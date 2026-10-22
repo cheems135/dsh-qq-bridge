@@ -646,43 +646,38 @@
       '<textarea id="basePersona" style="min-height:140px">' + esc(base !== '' ? base : baseDefault) + '</textarea>' +
       '<div class="btnrow" style="margin-top:8px"><button class="primary" id="baseSave">保存（下条消息生效）</button>' +
       '<button id="baseReset">恢复默认</button></div></div>';
-
-    out += '<div class="card"><h2>预设人设</h2>';
-    var builtin = [{ id: 'whale', name: '大米鲸鱼娘' }];
-    var visible = builtin.filter(function (p) { return hidden.indexOf(p.id) === -1; });
-    if (!visible.length) out += '<div class="empty">预设都被隐藏了</div>';
-    visible.forEach(function (p) {
-      var on = s.activePersonaId === p.id;
-      var detail = presets.filter(function (x) { return x.id === p.id; })[0];
-      var open = viewPreset === p.id;
-      out += '<div class="persona' + (on ? ' on' : '') + '">' +
-        '<h3>' + esc(p.name) + '<span class="tag">预设 ' + p.id + '</span>' + (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
-        (open && detail && detail.prompt
-          ? '<textarea id="presetEdit-' + p.id + '" style="min-height:220px;font-size:12px">' + esc(detail.prompt) + '</textarea>' +
-            '<div class="btnrow" style="margin-top:10px">' +
-            '<button class="primary small" data-presave="' + p.id + '">保存修改</button>' +
-            '<button class="small" data-prerestore="' + p.id + '">恢复原文</button>' +
-            '<button class="small" data-pv="' + p.id + '">试聊这句</button>' +
-            '<button class="small ghost" data-copy="' + p.id + '">另存为自定义</button>' +
-            '<button class="small ghost" data-view="' + p.id + '">收起</button></div>' +
-            '<div class="muted" style="margin-top:6px">保存会直接改写预设文件，同时立刻生效（下条消息开新会话）。</div>'
-          : '<div class="btnrow" style="margin-top:10px">' +
-            '<button class="primary small" data-use="' + p.id + '">' + (on ? '已启用' : '使用这个') + '</button>' +
-            '<button class="small" data-view="' + p.id + '">查看文本</button>' +
-            '<button class="small" data-pv="' + p.id + '">试聊</button>' +
-            '<button class="danger small" data-hide="' + p.id + '">删除</button></div>') +
-        '</div>';
+    // 预设和自定义合成一个列表：都能改名、编辑、试聊，不再区分来源。
+    var custom = (s.personae || []).slice();
+    var presetItems = presets.map(function (p) {
+      return { id: p.id, name: (s.presetNames && s.presetNames[p.id]) || p.name || p.id, prompt: p.prompt || '', isPreset: true };
     });
-    if (hidden.length) {
-      out += '<div class="muted" style="margin-top:6px">已隐藏：' + hidden.map(esc).join('、') +
-        ' <button class="ghost small" id="unhideAll">恢复显示</button></div>';
-    }
+    var items = presetItems.concat(custom.map(function (p) {
+      return { id: p.id, name: p.name, prompt: p.prompt, isPreset: false };
+    }));
+
+    out += '<div class="card"><h2>人设</h2>' +
+      '<div class="muted" style="margin-bottom:8px">都在这儿，都能改名、改提示词。点「使用」切换。</div>';
+    if (!items.length) out += '<div class="empty">还没有人设</div>';
+    items.forEach(function (p) {
+      var on = s.activePersonaId === p.id;
+      out += '<div class="persona' + (on ? ' on' : '') + '"><h3>' + esc(p.name) +
+        (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
+        '<div class="btnrow" style="margin-top:10px">' +
+        '<button class="primary small" data-use="' + esc(p.id) + '">' + (on ? '已启用' : '使用') + '</button>' +
+        '<button class="small" data-edit="' + esc(p.id) + '">改名 / 编辑</button>' +
+        '<button class="small" data-pv="' + esc(p.id) + '">试聊</button>' +
+        (p.isPreset
+          ? '<button class="small ghost" data-copy="' + esc(p.id) + '">复制一份</button>'
+          : '<button class="danger small" data-del="' + esc(p.id) + '">删除</button>') +
+        '</div></div>';
+    });
     out += '</div>';
 
-    var editing = (s.personae || []).filter(function (p) { return p.id === editingId; })[0];
-    out += '<div class="card" id="personaForm"><h2>' + (editing ? '编辑人设：' + esc(editing.name) : '新建人设') + '</h2>';
+    var editing = items.filter(function (p) { return p.id === editingId; })[0];
+    out += '<div class="card" id="personaForm"><h2>' + (editing ? '编辑：' + esc(editing.name) : '新建人设') + '</h2>';
     if (editing) {
-      out += '<div class="banner" style="margin-bottom:10px">正在编辑「' + esc(editing.name) + '」，改完点「保存修改」。</div>';
+      out += '<div class="banner" style="margin-bottom:10px">正在编辑「' + esc(editing.name) + '」，改完点「保存修改」。' +
+        (editing.isPreset ? '这是内置人设，保存会直接改写它的文件。' : '') + '</div>';
     }
     out += '<div style="display:grid;gap:8px">' +
       '<input id="pName" placeholder="人设名字，例如：暴躁学霸" value="' + (editing ? esc(editing.name) : '') + '">' +
@@ -690,19 +685,6 @@
       '<div class="btnrow"><button class="primary" id="pAdd">' + (editing ? '保存修改' : '新建人设') + '</button>' +
       '<button id="pCancel" style="display:' + (editing ? '' : 'none') + '">取消编辑</button></div></div></div>';
 
-    out += '<div class="card"><h2>我的人设</h2>';
-    if (!(s.personae || []).length) out += '<div class="empty">还没有自定义人设。上面填一个，或者用本页下面的「AI 生成」。</div>';
-    (s.personae || []).forEach(function (p) {
-      var on = s.activePersonaId === p.id;
-      out += '<div class="persona' + (on ? ' on' : '') + '"><h3>' + esc(p.name) +
-        (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
-        '<pre>' + esc(p.prompt) + '</pre>' +
-        '<div class="btnrow" style="margin-top:10px">' +
-        '<button class="primary small" data-use="' + esc(p.id) + '">' + (on ? '已启用' : '使用') + '</button>' +
-        '<button class="small" data-edit="' + esc(p.id) + '">编辑</button>' +
-        '<button class="small" data-pv="' + esc(p.id) + '">试聊</button>' +
-        '<button class="danger small" data-del="' + esc(p.id) + '">删除</button></div></div>';
-    });
     out += '</div>';
 
     out += '<div class="card"><h2>导入 / 导出</h2><div class="muted">导出成 JSON 保存或分享；导入会追加到列表。</div>' +
@@ -718,8 +700,7 @@
     out += '<div class="card"><h2>试聊预览</h2>' +
       '<div class="muted" style="margin-bottom:8px">用这个人设的提示词直接问模型：不经过 QQ，也不影响真实会话。改完人设先在这儿试一句。</div>' +
       '<select id="pvPersona">' +
-      visible.map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') +
-      (s.personae || []).map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '（自定义）</option>'; }).join('') +
+      items.map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') +
       '<textarea id="pvText" placeholder="说一句，比如：今天好累" style="margin-top:8px;min-height:72px"></textarea>' +
       '<div class="btnrow" style="margin-top:8px"><button class="primary" id="pvGo">让她回一句</button>' +
       '<span class="muted" id="pvMeta"></span></div>' +
@@ -1430,10 +1411,29 @@
     });
 
     if ((el = $('pAdd'))) el.onclick = async function () {
-      var el = this; // 捕获当次元素
       var name = $('pName').value.trim();
       var prompt = $('pPrompt').value.trim();
       if (!name || !prompt) { toast('名字和提示词都要填'); return; }
+      var editing = (data.settings.personae || []).filter(function (p) { return p.id === editingId; })[0];
+      var presetIds = presets.map(function (p) { return p.id; });
+      var editingIsPreset = editingId !== '' && presetIds.indexOf(editingId) >= 0;
+
+      // 内置人设：改文件 + 记一个显示名
+      if (editingIsPreset) {
+        try {
+          await api('POST', '/im-bridge/presets', { id: editingId, action: 'save', prompt: prompt });
+          var names = Object.assign({}, data.settings.presetNames || {});
+          names[editingId] = name;
+          await api('POST', '/im-bridge/settings', { presetNames: names });
+          toast('已保存');
+          editingId = '';
+          load();
+        } catch (e) {
+          toast('保存失败：' + e.message);
+        }
+        return;
+      }
+
       var personae = (data.settings.personae || []).slice();
       if (editingId) {
         personae = personae.map(function (p) {

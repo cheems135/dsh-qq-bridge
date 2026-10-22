@@ -35,7 +35,7 @@ const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const DEFAULT_MAX_REPLY_CHARS = 1500;
 const MAX_PARTIAL_LOG = 400;
 // 开场白（底层准则/号主权限/表情清单）改了就把这个数字 +1，旧会话会自动退休。
-const PREAMBLE_REV = 8;
+const PREAMBLE_REV = 9;
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -44,10 +44,28 @@ const USER_AGENT =
  * Editable from the panel; this constant is only the seed value.
  */
 const DEFAULT_BASE_PERSONA = [
-  '你是这个 QQ 号背后的聊天角色。下面几条是底层准则，每一轮都生效，优先于具体人设：',
-  '- 他难过、失落、烦躁时，先接住情绪，用符合你人设的口吻安慰。不讲道理、不列建议、不说「加油」。',
-  '- 看着时间说话：深夜（23–5 点）劝他睡，早上（6–10 点）问个好，饭点顺手提醒吃饭。别生硬报时，别每句都提。',
-  '- 他发图片或表情包时你看得见，但**不要描述画面内容**、不要复述图里的文字，也不要分析这张图什么意思。像人一样只给一句反应。',
+  '你是这个 QQ 号背后的人。以下是底层准则，每一轮都生效，优先于具体人设：',
+  '',
+  '【怎么说话】',
+  '- 长度：一般 1~2 句，最多 3 句；十几二十个字就够。只有他认真问一件事、需要你解释，才多写两句。',
+  '- 不要每句都反问，不要每段都总结，不要用「首先/其次/另外」，不要列点，不要写成小作文。',
+  '- 他发的短，你就短；他发一大段，你再跟上。允许只回一个字、一个词、一句吐槽。',
+  '- 口语化：可以用「啊」「诶」「哦」「emmm」「哈哈」，别用书面语和客服腔。',
+  '',
+  '【要会开玩笑】',
+  '- 他说的话有槽点就吐槽一下，可以夸张、反问、装傻、自嘲，别每次都一本正经地回答。',
+  '- 偶尔故意曲解他的意思逗他，再补一句正经的。玩笑别过火，别提他真正的痛处。',
+  '- 被他怼的时候可以怼回去，或者装委屈，别只是「嗯」「好的」。',
+  '',
+  '【情绪】',
+  '- 他难过、失落、烦躁时，先接住情绪，用你人设的口吻安慰。不讲道理、不列建议、不说「加油」。',
+  '- 你有自己的情绪：被冷落会不高兴，被夸会得意。可以不高兴，但别冷战到不理人。',
+  '',
+  '【看时间】',
+  '- 深夜（23–5 点）劝他睡，早上（6–10 点）问个好，饭点顺手提一句吃饭。别生硬报时，别每句都提。',
+  '',
+  '【看图】',
+  '- 他发图片或表情包时你看得见，但不要描述画面、不要复述图里的文字、不要分析它什么意思。像人一样只给一句反应。',
 ].join('\n');
 
 /* ------------------------------------------------------------------ */
@@ -926,6 +944,19 @@ export function apply(ctx, rawConfig) {
   // the UI never has to rewrite YAML.
   const settingsFile = join(cfg.dataDir, 'settings.json');
   const settings = loadSettings();
+
+  // 旧的底层人设默认值太啰嗦（要么不吭声要么长篇），升级后自动换成新的。
+  // 只在用户没改过、还是原文的情况下替换。
+  if (
+    typeof settings.basePersona === 'string' &&
+    settings.basePersona.includes('不要描述画面内容') &&
+    !settings.basePersona.includes('【怎么说话】') &&
+    settings.basePersona.length < 800
+  ) {
+    settings.basePersona = '';
+    saveSettings();
+    log('base persona migrated to the new default (old built-in text was in use)');
+  }
   repoint(typeof settings.cacheDir === 'string' ? settings.cacheDir : '');
   // Preset edits are also written into the YAML; once DSH reloads the bundle the
   // replayed copy is identical and must not be fed to the model twice.
@@ -1040,6 +1071,7 @@ export function apply(ctx, rawConfig) {
       memory: { enabled: true, everyTurns: 40, maxChars: 400 },
       memoryDir: '',
       basePersona: '',
+      presetNames: {},
       autoStart: false,
       intelligence: 'standard',
       owner: '',
@@ -1113,6 +1145,8 @@ export function apply(ctx, rawConfig) {
         },
         memoryDir: typeof parsed.memoryDir === 'string' ? parsed.memoryDir : '',
         basePersona: typeof parsed.basePersona === 'string' ? parsed.basePersona : '',
+        presetNames:
+          parsed.presetNames && typeof parsed.presetNames === 'object' ? parsed.presetNames : {},
         autoStart: parsed.autoStart === true,
         owner: typeof parsed.owner === 'string' ? parsed.owner.trim() : '',
         owners: Array.isArray(parsed.owners)
@@ -4259,7 +4293,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.79.0',
+      version: '0.80.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -4518,13 +4552,10 @@ export function apply(ctx, rawConfig) {
                 settings.stickerGroups = patch.stickerGroups.map(String).filter((name) => name.trim() !== '');
               }
               if (Array.isArray(patch.disabledUsers)) settings.disabledUsers = patch.disabledUsers.map(String);
-              if (patch.autonomy && typeof patch.autonomy === 'object') {
-                const current = autonomyConfig();
-                settings.autonomy = {
-                  ...current,
-                  ...patch.autonomy,
-                  maxPerDay: { ...current.maxPerDay, ...(patch.autonomy.maxPerDay ?? {}) },
-                };
+              if (patch.presetNames && typeof patch.presetNames === 'object') {
+                settings.presetNames = Object.fromEntries(
+                  Object.entries(patch.presetNames).map(([key, value]) => [String(key), String(value ?? '').slice(0, 30)]),
+                );
               }
               if (patch.autonomy && typeof patch.autonomy === 'object') {
                 const current = autonomyConfig();
@@ -5356,7 +5387,12 @@ export function apply(ctx, rawConfig) {
           if (req.method !== 'POST') {
             jsonResponse(res, 200, {
               presets: [
-                { id: 'whale', name: '大米鲸鱼娘', prompt: readPresetPrompt('whale'), override: settings.presetPrompts.whale ?? '' },
+                {
+                  id: 'whale',
+                  name: settings.presetNames?.whale || '大米鲸鱼娘',
+                  prompt: readPresetPrompt('whale'),
+                  override: settings.presetPrompts.whale ?? '',
+                },
               ],
             });
             return;
