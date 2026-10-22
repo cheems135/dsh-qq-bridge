@@ -97,6 +97,7 @@
   .pagehead p { margin: 0; color: var(--ink2); font-size: 13.5px; }
 
   /* ---------- content ---------- */
+  .warncard { border: 1px solid color-mix(in srgb, #e0a34b 45%, var(--line)); background: color-mix(in srgb, #e0a34b 8%, var(--panel)); }
   .card {
     background: var(--panel); border-radius: var(--radius);
     padding: 20px 20px 18px; margin-bottom: 14px;
@@ -289,6 +290,7 @@
       <button class="tab" data-tab="sticker"><span class="ico">▣</span>素材</button>
       <div class="navgroup">系统</div>
       <button class="tab" data-tab="memory"><span class="ico">◫</span>记忆</button>
+      <button class="tab" data-tab="autonomy"><span class="ico">✧</span>自主</button>`r`n      <button class="tab" data-tab="thoughts"><span class="ico">◌</span>想法</button>
       <button class="tab" data-tab="model"><span class="ico">◇</span>模型</button>
     </nav>
 
@@ -305,19 +307,27 @@
 
 <script>
 (function () {
+  function reportClient(text) {
+    try { fetch('/im-bridge/clientlog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: String(text).slice(0, 400) }) }); } catch (e) {}
+  }
+  window.onerror = function (message, source, line) { reportClient('JS 错误 ' + message + ' @' + line); };
+  window.addEventListener('unhandledrejection', function (event) { reportClient('Promise 拒绝 ' + (event.reason && event.reason.message ? event.reason.message : event.reason)); });
   var data = null;
   var login = null;
   var monitor = null;
   var models = null;
   var storage = null;
+  var thoughts = null;
   var presets = [];
   var viewPreset = '';
   var msgChat = 'all';
   var sFilter = '';
   var pickedStickers = {};
+  var showFullQQ = false;
   var editingId = '';
   var tab = 'overview';
   var msgFilter = 'all';
+  var monQuery = '';
   var monitorTimer = null;
   var toastTimer = null;
 
@@ -377,11 +387,13 @@
       api('GET', '/im-bridge/messages'),
       api('GET', '/im-bridge/models'),
       api('GET', '/im-bridge/presets'),
+      api('GET', '/im-bridge/thoughts'),
       api('GET', '/im-bridge/storage')
     ]).then(function (r) {
       data = r[0]; login = r[1]; monitor = r[2]; models = r[3];
       presets = (r[4] && r[4].presets) || [];
-      storage = r[5];
+      thoughts = r[5];
+      storage = r[6];
       renderPill(); renderPane();
     }).catch(function (e) { toast('读取失败：' + e.message); });
   }
@@ -404,6 +416,8 @@
     whitelist: ['联系人', '号主、允许私聊的 QQ 和群'],
     sticker: ['素材', '表情包、联网搜图和语音输出'],
     memory: ['记忆', '压缩规则、已存记忆和存放位置'],
+    autonomy: ['自主', '她自己的动作：改签名、发空间、主动找人'],
+    thoughts: ['想法', '她此刻在做什么、为什么这么做'],
     model: ['模型', '智力档位、模型、主动行为与搜索']
   };
 
@@ -416,6 +430,8 @@
     if (tab === 'sticker') html = viewSticker();
     if (tab === 'monitor') html = viewMonitor();
     if (tab === 'memory') html = viewMemory();
+    if (tab === 'autonomy') html = viewAutonomy();
+    if (tab === 'thoughts') html = viewThoughts();
     if (tab === 'model') html = viewModelSettings();
     var head = PAGE_HEADS[tab] || ['', ''];
     html = '<div class="pagehead"><h1>' + esc(head[0]) + '</h1><p>' + esc(head[1]) + '</p></div>' + html;
@@ -486,7 +502,17 @@
     var st = data.status;
     var l = login || {};
     var cost = st.cost || { today: 0, last: 0, peak: false };
-    var out = '<div class="card"><h2>状态</h2><div class="stats">' +
+    var warned = false;
+    try { warned = window.localStorage.getItem('qqb-warn') === '1'; } catch (e) {}
+    var out = warned ? '' : '<div class="card warncard"><div class="row"><span><b>⚠ 使用前必读</b>' +
+      '<div class="muted" style="margin-top:6px;line-height:1.75">' +
+      '这套插件通过 NapCat 接管真实 QQ 账号，属于<b>非官方自动化</b>，存在<b>被风控、限制甚至封号</b>的风险。' +
+      '<br>风险随行为强度上升：频繁改资料、自动发说说、主动给多人发消息属于高危操作。' +
+      '<br>建议：小号先试；打开「自主」时把每日额度调到很低；出现验证码或异常登录提示就立刻停用。' +
+      '<br>账号被封、内容发错、被他人投诉等后果由使用者自行承担。' +
+      '</div></span><button class="small ghost" id="warnHide">知道了</button></div></div>';
+
+    out += '<div class="card"><h2>状态</h2><div class="stats">' +
       '<div class="stat"><b>' + (st.connected ? '在线' : '离线') + '</b><span>NapCat</span></div>' +
       '<div class="stat"><b>' + esc(st.selfId || '—') + '</b><span>机器人账号</span></div>' +
       '<div class="stat"><b>' + esc(st.personaName || st.preset) + '</b><span>当前人设</span></div>' +
@@ -511,7 +537,19 @@
     }
     out += '</div>';
 
-    out += '<div class="card"><div class="row"><span><b>会话</b> <span class="muted">' + st.chats.length + ' 个</span></span>' +
+    // 今日自主：方案 B 一眼能看出今天她动了几次
+    var auto = (st.autonomy && st.autonomy.state) || { counts: {} };
+    var ac = auto.counts || {};
+    out += '<div class=""card""><div class=""row""><span><b>今天她自己动了几次</b>' +
+      '<span class=""muted"">' + (st.autonomy && st.autonomy.config && st.autonomy.config.enabled ? '自主模式开着' : '自主模式关着') + '</span></span>' +
+      '<button class=""small"" data-goautonomy=""1"">去设置</button></div>' +
+      '<div class=""stats"">' +
+      '<div class=""stat""><b>' + (ac.chats || 0) + '</b><span>主动找人</span></div>' +
+      '<div class=""stat""><b>' + (ac.qzone || 0) + '</b><span>发空间</span></div>' +
+      '<div class=""stat""><b>' + (ac.signature || 0) + '</b><span>改签名</span></div>' +
+      '</div></div>';
+
+    out += '<div class=""card""><div class=""row""><span><b>会话</b> <span class=""muted"">' + st.chats.length + ' 个</span></span>' +
       '<span class="muted">重置后下条消息开新会话</span></div>';
     if (!st.chats.length) out += '<div class="empty">还没有活跃会话</div>';
     st.chats.forEach(function (c) {
@@ -651,7 +689,6 @@
       '<span class="muted" id="pvMeta"></span></div>' +
       '<div id="pvOut" style="margin-top:12px"></div></div>';
 
-    out += proactiveCards();
     return out;
   }
 
@@ -661,7 +698,7 @@
     var perms = (data.status && data.status.ownerPerms) || { send: true, broadcast: true, schedule: true };
     var out = '<div class="card"><h2>号主（可多个，权限可自定义）</h2>' +
       '<div class="muted" style="margin-bottom:8px">号主跟她说话时会打开「号主模式」。可以填多个 QQ 号，一行一个或用逗号隔开。</div>' +
-      '<textarea id="ownersInput" placeholder="3397238634" style="min-height:70px">' + esc(owners.join('\n')) + '</textarea>' +
+      '<textarea id="ownersInput" placeholder="你的QQ号" style="min-height:70px">' + esc(owners.join('\n')) + '</textarea>' +
       '<div style="margin-top:10px;display:grid;gap:6px">' +
       '<div class="row"><span>允许代发消息 <code>[发送:QQ|内容]</code></span><button class="small" data-ownerperm="send">' + (perms.send ? '已开' : '已关') + '</button></div>' +
       '<div class="row"><span>允许群发 <code>[群发:内容]</code></span><button class="small" data-ownerperm="broadcast">' + (perms.broadcast ? '已开' : '已关') + '</button></div>' +
@@ -670,12 +707,19 @@
       '<div class="btnrow" style="margin-top:10px"><button class="primary" id="ownerSave">保存</button>' +
       '<button class="small ghost" id="ownerUseFirst">用白名单第一个</button></div></div>';
 
-    out += '<div class="card"><h2>允许私聊的 QQ</h2>';
+    out += '<div class="card"><h2>允许私聊的 QQ</h2>' +
+      '<div class="row" style="padding-top:0"><span class="muted">号码默认打码，备注只有你看得到；她看到的也只是备注 + 尾号。</span>' +
+      '<button class="small" id="qqReveal">' + (showFullQQ ? '隐藏号码' : '显示完整号码') + '</button></div>';
     if (!users.length) out += '<div class="muted" style="margin-bottom:8px">为空时使用配置文件里的白名单：' + esc((data.allowUsers || []).join('、') || '无') + '</div>';
+    var notes = data.settings.userNotes || {};
     users.forEach(function (u) {
       var off = (data.settings.disabledUsers || []).indexOf(u) !== -1;
-      out += '<div class="row" style="opacity:' + (off ? '.5' : '1') + '"><span class="mono">' + esc(u) +
-        (off ? ' <span class="tag">已停用</span>' : '') + '</span>' +
+      var note = notes[u] || '';
+      out += '<div class="row" style="opacity:' + (off ? '.5' : '1') + '">' +
+        '<span class="btnrow" style="flex:1;min-width:0">' +
+        '<input class="noteInput" data-note="' + esc(u) + '" placeholder="备注，例如：本人" value="' + esc(note) + '" style="max-width:170px;padding:6px 10px">' +
+        '<span class="mono">' + esc(showFullQQ ? u : '****' + u.slice(-4)) + '</span>' +
+        (off ? '<span class="tag">已停用</span>' : '') + '</span>' +
         '<span class="btnrow"><button class="small" data-disuser="' + esc(u) + '">' + (off ? '启用' : '停用') + '</button>' +
         '<button class="danger small" data-delqq="' + esc(u) + '">移除</button></span></div>';
     });
@@ -700,7 +744,8 @@
     var enabled = data.settings.stickers.enabled;
     var out = '<div class="card"><div class="row"><span><b>表情包</b> <span class="muted">' + files.length + ' 张</span></span>' +
       '<button id="sToggle" class="' + (enabled ? '' : 'primary') + '">' + (enabled ? '已开启' : '已关闭') + '</button></div>' +
-      '<div class="muted">开启后她才能发图。停用的单张不会被抽到，也不能被指定。</div></div>';
+      '<div class="muted">开启后她才能发图。停用的单张不会被抽到，也不能被指定。</div>' +
+      '<div class="muted" style="margin-top:6px">内置 85 张鲸鱼娘预设随插件发布，首次启用时自动铺进来；删掉的不会再回来。</div></div>';
 
     out += '<div class="card"><h2>手动添加</h2><div style="display:grid;gap:8px">' +
       '<input id="sName" placeholder="名字（她发图时用的指令名，例如：无语）">' +
@@ -752,10 +797,39 @@
     });
     out += '</div></div>';
 
+    out += '<div class="card"><h2>从网页收一整套</h2>' +
+      '<div class="muted" style="margin-bottom:8px">把表情包合集页／相册页的链接贴进来，它会把这个页面上所有够大的图都收下来。比搜图准得多——同一套图通常就在同一页。</div>' +
+      '<input id="pageUrl" placeholder="https://… 表情包合集 / 相册页">' +
+      '<div class="btnrow" style="margin-top:8px"><label class="field">名字前缀<input id="pageName" placeholder="鲸鱼娘" style="width:130px"></label>' +
+      '<label class="field">数量<input id="pageLimit" type="number" min="1" max="30" value="15" style="width:80px"></label>' +
+      '<button class="primary" id="pageGo" style="align-self:flex-end">收下来</button></div>' +
+      '<div id="pageOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div></div>';
+
+    out += '<div class="card"><h2>批量收集（质量优先）</h2>' +
+      '<div class="muted" style="margin-bottom:8px">同时用几个近义查询词搜，按「像素 + 文件体积 + 无损格式」打分，只留评分最高的几张。比单关键词精准得多。</div>' +
+      '<input id="harvestQueries" placeholder="多个关键词用逗号隔开，例如：蓝色鲸鱼娘,蓝鲸 娘,鲸鱼 可爱 表情包">' +
+      '<div class="btnrow" style="margin-top:8px"><label class="field">名字前缀<input id="harvestName" placeholder="鲸鱼娘" style="width:130px"></label>' +
+      '<label class="field">数量<input id="harvestLimit" type="number" min="1" max="30" value="12" style="width:80px"></label>' +
+      '<button class="primary" id="harvestGo" style="align-self:flex-end">开始收集</button></div>' +
+      '<div id="harvestOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div></div>';
+
+    out += '<div class="card"><h2>表情含义</h2>' +
+      '<div class="muted" style="margin-bottom:8px">她原本只认得表情包的名字。识别一遍之后，她知道每张图「长什么样、表达什么」，聊天时就能对得上。</div>' +
+      '<div class="btnrow"><button class="primary" id="noteFill">识别一批（每次 6 张）</button>' +
+      '<span class="muted" id="noteMeta"></span></div>' +
+      '<div id="noteOut" class="muted" style="margin-top:10px;white-space:pre-wrap;max-height:180px;overflow:auto"></div></div>';
+
     out += '<div class="card"><h2>AI 搜表情包</h2><div class="muted" style="margin-bottom:8px">联网搜图并直接入库；会过滤 logo 和小图，但质量随机，建议用具体词。</div>' +
       '<input id="aiStickerQuery" placeholder="例如：蓝色大肥鱼 表情包">' +
       '<button class="primary" id="aiStickerBtn" style="margin-top:8px">搜索并添加</button>' +
       '<div id="aiStickerOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div></div>';
+
+    out += '<div class="card"><h2>以图搜同款</h2>' +
+      '<div class="muted" style="margin-bottom:8px">传一张表情包，她先看懂它表达什么情绪，再用判断出来的关键词去搜同类图。</div>' +
+      '<input type="file" id="visFile" accept="image/*" style="padding:8px;background:var(--panel-2);border-radius:10px">' +
+      '<div class="btnrow" style="margin-top:8px"><button class="primary" id="visGo">看图搜同类</button>' +
+      '<span class="muted" id="visMeta"></span></div>' +
+      '<div id="visOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div></div>';
 
     out += viewVoiceCard();
     return out;
@@ -770,19 +844,26 @@
     });
     var list = all.filter(function (m) {
       if (msgChat !== 'all' && (m.chat || '未知') !== msgChat) return false;
-      return msgFilter === 'all' || m.dir === msgFilter;
+      if (msgFilter !== 'all' && m.dir !== msgFilter) return false;
+      if (monQuery !== '') {
+        var hay = String(m.text || '') + ' ' + notesLabel(m.chat || '');
+        if (hay.indexOf(monQuery) === -1) return false;
+      }
+      return true;
     });
     var out = '<div class="card"><div class="banner"><b>免责声明</b><br>' + esc((monitor && monitor.disclaimer) || '') + '</div></div>';
     out += '<div class="card"><div class="row"><span><b>消息记录</b> <span class="muted">' + list.length + ' / ' + all.length + ' 条</span></span>' +
+      '<input id="monSearch" placeholder="搜内容或备注" value="' + esc(monQuery) + '" style="max-width:180px;padding:7px 10px">' +
       '<span class="seg" id="msgSeg"><button data-filter="all" class="' + (msgFilter === 'all' ? 'on' : '') + '">全部</button>' +
       '<button data-filter="in" class="' + (msgFilter === 'in' ? 'on' : '') + '">收到</button>' +
       '<button data-filter="out" class="' + (msgFilter === 'out' ? 'on' : '') + '">发出</button></span></div>';
 
-    if (chats.length > 1) {
+    if (chats.length > 0) {
       out += '<div class="btnrow" style="margin-top:10px">' +
         '<button class="small ' + (msgChat === 'all' ? 'primary' : 'ghost') + '" data-chat="all">全部对话</button>' +
         chats.map(function (c) {
-          return '<button class="small ' + (msgChat === c ? 'primary' : 'ghost') + '" data-chat="' + esc(c) + '">' + esc(c) + '</button>';
+          return '<button class="small ' + (msgChat === c ? 'primary' : 'ghost') + '" data-chat="' + esc(c) + '">' +
+            esc(notesLabel(c)) + '</button>';
         }).join('') + '</div>';
     }
     out += '<div class="btnrow" style="margin-top:10px"><button class="danger small" id="mClear">清空记录</button>' +
@@ -792,13 +873,105 @@
     if (!list.length) out += '<div class="empty">这个分组还没有消息</div>';
     list.slice().reverse().forEach(function (m) {
       out += '<div class="msg ' + m.dir + '"><div class="meta"><span>' + (m.dir === 'in' ? '收到' : '发出') +
-        '</span><span class="mono">' + esc(m.chat || '') + '</span><span>' + new Date(m.time).toLocaleTimeString() + '</span></div>' +
+        '</span><span class="mono">' + esc(notesLabel(m.chat || '')) + '</span><span>' + new Date(m.time).toLocaleTimeString() + '</span></div>' +
         '<div class="body">' + esc(m.text || '') + '</div>' +
         (m.file ? '<a href="/im-bridge/msg-image?file=' + encodeURIComponent(m.file) + '" target="_blank">' +
           '<img src="/im-bridge/msg-image?file=' + encodeURIComponent(m.file) + '" alt="图片"></a>' : '') +
         '</div>';
     });
     out += '</div></div>';
+    return out;
+  }
+
+  function viewAutonomy() {
+    var a = (data.status && data.status.autonomy) || { config: {}, state: {} };
+    var c = a.config || {};
+    var st = a.state || {};
+    var counts = st.counts || {};
+    var cap = c.maxPerDay || {};
+    var on = !!c.enabled;
+    function swRow(key, label, desc) {
+      return '<div class="row"><span>' + label + '<br><span class="muted">' + desc + '</span></span>' +
+        '<button class="small ' + (c[key] ? 'primary' : '') + '" data-auto="' + key + '">' + (c[key] ? '已开' : '已关') + '</button></div>';
+    }
+    var out = '';
+    if (st.lastError) {
+      out += '<div class="card"><div class="banner"><b>上次自主动作失败</b><br>' + esc(st.lastError.message) +
+        '<br><span class="muted">' + esc(st.lastError.action || '') + ' · ' + esc(new Date(st.lastError.at).toLocaleString()) +
+        '。空间接口的 cookie 会过期，重新登录 NapCat 通常能恢复。</span></div></div>';
+    }
+    out += '<div class="card"><div class="row"><span><b>自主模式</b><br><span class="muted">让她自己决定要不要做点什么，每 25 分钟想一次</span></span>' +
+      '<button class="' + (on ? 'primary' : '') + '" id="autoMaster">' + (on ? '已开启' : '已关闭') + '</button></div>' +
+      '<div class="btnrow" style="margin-top:8px"><button id="autoTick">现在想一次</button>' +
+      '<button class="danger" id="autoStop">紧急停止</button></div>' +
+      '<div class="muted" style="margin-top:8px">今天：签名 ' + (counts.signature || 0) + '/' + (cap.signature || 0) +
+      ' · 昵称 ' + (counts.nickname || 0) + '/' + (cap.nickname || 0) +
+      ' · 空间 ' + (counts.qzone || 0) + '/' + (cap.qzone || 0) +
+      ' · 主动找人 ' + (counts.chats || 0) + '/' + (cap.chats || 0) + '</div>' +
+      '<div class="muted">只在 ' + (c.wakeStart || 9) + ':00–' + (c.wakeEnd || 23) + ':00 之间动手，两次动作至少隔 ' + (c.minGapMinutes || 45) + ' 分钟</div>' +
+      '<div class="muted" style="margin-top:6px">她不会改头像、不会加好友、不会同意好友申请；主动聊天只限白名单。</div></div>';
+
+    out += '<div class="card"><h2>允许她做什么</h2>' +
+      swRow('signature', '改个性签名', '一句话，20 字内') +
+      swRow('nickname', '改昵称', '默认关：频繁改会触发风控') +
+      swRow('qzone', '发 QQ 空间说说', '走 cookie 接口，非官方；发出去是公开的') +
+      swRow('initiate', '主动找人聊天', '只找白名单里的人') + '</div>';
+
+    out += '<div class="card"><h2>频率与时段</h2><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+      '<label class="field">签名/天<input id="capSig" type="number" min="0" max="5" value="' + (cap.signature || 0) + '"></label>' +
+      '<label class="field">昵称/天<input id="capNick" type="number" min="0" max="3" value="' + (cap.nickname || 0) + '"></label>' +
+      '<label class="field">空间/天<input id="capQzone" type="number" min="0" max="5" value="' + (cap.qzone || 0) + '"></label>' +
+      '</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px">' +
+      '<label class="field">找人/天<input id="capChats" type="number" min="0" max="20" value="' + (cap.chats || 0) + '"></label>' +
+      '<label class="field">最小间隔(分)<input id="autoGap" type="number" min="5" max="600" value="' + (c.minGapMinutes || 45) + '"></label>' +
+      '<label class="field">醒着从<input id="autoWakeA" type="number" min="0" max="23" value="' + (c.wakeStart || 9) + '"></label>' +
+      '<label class="field">到<input id="autoWakeB" type="number" min="1" max="24" value="' + (c.wakeEnd || 23) + '"></label>' +
+      '</div><button class="primary" id="autoSave" style="margin-top:10px">保存</button></div>';
+
+    out += proactiveCards();
+
+    out += '<div class="card"><h2>最近做的事</h2>';
+    var log = st.log || [];
+    if (!log.length) out += '<div class="empty">还没做过什么</div>';
+    log.forEach(function (item) {
+      out += '<div class="row"><span class="mono">' + esc(new Date(item.at).toLocaleString()) + '</span><span class="muted">' +
+        esc(item.action + (item.target ? ' → ' + item.target : '') + '：' + (item.text || '')) + '</span></div>';
+    });
+    out += '</div>';
+    return out;
+  }
+
+  function viewThoughts() {
+    var t = thoughts || { timeline: [] };
+    var items = t.timeline || [];
+    var out = '<div class="card"><div class="row"><span><b>她此刻的状态</b><br><span class="muted">心情：' + esc(t.mood || '平静') +
+      ' · 自主模式' + (t.enabled ? '开着' : '关着') + '</span></span>' +
+      '<button class="small" id="thTick">现在想一次</button>' +
+
+      '<button class="small" id="autoSim">模拟一天</button>' +
+      '<button class="small" id="thReflect">' + ((data.settings.autonomy && data.settings.autonomy.reflect === false) ? '复盘：关' : '复盘：开') + '</button></div>' +
+      '<div class="muted" style="margin-top:6px">复盘 = 每次回完话，让她回头写一句「我当时在想什么」。关掉能省一点点钱。</div>' +
+      '<div class="muted" style="margin-top:6px">今天：签名 ' + ((t.counts && t.counts.signature) || 0) +
+      ' · 空间 ' + ((t.counts && t.counts.qzone) || 0) + ' · 找人 ' + ((t.counts && t.counts.chats) || 0) + '</div></div>';
+
+    out += '<div class="card"><h2>她的想法与动作</h2>';
+    if (!items.length) out += '<div class="empty">还没有记录。点上面的「现在想一次」，或者等她自己动。</div>';
+    items.forEach(function (item) {
+      var when = new Date(item.at).toLocaleString();
+      if (item.kind === 'decision') {
+        var label = { signature: '改签名', nickname: '改昵称', qzone: '发空间', chat: '找人聊天', none: '什么也没做' }[item.action] || item.action;
+        out += '<div class="msg out" style="margin-bottom:8px"><div class="meta"><span>' + esc(label) + '</span><span>' + esc(when) + '</span></div>' +
+          (item.text ? '<div class="body">' + esc(item.text) + '</div>' : '') +
+          (item.reason ? '<div class="muted" style="margin-top:4px">为什么：' + esc(item.reason) + '</div>' : '') +
+          (item.target ? '<div class="muted">对象：' + esc(item.target) + '</div>' : '') + '</div>';
+      } else {
+        out += '<div class="msg" style="margin-bottom:8px"><div class="meta"><span>她的思考</span><span>' + esc(when) + '</span></div>' +
+          '<div class="body" style="white-space:pre-wrap">' + esc(String(item.text || '')) + '</div>' +
+          (item.reply ? '<div class="muted" style="margin-top:6px">据此说：' + esc(String(item.reply).split('|||').join(' / ').slice(0, 90)) + '</div>' : '') +
+          '</div>';
+      }
+    });
+    out += '</div>';
     return out;
   }
 
@@ -874,6 +1047,14 @@
   }
 
   /** 记忆：压缩规则 + 存放位置。 */
+  /** 把 private:1234567 显示成「备注（尾号1234）」。 */
+  function notesLabel(key) {
+    var qq = String(key || '').replace(/^(private|group):/, '');
+    var note = (data.settings.userNotes || {})[qq];
+    if (key.indexOf('group:') === 0) return '群 ' + qq;
+    return note ? note + '（尾号' + qq.slice(-4) + '）' : '尾号' + qq.slice(-4);
+  }
+
   function viewMemory() {
     var s = data.settings;
     var mem = s.memory || { enabled: true, everyTurns: 40, maxChars: 400 };
@@ -886,12 +1067,26 @@
       '<label class="field">记忆字数上限<input id="memChars" type="number" min="120" max="2000" value="' + mem.maxChars + '"></label>' +
       '</div><button class="primary" id="memSave" style="margin-top:10px">保存</button></div>';
 
+    out += '<div class="card"><h2>各对话的压缩进度</h2>' +
+      '<div class="muted" style="margin-bottom:8px">记忆是每个对话各自一份：聊满 ' + mem.everyTurns + ' 轮才会压出一条。想手动压现在就能点。</div>';
+    var chatStates = (data.status && data.status.chatStates) || [];
+    if (!chatStates.length) out += '<div class="empty">还没有对话记录</div>';
+    chatStates.forEach(function (c) {
+      var note = notesLabel(c.key);
+      var ratio = Math.min(100, Math.round(((c.turns || 0) / Math.max(1, mem.everyTurns)) * 100));
+      out += '<div class="row"><span>' + esc(note) + ' <span class="muted">' + (c.turns || 0) + ' / ' + mem.everyTurns + ' 轮</span>' +
+        '<div style="height:4px;border-radius:99px;background:var(--soft2);margin-top:6px;width:180px;overflow:hidden">' +
+        '<div style="height:100%;width:' + ratio + '%;background:var(--accent)"></div></div></span>' +
+        '<button class="small" data-memcompact="' + esc(c.key) + '">立即压缩</button></div>';
+    });
+    out += '</div>';
+
     out += '<div class="card"><h2>已存记忆</h2>' +
       '<div class="muted" style="margin-bottom:8px">共 ' + Object.keys(mems).length + ' 条。可以单独重压或清除。</div>';
     if (!Object.keys(mems).length) out += '<div class="empty">还没有记忆，聊够轮数会自动生成</div>';
     Object.keys(mems).forEach(function (k) {
       var when = mems[k] && mems[k].at ? new Date(mems[k].at).toLocaleString() : '';
-      out += '<div class="persona"><h3>' + esc(k) +
+      out += '<div class="persona"><h3>' + esc(notesLabel(k)) +
         (when ? '<span class="tag">' + esc(when) + '</span>' : '') + '</h3><pre>' + esc(mems[k].text) + '</pre>' +
         '<div class="btnrow" style="margin-top:8px"><button class="small" data-memcompact="' + esc(k) + '">立即压缩</button>' +
         '<button class="danger small" data-memclear="' + esc(k) + '">清除</button></div></div>';
@@ -933,6 +1128,10 @@
       '<input id="vCustomUrl" placeholder="http://127.0.0.1:9880/tts?text={text}&voice={voice}" value="' + esc(v.customUrl || '') + '"></label>' +
       '<label class="field" style="margin-top:8px">自定义音色名<input id="vCustomVoice" placeholder="例如 派蒙 / 晓晓" value="' + esc(v.customVoice || '') + '"></label>' +
       '<div class="muted" style="margin-top:6px">GPT-SoVITS / CosyVoice 之类起个 HTTP 接口就能接；返回音频字节即可。</div>' +
+      (v.lastError
+        ? '<div class="banner" style="margin-top:8px"><b>上次语音失败</b><br>' + esc(v.lastError) +
+          '<br><span class="muted">' + esc(v.lastErrorAt ? new Date(v.lastErrorAt).toLocaleString() : '') + '</span></div>'
+        : '') +
       '<button id="vSaveEngine" style="margin-top:8px">保存引擎设置</button>' +
       '<div class="btnrow" style="margin-top:10px"><input id="vText" placeholder="试听文本" style="flex:1;min-width:180px">' +
       '<button id="vTest">试听</button>' +
@@ -1030,6 +1229,7 @@
       $('sendCustom').style.display = el.value === '__custom' ? '' : 'none';
     };
     if ((el = $('sendGo'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var target = $('sendTarget').value === '__custom' ? ($('sendCustom').value || '').trim() : $('sendTarget').value;
       if (!target) { toast('先选发送对象'); return; }
       var payload = {
@@ -1051,6 +1251,7 @@
       if (btn) btn.onclick = function () { $('sendText').value = pair[1]; };
     });
     if ((el = $('btnStart'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       el.disabled = true;
       $('loginHint').textContent = '已请求启动，若弹 UAC 请点「是」…';
       api('POST', '/im-bridge/login', { action: 'start' }).then(function (v) {
@@ -1060,6 +1261,7 @@
       }).catch(function (e) { $('loginHint').textContent = '启动失败：' + e.message; el.disabled = false; });
     };
     if ((el = $('btnRegister'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       $('loginHint').textContent = '弹 UAC 时点「是」，之后启动就不用再点了';
       api('POST', '/im-bridge/login', { action: 'register' })
         .then(function () { toast('已请求注册，请在 UAC 窗口点「是」'); })
@@ -1068,6 +1270,7 @@
     if ((el = $('btnQrRefresh'))) el.onclick = loadQr;
     loadQr();
     if ((el = $('autoStartToggle'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var next = !data.status.autoStart;
       el.disabled = true;
       api('POST', '/im-bridge/settings', { autoStart: next })
@@ -1076,17 +1279,20 @@
         .finally(function () { el.disabled = false; });
     };
     if ((el = $('btnReconnect'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/action', { kind: 'reconnect' }).then(function (v) {
         toast(v.connected ? '已重连' : '请求已发出，但 NapCat 还没连上'); load();
       });
     };
     if ((el = $('btnPause'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var paused = !data.status.accountPaused;
       api('POST', '/im-bridge/action', { kind: paused ? 'pause' : 'resume' }).then(function () {
         toast(paused ? '已停用连接（配置保留）' : '已恢复连接'); load();
       });
     };
     if ((el = $('btnTest'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/action', { kind: 'test' }).then(function (v) {
         toast(v.connected ? '测试消息已发出' : 'NapCat 未连接，没发出去');
       });
@@ -1101,6 +1307,7 @@
     });
 
     if ((el = $('pAdd'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var name = $('pName').value.trim();
       var prompt = $('pPrompt').value.trim();
       if (!name || !prompt) { toast('名字和提示词都要填'); return; }
@@ -1119,10 +1326,12 @@
       }).catch(function (e) { toast('保存失败：' + e.message); });
     };
     if ((el = $('pCancel'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       editingId = '';
       renderPane();
     };
     if ((el = $('unhideAll'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { hiddenPresets: [] }).then(function () { toast('已恢复'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-hide]'), function (btn) {
@@ -1224,6 +1433,7 @@
       };
     });
     if ((el = $('pExport'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var blob = new Blob([JSON.stringify(data.settings.personae || [], null, 2)], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
@@ -1231,6 +1441,7 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
     };
     if ((el = $('pImportBtn'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       try {
         var incoming = JSON.parse($('pImport').value);
         if (!Array.isArray(incoming)) throw new Error('需要一个数组');
@@ -1245,6 +1456,7 @@
 
     if ((el = $('qqInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('qqAdd').click(); };
     if ((el = $('ownerSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var list = ($('ownersInput').value || '').split(/[,，\s]+/).filter(function (v) { return v; });
       api('POST', '/im-bridge/settings', { owners: list })
         .then(function () { toast('号主已保存（' + list.length + ' 个）'); load(); })
@@ -1262,12 +1474,14 @@
       };
     });
     if ((el = $('ownerUseFirst'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var first = (data.allowUsers || [])[0] || '';
       if (!first) { toast('白名单是空的'); return; }
       api('POST', '/im-bridge/settings', { owners: [first] })
         .then(function () { toast('号主设为 ' + first); load(); });
     };
     if ((el = $('qqAdd'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var v = $('qqInput').value.trim();
       if (!/^\d{5,12}$/.test(v)) { toast('QQ 号格式不对'); return; }
       var list = data.settings.whitelist.slice();
@@ -1282,6 +1496,7 @@
     });
     if ((el = $('groupInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('groupAdd').click(); };
     if ((el = $('groupAdd'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var v = $('groupInput').value.trim();
       if (!/^\d{5,12}$/.test(v)) { toast('群号格式不对'); return; }
       var list = (data.settings.groups || []).slice();
@@ -1296,9 +1511,11 @@
     });
 
     if ((el = $('sToggle'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { stickers: { enabled: !data.settings.stickers.enabled } }).then(load);
     };
     if ((el = $('sUpload'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var name = ($('sName').value || '').trim();
       var input = $('sFile');
       if (!name) { toast('先给表情包起个名字'); return; }
@@ -1323,6 +1540,30 @@
         api('POST', '/im-bridge/settings', { stickerDisabled: list }).then(load);
       };
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.noteInput'), function (input) {
+      var save = function () {
+        var qq = input.getAttribute('data-note');
+        var notes = Object.assign({}, data.settings.userNotes || {});
+        var value = (input.value || '').trim();
+        if (value === '') delete notes[qq];
+        else notes[qq] = value;
+        api('POST', '/im-bridge/settings', { userNotes: notes })
+          .then(function () { toast('备注已保存'); load(); })
+          .catch(function (e) { toast('保存失败：' + e.message); });
+      };
+      input.onblur = save;
+      input.onkeydown = function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          input.blur();
+        }
+      };
+    });
+    if ((el = $('qqReveal'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      showFullQQ = !showFullQQ;
+      renderPane();
+    };
     Array.prototype.forEach.call(document.querySelectorAll('[data-disuser]'), function (btn) {
       btn.onclick = function () {
         var user = btn.getAttribute('data-disuser');
@@ -1371,6 +1612,7 @@
       };
     });
     if ((el = $('pickApply'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var names = Object.keys(pickedStickers);
       if (!names.length) { toast('先勾选表情'); return; }
       var group = $('pickGroup').value;
@@ -1393,6 +1635,7 @@
       }).catch(function (e) { toast('分组失败：' + e.message); });
     };
     if ((el = $('pickClear'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       pickedStickers = {};
       renderPane();
     };
@@ -1417,11 +1660,13 @@
       };
     });
     if ((el = $('mClear'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       if (!confirm('清空监听记录？图片文件不会删。')) return;
       api('POST', '/im-bridge/messages', { action: 'clear' }).then(function () { toast('已清空'); load(); });
     };
 
     if ((el = $('pvGo'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var text = ($('pvText').value || '').trim();
       if (!text) { toast('先说一句'); return; }
       el.disabled = true;
@@ -1445,11 +1690,13 @@
       };
     });
     if ((el = $('baseSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { basePersona: $('basePersona').value })
         .then(function () { toast('已保存，下一条消息生效'); load(); })
         .catch(function (e) { toast('保存失败：' + e.message); });
     };
     if ((el = $('baseReset'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { basePersona: '' })
         .then(function () { toast('已恢复默认'); load(); });
     };
@@ -1467,18 +1714,139 @@
           .catch(function (e) { if (hint) hint.textContent = '失败：' + e.message; });
       };
     });
+    if ((el = $('monSearch'))) {
+      el.oninput = function () {
+        monQuery = this.value;
+        var pos = this.selectionStart;
+        renderPane();
+        var again = $('monSearch');
+        if (again) {
+          again.focus();
+          try { again.setSelectionRange(pos, pos); } catch (e) {}
+        }
+      };
+    }
+    if ((el = $('thReflect'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      var on = !(data.settings.autonomy && data.settings.autonomy.reflect === false);
+      api('POST', '/im-bridge/settings', { autonomy: { reflect: on } })
+        .then(function () { toast(on ? '已开启复盘' : '已关闭复盘'); load(); })
+        .catch(function (e) { toast('失败：' + e.message); });
+    };
+    if ((el = $('autoSim'))) el.onclick = function () {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '模拟中…';
+      toast('正在按五个时间点各想一次（不会真的执行）');
+      api('POST', '/im-bridge/autonomy', { action: 'simulate' })
+        .then(function (v) {
+          var rows = (v.results || []).map(function (r) {
+            var name = { signature: '改签名', nickname: '改昵称', qzone: '发空间', chat: '找人', none: '不动' }[r.action] || r.action;
+            var state = r.wouldRun ? '会执行' : (r.rejected || r.skipped || '不会执行');
+            return r.slot + '  ' + name + '  [' + state + ']  ' + (r.text || '') + (r.reason ? '（' + r.reason + '）' : '');
+          });
+          alert('模拟结果：\n\n' + (rows.join('\n\n') || '没有结果'));
+        })
+        .catch(function (e) { toast('失败：' + e.message); })
+        .finally(function () { btn.disabled = false; btn.textContent = '模拟一天'; });
+    };
+    if ((el = $('warnHide'))) el.onclick = function () {
+      var self = this;
+      try { window.localStorage.setItem('qqb-warn', '1'); } catch (e) {}
+      self.blur();
+      renderPane();
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-goautonomy]'), function (btn) {
+      btn.onclick = function () { tab = 'autonomy'; renderPane(); };
+    });
+    if ((el = $('thTick'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      reportClient('点击 想法-想一次');
+      // 用 this 而不是外层共享的 el：el 早被后面几十个绑定改写成别的元素了。
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '她在想…';
+      toast('她在想…（最多等一分钟）');
+      api('POST', '/im-bridge/autonomy', { action: 'tick' })
+        .then(function (v) {
+          var r = v.result || {};
+          var label = r.action || '?';
+          var extra = r.reason ? '（' + r.reason + '）' : r.rejected ? '（被拒：' + r.rejected + '）' : r.error ? '（失败：' + r.error + '）' : '';
+          toast('她的决定：' + label + extra);
+          load();
+        })
+        .catch(function (e) { toast('失败：' + e.message); })
+        .finally(function () { btn.disabled = false; btn.textContent = '现在想一次'; });
+    };
+    if ((el = $('autoMaster'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      var next = !(data.status.autonomy && data.status.autonomy.config && data.status.autonomy.config.enabled);
+      api('POST', '/im-bridge/settings', { autonomy: { enabled: next } })
+        .then(function () { toast(next ? '自主模式已开启' : '自主模式已关闭'); load(); })
+        .catch(function (e) { toast('失败：' + e.message); });
+    };
+    if ((el = $('autoStop'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      api('POST', '/im-bridge/autonomy', { action: 'stop' })
+        .then(function () { toast('已紧急停止'); load(); })
+        .catch(function (e) { toast('失败：' + e.message); });
+    };
+    if ((el = $('autoTick'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      reportClient('点击 自主-想一次');
+      el.disabled = true;
+      $('autoTick').textContent = '她在想…';
+      api('POST', '/im-bridge/autonomy', { action: 'tick' })
+        .then(function (v) {
+          var r = v.result || {};
+          var label = r.action ? (r.action + (r.rejected ? '（被拒：' + r.rejected + '）' : r.skipped ? '（额度/时段限制）' : r.ok ? '（已执行）' : '')) : '没动作';
+          toast('她的决定：' + label);
+          load();
+        })
+        .catch(function (e) { toast('失败：' + e.message); })
+        .finally(function () { btn.disabled = false; btn.textContent = '现在想一次'; });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-auto]'), function (btn) {
+      btn.onclick = function () {
+        var key = btn.getAttribute('data-auto');
+        var patch = { autonomy: {} };
+        patch.autonomy[key] = !(data.status.autonomy.config[key]);
+        api('POST', '/im-bridge/settings', patch)
+          .then(function () { toast('已设置'); load(); })
+          .catch(function (e) { toast('失败：' + e.message); });
+      };
+    });
+    if ((el = $('autoSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      api('POST', '/im-bridge/settings', {
+        autonomy: {
+          maxPerDay: {
+            signature: Number($('capSig').value) || 0,
+            nickname: Number($('capNick').value) || 0,
+            qzone: Number($('capQzone').value) || 0,
+            chats: Number($('capChats').value) || 0
+          },
+          minGapMinutes: Number($('autoGap').value) || 45,
+          wakeStart: Number($('autoWakeA').value) || 9,
+          wakeEnd: Number($('autoWakeB').value) || 23
+        }
+      }).then(function () { toast('已保存'); load(); }).catch(function (e) { toast('失败：' + e.message); });
+    };
     if ((el = $('mProvider'))) el.onchange = function () { fillModels(''); };
     if ((el = $('mSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { model: { provider: $('mProvider').value, model: $('mModel').value } })
         .then(function () { toast('已切换，下一条消息生效'); load(); })
         .catch(function (e) { toast('保存失败：' + e.message); });
     };
     if ((el = $('mReset'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { model: null })
         .then(function () { toast('已恢复默认'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
     if ((el = $('accAdd'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var url = ($('accUrl').value || '').trim();
       if (!/^wss?:\/\//.test(url)) { toast('地址要以 ws:// 开头'); return; }
       var accounts = (data.settings.accounts || []).slice();
@@ -1521,25 +1889,30 @@
       };
     });
     if ((el = $('pcSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         proactiveCfg: { startHour: Number($('pcStart').value), endHour: Number($('pcEnd').value), maxPerDay: Number($('pcMax').value) }
       }).then(function () { toast('已保存'); load(); }).catch(function (e) { toast('保存失败：' + e.message); });
     };
     if ((el = $('dndSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         dnd: { enabled: !!(data.settings.dnd && data.settings.dnd.enabled), startHour: Number($('dndStart').value), endHour: Number($('dndEnd').value) }
       }).then(function () { toast('已保存'); load(); });
     };
     if ((el = $('dndToggle'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         dnd: { enabled: !(data.settings.dnd && data.settings.dnd.enabled), startHour: Number($('dndStart').value), endHour: Number($('dndEnd').value) }
       }).then(load);
     };
     if ((el = $('memToggle'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memory: { enabled: !(data.settings.memory && data.settings.memory.enabled !== false) } })
         .then(function () { toast('已保存'); load(); });
     };
     if ((el = $('memSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memory: { everyTurns: Number($('memTurns').value), maxChars: Number($('memChars').value) } })
         .then(function () { toast('已保存'); load(); });
     };
@@ -1561,6 +1934,7 @@
       };
     });
     if ((el = $('cacheMove'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var dir = ($('cacheInput').value || '').trim();
       if (!dir) { toast('填一个路径'); return; }
       if (!confirm('把缓存迁移到 ' + dir + ' ？会移动日志、监听历史、语音和表情包。')) return;
@@ -1572,16 +1946,19 @@
         .finally(function () { el.disabled = false; });
     };
     if ((el = $('cacheDefault'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { cacheDir: '' })
         .then(function () { toast('已恢复默认路径'); load(); });
     };
     if ((el = $('cacheClean'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       if (!confirm('清理语音、旧监听图片和日志？表情包和设置不动。')) return;
       api('POST', '/im-bridge/storage', { action: 'clean' })
         .then(function (v) { toast('已清理：' + (v.removed || []).join('、')); load(); })
         .catch(function (e) { toast('清理失败：' + e.message); });
     };
     if ((el = $('vSaveEngine'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         voice: {
           engine: $('vEngine').value,
@@ -1592,6 +1969,7 @@
       }).then(function () { toast('已保存'); load(); });
     };
     if ((el = $('searxSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         search: {
           engine: $('seEngine').value,
@@ -1601,11 +1979,13 @@
       }).then(function () { toast('已保存'); load(); });
     };
     if ((el = $('memDirSave'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memoryDir: ($('memDir').value || '').trim() })
         .then(function () { toast('记忆位置已更新'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
     if ((el = $('vSamplesBtn'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       el.disabled = true;
       $('vSamples').innerHTML = '<div class="muted">生成中，约 10–20 秒…</div>';
       api('POST', '/im-bridge/voice/samples', { text: ($('vText').value || '').trim() || '喂，今天吃什么，我饿了' })
@@ -1630,10 +2010,12 @@
         .finally(function () { el.disabled = false; });
     };
     if ((el = $('vToggle'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { voice: { enabled: !(data.settings.voice && data.settings.voice.enabled) } })
         .then(function () { toast('已保存'); load(); });
     };
     if ((el = $('vTest'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       el.disabled = true;
       $('vOut').textContent = '合成并发送中…';
       api('POST', '/im-bridge/voice', { action: 'test', text: ($('vText').value || '喂，听得见吗？') })
@@ -1642,6 +2024,7 @@
         .finally(function () { el.disabled = false; });
     };
     if ((el = $('aiPersonaBtn'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var desc = ($('aiPersonaDesc').value || '').trim();
       if (!desc) { toast('先写一句描述'); return; }
       el.disabled = true;
@@ -1658,7 +2041,85 @@
       }).catch(function (e) { $('aiPersonaOut').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
+    if ((el = $('pageGo'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      var url = ($('pageUrl').value || '').trim();
+      if (!/^https?:\/\//i.test(url)) { toast('贴一个 http(s) 链接'); return; }
+      el.disabled = true;
+      $('pageOut').textContent = '抓取中…';
+      api('POST', '/im-bridge/stickers/page', {
+        url: url,
+        name: ($('pageName').value || '').trim() || 'page',
+        limit: Number($('pageLimit').value) || 15
+      })
+        .then(function (v) {
+          $('pageOut').textContent = '新增 ' + (v.added || []).length + ' 张：' + ((v.added || []).join('、') || '无');
+          toast('收下 ' + (v.added || []).length + ' 张');
+          load();
+        })
+        .catch(function (e) { $('pageOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('harvestGo'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      var raw = ($('harvestQueries').value || '').trim();
+      if (!raw) { toast('写几个关键词'); return; }
+      var queries = raw.split(/[,，、\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+      el.disabled = true;
+      $('harvestOut').textContent = '下载并打分中，可能要一两分钟…';
+      api('POST', '/im-bridge/stickers/harvest', {
+        queries: queries,
+        name: ($('harvestName').value || '').trim() || queries[0],
+        limit: Number($('harvestLimit').value) || 12
+      })
+        .then(function (v) {
+          $('harvestOut').textContent = '新增 ' + (v.added || []).length + ' 张：' + ((v.added || []).join('、') || '无');
+          toast('收集完成，新增 ' + (v.added || []).length + ' 张');
+          load();
+        })
+        .catch(function (e) { $('harvestOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('noteFill'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      el.disabled = true;
+      $('noteMeta').textContent = '看图识别中…';
+      api('POST', '/im-bridge/stickers/notes', { limit: 6 })
+        .then(function (v) {
+          $('noteMeta').textContent = '已识别 ' + v.described + ' / ' + v.total + ' 张';
+          var lines = Object.keys(v.notes || {}).map(function (k) { return k + '：' + v.notes[k]; });
+          $('noteOut').textContent = lines.join('\n') || '这次没识别出新的';
+          if ((v.added || []).length) toast('识别了 ' + v.added.length + ' 张');
+          load();
+        })
+        .catch(function (e) { $('noteMeta').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('visGo'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
+      var input = $('visFile');
+      var file = input && input.files && input.files[0];
+      if (!file) { toast('先选一张图'); return; }
+      if (file.size > 8 * 1024 * 1024) { toast('图别超过 8MB'); return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        el.disabled = true;
+        $('visMeta').textContent = '看图 + 搜图中…';
+        api('POST', '/im-bridge/stickers/visual', { data: String(reader.result), limit: 4 })
+          .then(function (v) {
+            $('visMeta').textContent = '新增 ' + (v.added || []).length + ' 张';
+            $('visOut').textContent = '画面：' + (v.desc || '—') +
+              '\n关键词：' + ((v.keywords || []).join('、') || '—') +
+              '\n新增：' + ((v.added || []).join('、') || '无');
+            load();
+          })
+          .catch(function (e) { $('visMeta').textContent = '失败：' + e.message; })
+          .finally(function () { el.disabled = false; });
+      };
+      reader.readAsDataURL(file);
+    };
     if ((el = $('aiStickerBtn'))) el.onclick = function () {
+      var el = this; // 捕获当次元素
       var query = ($('aiStickerQuery').value || '').trim();
       if (!query) { toast('先写关键词'); return; }
       el.disabled = true;

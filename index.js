@@ -25,20 +25,20 @@ import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
+// 语音合成要用的 Python：优先环境变量，其次 DSH 自带运行时，最后退回 PATH。
+const DEFAULT_PYTHON = process.env.DSH_IM_PYTHON ?? 'python';
+
 export const name = 'dsh-im-bridge';
 /** The Session Remote controller is the only service this bridge needs. */
 export const inject = ['sessionController'];
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const DEFAULT_MAX_REPLY_CHARS = 1500;
-
-/** Python used for edge-tts: env override, the bundled DSH runtime, then PATH. */
-const DEFAULT_PYTHON = [
-  process.env.DSH_IM_PYTHON,
-  join(process.env.USERPROFILE ?? homedir(), '.dsh', 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'python', 'python.exe'),
-  'python',
-].find((candidate) => candidate && (candidate === 'python' || existsSync(candidate))) ?? 'python';
 const MAX_PARTIAL_LOG = 400;
+// 开场白（底层准则/号主权限/表情清单）改了就把这个数字 +1，旧会话会自动退休。
+const PREAMBLE_REV = 8;
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 /**
  * Baseline behaviour every conversation inherits, above the per-persona prompt.
@@ -492,6 +492,20 @@ function textOfContent(content) {
   return parts.join('');
 }
 
+/** 模型吐出来的思考内容（不同 provider 字段名不同，见到就收）。 */
+function reasoningOfContent(content) {
+  if (!Array.isArray(content)) return '';
+  const parts = [];
+  for (const block of content) {
+    if (!block) continue;
+    if (block.type === 'reasoning' || block.type === 'thinking') {
+      const value = block.text ?? block.reasoning ?? block.content;
+      if (typeof value === 'string' && value.trim() !== '') parts.push(value);
+    }
+  }
+  return parts.join('\n');
+}
+
 /**
  * QQ renders no Markdown, so headings, bold markers, inline-code ticks and
  * pipe tables arrive as literal noise. Keep the prose, drop the syntax.
@@ -809,6 +823,12 @@ export function apply(ctx, rawConfig) {
   /* ---------------- state ---------------- */
 
   const state = loadState(cfg.stateFile, log);
+  // 旧版本把轮数存在 state.chats[key].turns 里，搬到独立的 state.turns。
+  state.turns = state.turns ?? {};
+  for (const [key, entry] of Object.entries(state.chats ?? {})) {
+    if (typeof entry?.turns === 'number' && (state.turns[key] ?? 0) < entry.turns) state.turns[key] = entry.turns;
+    if (entry !== undefined) delete entry.turns;
+  }
   const chats = new Map(); // sessionId -> chat runtime
   const creating = new Map(); // chatKey -> Promise<sessionId>
   const configuredModels = new Set(); // sessionIds already routed
@@ -819,6 +839,7 @@ export function apply(ctx, rawConfig) {
   let heartbeat = null;
   let stopped = false;
   let echoSeq = 0;
+  const pendingCalls = new Map(); // echo -> {name, resolve, reject, timer}
   let greeted = false;
   let lastSelfId = '';
   let accountPaused = false;
@@ -881,7 +902,8 @@ export function apply(ctx, rawConfig) {
       if (!parsed || typeof parsed !== 'object' || typeof parsed.chats !== 'object' || parsed.chats === null) {
         return { version: 1, chats: {} };
       }
-      return { version: 1, chats: parsed.chats };
+      // 保留所有字段：轮数、自主日志、想法记录都靠这里活过重启。
+      return { ...parsed, version: 1, chats: parsed.chats };
     } catch (error) {
       logger(`state file unreadable, starting fresh: ${error?.message ?? error}`);
       return { version: 1, chats: {} };
@@ -911,6 +933,9 @@ export function apply(ctx, rawConfig) {
   for (const [presetId, text] of Object.entries(settings.presetPrompts ?? {})) {
     if (readPresetPrompt(presetId).trim() === String(text).trim()) delete settings.presetPrompts[presetId];
   }
+
+  // 内置表情包跟着插件走：首次启用铺一次。
+  seedBundledStickers();
 
   // 开机自启：往当前用户的「启动」文件夹放一个隐藏启动脚本，不需要管理员权限。
   const startupScriptPath = join(
@@ -955,6 +980,38 @@ export function apply(ctx, rawConfig) {
   // 用户手动删了启动脚本也能自愈。
   if (settings.autoStart === true && !existsSync(startupScriptPath)) setAutoStart(true);
 
+  /**
+   * 随插件发布的内置表情包：第一次启用时铺进表情库。
+   * 只铺一次——用户删掉的不再回来，不然「删除」永远删不干净。
+   */
+  function seedBundledStickers() {
+    if (settings.stickerSeeded === true) return;
+    const bundled = join(dirname(fileURLToPath(import.meta.url)), 'assets', 'stickers');
+    try {
+      const manifestFile = join(bundled, 'manifest.json');
+      if (!existsSync(manifestFile)) return;
+      const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+      mkdirSync(stickerDir, { recursive: true });
+      let copied = 0;
+      for (const item of Array.isArray(manifest) ? manifest : []) {
+        const source = join(bundled, String(item.file ?? ''));
+        if (!existsSync(source)) continue;
+        // 同名已存在就往后编号，不覆盖用户自己的图
+        let name = String(item.name ?? '').trim() || `whale${copied + 1}`;
+        let suffix = 2;
+        const base = name;
+        while (resolveSticker(name) !== null) name = `${base}${suffix++}`;
+        cpSync(source, join(stickerDir, `${name}.png`));
+        copied += 1;
+      }
+      settings.stickerSeeded = true;
+      saveSettings();
+      log(`bundled stickers seeded: ${copied}`);
+    } catch (error) {
+      log(`bundled sticker seed failed: ${error?.message ?? error}`);
+    }
+  }
+
   function loadSettings() {
     const base = {
       whitelist: [],
@@ -983,7 +1040,10 @@ export function apply(ctx, rawConfig) {
       stickerDisabled: [],
       stickerGroup: {},
       stickerGroups: [],
+      stickerSeeded: false,
+      autonomy: null,
       disabledUsers: [],
+      userNotes: {},
       hiddenPresets: [],
       presetPrompts: {},
       dnd: { enabled: false, startHour: 23, endHour: 9 },
@@ -1065,7 +1125,15 @@ export function apply(ctx, rawConfig) {
             ? Object.fromEntries(Object.entries(parsed.stickerGroup).map(([name, group]) => [String(name), String(group)]))
             : {},
         stickerGroups: Array.isArray(parsed.stickerGroups) ? parsed.stickerGroups.map(String) : [],
+        stickerSeeded: parsed.stickerSeeded === true,
+        autonomy: parsed.autonomy && typeof parsed.autonomy === 'object' ? parsed.autonomy : null,
         disabledUsers: Array.isArray(parsed.disabledUsers) ? parsed.disabledUsers.map(String) : [],
+        userNotes:
+          parsed.userNotes && typeof parsed.userNotes === 'object' && !Array.isArray(parsed.userNotes)
+            ? Object.fromEntries(
+                Object.entries(parsed.userNotes).map(([key, value]) => [String(key), String(value).slice(0, 24)]),
+              )
+            : {},
         hiddenPresets: Array.isArray(parsed.hiddenPresets) ? parsed.hiddenPresets.map(String) : [],
         presetPrompts:
           parsed.presetPrompts && typeof parsed.presetPrompts === 'object' && !Array.isArray(parsed.presetPrompts)
@@ -1723,58 +1791,96 @@ export function apply(ctx, rawConfig) {
     }
   }
 
+  /** 发表情（fabiaoqing.com）的搜索结果页——中文梗图最全，且直链可下。 */
+  async function stickerUrlsFromFabiaoqing(query) {
+    const url = `https://fabiaoqing.com/search/bqb/keyword/${encodeURIComponent(query)}/type/bq/page/1.html`;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'user-agent': USER_AGENT },
+    });
+    if (!response.ok) return [];
+    const html = await response.text();
+    const found = [];
+    for (const match of html.matchAll(/data-original="(https?:\/\/[^"]+?\.(?:gif|png|jpe?g|webp))"/gi)) found.push(match[1]);
+    for (const match of html.matchAll(/<img[^>]+src="(https?:\/\/[^"]+?\.(?:gif|png|jpe?g|webp))"/gi)) found.push(match[1]);
+    return [...new Set(found)];
+  }
+
+  /** Bing 图片搜索：兜底，覆盖中文覆盖不到的关键词。 */
+  async function stickerUrlsFromBing(query) {
+    const url = `https://cn.bing.com/images/search?q=${encodeURIComponent(`${query} 表情包`)}&form=HDRSC2`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
+    if (!response.ok) return [];
+    const html = await response.text();
+    const found = [];
+    for (const match of html.matchAll(/murl&quot;:&quot;(https?:\/\/[^&"]+?)&quot;/gi)) found.push(match[1]);
+    for (const match of html.matchAll(/"murl":"(https?:\/\/[^"]+?)"/gi)) found.push(match[1]);
+    return [...new Set(found.map((item) => item.replace(/\\u002f/g, '/')))];
+  }
+
   /** Search the web for sticker images and install the first few that decode. */
   async function searchStickers(query, limit = 4) {
-    const web = ctx.get('web');
-    if (web === undefined) throw new Error('web 服务不可用');
-    // GitHub first: sticker packs there are single images with stable raw URLs.
-    let result = await web.search({ query: `github ${query} 表情包 sticker pack` });
-    let raw = JSON.stringify(result ?? {});
-    let allUrls = [...raw.matchAll(/https?:\/\/[^"'\s\\<>]+/gi)].map((m) => m[0]);
-    const githubRaw = allUrls.filter((url) => /raw\.githubusercontent\.com|github\.com\/[^/]+\/[^/]+\/raw/i.test(url)).filter((url) => /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url));
-    if (githubRaw.length === 0) {
-      // No direct GitHub images: fall back to the generic search, but keep the
-      // GitHub query as a second pass because it often surfaces pack READMEs
-      // that list raw image links.
-      result = await web.search({ query: `${query} 表情包` });
-      raw = JSON.stringify(result ?? {});
-      allUrls = [...raw.matchAll(/https?:\/\/[^"'\s\\<>]+/gi)].map((m) => m[0]);
-    }
-    const directImages = allUrls.filter((url) => /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url) && !/logo|icon|avatar|badge|favicon|sprite/i.test(url));
-    const pages = allUrls.filter((url) => !/\.(png|jpe?g|gif|webp|css|js)(\?|$)/i.test(url));
-
+    const keyword = String(query ?? '').trim();
+    if (keyword === '') throw new Error('关键词为空');
     const candidates = [];
-    for (const url of directImages.slice(0, 8)) candidates.push(url);
-    for (const page of [...new Set(pages)].slice(0, 5)) {
-      const fromPage = await imageUrlsFrom(page);
-      for (const url of fromPage.slice(0, 8)) candidates.push(url);
-      if (candidates.length >= 24) break;
+    // Bing 图片先跑：稳定、直链多；fabiaoqing 中文梗图更准但偶尔超时。
+    for (const probe of [
+      { name: 'bing', run: () => stickerUrlsFromBing(keyword) },
+      { name: 'fabiaoqing', run: () => stickerUrlsFromFabiaoqing(keyword) },
+    ]) {
+      try {
+        const urls = await probe.run();
+        if (urls.length > 0) {
+          log(`sticker search ${probe.name}: ${urls.length} candidates for "${keyword}"`);
+          candidates.push(...urls.slice(0, 16));
+        }
+      } catch (error) {
+        log(`sticker search ${probe.name} failed: ${error?.message ?? error}`);
+      }
+      if (candidates.length >= 12) break;
+    }
+    if (candidates.length === 0) {
+      const web = ctx.get('web');
+      if (web !== undefined) {
+        try {
+          const result = await web.search({ query: `${keyword} 表情包` });
+          const raw = JSON.stringify(result ?? {});
+          for (const match of raw.matchAll(/https?:\/\/[^"'\s\\<>]+?\.(?:png|jpe?g|gif|webp)/gi)) candidates.push(match[0]);
+          for (const page of [...new Set([...raw.matchAll(/https?:\/\/[^"'\s\\<>]+/gi)].map((m) => m[0]))].slice(0, 4)) {
+            for (const image of await imageUrlsFrom(page)) candidates.push(image);
+          }
+        } catch (error) {
+          log(`sticker search web failed: ${error?.message ?? error}`);
+        }
+      }
     }
 
     const saved = [];
-    // Prefer hosts that actually host reaction images over generic article pages.
-    const preferred = /biaoqing|sticker|emoji|doutu|fabiaoqing|memes|gif/i;
-    const ordered = [...new Set(candidates)].sort((a, b) => Number(preferred.test(b)) - Number(preferred.test(a)));
-    for (const url of ordered) {
+    const seen = new Set();
+    for (const url of [...new Set(candidates)]) {
       if (saved.length >= limit) break;
-      if (/logo|icon|avatar|badge|csdn|favicon|sprite/i.test(url)) continue;
+      if (/logo|icon|avatar|badge|csdn|favicon|sprite|qrcode|erweima/i.test(url)) continue;
       try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
         if (!response.ok) continue;
         const bytes = new Uint8Array(await response.arrayBuffer());
-        if (bytes.byteLength < 15000 || bytes.byteLength > 4 * 1024 * 1024) continue;
+        if (bytes.byteLength < 8000 || bytes.byteLength > 4 * 1024 * 1024) continue;
         const mediaType = sniffImage(bytes);
         if (mediaType === null) continue;
-        // PNG carries its own dimensions at a fixed offset; reject postage-stamp logos.
         if (mediaType === 'image/png' && bytes.length > 24) {
           const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
           const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
-          if (width > 0 && height > 0 && (width < 150 || height < 150)) continue;
+          if (width > 0 && height > 0 && (width < 120 || height < 120)) continue;
         }
+        const fingerprint = createHash('sha1').update(bytes).digest('hex');
+        if (seen.has(fingerprint)) continue;
+        seen.add(fingerprint);
         const extension =
           mediaType === 'image/gif' ? '.gif' : mediaType === 'image/webp' ? '.webp' : mediaType === 'image/jpeg' ? '.jpg' : '.png';
-        const safe = String(query).replace(/[\\/:*?"<>|\s]/g, '').slice(0, 12) || 'sticker';
-        const name = `${safe}_${saved.length + 1}`;
+        const safe = keyword.replace(/[\\/:*?"<>|\s]/g, '').slice(0, 12) || 'sticker';
+        let name = `${safe}_${saved.length + 1}`;
+        let index = 2;
+        while (listStickers().includes(name)) name = `${safe}_${saved.length + 1}_${index++}`;
         mkdirSync(stickerDir, { recursive: true });
         writeFileSync(join(stickerDir, `${name}${extension}`), bytes);
         saved.push(name);
@@ -1782,6 +1888,7 @@ export function apply(ctx, rawConfig) {
         /* try the next candidate */
       }
     }
+    log(`sticker search "${keyword}": saved ${saved.length} of ${candidates.length} candidates`);
     return saved;
   }
 
@@ -1836,6 +1943,24 @@ export function apply(ctx, rawConfig) {
     if (!socket || !socket.ready) return false;
     const echo = `b${(echoSeq += 1)}`;
     return socket.send(JSON.stringify({ action: name, params, echo }));
+  }
+
+  /** 需要回包的调用：改签名、拿 cookie 这类必须先知道成功没有。 */
+  function request(name, params, timeoutMs = 15000) {
+    if (!socket || !socket.ready) return Promise.reject(new Error('还没连上 NapCat'));
+    const echo = `r${(echoSeq += 1)}`;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingCalls.delete(echo);
+        reject(new Error(`${name}: 超时`));
+      }, timeoutMs);
+      pendingCalls.set(echo, { name, resolve, reject, timer });
+      if (!socket.send(JSON.stringify({ action: name, params, echo }))) {
+        clearTimeout(timer);
+        pendingCalls.delete(echo);
+        reject(new Error('发送失败'));
+      }
+    });
   }
 
   function sendSegments(chat, segments) {
@@ -1942,9 +2067,147 @@ export function apply(ctx, rawConfig) {
     return out.trim();
   }
 
+  /**
+   * 号主在聊天里直接改配置。只碰设置项，不执行代码、不重启、不建任务——
+   * 出问题的代价应当是一个开关拨错，而不是把正在跑的桥接改坏。
+   */
+  async function handleOwnerCommand(chat, line) {
+    const reply = (text) => sendText({ ...chat, sendChain: Promise.resolve() }, text);
+    const [, command = '', rest = ''] = line.match(/^[/／]([^\s]*)\s*([\s\S]*)$/) ?? [];
+    const arg = rest.trim();
+    try {
+      switch (command.toLowerCase()) {
+        case '帮助':
+        case 'help':
+          reply(
+            [
+              '能改的：',
+              '/人设 一段话 —— 改当前人设（内置预设则存成改写稿）',
+              '/语音 on|off　/表情 on|off　/主动 on|off',
+              '/白名单 加|删 QQ号',
+              '/搜索 host|wikipedia|ddg|searx',
+              '/档位 省|标准|高|最高',
+              '/记忆 压缩|清除',
+              '/状态',
+            ].join('\n'),
+          );
+          return true;
+        case '状态': {
+          const live = state.chats[chat.key]?.sessionId;
+          reply(
+            `连接 ${socket?.ready === true ? '在线' : '离线'} · 档位 ${INTELLIGENCE_EFFORT[settings.intelligence] ?? '?'}` +
+              ` · 人设 ${activePersona().id} · 语音 ${settings.voice.enabled ? '开' : '关'}` +
+              ` · 表情 ${settings.stickers.enabled ? '开' : '关'} · 会话 ${live ? '有' : '无'}`,
+          );
+          return true;
+        }
+        case '语音':
+          settings.voice.enabled = arg !== 'off';
+          saveSettings();
+          reply(`语音已${settings.voice.enabled ? '打开' : '关闭'}`);
+          return true;
+        case '表情':
+          settings.stickers.enabled = arg !== 'off';
+          saveSettings();
+          reply(`表情包已${settings.stickers.enabled ? '打开' : '关闭'}`);
+          return true;
+        case '主动':
+          settings.toggles = { ...settings.toggles, proactive: arg !== 'off' };
+          cfg.proactive = arg !== 'off' ? cfg.proactive ?? normalizeProactive({}) : null;
+          saveSettings();
+          reply(`主动找你已${arg !== 'off' ? '打开' : '关闭'}`);
+          return true;
+        case '白名单': {
+          const match = arg.match(/^(加|删)\s*(\d{5,12})$/);
+          if (match === null) {
+            reply('用法：/白名单 加 1234567');
+            return true;
+          }
+          const list = new Set(settings.whitelist.length > 0 ? settings.whitelist : effectiveUsers());
+          if (match[1] === '加') list.add(match[2]);
+          else list.delete(match[2]);
+          settings.whitelist = [...list];
+          saveSettings();
+          reply(`${match[1] === '加' ? '已加入' : '已移出'}白名单：${match[2]}`);
+          return true;
+        }
+        case '搜索': {
+          const engines = ['host', 'wikipedia', 'ddg', 'searx'];
+          if (!engines.includes(arg)) {
+            reply('可选：host / wikipedia / ddg / searx');
+            return true;
+          }
+          settings.search = { ...settings.search, engine: arg };
+          saveSettings();
+          reply(`搜索已切到 ${arg}`);
+          return true;
+        }
+        case '人设': {
+          if (arg === '') {
+            reply('用法：/人设 你是……（会改当前人设的提示词）');
+            return true;
+          }
+          const persona = activePersona();
+          const custom = settings.personae.find((item) => item.id === persona.id);
+          if (custom !== undefined) {
+            custom.prompt = arg;
+            saveSettings();
+          } else if (persona.id === 'whale' || persona.id === 'chiang') {
+            settings.presetPrompts[persona.id] = arg;
+            saveSettings();
+          } else {
+            reply('当前是跟随配置模式，先选一个人设再改');
+            return true;
+          }
+          for (const key of Object.keys(state.chats)) delete state.chats[key];
+          chats.clear();
+          saveState();
+          reply('人设改好了，下一条消息生效');
+          return true;
+        }
+        case '记忆': {
+          if (arg === '压缩') {
+            const text = await compactChat(chat, 'manual');
+            reply(text ? '压缩好了' : '这段没什么可压的');
+            return true;
+          }
+          if (arg === '清除') {
+            delete memories[chat.key];
+            saveMemories();
+            reply('这段记忆清了');
+            return true;
+          }
+          reply('用法：/记忆 压缩 或 /记忆 清除');
+          return true;
+        }
+        default:
+          return false;
+      }
+    } catch (error) {
+      log(`owner command failed: ${error?.message ?? error}`);
+      reply('这条指令出错了，看日志');
+      return true;
+    }
+  }
+
+  /** 号主可能只记得备注或尾号，都认。 */
+  function resolveTargetUser(raw) {
+    const target = String(raw ?? '').trim();
+    if (/^\d{5,12}$/.test(target)) return target;
+    const byNote = Object.entries(settings.userNotes).find(([, note]) => note === target);
+    if (byNote !== undefined) return byNote[0];
+    const digits = target.replace(/\D/g, '');
+    if (digits.length >= 4) {
+      const tail = digits.slice(-4);
+      const byTail = effectiveUsers().find((user) => user.slice(-4) === tail);
+      if (byTail !== undefined) return byTail;
+    }
+    return '';
+  }
+
   /** Owner-only: deliver a message to one whitelisted person on their behalf. */
   function sendToUser(userId, text, prefix) {
-    const target = String(userId).trim();
+    const target = resolveTargetUser(userId);
     const allowed = effectiveUsers().includes(target) || settings.owners.includes(target);
     if (!allowed) {
       log(`owner target ${target} is not in the whitelist — refused`);
@@ -1959,6 +2222,988 @@ export function apply(ctx, rawConfig) {
     logMessage({ dir: 'out', chat: `private:${target}`, text: `[号主代发] ${cleaned.slice(0, 200)}` });
     log(`owner relay -> private:${target}`);
     return true;
+  }
+
+  /* ---------- sticker meanings + photo search ---------- */
+
+  const stickerNoteFile = join(cfg.dataDir, 'sticker-notes.json');
+  let stickerNotes = loadStickerNotes();
+
+  function loadStickerNotes() {
+    try {
+      const parsed = JSON.parse(readFileSync(stickerNoteFile, 'utf8'));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveStickerNotes() {
+    try {
+      mkdirSync(dirname(stickerNoteFile), { recursive: true });
+      writeFileSync(stickerNoteFile, JSON.stringify(stickerNotes, null, 2));
+    } catch (error) {
+      log(`sticker notes save failed: ${error?.message ?? error}`);
+    }
+  }
+
+  /** 让模型看一眼这张表情包，写一句「它是什么、表示什么」。 */
+  async function describeStickerImage(file) {
+    const llm = ctx.get('llm');
+    const attachments = ctx.get('attachments');
+    if (llm === undefined || attachments === undefined) return '';
+    const bytes = readFileSync(file);
+    const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+    if (mediaType === null) return '';
+    let provider = cfg.model?.provider ?? 'deepseek-account';
+    let model = cfg.model?.model ?? 'deepseek-flash';
+    try {
+      const selection = ctx.get('agentDefaultModel')?.currentSelection();
+      if (selection?.provider) provider = selection.provider;
+      if (selection?.model) model = selection.model;
+    } catch {
+      /* keep fallback */
+    }
+    const ref = await attachments.saveImage({ data: new Uint8Array(bytes), mediaType, name: 'sticker' });
+    let text = '';
+    const stream = llm.stream({
+      provider,
+      model,
+      system: '看一眼这张表情包，用不超过 20 个字说清：画面是什么 + 用来表达什么情绪。只输出这一句，不要引号。',
+      messages: [{ role: 'user', content: [{ type: 'image', attachment: ref }] }],
+      maxTokens: 120,
+      signal: AbortSignal.timeout(60000),
+    });
+    for await (const chunk of stream) {
+      if (chunk.type === 'text-delta') text += chunk.text;
+      if (chunk.type === 'finish' && chunk.reason?.kind === 'error') throw new Error('看图失败');
+    }
+    return text.trim().slice(0, 30);
+  }
+
+  /** 补齐没有释义的表情包（一次最多 limit 张，避免一口气烧钱）。 */
+  async function fillStickerNotes(limit = 6) {
+    const done = [];
+    for (const name of listStickers()) {
+      if (done.length >= limit) break;
+      if (typeof stickerNotes[name] === 'string' && stickerNotes[name] !== '') continue;
+      const file = resolveSticker(name);
+      if (file === null) continue;
+      try {
+        const note = await describeStickerImage(file);
+        if (note !== '') {
+          stickerNotes[name] = note;
+          done.push(name);
+        }
+      } catch (error) {
+        log(`sticker describe failed (${name}): ${error?.message ?? error}`);
+      }
+    }
+    if (done.length > 0) {
+      saveStickerNotes();
+      log(`sticker notes filled: ${done.join('、')}`);
+    }
+    return done;
+  }
+
+  /** 用关键词找一张真实照片（不是表情包），存到缓存里再发。 */
+  async function searchPhoto(keyword) {
+    const urls = [];
+    try {
+      urls.push(...(await stickerUrlsFromBing(keyword)));
+    } catch (error) {
+      log(`photo search failed: ${error?.message ?? error}`);
+    }
+    const dir = join(cacheRoot, 'photos');
+    for (const url of [...new Set(urls)]) {
+      if (/logo|icon|avatar|badge|favicon|sprite|qrcode/i.test(url)) continue;
+      try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
+        if (!response.ok) continue;
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length < 20000 || bytes.length > 6 * 1024 * 1024) continue;
+        const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+        if (mediaType === null) continue;
+        if (mediaType === 'image/png' && bytes.length > 24) {
+          const width = bytes.readUInt32BE(16);
+          const height = bytes.readUInt32BE(20);
+          if (width < 300 || height < 300) continue;
+        }
+        mkdirSync(dir, { recursive: true });
+        const extension = mediaType === 'image/png' ? 'png' : mediaType === 'image/gif' ? 'gif' : 'jpg';
+        const file = join(dir, `p-${Date.now()}.${extension}`);
+        writeFileSync(file, bytes);
+        log(`photo found for "${keyword}" (${bytes.length} bytes)`);
+        return file;
+      } catch {
+        /* next */
+      }
+    }
+    return null;
+  }
+
+  /** 读出图片尺寸（png/gif/webp/jpeg），读不出来返回 null。 */
+  function imageSize(bytes, mediaType) {
+    try {
+      if (mediaType === 'image/png' && bytes.length > 24) {
+        return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+      }
+      if (mediaType === 'image/gif' && bytes.length > 10) {
+        return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) };
+      }
+      if (mediaType === 'image/webp' && bytes.length > 30) {
+        const chunk = bytes.toString('ascii', 12, 16);
+        if (chunk === 'VP8X') return { width: bytes.readUIntLE(24, 3) + 1, height: bytes.readUIntLE(27, 3) + 1 };
+        if (chunk === 'VP8 ') return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+        if (chunk === 'VP8L') {
+          const bits = bytes.readUInt32LE(21);
+          return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+        }
+      }
+      if (mediaType === 'image/jpeg') {
+        let offset = 2;
+        while (offset + 9 < bytes.length) {
+          if (bytes[offset] !== 0xff) {
+            offset += 1;
+            continue;
+          }
+          const marker = bytes[offset + 1];
+          const length = bytes.readUInt16BE(offset + 2);
+          if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+            return { height: bytes.readUInt16BE(offset + 5), width: bytes.readUInt16BE(offset + 7) };
+          }
+          offset += 2 + length;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  /**
+   * 批量收集：多个查询词各搜一遍，按「像素 + 体积 + 无损格式」打分取前 N 张。
+   * 搜到的图先下载校验，不合格的直接丢。
+   */
+  async function harvestStickers(queries, name, limit = 12) {
+    const wanted = Math.min(30, Math.max(1, Number(limit) || 12));
+    const seen = new Set();
+    const scored = [];
+    for (const query of queries.slice(0, 6)) {
+      if (String(query).trim() === '') continue;
+      let urls = [];
+      try {
+        urls = await stickerUrlsFromBing(query);
+      } catch (error) {
+        log(`harvest query failed (${query}): ${error?.message ?? error}`);
+      }
+      for (const url of [...new Set(urls)].slice(0, 24)) {
+        if (seen.has(url)) continue;
+        seen.add(url);
+        if (/logo|icon|avatar|badge|favicon|sprite|qrcode|banner/i.test(url)) continue;
+        try {
+          const response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { 'user-agent': USER_AGENT } });
+          if (!response.ok) continue;
+          const bytes = Buffer.from(await response.arrayBuffer());
+          if (bytes.length < 12000 || bytes.length > 6 * 1024 * 1024) continue;
+          const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+          if (mediaType === null) continue;
+          const size = imageSize(bytes, mediaType);
+          if (size === null || size.width < 200 || size.height < 200) continue;
+          const ratio = size.width / size.height;
+          if (ratio < 0.45 || ratio > 2.2) continue;
+          const pixels = size.width * size.height;
+          const bonus = mediaType === 'image/gif' ? 1.25 : mediaType === 'image/webp' ? 1.15 : mediaType === 'image/png' ? 1.1 : 1;
+          scored.push({ bytes, mediaType, score: pixels * bonus * (0.7 + Math.min(1, bytes.length / 400000)) });
+        } catch {
+          /* next */
+        }
+      }
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const saved = [];
+    const prefix = String(name ?? queries[0] ?? 'sticker').replace(/[\\/:*?"<>|\s]/g, '').slice(0, 12) || 'sticker';
+    mkdirSync(stickerDir, { recursive: true });
+    for (const item of scored) {
+      if (saved.length >= wanted) break;
+      const extension =
+        item.mediaType === 'image/gif'
+          ? '.gif'
+          : item.mediaType === 'image/webp'
+            ? '.webp'
+            : item.mediaType === 'image/jpeg'
+              ? '.jpg'
+              : '.png';
+      let index = saved.length + 1;
+      let stickerName = `${prefix}_${index}`;
+      while (listStickers().includes(stickerName)) stickerName = `${prefix}_${index++}`;
+      writeFileSync(join(stickerDir, `${stickerName}${extension}`), item.bytes);
+      saved.push(stickerName);
+    }
+    log(`harvest "${prefix}": ${saved.length} kept from ${scored.length} candidates`);
+    return saved;
+  }
+
+  /** 从一篇文章/相册页里把同一套图都收下来（表情包合集页最有用）。 */
+  async function harvestFromPage(url, name, limit = 12) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(20000), headers: { 'user-agent': USER_AGENT } });
+    if (!response.ok) throw new Error(`打不开这个页面：HTTP ${response.status}`);
+    const html = await response.text();
+    const urls = new Set();
+    for (const match of html.matchAll(/https?:\/\/[^"'\s<>()]+?\.(?:png|jpe?g|gif|webp)(?:\?[^"'\s<>()]*)?/gi)) {
+      urls.add(match[0]);
+    }
+    for (const match of html.matchAll(/(?:data-original|data-src|src)="(https?:\/\/[^"]+?\.(?:png|jpe?g|gif|webp))"/gi)) {
+      urls.add(match[1]);
+    }
+    const wanted = Math.min(30, Math.max(1, Number(limit) || 12));
+    const saved = [];
+    const prefix = String(name ?? 'page').replace(/[\\/:*?"<>|\s]/g, '').slice(0, 12) || 'page';
+    mkdirSync(stickerDir, { recursive: true });
+    for (const candidate of urls) {
+      if (saved.length >= wanted) break;
+      if (/logo|icon|avatar|badge|favicon|sprite|qrcode|banner|head/i.test(candidate)) continue;
+      try {
+        const image = await fetch(candidate, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
+        if (!image.ok) continue;
+        const bytes = Buffer.from(await image.arrayBuffer());
+        if (bytes.length < 10000 || bytes.length > 6 * 1024 * 1024) continue;
+        const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+        if (mediaType === null) continue;
+        const size = imageSize(bytes, mediaType);
+        if (size === null || size.width < 180 || size.height < 180) continue;
+        const extension =
+          mediaType === 'image/gif'
+            ? '.gif'
+            : mediaType === 'image/webp'
+              ? '.webp'
+              : mediaType === 'image/jpeg'
+                ? '.jpg'
+                : '.png';
+        let index = saved.length + 1;
+        let stickerName = `${prefix}_${index}`;
+        while (listStickers().includes(stickerName)) stickerName = `${prefix}_${index++}`;
+        writeFileSync(join(stickerDir, `${stickerName}${extension}`), bytes);
+        saved.push(stickerName);
+      } catch {
+        /* next */
+      }
+    }
+    log(`page harvest "${prefix}": ${saved.length} saved from ${urls.size} urls`);
+    return saved;
+  }
+
+  /** 表情包的情绪分组。 */
+  const STICKER_GROUPS = ['开心', '难过', '生气', '疑惑', '害羞', '摆烂', '日常', '互动', '其他'];
+
+  /** 让模型看一眼这张表情包：写一句释义，并归到一个情绪分组。 */
+  async function classifySticker(name) {
+    const file = resolveSticker(name);
+    if (file === null) return null;
+    const llm = ctx.get('llm');
+    const attachments = ctx.get('attachments');
+    if (llm === undefined || attachments === undefined) return null;
+    const bytes = readFileSync(file);
+    const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+    if (mediaType === null) return null;
+    let provider = cfg.model?.provider ?? 'deepseek-account';
+    let model = cfg.model?.model ?? 'deepseek-flash';
+    try {
+      const selection = ctx.get('agentDefaultModel')?.currentSelection();
+      if (selection?.provider) provider = selection.provider;
+      if (selection?.model) model = selection.model;
+    } catch {
+      /* keep fallback */
+    }
+    const ref = await attachments.saveImage({ data: new Uint8Array(bytes), mediaType, name: 'classify' });
+    let text = '';
+    for (let attempt = 0; attempt < 2 && text.trim() === ''; attempt += 1) {
+      const stream = llm.stream({
+        provider,
+        model,
+        system:
+          '看这张表情包，输出紧凑 JSON：{"desc":"25 字内说画面和情绪","group":"' +
+          STICKER_GROUPS.join('、') +
+          ' 里选一个"}。只输出 JSON。',
+        messages: [{ role: 'user', content: [{ type: 'image', attachment: ref }] }],
+        maxTokens: 200,
+        signal: AbortSignal.timeout(45000),
+      });
+      for await (const chunk of stream) {
+        if (chunk.type === 'text-delta') text += chunk.text;
+      }
+    }
+    const descMatch = text.match(/"desc"\s*:\s*"([^"]*)"/);
+    const groupMatch = text.match(/"group"\s*:\s*"([^"]*)"/);
+    const raw = groupMatch?.[1] ?? '';
+    const aliases = {
+      搞笑: '开心', 沙雕: '开心', 哈哈: '开心', 得意: '开心', 高兴: '开心',
+      哭: '难过', 委屈: '难过', 伤心: '难过', 泪: '难过',
+      无语: '摆烂', 嫌弃: '摆烂', 翻白眼: '摆烂', 摆烂: '摆烂', 躺平: '摆烂',
+      惊讶: '疑惑', 震惊: '疑惑', 疑惑: '疑惑', 问号: '疑惑',
+      吃饭: '日常', 吃: '日常', 睡: '日常', 摸鱼: '日常', 加班: '日常',
+      亲: '害羞', 喜欢: '害羞', 比心: '害羞', 害羞: '害羞', 爱心: '害羞',
+      加油: '互动', 摸摸: '互动', 抱: '互动', 贴贴: '互动', 聊天: '互动',
+      生气: '生气', 愤怒: '生气', 炸毛: '生气', 骂: '生气',
+    };
+    const group =
+      STICKER_GROUPS.find((item) => raw.includes(item)) ??
+      Object.entries(aliases).find(([keyword]) => raw.includes(keyword))?.[1] ??
+      '其他';
+    const desc = (descMatch?.[1] ?? '').replace(/["\\]/g, '').trim().slice(0, 30);
+    return { desc, group };
+  }
+
+  /** 批量识别 + 分组，一次 limit 张。 */
+  async function classifyStickers(limit = 8, force = false) {
+    const classified = [];
+    for (const name of listStickers()) {
+      if (classified.length >= limit) break;
+      const current = settings.stickerGroup[name];
+      // force=true 时连「其他」也重判一次（多半是分组词没认出来）
+      if (!(force && current === '其他') && typeof current === 'string' && current !== '') continue;
+      try {
+        const result = await classifySticker(name);
+        if (result === null) continue;
+        if (result.desc !== '') stickerNotes[name] = result.desc;
+        settings.stickerGroup[name] = result.group;
+        if (!settings.stickerGroups.includes(result.group)) settings.stickerGroups.push(result.group);
+        classified.push({ name, group: result.group, desc: result.desc });
+      } catch (error) {
+        log(`classify failed (${name}): ${error?.message ?? error}`);
+      }
+    }
+    if (classified.length > 0) {
+      saveStickerNotes();
+      saveSettings();
+      log(`stickers classified: ${classified.map((item) => `${item.name}→${item.group}`).join('、')}`);
+    }
+    return classified;
+  }
+
+  /** 判断候选图和原图是不是同一个角色/同一套图；不是就删掉。 */
+  async function pruneStickersBySimilarity(ref, names) {
+    const llm = ctx.get('llm');
+    const attachments = ctx.get('attachments');
+    if (llm === undefined || attachments === undefined || names.length === 0) return names;
+    let provider = cfg.model?.provider ?? 'deepseek-account';
+    let model = cfg.model?.model ?? 'deepseek-flash';
+    try {
+      const selection = ctx.get('agentDefaultModel')?.currentSelection();
+      if (selection?.provider) provider = selection.provider;
+      if (selection?.model) model = selection.model;
+    } catch {
+      /* keep fallback */
+    }
+    const kept = [];
+    for (const name of names) {
+      const file = resolveSticker(name);
+      if (file === null) continue;
+      try {
+        const bytes = readFileSync(file);
+        const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+        if (mediaType === null) continue;
+        const candidate = await attachments.saveImage({ data: new Uint8Array(bytes), mediaType, name: 'candidate' });
+        let answer = '';
+        const stream = llm.stream({
+          provider,
+          model,
+          system: '看两张表情包，判断第二张是不是和第一张同一个角色、或者同一套图。只回答「是」或「不是」。',
+          messages: [
+            { role: 'user', content: [{ type: 'image', attachment: ref }, { type: 'image', attachment: candidate }] },
+          ],
+          maxTokens: 20,
+          signal: AbortSignal.timeout(45000),
+        });
+        for await (const chunk of stream) {
+          if (chunk.type === 'text-delta') answer += chunk.text;
+        }
+        if (/^是/.test(answer.trim())) {
+          kept.push(name);
+        } else {
+          unlinkSync(file);
+          log(`sticker rejected (different character): ${name}`);
+        }
+      } catch (error) {
+        log(`similarity check failed (${name}): ${error?.message ?? error}`);
+        kept.push(name);
+      }
+    }
+    return kept;
+  }
+
+  /** 让模型看图，给出搜图用的中文关键词（不是描述画面）。 */
+  async function stickerKeywordsFromImage(image) {
+    const llm = ctx.get('llm');
+    if (llm === undefined) throw new Error('llm 服务不可用');
+    let provider = cfg.model?.provider ?? 'deepseek-account';
+    let model = cfg.model?.model ?? 'deepseek-flash';
+    try {
+      const selection = ctx.get('agentDefaultModel')?.currentSelection();
+      if (selection?.provider) provider = selection.provider;
+      if (selection?.model) model = selection.model;
+    } catch {
+      /* keep fallback */
+    }
+    let text = '';
+    // llm.stream 只认 durable attachment，所以先把图存成附件再引用。
+    const attachments = ctx.get('attachments');
+    if (attachments === undefined) throw new Error('attachments 服务不可用');
+    const ref = await attachments.saveImage({
+      data: new Uint8Array(Buffer.from(image.data, 'base64')),
+      mediaType: image.mediaType,
+      name: image.name ?? 'sticker',
+    });
+    // 偶尔会返回空文本，重试一次再放弃。
+    for (let attempt = 0; attempt < 2 && text.trim() === ''; attempt += 1) {
+      const stream = llm.stream({
+        provider,
+        model,
+        system:
+          '你会看表情包。给一张图，输出紧凑 JSON：' +
+          '{"desc":"一句话说画面和情绪","caption":"图上的主要台词，原样抄，没有就空字符串",' +
+          '"keywords":["3个中文短词，各不超过8个字，用来搜同类表情包"]}。只输出 JSON。',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', attachment: ref },
+              { type: 'text', text: '这张图想表达什么？给我搜同类表情包要用的关键词。' },
+            ],
+          },
+        ],
+        maxTokens: 500,
+        signal: AbortSignal.timeout(60000),
+      });
+      for await (const chunk of stream) {
+        if (chunk.type === 'text-delta') text += chunk.text;
+        if (chunk.type === 'finish' && chunk.reason?.kind === 'error') {
+          throw new Error(chunk.reason.failure?.message ?? '看图失败');
+        }
+      }
+    }
+    if (text.trim() === '') log('vision returned empty text (twice)');
+    // 模型输出可能被截断，逐字段抓，不依赖整体 JSON.parse。
+    const cleanKeyword = (value) =>
+      String(value)
+        .replace(/["{}[\]\\]/g, '')
+        .replace(/^desc[:：]?/i, '')
+        .trim()
+        .slice(0, 10);
+    const descMatch = text.match(/"desc"\s*:\s*"([^"]*)"/);
+    const captionMatch = text.match(/"caption"\s*:\s*"([^"]*)"/);
+    const keywordBlock = text.match(/"keywords"\s*:\s*\[([\s\S]*?)(?:\]|$)/);
+    let keywords = [];
+    if (keywordBlock !== null) {
+      keywords = [...keywordBlock[1].matchAll(/"([^"]*)"/g)]
+        .map((item) => cleanKeyword(item[1]))
+        .filter((item) => item !== '');
+    }
+    keywords = [...new Set(keywords)].slice(0, 4);
+    const caption = (captionMatch?.[1] ?? '').replace(/["\\]/g, '').trim().slice(0, 30);
+    if (descMatch === null && keywords.length === 0) {
+      const plain = cleanKeyword(text);
+      return { desc: plain, caption, keywords: plain === '' ? [] : [plain] };
+    }
+    return { desc: (descMatch?.[1] ?? '').slice(0, 80), caption, keywords };
+  }
+
+  /** 以图搜图：先拿图上的台词原句搜，再按关键词补；都是同一角色的图概率更高。 */
+  async function searchStickersByImage(image, limit = 4) {
+    const { desc, caption, keywords } = await stickerKeywordsFromImage(image);
+    const added = [];
+    const queries = [];
+    if (typeof caption === 'string' && caption.length >= 4) queries.push(caption);
+    queries.push(...keywords);
+    for (const query of queries) {
+      if (added.length >= limit) break;
+      const got = await searchStickers(query, Math.min(2, limit - added.length));
+      added.push(...got);
+    }
+    if (added.length === 0 && desc !== '') {
+      const got = await searchStickers(desc.slice(0, 12), 2);
+      added.push(...got);
+    }
+    // 搜回来的常常只是「梗相似」的别的图，再让模型看一眼是不是同一个角色。
+    let kept = added;
+    if (added.length > 0) {
+      try {
+        const attachments = ctx.get('attachments');
+        if (attachments !== undefined) {
+          const ref = await attachments.saveImage({
+            data: new Uint8Array(Buffer.from(image.data, 'base64')),
+            mediaType: image.mediaType,
+            name: 'reference',
+          });
+          kept = await pruneStickersBySimilarity(ref, added.slice(0, limit));
+        }
+      } catch (error) {
+        log(`similarity pass skipped: ${error?.message ?? error}`);
+      }
+    }
+    log(
+      `sticker by image: caption="${caption ?? ''}" keywords="${keywords.join('、')}" ` +
+        `desc="${desc}" added ${added.length} kept ${kept.length}`,
+    );
+    return { desc, caption, keywords, added: kept };
+  }
+
+  /** 给她一个真实的「现在」，而不是让她猜。 */
+  function clockStamp() {
+    const now = new Date();
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const pad = (value) => String(value).padStart(2, '0');
+    return `（现在是 ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} ${weekdays[now.getDay()]}）`;
+  }
+
+  /**
+   * 号主用自然语言让她改设置时，她回一句 [设置:键=值]，桥接负责落地。
+   * 只认下面这些键——面板能改什么，她就能改什么。
+   */
+  function applyOwnerMarker(chat, key, value) {
+    const raw = String(key ?? '').trim();
+    const val = String(value ?? '').trim();
+    switch (raw) {
+      case '语音':
+        settings.voice.enabled = !/^(关|off|否|0)$/i.test(val);
+        saveSettings();
+        return `语音已${settings.voice.enabled ? '打开' : '关闭'}`;
+      case '表情':
+        settings.stickers.enabled = !/^(关|off|否|0)$/i.test(val);
+        saveSettings();
+        return `表情包已${settings.stickers.enabled ? '打开' : '关闭'}`;
+      case '主动':
+        settings.toggles = { ...settings.toggles, proactive: !/^(关|off|否|0)$/i.test(val) };
+        cfg.proactive = settings.toggles.proactive ? cfg.proactive ?? normalizeProactive({}) : null;
+        saveSettings();
+        return `主动找你已${settings.toggles.proactive ? '打开' : '关闭'}`;
+      case '档位': {
+        const level = { 省: 'eco', 标准: 'standard', 高: 'high', 最高: 'max' }[val] ?? val;
+        if (!['eco', 'standard', 'high', 'max'].includes(level)) return '档位只认 省/标准/高/最高';
+        settings.intelligence = level;
+        saveSettings();
+        configuredModels.clear();
+        for (const live of chats.values()) {
+          try {
+            ctx.sessionController.cancel({ sessionId: live.sessionId });
+          } catch {
+            /* best effort */
+          }
+        }
+        chats.clear();
+        state.chats = {};
+        saveState();
+        return `档位已切到 ${level}（${INTELLIGENCE_EFFORT[level]}）`;
+      }
+      case '搜索': {
+        if (!['host', 'wikipedia', 'ddg', 'searx'].includes(val)) return '搜索源只认 host/wikipedia/ddg/searx';
+        settings.search = { ...settings.search, engine: val };
+        saveSettings();
+        return `搜索已切到 ${val}`;
+      }
+      case '白名单': {
+        const match = val.match(/^(加|删)\s*(\d{5,12})$/);
+        if (match === null) return '白名单用法：加/删 + QQ 号';
+        const list = new Set(settings.whitelist.length > 0 ? settings.whitelist : effectiveUsers());
+        if (match[1] === '加') list.add(match[2]);
+        else list.delete(match[2]);
+        settings.whitelist = [...list];
+        saveSettings();
+        return `${match[1] === '加' ? '已加入' : '已移出'}白名单：${match[2]}`;
+      }
+      case '人设': {
+        if (val === '') return '人设不能是空的';
+        const persona = activePersona();
+        const custom = settings.personae.find((item) => item.id === persona.id);
+        if (custom !== undefined) {
+          custom.prompt = val;
+          saveSettings();
+        } else if (persona.id === 'whale' || persona.id === 'chiang') {
+          settings.presetPrompts[persona.id] = val;
+          saveSettings();
+        } else {
+          return '当前是跟随配置模式，先选一个人设';
+        }
+        for (const key2 of Object.keys(state.chats)) delete state.chats[key2];
+        chats.clear();
+        saveState();
+        return '人设改好了，下一条生效';
+      }
+      case '记忆':
+        if (val === '清除') {
+          delete memories[chat.key];
+          saveMemories();
+          return '这段记忆清了';
+        }
+        return '记忆只支持：清除';
+      default:
+        return `没有「${raw}」这个设置`;
+    }
+  }
+
+  /**
+   * 她没看懂 → 查 → 用她自己的口吻接着答。
+   * 查询和资料都留在这一侧：对方只看到一句自然回复。
+   */
+  async function replyAfterLookup(chat, draft) {
+    try {
+      const terms = [...String(draft).matchAll(/\[查[:：]\s*([^\]\n]{1,24})\]/g)].map((match) => match[1].trim());
+      const queries = terms.length > 0 ? terms.slice(0, 2) : [String(chat.lastText ?? '').trim().slice(0, 40)];
+      log(`silent lookup: ${queries.join(' / ')}`);
+      let material = '';
+      for (const term of queries) {
+        if (term === '') continue;
+        const part = await collectSearchMaterial(term);
+        if (part !== '') material += `\n【${term}】\n${part}`;
+        if (material.length > 2600) break;
+      }
+      const body = String(draft)
+        .replace(/\[查[:：][^\]\n]{1,24}\]/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      if (material.trim() === '') {
+        log('silent lookup: nothing found, sent the draft answer');
+        sendText(chat, body !== '' ? body : '这个我真没查到，换个说法？');
+        return;
+      }
+      const persona = activePersona();
+      let personaPrompt = persona.prompt;
+      if (personaPrompt === '' && (persona.id === 'whale' || persona.id === 'chiang')) {
+        personaPrompt = settings.presetPrompts[persona.id] ?? readPresetPrompt(persona.id);
+      }
+      const base = (settings.basePersona !== '' ? settings.basePersona : DEFAULT_BASE_PERSONA).trim();
+      const system = [
+        base === '' ? '' : `【底层准则】\n${base}`,
+        personaPrompt,
+        '刚才有个词你没看懂，已经查过资料了。现在用你自己的口吻接着说你的话：两三条短句，' +
+          '别提交过、别复述资料、别写「查」「搜」这类字。',
+      ]
+        .filter((part) => part !== '')
+        .join('\n\n');
+      const recent = messages
+        .filter((entry) => entry.chat === chat.key)
+        .slice(-6)
+        .map((entry) => `${entry.dir === 'in' ? '他' : '你'}：${String(entry.text ?? '').slice(0, 120)}`)
+        .join('\n');
+      const reply = await askModel(
+        system,
+        `聊天记录：\n${recent}\n\n他刚说：${chat.lastText}\n\n刚查到的资料：\n${material}`,
+        400,
+      );
+      const cleaned = reply.replace(/\[查[:：][^\]\n]{1,24}\]/g, '').trim();
+      log('silent lookup: replied in her own words');
+      sendText(chat, cleaned !== '' ? cleaned : body !== '' ? body : '这个我真没查到，换个说法？');
+    } catch (error) {
+      log(`lookup reply failed: ${error?.message ?? error}`);
+      sendText(chat, '嗯…这个我一时说不上来');
+    }
+  }
+
+  /* ---------------- 自主行为（L1 + L2） ---------------- */
+
+  const AUTONOMY_DEFAULTS = {
+    enabled: false,
+    signature: true,
+    nickname: false,
+    qzone: false,
+    initiate: true,
+    maxPerDay: { signature: 1, nickname: 1, qzone: 1, chats: 3 },
+    minGapMinutes: 45,
+    wakeStart: 9,
+    wakeEnd: 23,
+    maxChars: 120,
+  };
+
+  function autonomyConfig() {
+    const saved = settings.autonomy ?? {};
+    return {
+      ...AUTONOMY_DEFAULTS,
+      ...saved,
+      maxPerDay: { ...AUTONOMY_DEFAULTS.maxPerDay, ...(saved.maxPerDay ?? {}) },
+    };
+  }
+
+  function todayKey() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  function autonomyState() {
+    state.autonomy = state.autonomy ?? {};
+    const today = todayKey();
+    if (state.autonomy.day !== today) {
+      state.autonomy = { day: today, counts: { signature: 0, nickname: 0, qzone: 0, chats: 0 }, lastActionAt: 0, log: [] };
+    }
+    state.autonomy.counts = state.autonomy.counts ?? { signature: 0, nickname: 0, qzone: 0, chats: 0 };
+    state.autonomy.log = Array.isArray(state.autonomy.log) ? state.autonomy.log : [];
+    return state.autonomy;
+  }
+
+  function autonomyAllowed(kind) {
+    const config = autonomyConfig();
+    if (!config.enabled) return false;
+    const hour = new Date().getHours();
+    if (hour < config.wakeStart || hour >= config.wakeEnd) return false;
+    const auto = autonomyState();
+    const cap = config.maxPerDay[kind] ?? 0;
+    if ((auto.counts[kind] ?? 0) >= cap) return false;
+    if (kind !== 'chats' && auto.lastActionAt !== 0 && Date.now() - auto.lastActionAt < config.minGapMinutes * 60000) {
+      return false;
+    }
+    return true;
+  }
+
+  /** 内容底线：明显违规的直接拒，不指望模型自觉。 */
+  const AUTONOMY_BLOCKLIST = [
+    '习近平', '共产党', '政治', '游行', '暴动', '色情', '裸', '约炮', '赌博', '博彩', '毒品', '冰毒',
+    '枪支', '炸药', '恐怖', '法轮', '台独', '港独', '反华', '自杀', '汇款', '转账', '加微信',
+    '扫码', '返利', '代购', '刷单', '兼职日结',
+  ];
+
+  function autonomyContentOk(text) {
+    const body = String(text ?? '').trim();
+    if (body === '') return '内容为空';
+    const config = autonomyConfig();
+    if (body.length > config.maxChars) return `太长了（${body.length} > ${config.maxChars}）`;
+    const hit = AUTONOMY_BLOCKLIST.find((word) => body.includes(word));
+    if (hit !== undefined) return `含敏感词「${hit}」`;
+    if (/https?:\/\/|www\./i.test(body)) return '不要带链接';
+    return null;
+  }
+
+  /** 改签名（NapCat 的 longnick 接口）。 */
+  async function setSignature(text) {
+    await request('set_self_longnick', { longNick: text }, 15000);
+    log(`autonomy: signature -> ${text}`);
+    return true;
+  }
+
+  /** 改昵称。 */
+  async function setNickname(text) {
+    await request('set_qq_profile', { nickname: text }, 15000);
+    log(`autonomy: nickname -> ${text}`);
+    return true;
+  }
+
+  /** 发一条 QQ 空间说说（cookie + g_tk，非官方接口，会过期）。 */
+  async function publishQzone(text) {
+    const [cookies, csrf] = await Promise.all([
+      request('get_cookies', { domain: 'qzone.qq.com' }, 15000),
+      request('get_csrf_token', {}, 15000),
+    ]);
+    const cookieHeader = String(cookies?.cookies ?? '');
+    const token = Number(csrf?.token ?? 0);
+    if (cookieHeader === '' || token === 0) throw new Error('拿不到 cookie 或 token');
+    const skeyMatch = cookieHeader.match(/(?:^|;\s*)skey=([^;]+)/);
+    const skey = skeyMatch === null ? '' : skeyMatch[1];
+    let hash = 5381;
+    for (const char of skey) hash += (hash << 5) + char.charCodeAt(0);
+    const bkn = (hash & 0x7fffffff) >>> 0;
+    const body = new URLSearchParams({
+      syn_tweet_verson: '1',
+      paramstr: '1',
+      who: '1',
+      con: text,
+      feedversion: '1',
+      ver: '1',
+      ugc_right: '1',
+      to_sign: '0',
+      hostuin: String(lastSelfId),
+      code_version: '1',
+      format: 'json',
+      qzreferrer: `https://user.qzone.qq.com/${lastSelfId}`,
+    }).toString();
+    const response = await fetch(
+      `https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin/emotion_cgi_publish_v6?g_tk=${bkn}`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader,
+          referer: `https://user.qzone.qq.com/${lastSelfId}`,
+          'user-agent': USER_AGENT,
+        },
+        body,
+        signal: AbortSignal.timeout(20000),
+      },
+    );
+    const raw = await response.text();
+    if (!response.ok) throw new Error(`空间接口 HTTP ${response.status}`);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(raw.replace(/^[^{]*/, ''));
+    } catch {
+      /* jsonp 包装 */
+    }
+    if (parsed !== null && parsed.code !== undefined && Number(parsed.code) !== 0) {
+      throw new Error(`空间接口返回 code=${parsed.code} ${parsed.message ?? ''}`);
+    }
+    log(`autonomy: qzone posted (${text.length} chars)`);
+    return { ok: true };
+  }
+
+  /** 事后复盘：她刚才那句话是怎么想出来的（模型不会保留思考过程，只能回头问）。 */
+  async function reflectOnTurn(chat, userText, spoken) {
+    if (settings.autonomy?.reflect === false) return null;
+    if (String(userText).trim() === '' || String(spoken).trim() === '') return null;
+    const answer = await askModel(
+      '你在复盘自己刚才的回复。用两三句话、第一人称写下你当时在想什么：' +
+        '你在意他哪句话、你判断他是什么情绪、你为什么选这个语气和这个内容。' +
+        '不要复述你回复的原文，不要总结整段对话，只写当时脑子里的念头。',
+      '他说：' + String(userText).slice(0, 200) + '\n你回：' + String(spoken).slice(0, 200) + '\n你当时在想什么？',
+      300,
+    );
+    const thinking = String(answer).trim();
+    if (thinking === '') return null;
+    state.thoughtLog = Array.isArray(state.thoughtLog) ? state.thoughtLog : [];
+    state.thoughtLog.unshift({
+      at: Date.now(),
+      chat: chat.key,
+      thinking: thinking.slice(0, 1200),
+      reply: String(spoken).slice(0, 200),
+    });
+    state.thoughtLog = state.thoughtLog.slice(0, 40);
+    saveState();
+    return thinking;
+  }
+
+  /** 让她自己决定这一轮要不要做点什么。 */
+  async function autonomyTick(manual = false, options = {}) {
+    const config = autonomyConfig();
+    if (!config.enabled && !manual) return { skipped: 'disabled' };
+    const auto = autonomyState();
+    const roster = effectiveUsers()
+      .map((user) => {
+        const note = settings.userNotes[user];
+        const last = messages.filter((entry) => entry.chat === `private:${user}`).slice(-1)[0];
+        const idle = last === undefined ? 999 : Math.round((Date.now() - last.time) / 60000);
+        return `${note ?? '尾号' + user.slice(-4)}：上次说话 ${idle} 分钟前`;
+      })
+      .join('\n');
+    // 规则先判断「现在有没有值得做的事」，模型只负责写内容——这样行为可预测、可测试。
+    const hour = Number(String(options.clock ?? '').slice(11, 13));
+    const nowHour = Number.isFinite(hour) && hour > 0 ? hour : new Date().getHours();
+    const candidates = [];
+    const countsView = options.budget ?? (options.freshBudget === true ? { chats: 0, qzone: 0, signature: 0, nickname: 0 } : auto.counts);
+    if (config.initiate === true && (countsView.chats ?? 0) < (config.maxPerDay.chats ?? 0)) {
+      const idle = effectiveUsers()
+        .map((user) => {
+          const last = messages.filter((entry) => entry.chat + '' === 'private:' + user).slice(-1)[0];
+          const real = last === undefined ? 999 : Math.round((Date.now() - last.time) / 60000);
+          return { user, minutes: typeof options.fakeIdle === 'number' ? options.fakeIdle : real };
+        })
+        .filter((item) => item.minutes >= 120)
+        .sort((a, b) => b.minutes - a.minutes)[0];
+      if (idle !== undefined) candidates.push({ action: 'chat', target: idle.user, minutes: idle.minutes });
+    }
+    if (
+      config.qzone === true &&
+      (countsView.qzone ?? 0) < (config.maxPerDay.qzone ?? 0) &&
+      [11, 12, 17, 18, 22].includes(nowHour)
+    ) {
+      candidates.push({ action: 'qzone' });
+    }
+    if (config.signature === true && (countsView.signature ?? 0) < (config.maxPerDay.signature ?? 0)) {
+      candidates.push({ action: 'signature' });
+    }
+    if (candidates.length === 0) {
+      auto.lastActionAt = Date.now();
+      saveState();
+      return { action: 'none', reason: '没有触发条件' };
+    }
+    const pick = candidates[0];
+    const choices = [];
+    if (pick.action === 'signature') choices.push('- signature：改个性签名（一句话，20 字内，像人随手写的）');
+    if (pick.action === 'qzone') choices.push('- qzone：发一条说说（40 字内，生活化，不涉及政治/广告/链接）');
+    if (pick.action === 'chat') choices.push('- chat：主动找某个人说话（只能找下面列表里的人，优先找最久没说话的那个）');
+    const system = [
+      '你是这个 QQ 号的主人，现在没人跟你说话，你可以决定做点什么。',
+      `现在时间：${options.clock ?? clockStamp()}`,
+      '可选动作（只能从下面选一个，没列出来的就是没开、别选）：',
+      ...choices,
+      '输出 JSON：{"action":"...","text":"...","target":"备注或尾号","reason":"一句为什么"}',
+      '按上面的要求，现在就做这一件事；内容要具体，别像模板。',
+
+      `今天已经做过：${(auto.log ?? [])
+        .slice(0, 5)
+        .map((item) => item.action)
+        .join('、') || '还没有'}`,
+      `可找的人：\n${roster}`,
+    ].join('\n');
+    const answer = await askModel(system, '现在做什么？', 400);
+    let decision = { action: 'none' };
+    try {
+      const match = answer.match(/\{[\s\S]*\}/);
+      if (match !== null) decision = JSON.parse(match[0]);
+    } catch {
+      /* 解析失败就当不做 */
+    }
+    // 规则已经挑好动作，模型只负责写内容；它答歪了就按规则的动作走。
+    const action = pick.action;
+    const reason = String(decision.reason ?? '').slice(0, 120);
+    if (action === 'none') {
+      auto.lastActionAt = Date.now();
+      saveState();
+      return { action: 'none' };
+    }
+    const text = String(decision.text ?? '').trim();
+    const problem = autonomyContentOk(text);
+    if (problem !== null) {
+      log(`autonomy: rejected ${action} (${problem})`);
+      return { action, rejected: problem };
+    }
+    const bucket = action === 'chat' ? 'chats' : action;
+    const switchedOn = action === 'chat' ? config.initiate === true : config[action] === true;
+    // 模拟模式：只回报判断，不真的执行；但要占用模拟额度，才能看出一天会做几次。
+    if (options.dryRun === true) {
+      const allowed = switchedOn && (manual || autonomyAllowed(bucket));
+      if (options.budget !== undefined) options.budget[bucket] = (options.budget[bucket] ?? 0) + 1;
+      return {
+        action,
+        text: text.slice(0, 80),
+        reason,
+        target: String(decision.target ?? ''),
+        wouldRun: allowed,
+      };
+    }
+    if (!switchedOn) return { action, rejected: '这个动作没开' };
+    // 手动点「想一次」= 你本人要求的，跳过每日额度和最小间隔，只看开关。
+    if (!manual && !autonomyAllowed(bucket)) return { action, skipped: 'budget-or-window' };
+    try {
+      if (action === 'signature') await setSignature(text);
+      else if (action === 'nickname') await setNickname(text);
+      else if (action === 'qzone') await publishQzone(text);
+      else if (action === 'chat') {
+        const target = resolveTargetUser(String(decision.target ?? ''));
+        if (target === '' || !effectiveUsers().includes(target)) return { action, rejected: 'target-not-allowed' };
+        await admit(
+          { key: `private:${target}`, kind: 'private', chatId: target, userId: target, sendChain: Promise.resolve() },
+          text,
+          { post_type: 'message', message_type: 'private', user_id: Number(target), message: [], raw_message: text },
+        );
+      } else {
+        return { action, rejected: 'unknown-action' };
+      }
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      auto.lastError = { at: Date.now(), action, message: message.slice(0, 200) };
+      saveState();
+      log(`autonomy: ${action} failed: ${message}`);
+      return { action, error: message };
+    }
+    auto.counts[bucket] = (auto.counts[bucket] ?? 0) + 1;
+    auto.lastActionAt = Date.now();
+    auto.log.unshift({
+      at: Date.now(),
+      action,
+      text: text.slice(0, 80),
+      target: String(decision.target ?? ''),
+      reason: String(decision.reason ?? '').slice(0, 120),
+    });
+    auto.log = auto.log.slice(0, 20);
+    saveState();
+    log(`autonomy: did ${action} -> ${text.slice(0, 40)}`);
+    return { action, ok: true };
   }
 
   /**
@@ -2017,7 +3262,7 @@ export function apply(ctx, rawConfig) {
         }
         if (chat.isOwner === true) {
           const perms = settings.ownerPerms;
-          const toOne = perms.send ? chunk.match(/^\s*\[发送[:：]\s*([0-9]{5,12})\s*\|\s*([\s\S]{1,300})\]\s*$/) : null;
+          const toOne = perms.send ? chunk.match(/^\s*\[发送[:：]\s*([^|\]\n]{1,24})\s*\|\s*([\s\S]{1,300})\]\s*$/) : null;
           if (toOne !== null) {
             sendToUser(toOne[1], toOne[2]);
             continue;
@@ -2028,7 +3273,7 @@ export function apply(ctx, rawConfig) {
             continue;
           }
           const later = perms.schedule
-            ? chunk.match(/^\s*\[定时[:：]\s*(\d{1,4})\s*\|\s*([0-9]{5,12})\s*\|\s*([\s\S]{1,300})\]\s*$/)
+            ? chunk.match(/^\s*\[定时[:：]\s*(\d{1,4})\s*\|\s*([^|\]\n]{1,24})\s*\|\s*([\s\S]{1,300})\]\s*$/)
             : null;
           if (later !== null) {
             const minutes = Math.min(1440, Number(later[1]));
@@ -2038,6 +3283,37 @@ export function apply(ctx, rawConfig) {
             setTimeout(() => sendToUser(target, body), minutes * 60000);
             continue;
           }
+        }
+        // `[图:关键词]` 发一张真实照片（不是表情包）。
+        const photoCommand = chunk.match(/^\s*\[图[:：]\s*([^\]\n]{1,30})\]\s*$/);
+        if (photoCommand !== null) {
+          try {
+            const file = await searchPhoto(photoCommand[1].trim());
+            if (file !== null) sendSegments(chat, [{ type: 'image', data: { file } }]);
+            else log(`photo not found: ${photoCommand[1]}`);
+          } catch (error) {
+            log(`photo send failed: ${error?.message ?? error}`);
+          }
+          continue;
+        }
+        // `[表情包:搜图]` 用他刚发的那张图去找同类表情包。
+        const visualSearch = chunk.match(/^\s*\[表情包[:：]\s*搜图\s*\]\s*$/);
+        if (visualSearch !== null) {
+          if (!chat.lastImage) {
+            sendText(chat, '你发张图，我照着找');
+            continue;
+          }
+          try {
+            const { added } = await searchStickersByImage(chat.lastImage, 2);
+            for (const name of added) {
+              const file = resolveSticker(name);
+              if (file !== null) sendSegments(chat, [{ type: 'image', data: { file } }]);
+              await new Promise((resolve) => setTimeout(resolve, 700));
+            }
+          } catch (error) {
+            log(`sticker by image failed: ${error?.message ?? error}`);
+          }
+          continue;
         }
         // `[表情包:搜 关键词]` goes online for a fresh sticker instead of using
         // the local shelf.
@@ -2055,21 +3331,28 @@ export function apply(ctx, rawConfig) {
           }
           continue;
         }
-        // `[查:词]` = she admits she doesn't know it; the bridge looks it up and
-        // replies with a second, short answer in her voice.
-        const lookup = chunk.match(/^\s*\[查[:：]\s*([^\]\n]{1,24})\]\s*$/);
-        if (lookup !== null) {
-          void answerLookup(chat, lookup[1].trim());
-          continue;
-        }
+        // `[查:词]` 不再单独发一条查询结果：整条回复交给 replyAfterLookup，
+        // 查完用她自己的话答（turn/end 里统一处理）。
         // `[语音]` turns one burst into a voice message; without TTS enabled or
         // a successful render it degrades to plain text instead of vanishing.
         let voiceFile = null;
         if (/^\s*\[语音\]/.test(chunk)) {
           const spoken = chunk.replace(/^\s*\[语音\]\s*/, '');
           if (settings.voice.enabled && spoken !== '') {
-            voiceFile = await synthesizeVoice(spoken);
-            if (voiceFile !== null) chunk = spoken;
+            try {
+              voiceFile = await synthesizeVoice(spoken);
+            } catch (error) {
+              // 失败也得让人知道原因，不然面板上只看到「语音开着却没声音」。
+              settings.voice.lastError = String(error?.message ?? error).slice(0, 200);
+              settings.voice.lastErrorAt = Date.now();
+              saveSettings();
+              log(`voice failed: ${settings.voice.lastError}`);
+            }
+            if (voiceFile !== null) {
+              chunk = spoken;
+              settings.voice.lastError = '';
+              saveSettings();
+            }
           } else {
             chunk = spoken;
           }
@@ -2107,7 +3390,17 @@ export function apply(ctx, rawConfig) {
       onMessage: (text) => {
         client.lastAlive = Date.now();
         try {
-          handlePayload(JSON.parse(text));
+          const payload = JSON.parse(text);
+          // OneBot 的 API 回包带 echo，先在待办里认领。
+          if (typeof payload?.echo === 'string' && pendingCalls.has(payload.echo)) {
+            const entry = pendingCalls.get(payload.echo);
+            pendingCalls.delete(payload.echo);
+            clearTimeout(entry.timer);
+            if (payload.status === 'ok' || payload.retcode === 0) entry.resolve(payload.data);
+            else entry.reject(new Error(`${entry.name}: ${payload.message ?? payload.wording ?? payload.retcode}`));
+            return;
+          }
+          handlePayload(payload);
         } catch (error) {
           log(`bad onebot payload: ${error?.message ?? error}`);
         }
@@ -2136,6 +3429,11 @@ export function apply(ctx, rawConfig) {
     return `${kind}:${id}`;
   }
 
+  /** 开场白一改就要换会话，所以版本号把开场白也算进去。 */
+  function preambleRev() {
+    return `${cfg.presetRev}.${PREAMBLE_REV}`;
+  }
+
   async function ensureSession(chat) {
     const known = state.chats[chat.key];
     const persona = activePersona();
@@ -2143,7 +3441,7 @@ export function apply(ctx, rawConfig) {
     // start a fresh Session instead of talking to the old one.
     const samePreset =
       (known?.preset ?? '') === persona.id &&
-      (known?.rev ?? '') === cfg.presetRev &&
+      (known?.rev ?? '') === preambleRev() &&
       // Owner mode is baked into the preamble, so a chat that changed status
       // needs a Session of its own.
       (known?.owner === true) === (chat.isOwner === true);
@@ -2162,7 +3460,7 @@ export function apply(ctx, rawConfig) {
       state.chats[chat.key] = {
         sessionId: created.sessionId,
         preset: persona.id,
-        rev: cfg.presetRev,
+        rev: preambleRev(),
         owner: chat.isOwner === true,
         title: chat.title,
         createdAt: Date.now(),
@@ -2179,8 +3477,13 @@ export function apply(ctx, rawConfig) {
       }
       if (persona.prompt !== '') preambleParts.push(persona.prompt);
       if (chat.isOwner === true) {
+        // 只给备注 + 尾号：完整号码没必要进模型上下文。
         const roster = effectiveUsers()
           .filter((user) => !settings.owners.includes(user))
+          .map((user) => {
+            const note = settings.userNotes[user];
+            return note ? `${note}（尾号${user.slice(-4)}）` : `尾号${user.slice(-4)}`;
+          })
           .join('、');
         const lines = ['【号主模式】现在跟你说话的是号主本人，你有额外权限，可以直接替他办事：'];
         if (settings.ownerPerms.send) {
@@ -2190,6 +3493,33 @@ export function apply(ctx, rawConfig) {
         if (settings.ownerPerms.schedule) lines.push('- 定时发送：[定时:分钟|QQ号|要说的话]');
         lines.push('- 也可以直接回答他的话、改主意、拒绝；办完事回一句就行，别复述指令。');
         lines.push(
+          '- **他让你改设置时你可以直接改**：回一句 `[设置:键=值]`，桥接会真的写进去。可用的键：' +
+            '`语音=开/关`、`表情=开/关`、`主动=开/关`、`档位=省/标准/高/最高`、' +
+            '`搜索=host/wikipedia/ddg/searx`、`白名单=加 1234567`、`白名单=删 1234567`、`人设=一段话`、`记忆=清除`。',
+        );
+        lines.push(
+          '- 设置标签只是给你用的记号，用户看不到；改完用你自己的话说一句「好了」就行，别把标签念出来。',
+        );
+        lines.push(
+          [
+            '- 管理面板里有这些，他问你的时候你要答得上来（别整段背给他听）：',
+            '概览：连接状态、本地快速登录、开机自启、机器人账号、最近日志；',
+            '发消息：用你的身份手动发文字/语音/表情；',
+            '监听：你们所有来往记录，按对话分组、按方向筛选；',
+            '人设：底层性格、两套预设人设（文本能直接改）、自定义人设、试聊；',
+            '联系人：号主、允许私聊的 QQ、允许的群；',
+            '素材：表情包（分组/停用/联网搜图/以图搜同款）、语音引擎与音色；',
+            '记忆：多少轮压缩一次、已存记忆、记忆文件位置、缓存与大扫除；',
+            '模型：智力档位、用哪个模型、主动行为与勿扰时段、搜索引擎。',
+            '- 他能让你改的只有：语音、表情、主动、档位、搜索、白名单、人设、记忆。',
+            '别的设置一律让他去面板点，别假装能改。',
+          ].join('\n'),
+        );
+        lines.push(
+          '- 【你自己能干的事】除了聊天，你还能改个性签名、发 QQ 空间说说、主动找人说话（只在白名单里）。' +
+            '这些在面板「自主」页由他控制开关和频率；他说不行就是不行。',
+        );
+        lines.push(
           '- **代发时别提号主**：不要说「号主让我跟你说」「他让我转告」「号主说」，也不要署名或加括号说明。' +
             '就直接用你自己的口吻把话说完，对方看起来就是你在跟他说话。',
         );
@@ -2197,16 +3527,44 @@ export function apply(ctx, rawConfig) {
       }
       const stickerNames = listStickers().filter((name) => !settings.stickerDisabled.includes(name));
       if (settings.stickers.enabled === true && stickerNames.length > 0) {
-        const grouped = stickerNames
-          .map((name) => (settings.stickerGroup[name] ? `${name}(${settings.stickerGroup[name]})` : name))
-          .join('、');
+        // 226 张全列出来太费 token：按组给几张示例，其余按组随机抽。
+        const byGroup = new Map();
+        for (const name of stickerNames) {
+          const group = settings.stickerGroup[name] ?? '';
+          if (!byGroup.has(group)) byGroup.set(group, []);
+          byGroup.get(group).push(name);
+        }
+        const summary = [...byGroup.entries()]
+          .map(([group, names]) => {
+            const samples = names
+              .slice(0, 5)
+              .map((name) => (stickerNotes[name] ? `${name}（${stickerNotes[name]}）` : name));
+            return `${group === '' ? '其他' : group}（${names.length}张）：${samples.join('、')}`;
+          })
+          .join('\n');
         preambleParts.push(
-          `【手边的表情包】${grouped}\n用 [表情包:名字] 发一张；想让桥接上网找新的，就写 [表情包:搜 关键词]。`,
+          `【手边的表情包】共 ${stickerNames.length} 张，按情绪分组：\n${summary}\n` +
+            '用 [表情包:名字] 发指定那张；写 [表情包:组名]（例如 [表情包:生气]）就从那一组随机抽一张——这是最自然的用法。' +
+            '想让桥接上网找新的，写 [表情包:搜 关键词]；找跟他刚发那张类似的，写 [表情包:搜图]。',
+        );
+      }
+      if (settings.stickers.enabled === true) {
+        preambleParts.push(
+          '【拍照/找图】他聊到吃的、天气、风景、猫狗、自己在干什么的时候，你可以直接发一张真实照片：' +
+            '写 [图:关键词]，例如 [图:精致摆盘的日式料理]、[图:下雨的城市街道]。一次一张，配一句短话。',
         );
       }
       const remembered = memories[chat.key]?.text;
       if (typeof remembered === 'string' && remembered !== '') {
         preambleParts.push(`【你们之前聊过的，记着这些】\n${remembered}`);
+      }
+      // 会话可能是重建的（换人设/压缩/重启）。把监听里最近的几句带上，别像失忆。
+      const recentLines = messages
+        .filter((entry) => entry.chat === chat.key && typeof entry.text === 'string' && entry.text !== '[图片]')
+        .slice(-8)
+        .map((entry) => `${entry.dir === 'in' ? '他' : '你'}：${entry.text.slice(0, 90)}`);
+      if (recentLines.length > 0) {
+        preambleParts.push(`【你们最近这几句】\n${recentLines.join('\n')}`);
       }
       if (preambleParts.length > 0) personaPreamble.set(created.sessionId, preambleParts.join('\n\n'));
       log(`created session ${created.sessionId} for ${chat.key} (persona=${persona.id})`);
@@ -2410,6 +3768,13 @@ export function apply(ctx, rawConfig) {
       return;
     }
 
+    // 号主的 `/xxx` 配置指令（只改设置，不动代码）。
+    if (chat.isOwner === true && /^[/／](帮助|help|状态|人设|语音|表情|主动|白名单|搜索|记忆)\b/.test(text)) {
+      void handleOwnerCommand(chat, text);
+      logMessage({ dir: 'in', chat: key, text: text.slice(0, 500), image: carriesImage === true });
+      return;
+    }
+
     void admit(chat, text, payload);
     logMessage({ dir: 'in', chat: key, text: text.slice(0, 500), image: carriesImage === true });
   }
@@ -2489,6 +3854,10 @@ export function apply(ctx, rawConfig) {
       state.chats[chat.key].updatedAt = Date.now();
       await configureModel(sessionId, chat.key);
       const content = await buildContent(payload, text, chat.key);
+      const incomingImages = content.filter((part) => part.type === 'image');
+      if (incomingImages.length > 0) live.lastImage = incomingImages[incomingImages.length - 1];
+      // 每轮都带上真实时间，否则她只能凭空猜早上晚上。
+      content.unshift({ type: 'text', text: clockStamp() });
       if (content.some((part) => part.type === 'image')) {
         content.unshift({
           type: 'text',
@@ -2531,7 +3900,7 @@ export function apply(ctx, rawConfig) {
 
   /* ---------------- outbound ---------------- */
 
-  ctx.on('session/event', (session, event) => {
+  ctx.on('session/event', async (session, event) => {
     if (selfTest !== null && session.id === selfTest.sessionId) {
       if (event.type === 'assistant/message') {
         const text = textOfContent(event.data.message?.content);
@@ -2562,6 +3931,11 @@ export function apply(ctx, rawConfig) {
         if (!turn) return;
         const text = textOfContent(event.data.message?.content);
         if (text.trim() !== '') turn.parts.push(text);
+        // 模型自己给出的思考段落（有就记下来，没有就空着）。
+        const reasoning = reasoningOfContent(event.data.message?.content);
+        if (reasoning.trim() !== '') {
+          turn.reasoning = turn.reasoning === undefined ? reasoning : `${turn.reasoning}\n${reasoning}`;
+        }
         return;
       }
       if (event.type === 'turn/end') {
@@ -2570,6 +3944,19 @@ export function apply(ctx, rawConfig) {
         chat.lastActivity = Date.now();
         const reason = event.data.reason ?? { kind: 'completed' };
         const spoken = (turn?.parts ?? []).join('\n\n').trim();
+        // 把「她当时怎么想的」单独存一份，想法页只看这个，不重复聊天记录。
+        const thinking = String(turn?.reasoning ?? '').trim();
+        if (thinking !== '' && spoken !== '') {
+          state.thoughtLog = Array.isArray(state.thoughtLog) ? state.thoughtLog : [];
+          state.thoughtLog.unshift({
+            at: Date.now(),
+            chat: chat.key,
+            thinking: thinking.slice(0, 1200),
+            reply: spoken.slice(0, 200),
+          });
+          state.thoughtLog = state.thoughtLog.slice(0, 40);
+          saveState();
+        }
         // A turn this plugin started on its own initiative: the model decides
         // whether it has anything to say at all.
         if (chat.proactivePending === true) {
@@ -2590,28 +3977,59 @@ export function apply(ctx, rawConfig) {
           sendText(chat, '（已中止）');
           return;
         }
-        const answer = spoken;
+        let answer = spoken;
+        // 号主可以让她顺手改设置：她回一句 [设置:键=值]，这里落地。
+        if (chat.isOwner === true && /\[设置[:：]/.test(answer)) {
+          const marks = [...answer.matchAll(/\[设置[:：]\s*([^=\]\n]{1,10})\s*=\s*([^\]\n]{1,300})\]/g)];
+          const notes = [];
+          for (const mark of marks) {
+            try {
+              notes.push(await applyOwnerMarker(chat, mark[1], mark[2]));
+            } catch (error) {
+              log(`owner marker failed: ${error?.message ?? error}`);
+              notes.push('有个设置没改成');
+            }
+          }
+          answer = answer.replace(/\[设置[:：][^\]]{1,330}\]/g, '').trim();
+          if (answer === '') answer = notes.join('；');
+          else if (notes.length > 0) log(`owner settings applied: ${notes.join('; ')}`);
+        }
         if (answer === '') {
           sendText(chat, cfg.emptyReply);
           return;
         }
-        sendText(chat, answer);
+        // 看不懂就直接去查，查完用她自己的话答——查这件事本身不告诉对方。
+        const wantsLookup =
+          /\[查[:：]/.test(answer) ||
+          (chat.lookupDone !== true &&
+            /不知道|不晓得|不懂|没懂|搞不懂|没搞明白|没弄明白|不了解|没听过|没听说过|不清楚|说不准|没概念|查不到/.test(
+              answer,
+            ));
+        if (wantsLookup && typeof chat.lastText === 'string' && chat.lastText.trim() !== '') {
+          chat.lookupDone = true;
+          void replyAfterLookup(chat, answer);
+        } else {
+          sendText(chat, answer);
+        }
+        // 回复发完再慢慢复盘她当时的想法，不拖慢回复。
+        const lastInbound = messages
+          .filter((entry) => entry.chat === chat.key && entry.dir === 'in')
+          .slice(-1)[0];
+        if (lastInbound !== undefined) {
+          void reflectOnTurn(chat, String(lastInbound.text ?? ''), answer).catch((error) =>
+            log(`reflect failed: ${error?.message ?? error}`),
+          );
+        }
         scheduleAfterthought(chat);
         maybeSendSticker(chat, chat.lastText);
-        // She answered "I don't know" without looking it up: look it up now and
-        // follow with the real answer instead of leaving it at that.
-        if (
-          chat.lookupDone !== true &&
-          /不知道|不晓得|不懂|没听过|没听说过|不清楚|查不到/.test(answer) &&
-          typeof chat.lastText === 'string' &&
-          chat.lastText.trim() !== ''
-        ) {
-          chat.lookupDone = true;
-          void answerLookup(chat, chat.lastText.trim().slice(0, 40));
-        }
-        chat.turnsDone = (chat.turnsDone ?? 0) + 1;
-        if (settings.memory.enabled && chat.turnsDone >= settings.memory.everyTurns) {
-          chat.turnsDone = 0;
+        // 轮数独立于会话存在：换会话/重启都不清零，否则永远攒不到阈值。
+        state.turns = state.turns ?? {};
+        const turns = (state.turns[chat.key] ?? 0) + 1;
+        state.turns[chat.key] = turns;
+        saveState();
+        if (settings.memory.enabled && turns >= settings.memory.everyTurns) {
+          state.turns[chat.key] = 0;
+          saveState();
           void compactChat(chat, 'turns');
         }
       }
@@ -2833,7 +4251,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.41.0',
+      version: '0.73.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -2847,6 +4265,7 @@ export function apply(ctx, rawConfig) {
       modelByChat: settings.modelByChat,
       stickerGroup: settings.stickerGroup,
       disabledUsers: settings.disabledUsers,
+      userNotes: settings.userNotes,
       accountPaused,
       accounts: settings.accounts,
       activeAccountId: settings.activeAccountId,
@@ -2855,6 +4274,7 @@ export function apply(ctx, rawConfig) {
       cacheDir: cacheRoot,
       memory: settings.memory,
       memories,
+      autonomy: { config: autonomyConfig(), state: autonomyState() },
       basePersona: settings.basePersona,
       basePersonaDefault: DEFAULT_BASE_PERSONA,
       owner: settings.owner,
@@ -2885,6 +4305,13 @@ export function apply(ctx, rawConfig) {
         sessionId: chat.sessionId,
         nudges: chat.nudges ?? 0,
         lastActivity: chat.lastActivity ?? 0,
+      })),
+      // 持久化的对话状态：即使当前没连着，也能看到轮数和记忆进度。
+      chatStates: [...new Set([...Object.keys(state.chats), ...Object.keys(state.turns ?? {})])].map((key) => ({
+        key,
+        sessionId: state.chats[key]?.sessionId ?? '',
+        turns: state.turns?.[key] ?? 0,
+        updatedAt: state.chats[key]?.updatedAt ?? 0,
       })),
       logFile: logFile,
     };
@@ -3083,6 +4510,29 @@ export function apply(ctx, rawConfig) {
                 settings.stickerGroups = patch.stickerGroups.map(String).filter((name) => name.trim() !== '');
               }
               if (Array.isArray(patch.disabledUsers)) settings.disabledUsers = patch.disabledUsers.map(String);
+              if (patch.autonomy && typeof patch.autonomy === 'object') {
+                const current = autonomyConfig();
+                settings.autonomy = {
+                  ...current,
+                  ...patch.autonomy,
+                  maxPerDay: { ...current.maxPerDay, ...(patch.autonomy.maxPerDay ?? {}) },
+                };
+              }
+              if (patch.autonomy && typeof patch.autonomy === 'object') {
+                const current = autonomyConfig();
+                settings.autonomy = {
+                  ...current,
+                  ...patch.autonomy,
+                  maxPerDay: { ...current.maxPerDay, ...(patch.autonomy.maxPerDay ?? {}) },
+                };
+              }
+              if (patch.userNotes && typeof patch.userNotes === 'object' && !Array.isArray(patch.userNotes)) {
+                settings.userNotes = Object.fromEntries(
+                  Object.entries(patch.userNotes)
+                    .map(([key, value]) => [String(key), String(value ?? '').trim().slice(0, 24)])
+                    .filter(([, value]) => value !== ''),
+                );
+              }
               if (typeof patch.cacheDir === 'string') {
                 const nextRoot = patch.cacheDir.trim();
                 try {
@@ -3223,15 +4673,22 @@ export function apply(ctx, rawConfig) {
             let body = '';
             req.on('data', (chunk) => {
               body += chunk;
-              if (body.length > 8192) req.destroy();
+              // 上传是 base64 图片，8MB 原图 = 约 11MB 编码，别再按 8KB 拦。
+              if (body.length > 12 * 1024 * 1024) req.destroy();
             });
             req.on('end', () => {
               try {
                 const action = JSON.parse(body === '' ? '{}' : body);
                 if (action.action === 'delete' && typeof action.name === 'string') {
-                  const safe = action.name.replace(/[\\/:*?"<>|]/g, '');
-                  const file = join(stickerDir, `${safe}.png`);
-                  if (existsSync(file)) unlinkSync(file);
+                  // 表情可能是 png/gif/jpg/webp，按扩展名逐个找，别只试 png。
+                  const safe = action.name.replace(/[\\/:*?"<>|]/g, '').trim();
+                  const file = resolveSticker(safe);
+                  if (file !== null) {
+                    unlinkSync(file);
+                    log(`sticker deleted: ${file}`);
+                  } else {
+                    log(`sticker delete: "${safe}" not found`);
+                  }
                 }
                 if (action.action === 'upload') {
                   const safe = String(action.name ?? '')
@@ -4006,6 +5463,301 @@ export function apply(ctx, rawConfig) {
     ctx.effect(() =>
       webServer.register({
         kind: 'exact',
+        path: '/im-bridge/clientlog',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 8192) req.destroy();
+          });
+          req.on('end', () => {
+            try {
+              const payload = JSON.parse(body === '' ? '{}' : body);
+              log('panel: ' + String(payload.text ?? '').slice(0, 400));
+            } catch {
+              /* ignore malformed */
+            }
+            jsonResponse(res, 200, { ok: true });
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/thoughts',
+        handler: (_req, res) => {
+          const auto = autonomyState();
+          const config = autonomyConfig();
+          const decisions = (auto.log ?? []).map((item) => ({
+            at: item.at,
+            kind: 'decision',
+            action: item.action,
+            text: item.text ?? '',
+            target: item.target ?? '',
+            reason: item.reason ?? '',
+          }));
+          // 想法页只看「她怎么想的」，不重复聊天记录。
+          const turns = (state.thoughtLog ?? []).map((item) => ({
+            at: item.at,
+            kind: 'thinking',
+            chat: item.chat,
+            text: item.thinking,
+            reply: item.reply,
+          }));
+          const timeline = [...decisions, ...turns].sort((a, b) => b.at - a.at).slice(0, 30);
+          jsonResponse(res, 200, {
+            mood: auto.mood ?? '平静',
+            enabled: config.enabled === true,
+            counts: auto.counts ?? {},
+            caps: config.maxPerDay,
+            timeline,
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/autonomy',
+        handler: (req, res) => {
+          if (req.method !== 'POST') {
+            jsonResponse(res, 200, { config: autonomyConfig(), state: autonomyState() });
+            return;
+          }
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 4096) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const requestBody = JSON.parse(body === '' ? '{}' : body);
+                if (requestBody.action === 'tick') {
+                  const result = await autonomyTick(true);
+                  jsonResponse(res, 200, { ok: true, result, state: autonomyState() });
+                  return;
+                }
+                if (requestBody.action === 'simulate') {
+                  // 快速验证「一整天她会不会自己动」：按几个时间点各想一次，但都不执行。
+                  const today = new Date().toISOString().slice(0, 10);
+                  const slots = ['09:30', '12:30', '15:30', '18:30', '21:00'];
+                  const results = [];
+                  const budget = { chats: 0, qzone: 0, signature: 0, nickname: 0 };
+                  for (const [index, slot] of slots.entries()) {
+                    try {
+                      const decision = await autonomyTick(false, {
+                        clock: today + ' ' + slot,
+                        dryRun: true,
+                        freshBudget: true,
+                        fakeIdle: 150 + index * 90,
+                        budget,
+                      });
+                      results.push({ slot, ...decision });
+                    } catch (error) {
+                      results.push({ slot, error: String(error?.message ?? error) });
+                    }
+                  }
+                  jsonResponse(res, 200, { ok: true, results });
+                  return;
+                }
+                if (requestBody.action === 'stop') {
+                  settings.autonomy = { ...autonomyConfig(), enabled: false };
+                  saveSettings();
+                  jsonResponse(res, 200, { ok: true, stopped: true });
+                  return;
+                }
+                jsonResponse(res, 400, { error: 'unsupported action' });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/debug/probe',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 4096) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const requestBody = JSON.parse(body === '' ? '{}' : body);
+                const name = String(requestBody.action ?? '');
+                const allowed = [
+                  'get_login_info',
+                  'get_version_info',
+                  'get_cookies',
+                  'get_csrf_token',
+                  'get_friend_list',
+                  'get_group_list',
+                  'get_status',
+                ];
+                if (!allowed.includes(name)) throw new Error(`只允许探测：${allowed.join(', ')}`);
+                const data = await request(name, requestBody.params ?? {}, 12000);
+                jsonResponse(res, 200, { ok: true, action: name, data });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/stickers/classify',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 4096) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const limit = Math.min(30, Math.max(1, Number(request.limit) || 8));
+                const classified = await classifyStickers(limit, request.force === true);
+                const total = listStickers().length;
+                const grouped = listStickers().filter(
+                  (name) => typeof settings.stickerGroup[name] === 'string' && settings.stickerGroup[name] !== '',
+                ).length;
+                jsonResponse(res, 200, { ok: true, classified, total, grouped, groups: settings.stickerGroups });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/stickers/page',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 8192) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const url = String(request.url ?? '').trim();
+                if (!/^https?:\/\//i.test(url)) throw new Error('给一个 http(s) 链接');
+                const added = await harvestFromPage(url, request.name ?? 'page', Number(request.limit) || 12);
+                jsonResponse(res, 200, { ok: true, added, files: listStickers() });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/stickers/harvest',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 8192) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const queries = Array.isArray(request.queries)
+                  ? request.queries.map(String).filter((item) => item.trim() !== '')
+                  : [String(request.query ?? '可爱 表情包')];
+                if (queries.length === 0) throw new Error('给个关键词');
+                const added = await harvestStickers(queries, request.name ?? queries[0], Number(request.limit) || 12);
+                jsonResponse(res, 200, { ok: true, added, files: listStickers() });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/stickers/notes',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 4096) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const limit = Math.min(20, Math.max(1, Number(request.limit) || 6));
+                const added = await fillStickerNotes(limit);
+                const total = listStickers().length;
+                const described = listStickers().filter((name) => typeof stickerNotes[name] === 'string' && stickerNotes[name] !== '').length;
+                jsonResponse(res, 200, { ok: true, added, total, described, notes: stickerNotes });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/stickers/visual',
+        handler: (req, res) => {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 12 * 1024 * 1024) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const data = String(request.data ?? '');
+                if (data === '') throw new Error('需要一张图');
+                const bytes = Buffer.from(data.replace(/^data:[^,]+,/, ''), 'base64');
+                if (bytes.length === 0) throw new Error('图片是空的');
+                const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
+                if (mediaType === null) throw new Error('只支持 PNG / JPEG / GIF / WebP');
+                const result = await searchStickersByImage(
+                  { type: 'image', data: bytes.toString('base64'), mediaType, name: 'upload' },
+                  Math.min(6, Math.max(1, Number(request.limit) || 4)),
+                );
+                jsonResponse(res, 200, { ok: true, ...result, files: listStickers() });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
         path: '/im-bridge/ai/stickers',
         handler: (req, res) => {
           let body = '';
@@ -4327,6 +6079,40 @@ export function apply(ctx, rawConfig) {
 
   connectSocket();
   if (cfg.selfTest) void runSelfTest();
+
+  // 自主行为：每 25 分钟想一次要不要做点什么（受开关/时段/每日额度约束）。
+  const autonomyTimer = setInterval(() => {
+    if (settings.autonomy?.enabled !== true) return;
+    if (!socket || socket.ready !== true) return;
+    void autonomyTick(false).catch((error) => log(`autonomy tick failed: ${error?.message ?? error}`));
+  }, 25 * 60 * 1000);
+  ctx.effect(() => () => clearInterval(autonomyTimer));
+
+  // 每天 21:00 给号主发一条「她今天做了什么」。
+  const digestTimer = setInterval(() => {
+    const now = new Date();
+    if (now.getHours() !== 21) return;
+    const stamp = `${todayKey()}:digest`;
+    if (state.lastDigest === stamp) return;
+    state.lastDigest = stamp;
+    saveState();
+    const auto = autonomyState();
+    const total = (auto.counts.signature ?? 0) + (auto.counts.qzone ?? 0) + (auto.counts.chats ?? 0) + (auto.counts.nickname ?? 0);
+    if (total === 0) return;
+    const owner = (settings.owners ?? [])[0];
+    if (owner === undefined) return;
+    const lines = [
+      '今天她自己的动作：',
+      '· 改签名 ' + String(auto.counts.signature ?? 0) + ' 次',
+      '· 发空间 ' + String(auto.counts.qzone ?? 0) + ' 次',
+      '· 主动找人 ' + String(auto.counts.chats ?? 0) + ' 次',
+    ];
+    const recent = (auto.log ?? []).slice(0, 3).map((item) => '· ' + item.action + '：' + String(item.text ?? '').slice(0, 30));
+    if (recent.length > 0) lines.push('最近三条：', ...recent);
+    action('send_msg', { message_type: 'private', user_id: Number(owner) || owner, message: [{ type: 'text', data: { text: lines.join('\n') } }] });
+    log('autonomy: daily digest sent');
+  }, 5 * 60 * 1000);
+  ctx.effect(() => () => clearInterval(digestTimer));
   scheduleProactive();
 
   ctx.effect(() => () => {
