@@ -364,6 +364,38 @@
   }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  /** 自建弹窗：面板跑在 iframe 里，window.confirm / prompt 会被 Chromium 直接拦掉。 */
+  function showModal(message, withInput, placeholder, okLabel) {
+    return new Promise(function (resolve) {
+      var box = $('modal');
+      var input = $('modalInput');
+      var ok = $('modalOk');
+      var cancel = $('modalCancel');
+      $('modalMsg').textContent = message;
+      input.style.display = withInput ? '' : 'none';
+      input.value = '';
+      input.placeholder = placeholder || '';
+      ok.textContent = okLabel || '确定';
+      box.hidden = false;
+      if (withInput) setTimeout(function () { input.focus(); }, 30);
+      function done(value) {
+        box.hidden = true;
+        ok.onclick = null;
+        cancel.onclick = null;
+        input.onkeydown = null;
+        resolve(value);
+      }
+      ok.onclick = function () { done(withInput ? (input.value.trim() === '' ? null : input.value.trim()) : true); };
+      cancel.onclick = function () { done(withInput ? null : false); };
+      input.onkeydown = function (e) {
+        if (e.key === 'Enter') ok.click();
+        if (e.key === 'Escape') cancel.click();
+      };
+    });
+  }
+
+  function askConfirm(message) { return showModal(message, false, '', '确定'); }
+  function askText(message, placeholder) { return showModal(message, true, placeholder, '确定'); }
   function toast(msg) {
     var el = $('toast');
     el.textContent = msg;
