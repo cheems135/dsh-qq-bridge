@@ -108,6 +108,13 @@ dsh plugin --profile <你的 profile> add /path/to/this/repo
 
 面板里还能配：智力档位、主动行为（定时找你 / 沉默追问 / 说完补一句）、勿扰时段、搜索与语音引擎、号主与权限、记忆压缩与存放位置、缓存位置、开机自启。
 
+### 环境变量
+
+| 变量 | 作用 |
+|---|---|
+| `DSH_PRESET_DIR` | 「查看/编辑预设人设文本」从哪个目录找 `*-preset/cordis.patch.yml`；不设则该项不可用（其它功能不受影响） |
+| `DSH_IM_PYTHON` | edge-tts 用的 Python 解释器；不设则依次找 DSH 自带运行时与 PATH 里的 `python` |
+
 ## QQ 里能用的指令
 
 | 指令 | 作用 |
