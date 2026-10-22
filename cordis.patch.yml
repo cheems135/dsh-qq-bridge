@@ -22,7 +22,7 @@
         groupRequireAt: true
         # 机器人干活的工作目录（模型可以读写这里）。留空/删掉 = 用 DSH 当前工作目录
         # cwd: 'C:/path/to/workspace'
-        # 新人设用哪个 agent preset（whale / chiang，或你自装的 preset id）
+        # 新人设用哪个 agent preset（whale，或你自装的 preset id）
         agentPreset: whale
         # 改过人设文本就 +1：聊天会换新会话，旧会话一直用旧人格
         presetRev: '1'

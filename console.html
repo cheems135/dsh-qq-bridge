@@ -487,7 +487,6 @@
       '<label class="field" style="margin-top:8px">附带表情</label>' +
       '<select id="sendSticker"><option value="">不发图</option>' +
       files.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('') +
-      '</select>' +
       '<div class="btnrow" style="margin-top:12px"><button class="primary" id="sendGo">发送</button>' +
       '<span class="muted" id="sendOut"></span></div></div>';
 
@@ -607,7 +606,7 @@
       '<button id="baseReset">恢复默认</button></div></div>';
 
     out += '<div class="card"><h2>预设人设</h2>';
-    var builtin = [{ id: 'whale', name: '大米鲸鱼娘' }, { id: 'chiang', name: '蒋介石' }];
+    var builtin = [{ id: 'whale', name: '大米鲸鱼娘' }];
     var visible = builtin.filter(function (p) { return hidden.indexOf(p.id) === -1; });
     if (!visible.length) out += '<div class="empty">预设都被隐藏了</div>';
     visible.forEach(function (p) {
@@ -645,10 +644,6 @@
     }
     out += '<div style="display:grid;gap:8px">' +
       '<input id="pName" placeholder="人设名字，例如：暴躁学霸" value="' + (editing ? esc(editing.name) : '') + '">' +
-      '<select id="pPreset">' +
-      '<option value="whale"' + (editing && editing.preset === 'whale' ? ' selected' : '') + '>底座：鲸鱼娘（短句、口语）</option>' +
-      '<option value="chiang"' + (editing && editing.preset === 'chiang' ? ' selected' : '') + '>底座：蒋介石（训话腔）</option>' +
-      '</select>' +
       '<textarea id="pPrompt" placeholder="人设提示词：怎么说话、口头禅、忌讳、爱吃什么……">' + (editing ? esc(editing.prompt) : '') + '</textarea>' +
       '<div class="btnrow"><button class="primary" id="pAdd">' + (editing ? '保存修改' : '新建人设') + '</button>' +
       '<button id="pCancel" style="display:' + (editing ? '' : 'none') + '">取消编辑</button></div></div></div>';
@@ -658,7 +653,7 @@
     (s.personae || []).forEach(function (p) {
       var on = s.activePersonaId === p.id;
       out += '<div class="persona' + (on ? ' on' : '') + '"><h3>' + esc(p.name) +
-        '<span class="tag">' + esc(p.preset || 'whale') + '</span>' + (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
+        (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
         '<pre>' + esc(p.prompt) + '</pre>' +
         '<div class="btnrow" style="margin-top:10px">' +
         '<button class="primary small" data-use="' + esc(p.id) + '">' + (on ? '已启用' : '使用') + '</button>' +
@@ -683,7 +678,6 @@
       '<select id="pvPersona">' +
       visible.map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') +
       (s.personae || []).map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '（自定义）</option>'; }).join('') +
-      '</select>' +
       '<textarea id="pvText" placeholder="说一句，比如：今天好累" style="margin-top:8px;min-height:72px"></textarea>' +
       '<div class="btnrow" style="margin-top:8px"><button class="primary" id="pvGo">让她回一句</button>' +
       '<span class="muted" id="pvMeta"></span></div>' +
@@ -1314,10 +1308,10 @@
       var personae = (data.settings.personae || []).slice();
       if (editingId) {
         personae = personae.map(function (p) {
-          return p.id === editingId ? { id: p.id, name: name, preset: $('pPreset').value, prompt: prompt } : p;
+          return p.id === editingId ? { id: p.id, name: name, preset: 'whale', prompt: prompt } : p;
         });
       } else {
-        personae.push({ id: 'p' + Date.now(), name: name, preset: $('pPreset').value, prompt: prompt });
+        personae.push({ id: 'p' + Date.now(), name: name, preset: 'whale', prompt: prompt });
       }
       api('POST', '/im-bridge/settings', { personae: personae }).then(function () {
         toast(editingId ? '已保存' : '已添加');
@@ -1380,10 +1374,8 @@
         editingId = '';
         var nameInput = document.getElementById('pName');
         var promptInput = document.getElementById('pPrompt');
-        var presetSelect = document.getElementById('pPreset');
         if (nameInput) nameInput.value = detail.name + '（我的版本）';
         if (promptInput) promptInput.value = detail.prompt;
-        if (presetSelect) presetSelect.value = id;
         if (document.getElementById('pAdd')) document.getElementById('pAdd').textContent = '另存为新的人设';
         viewPreset = '';
         renderPane();
@@ -1391,7 +1383,6 @@
         if (again) {
           again.value = detail.name + '（我的版本）';
           document.getElementById('pPrompt').value = detail.prompt;
-          document.getElementById('pPreset').value = id;
           document.getElementById('pAdd').textContent = '另存为新的人设';
         }
         window.scrollTo(0, document.body.scrollHeight);

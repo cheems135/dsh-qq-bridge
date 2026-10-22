@@ -1761,9 +1761,9 @@ export function apply(ctx, rawConfig) {
   const PERSONA_SYSTEM = [
     '你是给 QQ 聊天机器人写人设的提示词工程师。',
     '用户给一句自然语言描述，你输出一个 JSON 对象，且只输出 JSON，不要解释、不要代码块。',
-    '字段：name（中文名，短）、preset（只能是 "whale" 或 "chiang"）、prompt（人设提示词，150–400 字，中文）。',
+    '字段：name（中文名，短）、preset（固定写 "whale"）、prompt（人设提示词，150–400 字，中文）。',
     'prompt 要写成"你如何说话"的规则：口吻、长短、情绪反应、禁忌；不要写世界观设定，不要写具体剧情。',
-    'whale 底座适合日常闲聊、短句、口语；chiang 底座适合训话腔、硬气。按描述挑一个更贴的。',
+    'whale 底座适合日常闲聊、短句、口语。',
   ].join('\n');
 
   /** Pull candidate image URLs out of one page (or return the URL if it is already an image). */
@@ -1916,7 +1916,7 @@ export function apply(ctx, rawConfig) {
 
   /** The persona a new Session is born with. */
   function activePersona() {
-    const builtin = ['whale', 'chiang'];
+    const builtin = ['whale'];
     if (builtin.includes(settings.activePersonaId)) {
       return { id: settings.activePersonaId, preset: settings.activePersonaId, prompt: '' };
     }
@@ -2152,7 +2152,7 @@ export function apply(ctx, rawConfig) {
           if (custom !== undefined) {
             custom.prompt = arg;
             saveSettings();
-          } else if (persona.id === 'whale' || persona.id === 'chiang') {
+          } else if (persona.id === 'whale') {
             settings.presetPrompts[persona.id] = arg;
             saveSettings();
           } else {
@@ -2818,7 +2818,7 @@ export function apply(ctx, rawConfig) {
         if (custom !== undefined) {
           custom.prompt = val;
           saveSettings();
-        } else if (persona.id === 'whale' || persona.id === 'chiang') {
+        } else if (persona.id === 'whale') {
           settings.presetPrompts[persona.id] = val;
           saveSettings();
         } else {
@@ -2868,7 +2868,7 @@ export function apply(ctx, rawConfig) {
       }
       const persona = activePersona();
       let personaPrompt = persona.prompt;
-      if (personaPrompt === '' && (persona.id === 'whale' || persona.id === 'chiang')) {
+      if (personaPrompt === '' && persona.id === 'whale') {
         personaPrompt = settings.presetPrompts[persona.id] ?? readPresetPrompt(persona.id);
       }
       const base = (settings.basePersona !== '' ? settings.basePersona : DEFAULT_BASE_PERSONA).trim();
@@ -4240,7 +4240,7 @@ export function apply(ctx, rawConfig) {
 
   function statusPayload() {
     const persona = activePersona();
-    const builtinNames = { whale: '大米鲸鱼娘', chiang: '蒋介石', config: '跟随配置' };
+    const builtinNames = { whale: '大米鲸鱼娘', config: '跟随配置' };
     const customPersona = settings.personae.find((item) => item.id === persona.id);
     const personaName = customPersona?.name ?? builtinNames[persona.id] ?? persona.id;
     return {
@@ -4251,7 +4251,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.73.0',
+      version: '0.75.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -4362,7 +4362,7 @@ export function apply(ctx, rawConfig) {
               settings,
               status: statusPayload(),
               stickerFiles: listStickers(),
-              availablePresets: ['whale', 'chiang'],
+              availablePresets: ['whale'],
               allowUsers: effectiveUsers(),
             });
             return;
@@ -4649,7 +4649,7 @@ export function apply(ctx, rawConfig) {
                 // exists — fall back to the built-in so deletion really uninstalls.
                 const requested = patch.activePersonaId;
                 const exists =
-                  ['whale', 'chiang'].includes(requested) || settings.personae.some((item) => item.id === requested);
+                  'whale' === requested || settings.personae.some((item) => item.id === requested);
                 settings.activePersonaId = exists ? requested : 'whale';
                 for (const key of Object.keys(state.chats)) delete state.chats[key];
                 chats.clear();
@@ -5040,7 +5040,7 @@ export function apply(ctx, rawConfig) {
                 const custom = settings.personae.find((item) => item.id === id);
                 if (custom !== undefined) {
                   personaPrompt = custom.prompt;
-                } else if (id === 'whale' || id === 'chiang') {
+                } else if (id === 'whale') {
                   personaPrompt = settings.presetPrompts[id] ?? readPresetPrompt(id);
                 }
                 const base = (settings.basePersona !== '' ? settings.basePersona : DEFAULT_BASE_PERSONA).trim();
@@ -5055,7 +5055,7 @@ export function apply(ctx, rawConfig) {
                   ms: Date.now() - started,
                   systemChars: system.length,
                   persona: id,
-                  name: custom?.name ?? ({ whale: '大米鲸鱼娘', chiang: '蒋介石' }[id] ?? id),
+                  name: custom?.name ?? ({ whale: '大米鲸鱼娘' }[id] ?? id),
                 });
               } catch (error) {
                 jsonResponse(res, 500, { error: String(error?.message ?? error) });
@@ -5349,7 +5349,6 @@ export function apply(ctx, rawConfig) {
             jsonResponse(res, 200, {
               presets: [
                 { id: 'whale', name: '大米鲸鱼娘', prompt: readPresetPrompt('whale'), override: settings.presetPrompts.whale ?? '' },
-                { id: 'chiang', name: '蒋介石', prompt: readPresetPrompt('chiang'), override: settings.presetPrompts.chiang ?? '' },
               ],
             });
             return;
@@ -5363,7 +5362,7 @@ export function apply(ctx, rawConfig) {
             try {
               const request = JSON.parse(body === '' ? '{}' : body);
               const id = String(request.id ?? '');
-              if (!['whale', 'chiang'].includes(id)) throw new Error('未知预设');
+              if (id !== 'whale') throw new Error('未知预设');
               if (request.action === 'restore') {
                 const file = join(cfg.presetDir, `${id}-preset`, 'cordis.patch.yml');
                 const backup = `${file}.orig`;
@@ -5449,7 +5448,7 @@ export function apply(ctx, rawConfig) {
                 if (match === null) throw new Error(`模型没有返回 JSON：${cleaned.slice(0, 120)}`);
                 const persona = JSON.parse(match[0]);
                 if (typeof persona.name !== 'string' || typeof persona.prompt !== 'string') throw new Error('返回的人设缺少 name/prompt');
-                const preset = persona.preset === 'chiang' ? 'chiang' : 'whale';
+                const preset = 'whale';
                 log(`ai persona generated: ${persona.name} (${preset})`);
                 jsonResponse(res, 200, { ok: true, persona: { name: persona.name, preset, prompt: persona.prompt } });
               } catch (error) {
