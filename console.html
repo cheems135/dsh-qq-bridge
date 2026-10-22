@@ -814,6 +814,29 @@
     });
     out += '</div></div>';
 
+    var ph = data.settings.photo || {};
+    out += '<div class="card"><h2>照片来源</h2>' +
+      '<div class="muted" style="margin-bottom:8px">她发 [图:关键词] 时按这里的规则找图。自备图库（photos/library）永远优先，文件名带关键词就会被命中。</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '<label class="field">来源<select id="phSource">' +
+      '<option value="search"' + ((ph.source || 'search') === 'search' ? ' selected' : '') + '>只搜真实照片</option>' +
+      '<option value="gen"' + (ph.source === 'gen' ? ' selected' : '') + '>只生成</option>' +
+      '<option value="auto"' + (ph.source === 'auto' ? ' selected' : '') + '>搜不到再生成</option>' +
+      '</select></label>' +
+      '<label class="field">人像性别<select id="phGender">' +
+      '<option value="女"' + ((ph.gender || '女') === '女' ? ' selected' : '') + '>女</option>' +
+      '<option value="男"' + (ph.gender === '男' ? ' selected' : '') + '>男</option>' +
+      '</select></label></div>' +
+      '<label class="field" style="margin-top:8px">她的外观（生成时用）' +
+      '<input id="phLook" value="' + esc(ph.appearance || '蓝黑色长发的年轻女生，鲸鱼发饰') + '"></label>' +
+      '<label class="field" style="margin-top:8px">最小宽度（搜图阈值）' +
+      '<input id="phMinWidth" type="number" min="400" max="2000" value="' + Number(ph.minWidth || 800) + '"></label>' +
+      '<div class="muted" style="margin-top:6px">生成走 pollinations（免费免密），有配额限制、也可能带水印；搜图在中文环境容易撞到带水印的图库站。想要稳定高质量，把自己拍/存的照片按关键词命名放进 photos/library 最靠谱。</div>' +
+      '<div class="btnrow" style="margin-top:10px"><button class="primary" id="phSave">保存</button>' +
+      '<input id="phTestKw" placeholder="试一个关键词" style="flex:1;min-width:140px">' +
+      '<button id="phTest">试一张</button></div>' +
+      '<div id="phTestOut" class="muted" style="margin-top:8px;white-space:pre-wrap"></div></div>';
+
     out += '<div class="card"><h2>从网页收一整套</h2>' +
       '<div class="muted" style="margin-bottom:8px">把表情包合集页／相册页的链接贴进来，它会把这个页面上所有够大的图都收下来。比搜图准得多——同一套图通常就在同一页。</div>' +
       '<input id="pageUrl" placeholder="https://… 表情包合集 / 相册页">' +
@@ -1701,7 +1724,29 @@
         renderPane();
       };
     });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-newgroup]'), function (btn) {
+    if ((el = $('phSave'))) el.onclick = async function () {
+      await api('POST', '/im-bridge/settings', {
+        photo: {
+          source: $('phSource').value,
+          gender: $('phGender').value,
+          appearance: $('phLook').value.trim(),
+          minWidth: Number($('phMinWidth').value) || 800
+        }
+      });
+      toast('照片来源已保存');
+    };
+    if ((el = $('phTest'))) el.onclick = async function () {
+      var kw = ($('phTestKw').value || '').trim();
+      if (!kw) { toast('写个关键词'); return; }
+      var out = $('phTestOut');
+      out.textContent = '找图中…';
+      try {
+        var v = await api('POST', '/im-bridge/photo', { keyword: kw });
+        out.textContent = '拿到：' + v.file + '（' + Math.round(v.ms / 1000) + ' 秒）';
+      } catch (e) {
+        out.textContent = '失败：' + e.message;
+      }
+    };    Array.prototype.forEach.call(document.querySelectorAll('[data-newgroup]'), function (btn) {
       btn.onclick = async function () {
         var name = await askText('新分组名（例如：开心 / 生气 / 敷衍）');
         if (!name) return;

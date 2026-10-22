@@ -1081,6 +1081,15 @@ export function apply(ctx, rawConfig) {
       stickerGroup: {},
       stickerGroups: [],
       stickerSeeded: false,
+      photo: {
+        source: 'search',
+        gender: '女',
+        appearance: '蓝黑色长发的年轻女生，鲸鱼发饰',
+        minWidth: 800,
+        genUrl: 'https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&nologo=true',
+        genWidth: 768,
+        genHeight: 768,
+      },
       autonomy: null,
       disabledUsers: [],
       userNotes: {},
@@ -1168,6 +1177,7 @@ export function apply(ctx, rawConfig) {
             : {},
         stickerGroups: Array.isArray(parsed.stickerGroups) ? parsed.stickerGroups.map(String) : [],
         stickerSeeded: parsed.stickerSeeded === true,
+        photo: { ...base.photo, ...(parsed.photo && typeof parsed.photo === 'object' ? parsed.photo : {}) },
         autonomy: parsed.autonomy && typeof parsed.autonomy === 'object' ? parsed.autonomy : null,
         disabledUsers: Array.isArray(parsed.disabledUsers) ? parsed.disabledUsers.map(String) : [],
         userNotes:
@@ -1849,8 +1859,14 @@ export function apply(ctx, rawConfig) {
   }
 
   /** Bing 图片搜索：兜底，覆盖中文覆盖不到的关键词。 */
-  async function stickerUrlsFromBing(query) {
-    const url = `https://cn.bing.com/images/search?q=${encodeURIComponent(`${query} 表情包`)}&form=HDRSC2`;
+  async function bingImageUrls(query, options = {}) {
+    const suffix = options.suffix ?? '';
+    const large = options.large === true;
+    const url =
+      'https://cn.bing.com/images/search?q=' +
+      encodeURIComponent(query + suffix) +
+      '&form=HDRSC2' +
+      (large ? '&qft=+filterui:imagesize-large' : '');
     const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
     if (!response.ok) return [];
     const html = await response.text();
@@ -1858,6 +1874,10 @@ export function apply(ctx, rawConfig) {
     for (const match of html.matchAll(/murl&quot;:&quot;(https?:\/\/[^&"]+?)&quot;/gi)) found.push(match[1]);
     for (const match of html.matchAll(/"murl":"(https?:\/\/[^"]+?)"/gi)) found.push(match[1]);
     return [...new Set(found.map((item) => item.replace(/\\u002f/g, '/')))];
+  }
+
+  async function stickerUrlsFromBing(query) {
+    return bingImageUrls(query, { suffix: ' 表情包' });
   }
 
   /** Search the web for sticker images and install the first few that decode. */
@@ -2349,42 +2369,167 @@ export function apply(ctx, rawConfig) {
   }
 
   /** 用关键词找一张真实照片（不是表情包），存到缓存里再发。 */
-  async function searchPhoto(keyword) {
-    const urls = [];
-    try {
-      urls.push(...(await stickerUrlsFromBing(keyword)));
-    } catch (error) {
-      log(`photo search failed: ${error?.message ?? error}`);
+  /** 免费、免密的文生图（pollinations），用来补搜索找不到高质量图的场景。 */
+  async function generatePhoto(prompt) {
+    const base = (settings.photo?.genUrl || 'https://image.pollinations.ai/prompt/{prompt}')
+      .replace('{prompt}', '__PROMPT__');
+    const build = (text, size) =>
+      base
+        .replace('__PROMPT__', encodeURIComponent(text))
+        .replace('{width}', String(size))
+        .replace('{height}', String(size));
+    const attempts = [
+      { text: prompt, size: Number(settings.photo?.genWidth ?? 768), timeout: 75000 },
+      { text: prompt.slice(0, 24) + ', photo', size: 512, timeout: 45000 },
+    ];
+    let lastError = null;
+    for (const attempt of attempts) {
+      try {
+        const started = Date.now();
+        const response = await fetch(build(attempt.text, attempt.size), {
+          signal: AbortSignal.timeout(attempt.timeout),
+          headers: { 'user-agent': USER_AGENT },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length < 12000) throw new Error('返回太小');
+        const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16))) ?? 'image/jpeg';
+        const dir = join(cacheRoot, 'photos');
+        mkdirSync(dir, { recursive: true });
+        const extension = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+        const file = join(dir, `g-${Date.now()}.${extension}`);
+        writeFileSync(file, bytes);
+        log(`photo generated in ${Date.now() - started}ms (${bytes.length} bytes) for "${prompt.slice(0, 30)}"`);
+        return file;
+      } catch (error) {
+        lastError = error;
+        log(`generate attempt failed: ${error?.message ?? error}`);
+      }
     }
-    const dir = join(cacheRoot, 'photos');
-    for (const url of [...new Set(urls)]) {
+    throw lastError ?? new Error('生图失败');
+  }
+
+  /** 先把自备图库翻一遍：名字里带关键词的优先，画质由你保证。 */
+  function photoFromLibrary(keyword) {
+    const dir = join(cacheRoot, 'photos', 'library');
+    if (!existsSync(dir)) return null;
+    const words = String(keyword).split(/[\s,，、]+/).filter((word) => word.length >= 2);
+    let best = null;
+    for (const name of readdirSync(dir)) {
+      if (!/\.(png|jpe?g|webp|gif)$/i.test(name)) continue;
+      const hit = words.filter((word) => name.includes(word)).length;
+      if (hit === 0) continue;
+      const file = join(dir, name);
+      const size = statSync(file).size;
+      if (best === null || hit > best.hit) best = { file, hit, size };
+    }
+    if (best === null) return null;
+    log('photo from library: ' + best.file + ' (' + best.size + ' bytes)');
+    return best.file;
+  }
+
+  async function searchPhoto(keyword) {
+    const fromLibrary = photoFromLibrary(keyword);
+    if (fromLibrary !== null) return fromLibrary;
+    const minWidth = Number(settings.photo?.minWidth ?? 800);
+    // 先搜图库站（画质稳、无水印），再退到普通大图。
+    const queries = [
+      keyword + ' site:unsplash.com OR site:pexels.com',
+      keyword + ' 高清 实拍 -水印',
+    ];
+    let urls = [];
+    for (const query of queries) {
+      try {
+        urls.push(...(await bingImageUrls(query, { large: true })));
+      } catch (error) {
+        log('photo search failed: ' + (error?.message ?? error));
+      }
+      if (urls.length >= 30) break;
+    }
+    const scored = [];
+    const seen = new Set();
+    for (const url of urls) {
+      if (seen.has(url)) continue;
+      seen.add(url);
       if (/logo|icon|avatar|badge|favicon|sprite|qrcode/i.test(url)) continue;
+      if (PHOTO_BAD_DOMAINS.some((domain) => url.includes(domain))) continue;
       try {
         const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
         if (!response.ok) continue;
         const bytes = Buffer.from(await response.arrayBuffer());
-        if (bytes.length < 20000 || bytes.length > 6 * 1024 * 1024) continue;
+        if (bytes.length < 40000 || bytes.length > 12 * 1024 * 1024) continue;
         const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
         if (mediaType === null) continue;
-        if (mediaType === 'image/png' && bytes.length > 24) {
-          const width = bytes.readUInt32BE(16);
-          const height = bytes.readUInt32BE(20);
-          if (width < 300 || height < 300) continue;
-        }
-        mkdirSync(dir, { recursive: true });
-        const extension = mediaType === 'image/png' ? 'png' : mediaType === 'image/gif' ? 'gif' : 'jpg';
-        const file = join(dir, `p-${Date.now()}.${extension}`);
-        writeFileSync(file, bytes);
-        log(`photo found for "${keyword}" (${bytes.length} bytes)`);
-        return file;
+        const size = imageSize(bytes, mediaType);
+        if (size === null || size.width < minWidth || size.height < minWidth * 0.6) continue;
+        const ratio = size.width / size.height;
+        if (ratio < 0.55 || ratio > 2) continue;
+        const good = PHOTO_GOOD_DOMAINS.some((domain) => url.includes(domain));
+        scored.push({ bytes, mediaType, width: size.width, height: size.height, score: size.width * size.height * (good ? 2 : 1) });
       } catch {
         /* next */
       }
+      if (scored.length >= 6) break;
     }
-    return null;
+    if (scored.length === 0) return null;
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    const dir = join(cacheRoot, 'photos');
+    mkdirSync(dir, { recursive: true });
+    const extension = best.mediaType === 'image/png' ? 'png' : best.mediaType === 'image/webp' ? 'webp' : 'jpg';
+    const file = join(dir, `p-${Date.now()}.${extension}`);
+    writeFileSync(file, best.bytes);
+    log(`photo found for "${keyword}" ${best.width}x${best.height} (${best.bytes.length} bytes)`);
+    return file;
   }
 
-  /** 读出图片尺寸（png/gif/webp/jpeg），读不出来返回 null。 */
+  /** 让她发一张照片：人像/手相关走生成（能控制性别），其余先搜图再兜底生成。 */
+  async function photoFor(keyword) {
+    const text = String(keyword ?? '').trim();
+    if (text === '') return null;
+    const config = settings.photo ?? {};
+    const source = config.source ?? 'auto';
+    // 出现人/手/身体部位就说明画面上会有人：搜索没法保证性别，只能生成。
+    const personish = /我|自拍|手|本人|穿|衣服|头发|背影|腿|脸|女孩|女生|她|抱着|拿着/.test(text);
+    const gender = config.gender === '男' ? 'young man, male' : 'young woman, female';
+    const look = String(config.appearance ?? '蓝黑色长发的年轻女生，鲸鱼发饰').trim();
+    const genPrompt = personish
+      ? text + '，' + look + '，' + gender + '，realistic photo, natural light, high detail, no text, no watermark, no logo'
+      : text + '，realistic photo, food photography, natural light, high detail, no text, no watermark';
+
+    // 自备图库永远优先：你放进去的图，画质由你保证。
+    const library = photoFromLibrary(text);
+    if (library !== null) return library;
+
+    if (source === 'gen') {
+      try {
+        return await generatePhoto(genPrompt);
+      } catch (error) {
+        log('photo generation failed: ' + (error?.message ?? error));
+        return null;
+      }
+    }
+    if (personish) {
+      try {
+        return await generatePhoto(genPrompt);
+      } catch (error) {
+        log('person photo generation failed, falling back to search: ' + (error?.message ?? error));
+      }
+    }
+    try {
+      const found = await searchPhoto(text);
+      if (found !== null) return found;
+    } catch (error) {
+      log('photo search error: ' + (error?.message ?? error));
+    }
+    try {
+      return await generatePhoto(genPrompt);
+    } catch (error) {
+      log('photo generation failed: ' + (error?.message ?? error));
+      return null;
+    }
+  }
+
   function imageSize(bytes, mediaType) {
     try {
       if (mediaType === 'image/png' && bytes.length > 24) {
@@ -3330,7 +3475,7 @@ export function apply(ctx, rawConfig) {
         const photoCommand = chunk.match(/^\s*\[图[:：]\s*([^\]\n]{1,30})\]\s*$/);
         if (photoCommand !== null) {
           try {
-            const file = await searchPhoto(photoCommand[1].trim());
+            const file = await photoFor(photoCommand[1].trim());
             if (file !== null) sendSegments(chat, [{ type: 'image', data: { file } }]);
             else log(`photo not found: ${photoCommand[1]}`);
           } catch (error) {
@@ -4293,7 +4438,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.80.0',
+      version: '0.86.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -4552,6 +4697,9 @@ export function apply(ctx, rawConfig) {
                 settings.stickerGroups = patch.stickerGroups.map(String).filter((name) => name.trim() !== '');
               }
               if (Array.isArray(patch.disabledUsers)) settings.disabledUsers = patch.disabledUsers.map(String);
+              if (patch.photo && typeof patch.photo === 'object') {
+                settings.photo = { ...settings.photo, ...patch.photo };
+              }
               if (patch.presetNames && typeof patch.presetNames === 'object') {
                 settings.presetNames = Object.fromEntries(
                   Object.entries(patch.presetNames).map(([key, value]) => [String(key), String(value ?? '').slice(0, 30)]),
@@ -5054,6 +5202,38 @@ export function apply(ctx, rawConfig) {
             } catch (error) {
               jsonResponse(res, 500, { error: String(error?.message ?? error) });
             }
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/photo',
+        handler: (req, res) => {
+          if (req.method === 'GET') {
+            jsonResponse(res, 200, { config: settings.photo });
+            return;
+          }
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 8192) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const keyword = String(request.keyword ?? '').trim();
+                if (keyword === '') throw new Error('给个关键词');
+                const started = Date.now();
+                const file = await photoFor(keyword);
+                if (file === null) throw new Error('没找到也没生成出来');
+                jsonResponse(res, 200, { ok: true, file, ms: Date.now() - started });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
           });
         },
       }),
