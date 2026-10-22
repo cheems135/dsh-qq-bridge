@@ -570,7 +570,8 @@
         '<button class="ghost" id="btnRegister">注册免UAC启动（一次性）</button>' +
         '<span class="muted" id="loginHint"></span></div>';
       out += '<div id="qrBox" style="margin-top:12px"></div>';
-      out += '<div class="muted" id="qrAge" style="margin-top:8px">正在读取二维码状态…</div>';
+      out += '<div class="muted" id="qrAge" style="margin-top:8px">正在读取二维码状态…</div>' +
+        '<div class="muted" id="loginDiag" style="margin-top:4px;font-size:12px">正在检查进程…</div>';
         '<span class="muted" id="loginHint"></span></div>';
       out += '<div id="qrBox" style="margin-top:12px"></div>';
       if (l.qrUpdatedAt) out += '<div class="muted" style="margin-top:8px">二维码更新于 ' + Math.round(l.qrAgeSeconds || 0) + ' 秒前（超过 2 分钟基本失效）</div>';
@@ -1238,10 +1239,28 @@
 
   function loadQr() { paintQr(); }
 
+  function refreshDiag() {
+    var line = $('loginDiag');
+    if (!line) return;
+    api('GET', '/im-bridge/login/diag')
+      .then(function (d) {
+        line.textContent = 'QQ 进程 ' + d.qqProcesses + ' 个 · NapCat 进程 ' + d.napcatProcesses +
+          ' 个 · 3001 端口 ' + d.port3001 + (d.qrAgeSeconds === null ? '' : ' · 二维码 ' + d.qrAgeSeconds + ' 秒前');
+        if (d.advice) {
+          line.textContent += ' —— ' + d.advice;
+          line.style.color = 'var(--danger)';
+        } else {
+          line.style.color = 'var(--ink3)';
+        }
+      })
+      .catch(function () {});
+  }
+
   function startQrWatch() {
     stopQrWatch();
     paintQr();
-    qrTimer = setInterval(function () { if ($('qrBox')) paintQr(); }, 5000);
+    refreshDiag();
+    qrTimer = setInterval(function () { if ($('qrBox')) paintQr(); refreshDiag(); }, 5000);
   }
 
   function stopQrWatch() {

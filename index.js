@@ -23,7 +23,7 @@ import { homedir } from 'node:os';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const DEFAULT_PYTHON = process.env.DSH_IM_PYTHON ?? 'python';
 
@@ -4259,7 +4259,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.77.0',
+      version: '0.79.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -5948,6 +5948,39 @@ export function apply(ctx, rawConfig) {
             } catch (error) {
               jsonResponse(res, 500, { error: String(error?.message ?? error) });
             }
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/login/diag',
+        handler: (_req, res) => {
+          const count = (name) => {
+            try {
+              const out = spawnSync('tasklist.exe', ['/FI', 'IMAGENAME eq ' + name, '/NH'], { encoding: 'utf8', windowsHide: true });
+              return (String(out.stdout ?? '').match(new RegExp(name.replace('.', '\\\\.'), 'gi')) ?? []).length;
+            } catch {
+              return -1;
+            }
+          };
+          const qrFile = join(cfg.napcat.dir, 'cache', 'qrcode.png');
+          let qrAge = null;
+          try {
+            qrAge = Math.round((Date.now() - statSync(qrFile).mtimeMs) / 1000);
+          } catch {
+            qrAge = null;
+          }
+          jsonResponse(res, 200, {
+            qqProcesses: count('QQ.exe'),
+            napcatProcesses: count('NapCatWinBootMain.exe'),
+            port3001: socket !== null && socket.ready ? 'connected' : 'closed',
+            qrAgeSeconds: qrAge,
+            advice:
+              qrAge !== null && qrAge > 150
+                ? 'NapCat 没写出新二维码。多半是桌面 QQ 已经在运行，注入失败：先完全退出 QQ 再点「本地快速登录」。'
+                : '',
           });
         },
       }),
