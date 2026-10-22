@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "QQ / IM 桥接",
+    "description": "通过 NapCat（OneBot 11）把 QQ 私聊和群聊接进 DeepSeek Harness 会话：每个聊天对应一个会话，消息进入模型，回复回到 QQ。"
+  }
+}

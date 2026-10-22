@@ -1,0 +1,1701 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QQ 桥接 · 管理面板</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f6f4;
+    --panel: #ffffff;
+    --panel-2: #fbfaf9;
+    --ink: #1c1c1e;
+    --ink2: #6e6e73;
+    --ink3: #9a9aa0;
+    --line: rgba(28,28,30,.07);
+    --line2: rgba(28,28,30,.12);
+    --soft: rgba(28,28,30,.035);
+    --soft2: rgba(28,28,30,.06);
+    --accent: #2f6bff;
+    --accent-ink: #2458d8;
+    --accent-weak: rgba(47,107,255,.08);
+    --danger: #d9534f;
+    --ok: #17a673;
+    --warn: #c98a1e;
+    --radius: 18px;
+    --radius-sm: 12px;
+    --shadow: 0 1px 3px rgba(28,28,30,.05), 0 10px 24px -12px rgba(28,28,30,.10);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: .01em;
+  }
+  ::selection { background: var(--accent-weak); }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 99px; border: 3px solid transparent; background-clip: content-box; }
+
+  /* ---------- shell ---------- */
+  .app { min-height: 100vh; display: grid; grid-template-columns: 212px minmax(0, 1fr); }
+  .side {
+    position: sticky; top: 0; height: 100vh;
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 22px 14px; background: transparent;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 4px; }
+  .logo {
+    width: 32px; height: 32px; border-radius: 10px; flex: none;
+    display: grid; place-items: center; color: #fff; font-weight: 650; font-size: 15px;
+    background: linear-gradient(150deg, #6f9bff, var(--accent));
+    box-shadow: 0 4px 12px -4px rgba(47,107,255,.5);
+  }
+  .brandText { display: flex; flex-direction: column; line-height: 1.3; }
+  .brandText b { font-size: 14.5px; font-weight: 600; }
+  .ver { font-size: 11px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+
+  .statusbox { margin: 0 4px; padding: 12px 13px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; font-weight: 500; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 7px; background: var(--soft); font-size: 11.5px; color: var(--ink2); white-space: nowrap; }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .navgroup { font-size: 11px; color: var(--ink3); padding: 14px 12px 5px; letter-spacing: .04em; }
+  .tab {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 9px 12px; border: 0; border-radius: 11px;
+    background: transparent; box-shadow: none; color: var(--ink2);
+    font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+    transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+  }
+  .tab .ico { width: 17px; text-align: center; opacity: .7; font-size: 13px; }
+  .tab:hover { background: var(--soft2); color: var(--ink); }
+  .tab.on { background: var(--panel); color: var(--ink); font-weight: 550; box-shadow: var(--shadow); }
+  .tab.on .ico { opacity: 1; color: var(--accent); }
+  .sidefoot { margin-top: auto; padding: 0 4px; }
+
+  .main { min-width: 0; }
+  .maininner { max-width: 660px; margin: 0 auto; padding: 34px 26px 96px; animation: rise .22s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px);
+    background: #1c1c1e; color: #fff; padding: 11px 20px; border-radius: 12px; font-size: 13.5px;
+    opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 50;
+    box-shadow: 0 16px 40px -12px rgba(0,0,0,.4); max-width: 80vw;
+  }
+  .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- page head ---------- */
+  .pagehead { margin: 0 0 20px; padding: 0 2px; }
+  .pagehead h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: -.01em; }
+  .pagehead p { margin: 0; color: var(--ink2); font-size: 13.5px; }
+
+  /* ---------- content ---------- */
+  .card {
+    background: var(--panel); border-radius: var(--radius);
+    padding: 20px 20px 18px; margin-bottom: 14px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 {
+    font-size: 14.5px; font-weight: 600; color: var(--ink);
+    margin: 0 0 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .card > .muted:first-of-type { margin-top: 0; }
+  .card h2 + .muted { margin-top: -2px; margin-bottom: 10px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; flex-wrap: wrap; }
+  .row > * { min-width: 0; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row.start { justify-content: flex-start; }
+  .muted { color: var(--ink2); font-size: 13px; line-height: 1.65; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--ink2); }
+
+  /* 长路径：标签一行，值另起一行，永不撑破布局 */
+  .kv { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; min-width: 0; }
+  .kv > span { font-size: 12.5px; color: var(--ink2); }
+  .kv + .kv { border-top: 1px solid var(--line); }
+  code.path {
+    display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.6; color: var(--ink);
+    background: var(--panel-2); border-radius: 9px; padding: 8px 10px;
+    overflow-wrap: anywhere; word-break: break-all; white-space: normal;
+  }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(136px, 1fr)); gap: 10px; }
+  .stat { border-radius: 14px; padding: 14px 16px; background: var(--panel-2); }
+  .stat b { display: block; font-size: 20px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--ink3); }
+
+  input, textarea, select {
+    font: inherit; font-size: 14px; color: inherit; width: 100%;
+    background: var(--panel-2); border: 1px solid transparent;
+    border-radius: var(--radius-sm); padding: 10px 13px; outline: none;
+    transition: background .16s, border-color .16s, box-shadow .16s;
+  }
+  input:hover, textarea:hover, select:hover { background: var(--soft); }
+  input:focus, textarea:focus, select:focus { background: var(--panel); border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-weak); }
+  textarea { min-height: 104px; resize: vertical; line-height: 1.7; }
+  label.field { display: block; font-size: 12.5px; color: var(--ink2); }
+  label.field > input, label.field > button { margin-top: 6px; }
+
+  button {
+    font: inherit; font-size: 13.5px; cursor: pointer;
+    border-radius: var(--radius-sm); border: 0;
+    background: var(--soft); color: var(--ink); padding: 8px 15px;
+    transition: background .16s, color .16s, transform .06s, box-shadow .16s;
+  }
+  button:hover:not(:disabled) { background: var(--soft2); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--accent-weak); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #fff; box-shadow: 0 6px 16px -8px rgba(47,107,255,.7); }
+  button.primary:hover:not(:disabled) { background: var(--accent-ink); }
+  button.danger { background: transparent; color: var(--danger); }
+  button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+  button.ghost { background: transparent; }
+  button.ghost:hover:not(:disabled) { background: var(--soft); }
+  button.small { padding: 6px 12px; font-size: 12.5px; border-radius: 10px; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .persona { background: var(--panel-2); border-radius: 14px; padding: 16px 17px; margin-bottom: 10px; }
+  .persona.on { background: var(--accent-weak); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .persona h3 { margin: 0 0 2px; font-size: 14.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; border-radius: 6px; padding: 2px 7px; background: var(--soft2); color: var(--ink2); font-weight: 500; }
+  .persona pre { white-space: pre-wrap; font-size: 12.5px; color: var(--ink2); margin: 8px 0 0; max-height: 110px; overflow: auto; line-height: 1.7; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+  .sticker { background: var(--panel-2); border-radius: 14px; padding: 8px; text-align: center; transition: transform .16s, background .16s; }
+  .sticker:hover { transform: translateY(-2px); background: var(--soft); }
+  .sticker img { width: 100%; height: 86px; object-fit: contain; border-radius: 10px; }
+  .sticker .name { font-size: 11.5px; margin-top: 6px; word-break: break-all; color: var(--ink2); }
+  .sticker .acts { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+
+  .empty { text-align: center; color: var(--ink3); font-size: 13px; padding: 30px 12px; border-radius: 14px; background: var(--panel-2); }
+
+  .msgs { display: flex; flex-direction: column; gap: 8px; }
+  .msg { border-radius: 14px; padding: 12px 14px; background: var(--panel-2); }
+  .msg.in { background: var(--soft); }
+  .msg .meta { font-size: 11.5px; color: var(--ink3); margin-bottom: 4px; display: flex; gap: 8px; }
+  .msg .body { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .msg img { max-width: 170px; border-radius: 10px; margin-top: 6px; }
+
+  .banner {
+    background: color-mix(in srgb, var(--warn) 9%, transparent);
+    border-radius: 14px; padding: 14px 16px; font-size: 13px; line-height: 1.7; color: var(--ink2);
+  }
+  .banner b { color: var(--warn); }
+
+  pre.log {
+    max-height: 230px; overflow: auto; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11.5px; line-height: 1.7; white-space: pre-wrap; margin: 10px 0 0;
+    color: var(--ink2); background: var(--panel-2); border-radius: 12px; padding: 12px 14px;
+  }
+
+  .seg { display: inline-flex; background: var(--soft); border-radius: 10px; padding: 2px; }
+  .seg button { border-radius: 8px; padding: 5px 12px; font-size: 12.5px; background: transparent; }
+  .seg button.on { background: var(--panel); font-weight: 550; box-shadow: var(--shadow); }
+
+  /* ---------- dark ---------- */
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #101012;
+    --panel: #1a1a1e;
+    --panel-2: #212127;
+    --ink: #f2f2f5;
+    --ink2: #a5a5b0;
+    --ink3: #78787f;
+    --line: rgba(255,255,255,.07);
+    --line2: rgba(255,255,255,.13);
+    --soft: rgba(255,255,255,.05);
+    --soft2: rgba(255,255,255,.09);
+    --accent: #6f9bff;
+    --accent-ink: #8fb0ff;
+    --accent-weak: rgba(111,155,255,.14);
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 12px 28px -14px rgba(0,0,0,.7);
+  }
+  html[data-theme="dark"] .toast { background: #2c2c33; }
+  html[data-theme="dark"] button.primary { color: #0f0f12; }
+  html[data-theme="dark"] .logo { background: linear-gradient(150deg, #7aa2ff, #3f6fe8); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; }
+    .side {
+      position: sticky; top: 0; z-index: 30; height: auto;
+      flex-direction: row; align-items: center; gap: 10px;
+      padding: 10px 12px; background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(12px); border-bottom: 1px solid var(--line);
+    }
+    .statusbox { display: none; }
+    .brand { flex: none; }
+    .brandText { display: none; }
+    /* 顶层目录：两行网格，不再横向滚动 */
+    .nav {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 4px; margin: 0; flex: 1; min-width: 0;
+    }
+    .navgroup { display: none; }
+    .tab {
+      width: 100%; justify-content: center; padding: 7px 6px;
+      font-size: 12.5px; white-space: nowrap; text-align: center;
+      border-radius: 9px;
+    }
+    .tab .ico { display: none; }
+    .tab.on { box-shadow: 0 1px 3px rgba(28,28,30,.12); }
+    .sidefoot { margin: 0; flex: none; }
+    .sidefoot button { padding: 7px 10px; }
+    .maininner { padding: 20px 16px 80px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .pagehead h1 { font-size: 19px; }
+  }
+  @media (max-width: 430px) {
+    .nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tab { font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">Q</div>
+      <div class="brandText"><b>QQ 桥接</b><span class="ver" id="ver">v—</span></div>
+    </div>
+
+    <div class="statusbox">
+      <span class="pill"><span class="dot" id="dot"></span><span id="pillText">…</span></span>
+      <div class="chips">
+        <span class="chip" id="chipIq">档位 —</span>
+        <span class="chip" id="chipVoice">语音 —</span>
+      </div>
+    </div>
+
+    <nav class="nav" id="tabs">
+      <div class="navgroup">对话</div>
+      <button class="tab on" data-tab="overview"><span class="ico">◎</span>概览</button>
+      <button class="tab" data-tab="send"><span class="ico">✈</span>发消息</button>
+      <button class="tab" data-tab="monitor"><span class="ico">☰</span>监听</button>
+      <div class="navgroup">角色</div>
+      <button class="tab" data-tab="persona"><span class="ico">☺</span>人设</button>
+      <button class="tab" data-tab="whitelist"><span class="ico">✓</span>联系人</button>
+      <button class="tab" data-tab="sticker"><span class="ico">▣</span>素材</button>
+      <div class="navgroup">系统</div>
+      <button class="tab" data-tab="memory"><span class="ico">◫</span>记忆</button>
+      <button class="tab" data-tab="model"><span class="ico">◇</span>模型</button>
+    </nav>
+
+    <div class="sidefoot">
+      <button class="ghost small" id="refresh">刷新数据</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="maininner"><div id="pane"></div></div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var data = null;
+  var login = null;
+  var monitor = null;
+  var models = null;
+  var storage = null;
+  var presets = [];
+  var viewPreset = '';
+  var msgChat = 'all';
+  var sFilter = '';
+  var pickedStickers = {};
+  var editingId = '';
+  var tab = 'overview';
+  var msgFilter = 'all';
+  var monitorTimer = null;
+  var toastTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  /** Follow the host page's theme when embedded, the OS when opened standalone. */
+  function applyTheme() {
+    var dark = null;
+    try {
+      var parentDoc = window.parent && window.parent !== window ? window.parent.document : null;
+      var root = parentDoc ? parentDoc.documentElement : null;
+      if (root && parentDoc.body) {
+        var marker = ((root.className || '') + ' ' + (root.getAttribute('data-theme') || '') + ' ' + (root.getAttribute('data-color-mode') || '')).toLowerCase();
+        if (marker.indexOf('dark') !== -1) dark = true;
+        else if (marker.indexOf('light') !== -1) dark = false;
+        else {
+          var bg = window.parent.getComputedStyle(parentDoc.body).backgroundColor || '';
+          var parts = bg.match(/\d+/g);
+          if (parts && parts.length >= 3) {
+            dark = (Number(parts[0]) * 0.299 + Number(parts[1]) * 0.587 + Number(parts[2]) * 0.114) < 128;
+          }
+        }
+      }
+    } catch (e) {
+      dark = null;
+    }
+    if (dark === null) dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('on'); }, 2000);
+  }
+  function api(method, url, payload) {
+    return fetch(url, {
+      method: method,
+      headers: payload ? { 'content-type': 'application/json' } : undefined,
+      body: payload ? JSON.stringify(payload) : undefined,
+      cache: 'no-store'
+    }).then(function (r) {
+      return r.json().then(function (v) {
+        if (!r.ok) throw new Error(v && v.error ? v.error : ('HTTP ' + r.status));
+        return v;
+      });
+    });
+  }
+
+  function load() {
+    return Promise.all([
+      api('GET', '/im-bridge/settings'),
+      api('GET', '/im-bridge/login'),
+      api('GET', '/im-bridge/messages'),
+      api('GET', '/im-bridge/models'),
+      api('GET', '/im-bridge/presets'),
+      api('GET', '/im-bridge/storage')
+    ]).then(function (r) {
+      data = r[0]; login = r[1]; monitor = r[2]; models = r[3];
+      presets = (r[4] && r[4].presets) || [];
+      storage = r[5];
+      renderPill(); renderPane();
+    }).catch(function (e) { toast('读取失败：' + e.message); });
+  }
+
+  function renderPill() {
+    var st = data.status;
+    $('dot').style.background = st.connected ? '#2fbf71' : '#d94b4b';
+    $('pillText').textContent = st.connected ? ('已连接 · ' + (st.selfId || '?')) : '未连接';
+    if ($('ver')) $('ver').textContent = 'v' + (st.version || '—');
+    var effortLabel = { off: '省', low: '标准', high: '高', max: '最高' };
+    if ($('chipIq')) $('chipIq').textContent = '档位 ' + (effortLabel[st.effectiveEffort] || st.effectiveEffort || '—');
+    if ($('chipVoice')) $('chipVoice').textContent = '语音 ' + (data.settings && data.settings.voice && data.settings.voice.enabled ? '开' : '关');
+  }
+
+  var PAGE_HEADS = {
+    overview: ['概览', '连接状态、登录、机器人账号和最近日志'],
+    send: ['发消息', '用她的身份直接发一条，不经过模型'],
+    monitor: ['监听', '你和她的往来记录，每 2 秒自动刷新'],
+    persona: ['人设', '底层性格、预设与自定义人设，改完下一条消息生效'],
+    whitelist: ['联系人', '号主、允许私聊的 QQ 和群'],
+    sticker: ['素材', '表情包、联网搜图和语音输出'],
+    memory: ['记忆', '压缩规则、已存记忆和存放位置'],
+    model: ['模型', '智力档位、模型、主动行为与搜索']
+  };
+
+  function renderPane() {
+    var html = '';
+    if (tab === 'overview') html = viewOverview();
+    if (tab === 'send') html = viewSend();
+    if (tab === 'persona') html = viewPersona();
+    if (tab === 'whitelist') html = viewWhitelist();
+    if (tab === 'sticker') html = viewSticker();
+    if (tab === 'monitor') html = viewMonitor();
+    if (tab === 'memory') html = viewMemory();
+    if (tab === 'model') html = viewModelSettings();
+    var head = PAGE_HEADS[tab] || ['', ''];
+    html = '<div class="pagehead"><h1>' + esc(head[0]) + '</h1><p>' + esc(head[1]) + '</p></div>' + html;
+    // The monitor refreshes every couple of seconds; without this the list
+    // would jump back to the top while being read.
+    var keepScroll = window.scrollY;
+    $('pane').innerHTML = html;
+    bind();
+    window.scrollTo(0, keepScroll);
+    if (tab === 'model') renderModelPickers();
+    if (tab === 'overview') loadLog();
+    if (monitorTimer) { clearInterval(monitorTimer); monitorTimer = null; }
+    if (tab === 'monitor') {
+      monitorTimer = setInterval(function () {
+        if (tab !== 'monitor') return;
+        api('GET', '/im-bridge/messages').then(function (v) {
+          monitor = v;
+          renderPane();
+        }).catch(function () {});
+      }, 2000);
+    }
+  }
+
+  function row(label, value) {
+    return '<div class="row"><span>' + label + '</span><span class="muted">' + value + '</span></div>';
+  }
+
+  function viewSend() {
+    var st = data.status;
+    var targets = [];
+    (st.chats || []).forEach(function (c) { targets.push(c.key); });
+    (st.allowUsers || []).forEach(function (u) {
+      var key = 'private:' + u;
+      if (targets.indexOf(key) === -1) targets.push(key);
+    });
+    (st.allowGroups || []).forEach(function (g) {
+      var key = 'group:' + g;
+      if (targets.indexOf(key) === -1) targets.push(key);
+    });
+    var files = data.stickerFiles || [];
+    var out = '<div class="card"><h2>以她的身份发一条</h2>' +
+      '<div class="muted" style="margin-bottom:10px">直接调用 NapCat 发送，不经过模型——用来纠正她的话、补发提示、或者手动喂一张图。</div>';
+    out += '<label class="field">发送对象</label><select id="sendTarget">' +
+      targets.map(function (t) { return '<option value="' + esc(t) + '">' + esc(t) + '</option>'; }).join('') +
+      '<option value="__custom">手动输入…</option></select>';
+    out += '<input id="sendCustom" placeholder="private:QQ号 或 group:群号" style="margin-top:8px;display:none">';
+    out += '</div>';
+
+    out += '<div class="card"><h2>内容</h2>' +
+      '<label class="field">文字</label><textarea id="sendText" placeholder="要发的文字，可留空"></textarea>' +
+      '<label class="field" style="margin-top:8px">语音（填了就用这条合成语音）</label>' +
+      '<input id="sendVoice" placeholder="例如：喂，我回来了">' +
+      '<label class="field" style="margin-top:8px">附带表情</label>' +
+      '<select id="sendSticker"><option value="">不发图</option>' +
+      files.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('') +
+      '</select>' +
+      '<div class="btnrow" style="margin-top:12px"><button class="primary" id="sendGo">发送</button>' +
+      '<span class="muted" id="sendOut"></span></div></div>';
+
+    out += '<div class="card"><h2>快捷补救</h2><div class="btnrow">' +
+      '<button class="small" id="sendFillSorry">「刚才说错了，别当真」</button>' +
+      '<button class="small" id="sendFillBusy">「我去忙一会儿，回头找你」</button>' +
+      '<button class="small" id="sendFillNight">「睡了，晚安」</button></div></div>';
+    return out;
+  }
+
+  function viewOverview() {
+    var st = data.status;
+    var l = login || {};
+    var cost = st.cost || { today: 0, last: 0, peak: false };
+    var out = '<div class="card"><h2>状态</h2><div class="stats">' +
+      '<div class="stat"><b>' + (st.connected ? '在线' : '离线') + '</b><span>NapCat</span></div>' +
+      '<div class="stat"><b>' + esc(st.selfId || '—') + '</b><span>机器人账号</span></div>' +
+      '<div class="stat"><b>' + esc(st.personaName || st.preset) + '</b><span>当前人设</span></div>' +
+      '<div class="stat"><b>¥' + Number(cost.today || 0).toFixed(3) + '</b><span>今日花费 · ' + (cost.peak ? '高峰价' : '空闲价') + '</span></div>' +
+      '</div>';
+    out += row('本轮花费', '¥' + Number(cost.last || 0).toFixed(4));
+    out += row('白名单', st.allowUsers.length ? st.allowUsers.map(esc).join('、') : '（空，谁都不理）');
+    out += row('群', st.allowGroups.length ? st.allowGroups.map(esc).join('、') : '未启用');
+    out += '</div>';
+
+    out += '<div class="card"><h2>登录 QQ</h2>';
+    if (l.connected) {
+      out += '<div class="row"><span>账号 ' + esc(st.selfId || l.qq) + ' 在线</span><span class="muted">不用再登录</span></div>';
+    } else {
+      out += '<div class="muted" style="margin-bottom:10px">「本地快速登录」= 拉起 NapCat（QQ ' + esc(l.qq) + '）。第一次会弹 UAC；点一次「注册免UAC启动」之后就不用再点了。</div>';
+      out += '<div class="btnrow"><button class="primary" id="btnStart">本地快速登录</button>' +
+        '<button id="btnQrRefresh">刷新二维码</button>' +
+        '<button class="ghost" id="btnRegister">注册免UAC启动（一次性）</button>' +
+        '<span class="muted" id="loginHint"></span></div>';
+      out += '<div id="qrBox" style="margin-top:12px"></div>';
+      if (l.qrUpdatedAt) out += '<div class="muted" style="margin-top:8px">二维码更新于 ' + Math.round(l.qrAgeSeconds || 0) + ' 秒前（超过 2 分钟基本失效）</div>';
+    }
+    out += '</div>';
+
+    out += '<div class="card"><div class="row"><span><b>会话</b> <span class="muted">' + st.chats.length + ' 个</span></span>' +
+      '<span class="muted">重置后下条消息开新会话</span></div>';
+    if (!st.chats.length) out += '<div class="empty">还没有活跃会话</div>';
+    st.chats.forEach(function (c) {
+      out += '<div class="row"><span class="mono">' + esc(c.key) + '</span>' +
+        '<span class="btnrow"><select class="chatModel" data-key="' + esc(c.key) + '" style="width:190px">' + chatModelOptions(c.key) + '</select>' +
+        '<button class="danger small" data-reset="' + esc(c.key) + '">重置</button></span></div>';
+    });
+    out += '</div>';
+
+    out += '<div class="card"><div class="row"><span><b>最近日志</b></span><button class="small" id="logRefresh">刷新</button></div>' +
+      '<pre class="log" id="logBox"></pre></div>';
+
+    out += '<div class="card"><div class="btnrow">' +
+      '<button id="btnReconnect">重连 NapCat</button>' +
+      '<button id="btnTest">发测试消息</button>' +
+      '<button id="btnPause" class="' + (st.accountPaused ? 'primary' : 'danger') + '">' +
+      (st.accountPaused ? '恢复连接' : '停用连接（保留配置）') + '</button>' +
+      '<a href="/" target="_blank" rel="noopener"><button class="ghost">打开 DeepSeek Harness</button></a>' +
+      '</div><div class="muted" style="margin-top:8px">停用只是断开这个账号的连接，配置、白名单、人设都保留；恢复后自动重连。</div>' +
+      '<div class="row" style="margin-top:10px"><span>开机自动登录 NapCat<br><span class="muted">往当前用户的「启动」文件夹放一个隐藏脚本，不需要管理员权限</span></span>' +
+      '<button class="small ' + (st.autoStart ? 'primary' : '') + '" id="autoStartToggle">' + (st.autoStart ? '已开启' : '已关闭') + '</button></div>' +
+      '<div class="muted">' + (st.autoStart
+        ? (st.autoStartInstalled ? '脚本已就位，重启后自动上线' : '已开启但脚本缺失，点一下开关重建')
+        : '开启后重启电脑会自动上线，不用手动点') + '</div>' +
+      '<div class="kv" style="margin-top:10px"><span>日志文件</span><code class="path">' + esc(st.logFile) + '</code></div></div>';
+
+    out += '<div class="card"><h2>机器人账号</h2>' +
+      '<div class="muted" style="margin-bottom:8px">每个账号对应一个 NapCat 的 WebSocket 地址；切换后立刻重连。同一时间只连一个。</div>';
+    var accounts = data.settings.accounts || [];
+    if (!accounts.length) out += '<div class="empty">还没有额外账号，当前用配置文件里的地址</div>';
+    accounts.forEach(function (a) {
+      var on = data.settings.activeAccountId === a.id;
+      out += '<div class="row"><span>' + esc(a.name) + ' <span class="muted mono">' + esc(a.wsUrl) + '</span>' +
+        (on ? ' <span class="tag">使用中</span>' : '') + '</span>' +
+        '<span class="btnrow">' + (on ? '' : '<button class="small" data-accuse="' + esc(a.id) + '">切换</button>') +
+        '<button class="danger small" data-accdel="' + esc(a.id) + '">删除</button></span></div>';
+    });
+    out += '<div style="display:grid;gap:8px;margin-top:10px">' +
+      '<input id="accName" placeholder="名字，例如：小号">' +
+      '<input id="accUrl" placeholder="ws://127.0.0.1:3101">' +
+      '<input id="accToken" placeholder="token（可空）">' +
+      '<button class="primary" id="accAdd">添加账号</button></div></div>';
+    return out;
+  }
+
+  function viewPersona() {
+    var s = data.settings;
+    var hidden = s.hiddenPresets || [];
+    var base = (data.status && data.status.basePersona) || '';
+    var baseDefault = (data.status && data.status.basePersonaDefault) || '';
+    var out = '<div class="card"><h2>底层性格（所有会话生效）</h2>' +
+      '<div class="muted" style="margin-bottom:8px">排在所有人设之前。默认包含：难过时安慰、按时间问候（深夜劝睡 / 早上问好 / 饭点提醒）、看图不描述画面。</div>' +
+      '<textarea id="basePersona" style="min-height:140px">' + esc(base !== '' ? base : baseDefault) + '</textarea>' +
+      '<div class="btnrow" style="margin-top:8px"><button class="primary" id="baseSave">保存（下条消息生效）</button>' +
+      '<button id="baseReset">恢复默认</button></div></div>';
+
+    out += '<div class="card"><h2>预设人设</h2>';
+    var builtin = [{ id: 'whale', name: '大米鲸鱼娘' }, { id: 'chiang', name: '蒋介石' }];
+    var visible = builtin.filter(function (p) { return hidden.indexOf(p.id) === -1; });
+    if (!visible.length) out += '<div class="empty">预设都被隐藏了</div>';
+    visible.forEach(function (p) {
+      var on = s.activePersonaId === p.id;
+      var detail = presets.filter(function (x) { return x.id === p.id; })[0];
+      var open = viewPreset === p.id;
+      out += '<div class="persona' + (on ? ' on' : '') + '">' +
+        '<h3>' + esc(p.name) + '<span class="tag">预设 ' + p.id + '</span>' + (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
+        (open && detail && detail.prompt
+          ? '<textarea id="presetEdit-' + p.id + '" style="min-height:220px;font-size:12px">' + esc(detail.prompt) + '</textarea>' +
+            '<div class="btnrow" style="margin-top:10px">' +
+            '<button class="primary small" data-presave="' + p.id + '">保存修改</button>' +
+            '<button class="small" data-prerestore="' + p.id + '">恢复原文</button>' +
+            '<button class="small" data-pv="' + p.id + '">试聊这句</button>' +
+            '<button class="small ghost" data-copy="' + p.id + '">另存为自定义</button>' +
+            '<button class="small ghost" data-view="' + p.id + '">收起</button></div>' +
+            '<div class="muted" style="margin-top:6px">保存会直接改写预设文件，同时立刻生效（下条消息开新会话）。</div>'
+          : '<div class="btnrow" style="margin-top:10px">' +
+            '<button class="primary small" data-use="' + p.id + '">' + (on ? '已启用' : '使用这个') + '</button>' +
+            '<button class="small" data-view="' + p.id + '">查看文本</button>' +
+            '<button class="small" data-pv="' + p.id + '">试聊</button>' +
+            '<button class="danger small" data-hide="' + p.id + '">删除</button></div>') +
+        '</div>';
+    });
+    if (hidden.length) {
+      out += '<div class="muted" style="margin-top:6px">已隐藏：' + hidden.map(esc).join('、') +
+        ' <button class="ghost small" id="unhideAll">恢复显示</button></div>';
+    }
+    out += '</div>';
+
+    var editing = (s.personae || []).filter(function (p) { return p.id === editingId; })[0];
+    out += '<div class="card" id="personaForm"><h2>' + (editing ? '编辑人设：' + esc(editing.name) : '新建人设') + '</h2>';
+    if (editing) {
+      out += '<div class="banner" style="margin-bottom:10px">正在编辑「' + esc(editing.name) + '」，改完点「保存修改」。</div>';
+    }
+    out += '<div style="display:grid;gap:8px">' +
+      '<input id="pName" placeholder="人设名字，例如：暴躁学霸" value="' + (editing ? esc(editing.name) : '') + '">' +
+      '<select id="pPreset">' +
+      '<option value="whale"' + (editing && editing.preset === 'whale' ? ' selected' : '') + '>底座：鲸鱼娘（短句、口语）</option>' +
+      '<option value="chiang"' + (editing && editing.preset === 'chiang' ? ' selected' : '') + '>底座：蒋介石（训话腔）</option>' +
+      '</select>' +
+      '<textarea id="pPrompt" placeholder="人设提示词：怎么说话、口头禅、忌讳、爱吃什么……">' + (editing ? esc(editing.prompt) : '') + '</textarea>' +
+      '<div class="btnrow"><button class="primary" id="pAdd">' + (editing ? '保存修改' : '新建人设') + '</button>' +
+      '<button id="pCancel" style="display:' + (editing ? '' : 'none') + '">取消编辑</button></div></div></div>';
+
+    out += '<div class="card"><h2>我的人设</h2>';
+    if (!(s.personae || []).length) out += '<div class="empty">还没有自定义人设。上面填一个，或者用本页下面的「AI 生成」。</div>';
+    (s.personae || []).forEach(function (p) {
+      var on = s.activePersonaId === p.id;
+      out += '<div class="persona' + (on ? ' on' : '') + '"><h3>' + esc(p.name) +
+        '<span class="tag">' + esc(p.preset || 'whale') + '</span>' + (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
+        '<pre>' + esc(p.prompt) + '</pre>' +
+        '<div class="btnrow" style="margin-top:10px">' +
+        '<button class="primary small" data-use="' + esc(p.id) + '">' + (on ? '已启用' : '使用') + '</button>' +
+        '<button class="small" data-edit="' + esc(p.id) + '">编辑</button>' +
+        '<button class="small" data-pv="' + esc(p.id) + '">试聊</button>' +
+        '<button class="danger small" data-del="' + esc(p.id) + '">删除</button></div></div>';
+    });
+    out += '</div>';
+
+    out += '<div class="card"><h2>导入 / 导出</h2><div class="muted">导出成 JSON 保存或分享；导入会追加到列表。</div>' +
+      '<div class="btnrow" style="margin-top:8px"><button id="pExport">导出 JSON</button></div>' +
+      '<textarea id="pImport" style="margin-top:8px" placeholder="把人设 JSON 粘在这里"></textarea>' +
+      '<button class="primary" id="pImportBtn" style="margin-top:8px">导入</button></div>';
+
+    out += '<div class="card"><h2>AI 生成人设</h2><div class="muted" style="margin-bottom:8px">用 DSH 同一个模型和登录态，不另配 key。</div>' +
+      '<input id="aiPersonaDesc" placeholder="例如：一个嘴很毒的健身教练，说话短，爱催人练">' +
+      '<button class="primary" id="aiPersonaBtn" style="margin-top:8px">生成人设</button>' +
+      '<div id="aiPersonaOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div></div>';
+
+    out += '<div class="card"><h2>试聊预览</h2>' +
+      '<div class="muted" style="margin-bottom:8px">用这个人设的提示词直接问模型：不经过 QQ，也不影响真实会话。改完人设先在这儿试一句。</div>' +
+      '<select id="pvPersona">' +
+      visible.map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') +
+      (s.personae || []).map(function (p) { return '<option value="' + esc(p.id) + '"' + (s.activePersonaId === p.id ? ' selected' : '') + '>' + esc(p.name) + '（自定义）</option>'; }).join('') +
+      '</select>' +
+      '<textarea id="pvText" placeholder="说一句，比如：今天好累" style="margin-top:8px;min-height:72px"></textarea>' +
+      '<div class="btnrow" style="margin-top:8px"><button class="primary" id="pvGo">让她回一句</button>' +
+      '<span class="muted" id="pvMeta"></span></div>' +
+      '<div id="pvOut" style="margin-top:12px"></div></div>';
+
+    out += proactiveCards();
+    return out;
+  }
+
+  function viewWhitelist() {
+    var users = data.settings.whitelist || [];
+    var owners = (data.status && (data.status.owners || [])) || [];
+    var perms = (data.status && data.status.ownerPerms) || { send: true, broadcast: true, schedule: true };
+    var out = '<div class="card"><h2>号主（可多个，权限可自定义）</h2>' +
+      '<div class="muted" style="margin-bottom:8px">号主跟她说话时会打开「号主模式」。可以填多个 QQ 号，一行一个或用逗号隔开。</div>' +
+      '<textarea id="ownersInput" placeholder="3397238634" style="min-height:70px">' + esc(owners.join('\n')) + '</textarea>' +
+      '<div style="margin-top:10px;display:grid;gap:6px">' +
+      '<div class="row"><span>允许代发消息 <code>[发送:QQ|内容]</code></span><button class="small" data-ownerperm="send">' + (perms.send ? '已开' : '已关') + '</button></div>' +
+      '<div class="row"><span>允许群发 <code>[群发:内容]</code></span><button class="small" data-ownerperm="broadcast">' + (perms.broadcast ? '已开' : '已关') + '</button></div>' +
+      '<div class="row"><span>允许定时发送 <code>[定时:分钟|QQ|内容]</code></span><button class="small" data-ownerperm="schedule">' + (perms.schedule ? '已开' : '已关') + '</button></div>' +
+      '</div>' +
+      '<div class="btnrow" style="margin-top:10px"><button class="primary" id="ownerSave">保存</button>' +
+      '<button class="small ghost" id="ownerUseFirst">用白名单第一个</button></div></div>';
+
+    out += '<div class="card"><h2>允许私聊的 QQ</h2>';
+    if (!users.length) out += '<div class="muted" style="margin-bottom:8px">为空时使用配置文件里的白名单：' + esc((data.allowUsers || []).join('、') || '无') + '</div>';
+    users.forEach(function (u) {
+      var off = (data.settings.disabledUsers || []).indexOf(u) !== -1;
+      out += '<div class="row" style="opacity:' + (off ? '.5' : '1') + '"><span class="mono">' + esc(u) +
+        (off ? ' <span class="tag">已停用</span>' : '') + '</span>' +
+        '<span class="btnrow"><button class="small" data-disuser="' + esc(u) + '">' + (off ? '启用' : '停用') + '</button>' +
+        '<button class="danger small" data-delqq="' + esc(u) + '">移除</button></span></div>';
+    });
+    out += '<div class="row start" style="border-top:1px solid var(--line);padding-top:12px">' +
+      '<input id="qqInput" placeholder="输入 QQ 号，回车添加" style="flex:1">' +
+      '<button class="primary" id="qqAdd">添加</button></div></div>';
+
+    var groups = data.settings.groups || [];
+    out += '<div class="card"><h2>允许的群</h2><div class="muted" style="margin-bottom:8px">群里必须 @ 她才回；为空时不响应任何群。</div>';
+    if (!groups.length) out += '<div class="empty">没有配置群</div>';
+    groups.forEach(function (g) {
+      out += '<div class="row"><span class="mono">' + esc(g) + '</span><button class="danger small" data-delgroup="' + esc(g) + '">移除</button></div>';
+    });
+    out += '<div class="row start" style="border-top:1px solid var(--line);padding-top:12px">' +
+      '<input id="groupInput" placeholder="输入群号，回车添加" style="flex:1">' +
+      '<button class="primary" id="groupAdd">添加</button></div></div>';
+    return out;
+  }
+
+  function viewSticker() {
+    var files = data.stickerFiles || [];
+    var enabled = data.settings.stickers.enabled;
+    var out = '<div class="card"><div class="row"><span><b>表情包</b> <span class="muted">' + files.length + ' 张</span></span>' +
+      '<button id="sToggle" class="' + (enabled ? '' : 'primary') + '">' + (enabled ? '已开启' : '已关闭') + '</button></div>' +
+      '<div class="muted">开启后她才能发图。停用的单张不会被抽到，也不能被指定。</div></div>';
+
+    out += '<div class="card"><h2>手动添加</h2><div style="display:grid;gap:8px">' +
+      '<input id="sName" placeholder="名字（她发图时用的指令名，例如：无语）">' +
+      '<input id="sFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp">' +
+      '<button class="primary" id="sUpload">上传（≤8MB）</button></div></div>';
+
+    out += '<div class="card"><h2>全部表情</h2>';
+    var declared = data.settings.stickerGroups || [];
+    var assigned = Object.keys(data.settings.stickerGroup || {}).map(function (k) { return data.settings.stickerGroup[k]; });
+    var groups = [];
+    declared.concat(assigned).forEach(function (g) {
+      if (g && groups.indexOf(g) === -1) groups.push(g);
+    });
+    var pickedCount = Object.keys(pickedStickers).filter(function (k) { return pickedStickers[k]; }).length;
+    out += '<div class="btnrow" style="margin-bottom:10px">' +
+      '<button class="small ' + (sFilter === '' ? 'primary' : 'ghost') + '" data-sfilter="">全部</button>' +
+      '<button class="small ' + (sFilter === '__none' ? 'primary' : 'ghost') + '" data-sfilter="__none">未分组</button>' +
+      groups.map(function (g) {
+        return '<span class="btnrow" style="gap:2px"><button class="small ' + (sFilter === g ? 'primary' : 'ghost') + '" data-sfilter="' + esc(g) + '">' + esc(g) + '</button>' +
+          '<button class="small ghost" data-sdelgroup="' + esc(g) + '" title="删除分组">×</button></span>';
+      }).join('') +
+      '<button class="small" data-newgroup="1">＋ 新建分组</button></div>';
+    out += '<div class="card" style="background:var(--soft);box-shadow:none;margin-bottom:12px">' +
+      '<div class="row"><span>已选 <b id="pickCount">' + pickedCount + '</b> 张</span>' +
+      '<span class="btnrow"><select id="pickGroup" style="width:170px">' +
+      '<option value="">未分组</option>' +
+      groups.map(function (g) { return '<option value="' + esc(g) + '">' + esc(g) + '</option>'; }).join('') +
+      '<option value="__new">＋新建分组…</option></select>' +
+      '<button class="primary small" id="pickApply">分到该组</button>' +
+      '<button class="small ghost" id="pickClear">清空选择</button></span></div></div>';
+    out += '<div class="grid">';
+    var shown = files.filter(function (name) {
+      if (!sFilter) return true;
+      var g = (data.settings.stickerGroup || {})[name] || '';
+      if (sFilter === '__none') return g === '';
+      return g === sFilter;
+    });
+    if (!shown.length) out += '<div class="empty" style="grid-column:1/-1">这个分组还没有表情</div>';
+    shown.forEach(function (name) {
+      var off = (data.settings.stickerDisabled || []).indexOf(name) !== -1;
+      var group = (data.settings.stickerGroup || {})[name] || '';
+      out += '<div class="sticker" style="opacity:' + (off ? '.45' : '1') + '">' +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:11px;justify-content:center">' +
+        '<input type="checkbox" data-pick="' + esc(name) + '"' + (pickedStickers[name] ? ' checked' : '') + ' style="width:auto">选择</label>' +
+        '<img src="/im-bridge/sticker?name=' + encodeURIComponent(name) + '" alt="' + esc(name) + '">' +
+        '<div class="name">' + esc(name) + (group ? ' <span class="tag">' + esc(group) + '</span>' : '') + '</div>' +
+        '<div class="acts"><button class="small ghost" data-stoggle="' + esc(name) + '">' + (off ? '启用' : '停用') + '</button>' +
+        '<button class="small danger" data-delsticker="' + esc(name) + '">删</button></div></div>';
+    });
+    out += '</div></div>';
+
+    out += '<div class="card"><h2>AI 搜表情包</h2><div class="muted" style="margin-bottom:8px">联网搜图并直接入库；会过滤 logo 和小图，但质量随机，建议用具体词。</div>' +
+      '<input id="aiStickerQuery" placeholder="例如：蓝色大肥鱼 表情包">' +
+      '<button class="primary" id="aiStickerBtn" style="margin-top:8px">搜索并添加</button>' +
+      '<div id="aiStickerOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div></div>';
+
+    out += viewVoiceCard();
+    return out;
+  }
+
+  function viewMonitor() {
+    var all = (monitor && monitor.messages) || [];
+    var chats = [];
+    all.forEach(function (m) {
+      var key = m.chat || '未知';
+      if (chats.indexOf(key) === -1) chats.push(key);
+    });
+    var list = all.filter(function (m) {
+      if (msgChat !== 'all' && (m.chat || '未知') !== msgChat) return false;
+      return msgFilter === 'all' || m.dir === msgFilter;
+    });
+    var out = '<div class="card"><div class="banner"><b>免责声明</b><br>' + esc((monitor && monitor.disclaimer) || '') + '</div></div>';
+    out += '<div class="card"><div class="row"><span><b>消息记录</b> <span class="muted">' + list.length + ' / ' + all.length + ' 条</span></span>' +
+      '<span class="seg" id="msgSeg"><button data-filter="all" class="' + (msgFilter === 'all' ? 'on' : '') + '">全部</button>' +
+      '<button data-filter="in" class="' + (msgFilter === 'in' ? 'on' : '') + '">收到</button>' +
+      '<button data-filter="out" class="' + (msgFilter === 'out' ? 'on' : '') + '">发出</button></span></div>';
+
+    if (chats.length > 1) {
+      out += '<div class="btnrow" style="margin-top:10px">' +
+        '<button class="small ' + (msgChat === 'all' ? 'primary' : 'ghost') + '" data-chat="all">全部对话</button>' +
+        chats.map(function (c) {
+          return '<button class="small ' + (msgChat === c ? 'primary' : 'ghost') + '" data-chat="' + esc(c) + '">' + esc(c) + '</button>';
+        }).join('') + '</div>';
+    }
+    out += '<div class="btnrow" style="margin-top:10px"><button class="danger small" id="mClear">清空记录</button>' +
+      '<span class="muted" style="align-self:center">每 2 秒自动刷新</span></div>';
+
+    out += '<div class="msgs" style="margin-top:12px">';
+    if (!list.length) out += '<div class="empty">这个分组还没有消息</div>';
+    list.slice().reverse().forEach(function (m) {
+      out += '<div class="msg ' + m.dir + '"><div class="meta"><span>' + (m.dir === 'in' ? '收到' : '发出') +
+        '</span><span class="mono">' + esc(m.chat || '') + '</span><span>' + new Date(m.time).toLocaleTimeString() + '</span></div>' +
+        '<div class="body">' + esc(m.text || '') + '</div>' +
+        (m.file ? '<a href="/im-bridge/msg-image?file=' + encodeURIComponent(m.file) + '" target="_blank">' +
+          '<img src="/im-bridge/msg-image?file=' + encodeURIComponent(m.file) + '" alt="图片"></a>' : '') +
+        '</div>';
+    });
+    out += '</div></div>';
+    return out;
+  }
+
+  function viewModelSettings() {
+    var s = data.status;
+    var pc = data.settings.proactiveCfg || { startHour: 9, endHour: 23, maxPerDay: 3 };
+    var dnd = data.settings.dnd || { enabled: false, startHour: 23, endHour: 9 };
+    function sw(key, label, on) {
+      return '<div class="row"><span>' + label + '</span><button class="small" data-toggle="' + key + '">' + (on ? '开' : '关') + '</button></div>';
+    }
+    var out = '<div class="card"><h2>聊天模型</h2><div class="row"><span>当前</span><span class="muted mono" id="modelCur"></span></div>' +
+      '<label class="field" style="margin-top:8px">智力档位（点一下立刻切换并重开会话）</label>' +
+      '<div class="btnrow">' +
+      ['eco:省·不思考', 'standard:标准·轻思考', 'high:高·深想', 'max:最高·拉满'].map(function (pair) {
+        var id = pair.split(':')[0];
+        var label = pair.split(':')[1];
+        return '<button class="small ' + ((data.status.intelligence || 'standard') === id ? 'primary' : '') + '" data-iq="' + id + '">' + label + '</button>';
+      }).join('') + '</div>' +
+      '<div class="muted" style="margin-top:4px">当前实际档位：<code>' + esc(data.status.effectiveEffort || 'low') + '</code>。档位写在会话里，所以切换会结束当前会话，下一条消息自动开新会话。</div>' +
+      '<div class="muted" id="iqHint"></div>' +
+      '<div style="display:grid;gap:8px;margin-top:8px">' +
+      '<select id="mProvider"></select><select id="mModel"></select>' +
+      '<div class="btnrow"><button class="primary" id="mSave">保存模型</button><button id="mReset">恢复默认</button></div>' +
+      '<div class="muted">思考深度由上面的「智力档位」统一控制，这里只管用哪个模型。要加本地模型（Ollama 之类）或别的 API key：去 DSH「设置 → 模型」添加，加完这里自动出现。</div>' +
+      '</div></div>';
+
+    out += viewSearchCard();
+    return out;
+  }
+
+  /** 人设页里的「主动行为」块：她什么时候会主动说话。 */
+  function proactiveCards() {
+    var s = data.status;
+    var pc = data.settings.proactiveCfg || { startHour: 9, endHour: 23, maxPerDay: 3 };
+    var dnd = data.settings.dnd || { enabled: false, startHour: 23, endHour: 9 };
+    function sw(key, label, on) {
+      return '<div class="row"><span>' + label + '</span><button class="small" data-toggle="' + key + '">' + (on ? '开' : '关') + '</button></div>';
+    }
+    var out = '<div class="card"><h2>主动行为</h2>' +
+      '<div class="muted" style="margin-bottom:8px">她不只在你说话时才有反应。</div>' +
+      sw('proactive', '定时找你（2–5 小时）', s.proactive) +
+      sw('silence', '沉默后追问（18–35 分钟）', s.silence) +
+      sw('afterthought', '说完再补一句', s.afterthought) + '</div>';
+
+    out += '<div class="card"><h2>时段</h2><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+      '<label class="field">主动开始<input id="pcStart" type="number" min="0" max="23" value="' + pc.startHour + '"></label>' +
+      '<label class="field">主动结束<input id="pcEnd" type="number" min="1" max="24" value="' + pc.endHour + '"></label>' +
+      '<label class="field">每天上限<input id="pcMax" type="number" min="1" max="20" value="' + pc.maxPerDay + '"></label>' +
+      '</div><button class="primary" id="pcSave" style="margin-top:10px">保存主动时段</button>' +
+      '<div class="row" style="margin-top:12px"><span>勿扰时段</span><button class="small" id="dndToggle">' + (dnd.enabled ? '已开' : '已关') + '</button></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">' +
+      '<label class="field">勿扰开始<input id="dndStart" type="number" min="0" max="23" value="' + dnd.startHour + '"></label>' +
+      '<label class="field">勿扰结束<input id="dndEnd" type="number" min="0" max="24" value="' + dnd.endHour + '"></label>' +
+      '</div><button class="primary" id="dndSave" style="margin-top:10px">保存勿扰</button>' +
+      '<div class="muted" style="margin-top:6px">勿扰只压主动消息，你找她照样回。</div></div>';
+    return out;
+  }
+
+  function viewSearchCard() {
+    var se = (data.settings && data.settings.search) || {};
+    return '<div class="card"><h2>搜索引擎（补课）</h2>' +
+      '<div class="muted" style="margin-bottom:8px">她遇到不懂的梗/新词会写 [查:词]，桥接去查完再用她的话回你。查到的东西不好，多半是引擎选错了。</div>' +
+      '<label class="field">引擎<select id="seEngine">' +
+      '<option value="host"' + (se.engine === 'host' || !se.engine ? ' selected' : '') + '>DSH 自带（默认，免费）</option>' +
+      '<option value="wikipedia"' + (se.engine === 'wikipedia' ? ' selected' : '') + '>维基百科 API（免费、无需 key）</option>' +
+      '<option value="ddg"' + (se.engine === 'ddg' ? ' selected' : '') + '>DuckDuckGo API（免费、英文强）</option>' +
+      '<option value="searx"' + (se.engine === 'searx' ? ' selected' : '') + '>SearXNG（自建，开源）</option>' +
+      '<option value="custom"' + (se.engine === 'custom' ? ' selected' : '') + '>自定义 URL（{q} 占位）</option>' +
+      '</select></label>' +
+      '<label class="field" style="margin-top:8px">SearXNG 地址<input id="searxUrl" placeholder="http://127.0.0.1:8888" value="' + esc(se.searxUrl || '') + '"></label>' +
+      '<label class="field" style="margin-top:8px">自定义搜索 URL<input id="seCustomUrl" placeholder="https://example.com/search?q={q}" value="' + esc(se.customUrl || '') + '"></label>' +
+      '<button class="primary" id="searxSave" style="margin-top:10px">保存搜索设置</button></div>';
+  }
+
+  /** 记忆：压缩规则 + 存放位置。 */
+  function viewMemory() {
+    var s = data.settings;
+    var mem = s.memory || { enabled: true, everyTurns: 40, maxChars: 400 };
+    var mems = (data.status && data.status.memories) || {};
+    var out = '<div class="card"><h2>记忆压缩</h2>' +
+      '<div class="muted" style="margin-bottom:8px">聊到设定轮数就把最近的对话压成一小段记忆，然后换新会话；那段记忆会带进新会话。不这么做，窗口迟早会被撑满。</div>' +
+      '<div class="row"><span>启用</span><button class="small" id="memToggle">' + (mem.enabled ? '已开' : '已关') + '</button></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">' +
+      '<label class="field">每多少轮压缩<input id="memTurns" type="number" min="5" max="500" value="' + mem.everyTurns + '"></label>' +
+      '<label class="field">记忆字数上限<input id="memChars" type="number" min="120" max="2000" value="' + mem.maxChars + '"></label>' +
+      '</div><button class="primary" id="memSave" style="margin-top:10px">保存</button></div>';
+
+    out += '<div class="card"><h2>已存记忆</h2>' +
+      '<div class="muted" style="margin-bottom:8px">共 ' + Object.keys(mems).length + ' 条。可以单独重压或清除。</div>';
+    if (!Object.keys(mems).length) out += '<div class="empty">还没有记忆，聊够轮数会自动生成</div>';
+    Object.keys(mems).forEach(function (k) {
+      var when = mems[k] && mems[k].at ? new Date(mems[k].at).toLocaleString() : '';
+      out += '<div class="persona"><h3>' + esc(k) +
+        (when ? '<span class="tag">' + esc(when) + '</span>' : '') + '</h3><pre>' + esc(mems[k].text) + '</pre>' +
+        '<div class="btnrow" style="margin-top:8px"><button class="small" data-memcompact="' + esc(k) + '">立即压缩</button>' +
+        '<button class="danger small" data-memclear="' + esc(k) + '">清除</button></div></div>';
+    });
+    out += '</div>';
+
+    out += '<div class="card"><h2>记忆文件位置</h2>' +
+      '<div class="kv"><span>当前文件</span><code class="path">' + esc((data.status && data.status.memoryFile) || '') + '</code></div>' +
+      '<input id="memDir" placeholder="留空 = 默认（.dsh/im-bridge/memories.json）" value="' + esc(s.memoryDir || '') + '" style="margin-top:8px">' +
+      '<div class="btnrow" style="margin-top:8px"><button id="memDirSave">迁移到该目录</button></div></div>';
+
+    out += '<div class="card"><h2>缓存与占用</h2>' +
+      '<div class="muted" style="margin-bottom:8px">日志、监听历史、语音、表情包都放在这里；<b>设置和会话记录不动</b>，换路径不会丢配置。</div>' +
+      '<div class="kv"><span>当前路径</span><code class="path">' + esc((storage && storage.cacheDir) || (data.status && data.status.cacheDir) || '') + '</code></div>' +
+      '<div class="row"><span>占用</span><span class="muted">表情 ' + fmtSize(storage && storage.sizes && storage.sizes.sticker) +
+      ' · 语音 ' + fmtSize(storage && storage.sizes && storage.sizes.voice) +
+      ' · 监听图 ' + fmtSize(storage && storage.sizes && storage.sizes.messages) +
+      ' · 日志 ' + fmtSize(storage && storage.sizes && storage.sizes.log) + '</span></div>' +
+      '<input id="cacheInput" placeholder="新路径，例如 D:/dsh-cache/im-bridge" style="margin-top:8px">' +
+      '<div class="btnrow" style="margin-top:8px"><button class="primary" id="cacheMove">迁移到这个路径</button>' +
+      '<button id="cacheDefault">恢复默认</button>' +
+      '<button class="danger" id="cacheClean">清理缓存（语音/旧图/日志）</button></div>' +
+      '<div id="cacheOut" class="muted" style="margin-top:8px"></div></div>';
+    return out;
+  }
+
+  /** 只剩语音和素材相关的设置，挂到「素材」页。 */
+  function viewVoiceCard() {
+    var v = data.settings.voice || {};
+    return '<div class="card"><h2>语音输出</h2>' +
+      '<div class="row"><span>让她偶尔发语音</span><button class="small" id="vToggle">' + (v.enabled ? '已开' : '已关') + '</button></div>' +
+      '<div class="muted" style="margin:6px 0 8px">只用高质量音色：edge-tts（微软在线）或你自己的 TTS 服务。离线 SAPI 只作兜底，不在这里选。</div>' +
+      '<div class="btnrow" style="margin-top:10px"><label class="field" style="flex:1">引擎' +
+      '<select id="vEngine">' +
+      '<option value="edge"' + (v.engine !== 'custom' ? ' selected' : '') + '>edge-tts（推荐）</option>' +
+      '<option value="custom"' + (v.engine === 'custom' ? ' selected' : '') + '>自定义 HTTP TTS</option></select></label>' +
+      '<label class="field" style="flex:1">edge 音色<input id="vEdgeVoice" value="' + esc(v.edgeVoice || 'zh-CN-XiaoxiaoNeural') + '"></label></div>' +
+      '<label class="field" style="margin-top:8px">自定义 TTS 地址（用 {text} / {voice} 占位）' +
+      '<input id="vCustomUrl" placeholder="http://127.0.0.1:9880/tts?text={text}&voice={voice}" value="' + esc(v.customUrl || '') + '"></label>' +
+      '<label class="field" style="margin-top:8px">自定义音色名<input id="vCustomVoice" placeholder="例如 派蒙 / 晓晓" value="' + esc(v.customVoice || '') + '"></label>' +
+      '<div class="muted" style="margin-top:6px">GPT-SoVITS / CosyVoice 之类起个 HTTP 接口就能接；返回音频字节即可。</div>' +
+      '<button id="vSaveEngine" style="margin-top:8px">保存引擎设置</button>' +
+      '<div class="btnrow" style="margin-top:10px"><input id="vText" placeholder="试听文本" style="flex:1;min-width:180px">' +
+      '<button id="vTest">试听</button>' +
+      '<button id="vSamplesBtn">生成对比样本</button></div>' +
+      '<div id="vSamples" style="margin-top:10px"></div>' +
+      '<div id="vOut" class="muted" style="margin-top:8px"></div></div>';
+  }
+
+  function fmtSize(bytes) {
+    var n = Number(bytes) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function loadLog() {
+    var box = $('logBox');
+    if (!box) return;
+    api('GET', '/im-bridge/log?lines=40')
+      .then(function (v) { box.textContent = (v.lines || []).join('\n') || '（空）'; box.scrollTop = box.scrollHeight; })
+      .catch(function (e) { box.textContent = '读取失败：' + e.message; });
+  }
+
+  function loadQr() {
+    var box = $('qrBox');
+    if (!box) return;
+    var img = new Image();
+    img.onload = function () {
+      img.style.maxWidth = '220px'; img.style.borderRadius = '12px'; img.style.border = '1px solid var(--line)';
+      img.style.cursor = 'pointer'; img.title = '点击刷新';
+      img.onclick = function () { img.src = '/im-bridge/qr?t=' + Date.now(); };
+      box.innerHTML = ''; box.appendChild(img);
+    };
+    img.onerror = function () { box.innerHTML = '<div class="muted">还没有二维码：先点「本地快速登录」。</div>'; };
+    img.src = '/im-bridge/qr?t=' + Date.now();
+  }
+
+  function chatModelOptions(chatKey) {
+    var current = (data.status.modelByChat || {})[chatKey];
+    var out = '<option value="">跟随全局</option>';
+    ((models && models.groups) || []).forEach(function (g) {
+      (g.models || []).forEach(function (m) {
+        var value = g.id + '|' + m.id;
+        var selected = current && current.provider === g.id && current.model === m.id;
+        out += '<option value="' + esc(value) + '"' + (selected ? ' selected' : '') + '>' + esc(m.name || m.id) + ' · ' + esc(g.name || g.id) + '</option>';
+      });
+    });
+    return out;
+  }
+
+  function renderModelPickers() {
+    var provider = $('mProvider');
+    var modelSelect = $('mModel');
+    if (!provider || !modelSelect) return;
+    // 用面板真实生效的那一组，而不是目录里的默认值；否则下拉显示的和实际用的会不一致。
+    var cur = (data.status && data.status.model) || (models && (models.current || models.default)) || {};
+    provider.innerHTML = '';
+    ((models && models.groups) || []).forEach(function (g) {
+      var opt = document.createElement('option');
+      opt.value = g.id; opt.textContent = g.name || g.id;
+      if (g.id === cur.provider) opt.selected = true;
+      provider.appendChild(opt);
+    });
+    if (!provider.options.length) {
+      provider.innerHTML = '<option value="' + esc(cur.provider || '') + '">' + esc(cur.provider || '无可用模型') + '</option>';
+    }
+    fillModels(cur.model);
+    if ($('modelCur')) {
+      $('modelCur').textContent =
+        (cur.provider || '?') + ' / ' + (cur.model || '?') + (cur.reasoningEffort ? ' · ' + cur.reasoningEffort : '');
+    }
+  }
+
+  function fillModels(preferred) {
+    var provider = $('mProvider');
+    var modelSelect = $('mModel');
+    if (!provider || !modelSelect) return;
+    var groups = (models && models.groups) || [];
+    var group = groups.filter(function (g) { return g.id === provider.value; })[0];
+    modelSelect.innerHTML = '';
+    ((group && group.models) || []).forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m.id; opt.textContent = m.name || m.id;
+      if (m.id === preferred) opt.selected = true;
+      modelSelect.appendChild(opt);
+    });
+    if (!modelSelect.options.length) {
+      modelSelect.innerHTML = '<option value="' + esc(preferred || '') + '">' + esc(preferred || '无可用模型') + '</option>';
+    }
+  }
+
+  function bind() {
+    var el;
+    if ((el = $('sendTarget'))) el.onchange = function () {
+      $('sendCustom').style.display = el.value === '__custom' ? '' : 'none';
+    };
+    if ((el = $('sendGo'))) el.onclick = function () {
+      var target = $('sendTarget').value === '__custom' ? ($('sendCustom').value || '').trim() : $('sendTarget').value;
+      if (!target) { toast('先选发送对象'); return; }
+      var payload = {
+        target: target,
+        text: ($('sendText').value || '').trim(),
+        voice: ($('sendVoice').value || '').trim(),
+        sticker: $('sendSticker').value || ''
+      };
+      if (!payload.text && !payload.voice && !payload.sticker) { toast('没有要发的内容'); return; }
+      el.disabled = true;
+      $('sendOut').textContent = '发送中…';
+      api('POST', '/im-bridge/send', payload)
+        .then(function (v) { $('sendOut').textContent = '已发送（' + v.segments.join('+') + '）→ ' + v.target; toast('已发送'); })
+        .catch(function (e) { $('sendOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    [['sendFillSorry', '刚才说错了，别当真'], ['sendFillBusy', '我去忙一会儿，回头找你'], ['sendFillNight', '睡了，晚安']].forEach(function (pair) {
+      var btn = $(pair[0]);
+      if (btn) btn.onclick = function () { $('sendText').value = pair[1]; };
+    });
+    if ((el = $('btnStart'))) el.onclick = function () {
+      el.disabled = true;
+      $('loginHint').textContent = '已请求启动，若弹 UAC 请点「是」…';
+      api('POST', '/im-bridge/login', { action: 'start' }).then(function (v) {
+        $('loginHint').textContent = v.already ? '本来就在运行' : '已拉起，登录后自动刷新';
+        setTimeout(load, 6000);
+        setTimeout(function () { if (el) el.disabled = false; }, 6000);
+      }).catch(function (e) { $('loginHint').textContent = '启动失败：' + e.message; el.disabled = false; });
+    };
+    if ((el = $('btnRegister'))) el.onclick = function () {
+      $('loginHint').textContent = '弹 UAC 时点「是」，之后启动就不用再点了';
+      api('POST', '/im-bridge/login', { action: 'register' })
+        .then(function () { toast('已请求注册，请在 UAC 窗口点「是」'); })
+        .catch(function (e) { $('loginHint').textContent = '注册失败：' + e.message; });
+    };
+    if ((el = $('btnQrRefresh'))) el.onclick = loadQr;
+    loadQr();
+    if ((el = $('autoStartToggle'))) el.onclick = function () {
+      var next = !data.status.autoStart;
+      el.disabled = true;
+      api('POST', '/im-bridge/settings', { autoStart: next })
+        .then(function () { toast(next ? '已开启开机自启' : '已关闭开机自启'); load(); })
+        .catch(function (e) { toast('设置失败：' + e.message); })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('btnReconnect'))) el.onclick = function () {
+      api('POST', '/im-bridge/action', { kind: 'reconnect' }).then(function (v) {
+        toast(v.connected ? '已重连' : '请求已发出，但 NapCat 还没连上'); load();
+      });
+    };
+    if ((el = $('btnPause'))) el.onclick = function () {
+      var paused = !data.status.accountPaused;
+      api('POST', '/im-bridge/action', { kind: paused ? 'pause' : 'resume' }).then(function () {
+        toast(paused ? '已停用连接（配置保留）' : '已恢复连接'); load();
+      });
+    };
+    if ((el = $('btnTest'))) el.onclick = function () {
+      api('POST', '/im-bridge/action', { kind: 'test' }).then(function (v) {
+        toast(v.connected ? '测试消息已发出' : 'NapCat 未连接，没发出去');
+      });
+    };
+    if ((el = $('logRefresh'))) el.onclick = loadLog;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-reset]'), function (btn) {
+      btn.onclick = function () {
+        if (!confirm('重置这个会话？下一条消息会开新的。')) return;
+        api('POST', '/im-bridge/action', { kind: 'reset', key: btn.getAttribute('data-reset') })
+          .then(function () { toast('已重置'); load(); });
+      };
+    });
+
+    if ((el = $('pAdd'))) el.onclick = function () {
+      var name = $('pName').value.trim();
+      var prompt = $('pPrompt').value.trim();
+      if (!name || !prompt) { toast('名字和提示词都要填'); return; }
+      var personae = (data.settings.personae || []).slice();
+      if (editingId) {
+        personae = personae.map(function (p) {
+          return p.id === editingId ? { id: p.id, name: name, preset: $('pPreset').value, prompt: prompt } : p;
+        });
+      } else {
+        personae.push({ id: 'p' + Date.now(), name: name, preset: $('pPreset').value, prompt: prompt });
+      }
+      api('POST', '/im-bridge/settings', { personae: personae }).then(function () {
+        toast(editingId ? '已保存' : '已添加');
+        editingId = '';
+        load();
+      }).catch(function (e) { toast('保存失败：' + e.message); });
+    };
+    if ((el = $('pCancel'))) el.onclick = function () {
+      editingId = '';
+      renderPane();
+    };
+    if ((el = $('unhideAll'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { hiddenPresets: [] }).then(function () { toast('已恢复'); load(); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-hide]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-hide');
+        if (!confirm('从列表里删除「' + id + '」？只是隐藏；要彻底卸载请去插件管理。')) return;
+        var hidden = (data.settings.hiddenPresets || []).slice();
+        if (hidden.indexOf(id) === -1) hidden.push(id);
+        var patch = { hiddenPresets: hidden };
+        if (data.settings.activePersonaId === id) patch.activePersonaId = '';
+        api('POST', '/im-bridge/settings', patch).then(function () { toast('已移除'); load(); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-view');
+        viewPreset = viewPreset === id ? '' : id;
+        renderPane();
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-presave]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-presave');
+        var box = document.getElementById('presetEdit-' + id);
+        if (!box) return;
+        btn.disabled = true;
+        api('POST', '/im-bridge/presets', { action: 'save', id: id, prompt: box.value })
+          .then(function () { toast('已保存，下条消息生效'); load(); })
+          .catch(function (e) { toast('保存失败：' + e.message); btn.disabled = false; });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-prerestore]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-prerestore');
+        if (!confirm('恢复成预设原文？你的修改会丢。')) return;
+        api('POST', '/im-bridge/presets', { action: 'restore', id: id })
+          .then(function () { toast('已恢复原文'); load(); })
+          .catch(function (e) { toast('恢复失败：' + e.message); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-copy');
+        var detail = presets.filter(function (x) { return x.id === id; })[0];
+        if (!detail) { toast('读不到预设文本'); return; }
+        editingId = '';
+        var nameInput = document.getElementById('pName');
+        var promptInput = document.getElementById('pPrompt');
+        var presetSelect = document.getElementById('pPreset');
+        if (nameInput) nameInput.value = detail.name + '（我的版本）';
+        if (promptInput) promptInput.value = detail.prompt;
+        if (presetSelect) presetSelect.value = id;
+        if (document.getElementById('pAdd')) document.getElementById('pAdd').textContent = '另存为新的人设';
+        viewPreset = '';
+        renderPane();
+        var again = document.getElementById('pName');
+        if (again) {
+          again.value = detail.name + '（我的版本）';
+          document.getElementById('pPrompt').value = detail.prompt;
+          document.getElementById('pPreset').value = id;
+          document.getElementById('pAdd').textContent = '另存为新的人设';
+        }
+        window.scrollTo(0, document.body.scrollHeight);
+        toast('已填入表单，改完点「另存为新的人设」');
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-use]'), function (btn) {
+      btn.onclick = function () {
+        api('POST', '/im-bridge/settings', { activePersonaId: btn.getAttribute('data-use') })
+          .then(function () { toast('已切换'); load(); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'), function (btn) {
+      btn.onclick = function () {
+        editingId = btn.getAttribute('data-edit');
+        renderPane();
+        var form = $('personaForm');
+        if (form) form.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        var nameBox = $('pName');
+        if (nameBox) setTimeout(function () { nameBox.focus(); }, 200);
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-del]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-del');
+        var target = (data.settings.personae || []).filter(function (p) { return p.id === id; })[0];
+        var isActive = data.settings.activePersonaId === id;
+        var tip = '删除人设「' + (target ? target.name : id) + '」？' +
+          (isActive ? '她正在用这个人设，删除后会切回「大米鲸鱼娘」。' : '');
+        if (!confirm(tip)) return;
+        var personae = (data.settings.personae || []).filter(function (p) { return p.id !== id; });
+        var patch = { personae: personae };
+        if (isActive) patch.activePersonaId = 'whale';
+        api('POST', '/im-bridge/settings', patch).then(function () {
+          toast(isActive ? '已删除，切回大米鲸鱼娘' : '已删除');
+          if (editingId === id) editingId = '';
+          load();
+        });
+      };
+    });
+    if ((el = $('pExport'))) el.onclick = function () {
+      var blob = new Blob([JSON.stringify(data.settings.personae || [], null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'personae.json'; a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    };
+    if ((el = $('pImportBtn'))) el.onclick = function () {
+      try {
+        var incoming = JSON.parse($('pImport').value);
+        if (!Array.isArray(incoming)) throw new Error('需要一个数组');
+        var personae = (data.settings.personae || []).slice();
+        incoming.forEach(function (p) {
+          if (!p || !p.name || !p.prompt) return;
+          personae.push({ id: 'p' + Date.now() + Math.floor(Math.random() * 1000), name: String(p.name), preset: String(p.preset || 'whale'), prompt: String(p.prompt) });
+        });
+        api('POST', '/im-bridge/settings', { personae: personae }).then(function () { toast('已导入'); load(); });
+      } catch (e) { toast('导入失败：' + e.message); }
+    };
+
+    if ((el = $('qqInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('qqAdd').click(); };
+    if ((el = $('ownerSave'))) el.onclick = function () {
+      var list = ($('ownersInput').value || '').split(/[,，\s]+/).filter(function (v) { return v; });
+      api('POST', '/im-bridge/settings', { owners: list })
+        .then(function () { toast('号主已保存（' + list.length + ' 个）'); load(); })
+        .catch(function (e) { toast('保存失败：' + e.message); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ownerperm]'), function (btn) {
+      btn.onclick = function () {
+        var key = btn.getAttribute('data-ownerperm');
+        var current = (data.status && data.status.ownerPerms) || { send: true, broadcast: true, schedule: true };
+        var next = { send: current.send, broadcast: current.broadcast, schedule: current.schedule };
+        next[key] = !current[key];
+        api('POST', '/im-bridge/settings', { ownerPerms: next })
+          .then(function () { toast('已保存'); load(); })
+          .catch(function (e) { toast('保存失败：' + e.message); });
+      };
+    });
+    if ((el = $('ownerUseFirst'))) el.onclick = function () {
+      var first = (data.allowUsers || [])[0] || '';
+      if (!first) { toast('白名单是空的'); return; }
+      api('POST', '/im-bridge/settings', { owners: [first] })
+        .then(function () { toast('号主设为 ' + first); load(); });
+    };
+    if ((el = $('qqAdd'))) el.onclick = function () {
+      var v = $('qqInput').value.trim();
+      if (!/^\d{5,12}$/.test(v)) { toast('QQ 号格式不对'); return; }
+      var list = data.settings.whitelist.slice();
+      if (list.indexOf(v) === -1) list.push(v);
+      api('POST', '/im-bridge/settings', { whitelist: list }).then(function () { toast('已添加'); load(); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-delqq]'), function (btn) {
+      btn.onclick = function () {
+        var list = data.settings.whitelist.filter(function (u) { return u !== btn.getAttribute('data-delqq'); });
+        api('POST', '/im-bridge/settings', { whitelist: list }).then(function () { toast('已移除'); load(); });
+      };
+    });
+    if ((el = $('groupInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('groupAdd').click(); };
+    if ((el = $('groupAdd'))) el.onclick = function () {
+      var v = $('groupInput').value.trim();
+      if (!/^\d{5,12}$/.test(v)) { toast('群号格式不对'); return; }
+      var list = (data.settings.groups || []).slice();
+      if (list.indexOf(v) === -1) list.push(v);
+      api('POST', '/im-bridge/settings', { groups: list }).then(function () { toast('已添加'); load(); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-delgroup]'), function (btn) {
+      btn.onclick = function () {
+        var list = (data.settings.groups || []).filter(function (g) { return g !== btn.getAttribute('data-delgroup'); });
+        api('POST', '/im-bridge/settings', { groups: list }).then(function () { toast('已移除'); load(); });
+      };
+    });
+
+    if ((el = $('sToggle'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { stickers: { enabled: !data.settings.stickers.enabled } }).then(load);
+    };
+    if ((el = $('sUpload'))) el.onclick = function () {
+      var name = ($('sName').value || '').trim();
+      var input = $('sFile');
+      if (!name) { toast('先给表情包起个名字'); return; }
+      if (!input.files || !input.files[0]) { toast('先选一张图'); return; }
+      var file = input.files[0];
+      if (file.size > 8 * 1024 * 1024) { toast('图片超过 8MB'); return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var base64 = String(reader.result).split(',')[1] || '';
+        api('POST', '/im-bridge/stickers', { action: 'upload', name: name, data: base64 })
+          .then(function () { toast('已上传'); load(); })
+          .catch(function (e) { toast('上传失败：' + e.message); });
+      };
+      reader.readAsDataURL(file);
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-stoggle]'), function (btn) {
+      btn.onclick = function () {
+        var name = btn.getAttribute('data-stoggle');
+        var list = (data.settings.stickerDisabled || []).slice();
+        var i = list.indexOf(name);
+        if (i === -1) list.push(name); else list.splice(i, 1);
+        api('POST', '/im-bridge/settings', { stickerDisabled: list }).then(load);
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-disuser]'), function (btn) {
+      btn.onclick = function () {
+        var user = btn.getAttribute('data-disuser');
+        var list = (data.settings.disabledUsers || []).slice();
+        var index = list.indexOf(user);
+        if (index === -1) list.push(user); else list.splice(index, 1);
+        api('POST', '/im-bridge/settings', { disabledUsers: list }).then(function () {
+          toast(index === -1 ? '已停用' : '已启用'); load();
+        });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-sfilter]'), function (btn) {
+      btn.onclick = function () {
+        sFilter = btn.getAttribute('data-sfilter');
+        renderPane();
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-newgroup]'), function (btn) {
+      btn.onclick = function () {
+        var name = window.prompt('新分组名（例如：开心 / 生气 / 敷衍）');
+        if (!name) return;
+        var list = (data.settings.stickerGroups || []).slice();
+        if (list.indexOf(name.trim()) === -1) list.push(name.trim());
+        api('POST', '/im-bridge/settings', { stickerGroups: list })
+          .then(function () { toast('已新建分组'); load(); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-sdelgroup]'), function (btn) {
+      btn.onclick = function () {
+        var name = btn.getAttribute('data-sdelgroup');
+        if (!confirm('删除分组「' + name + '」？组里的表情会变成未分组，不会被删。')) return;
+        var list = (data.settings.stickerGroups || []).filter(function (g) { return g !== name; });
+        var map = Object.assign({}, data.settings.stickerGroup || {});
+        Object.keys(map).forEach(function (k) { if (map[k] === name) delete map[k]; });
+        api('POST', '/im-bridge/settings', { stickerGroups: list, stickerGroup: map })
+          .then(function () { toast('分组已删除'); if (sFilter === name) sFilter = ''; load(); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pick]'), function (box) {
+      box.onchange = function () {
+        var name = box.getAttribute('data-pick');
+        if (box.checked) pickedStickers[name] = true;
+        else delete pickedStickers[name];
+        var counter = $('pickCount');
+        if (counter) counter.textContent = Object.keys(pickedStickers).length;
+      };
+    });
+    if ((el = $('pickApply'))) el.onclick = function () {
+      var names = Object.keys(pickedStickers);
+      if (!names.length) { toast('先勾选表情'); return; }
+      var group = $('pickGroup').value;
+      if (group === '__new') {
+        var created = window.prompt('新分组名（例如：开心 / 生气 / 敷衍）');
+        if (!created) return;
+        group = created.trim();
+      }
+      var map = Object.assign({}, data.settings.stickerGroup || {});
+      names.forEach(function (n) {
+        if (group === '') delete map[n];
+        else map[n] = group;
+      });
+      var declared = (data.settings.stickerGroups || []).slice();
+      if (group !== '' && declared.indexOf(group) === -1) declared.push(group);
+      api('POST', '/im-bridge/settings', { stickerGroup: map, stickerGroups: declared }).then(function () {
+        toast('已把 ' + names.length + ' 张分到「' + (group || '未分组') + '」');
+        pickedStickers = {};
+        load();
+      }).catch(function (e) { toast('分组失败：' + e.message); });
+    };
+    if ((el = $('pickClear'))) el.onclick = function () {
+      pickedStickers = {};
+      renderPane();
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-delsticker]'), function (btn) {
+      btn.onclick = function () {
+        var name = btn.getAttribute('data-delsticker');
+        if (!confirm('删除表情「' + name + '」？')) return;
+        api('POST', '/im-bridge/stickers', { action: 'delete', name: name }).then(function () { toast('已删除'); load(); });
+      };
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('#msgSeg button'), function (btn) {
+      btn.onclick = function () {
+        msgFilter = btn.getAttribute('data-filter');
+        renderPane();
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-chat]'), function (btn) {
+      btn.onclick = function () {
+        msgChat = btn.getAttribute('data-chat');
+        renderPane();
+      };
+    });
+    if ((el = $('mClear'))) el.onclick = function () {
+      if (!confirm('清空监听记录？图片文件不会删。')) return;
+      api('POST', '/im-bridge/messages', { action: 'clear' }).then(function () { toast('已清空'); load(); });
+    };
+
+    if ((el = $('pvGo'))) el.onclick = function () {
+      var text = ($('pvText').value || '').trim();
+      if (!text) { toast('先说一句'); return; }
+      el.disabled = true;
+      $('pvMeta').textContent = '她正在想…';
+      api('POST', '/im-bridge/preview', { personaId: $('pvPersona').value, text: text })
+        .then(function (v) {
+          $('pvMeta').textContent = v.name + ' · ' + v.ms + 'ms · 提示词 ' + v.systemChars + ' 字';
+          $('pvOut').innerHTML = '<div class="msg out"><div class="meta"><span>她的回复</span></div>' +
+            '<div class="body">' + esc(v.reply) + '</div></div>';
+        })
+        .catch(function (e) { $('pvMeta').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pv]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-pv');
+        var select = $('pvPersona');
+        if (select) select.value = id;
+        var box = $('pvText');
+        if (box) { box.focus(); box.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      };
+    });
+    if ((el = $('baseSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { basePersona: $('basePersona').value })
+        .then(function () { toast('已保存，下一条消息生效'); load(); })
+        .catch(function (e) { toast('保存失败：' + e.message); });
+    };
+    if ((el = $('baseReset'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { basePersona: '' })
+        .then(function () { toast('已恢复默认'); load(); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-iq]'), function (btn) {
+      btn.onclick = function () {
+        var level = btn.getAttribute('data-iq');
+        var hint = $('iqHint');
+        if (hint) hint.textContent = '切换中…';
+        api('POST', '/im-bridge/action', { kind: 'switchLevel', level: level })
+          .then(function (v) {
+            if (hint) hint.textContent = '已切到 ' + v.level + '（' + v.effort + '），结束 ' + v.retired + ' 个会话';
+            toast('已切换：' + v.effort);
+            load();
+          })
+          .catch(function (e) { if (hint) hint.textContent = '失败：' + e.message; });
+      };
+    });
+    if ((el = $('mProvider'))) el.onchange = function () { fillModels(''); };
+    if ((el = $('mSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { model: { provider: $('mProvider').value, model: $('mModel').value } })
+        .then(function () { toast('已切换，下一条消息生效'); load(); })
+        .catch(function (e) { toast('保存失败：' + e.message); });
+    };
+    if ((el = $('mReset'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { model: null })
+        .then(function () { toast('已恢复默认'); load(); })
+        .catch(function (e) { toast('失败：' + e.message); });
+    };
+    if ((el = $('accAdd'))) el.onclick = function () {
+      var url = ($('accUrl').value || '').trim();
+      if (!/^wss?:\/\//.test(url)) { toast('地址要以 ws:// 开头'); return; }
+      var accounts = (data.settings.accounts || []).slice();
+      accounts.push({
+        id: 'acc' + Date.now(),
+        name: ($('accName').value || '').trim() || ('账号 ' + (accounts.length + 1)),
+        wsUrl: url,
+        token: ($('accToken').value || '').trim()
+      });
+      api('POST', '/im-bridge/settings', { accounts: accounts }).then(function () { toast('已添加'); load(); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-accuse]'), function (btn) {
+      btn.onclick = function () {
+        api('POST', '/im-bridge/settings', { activeAccountId: btn.getAttribute('data-accuse') })
+          .then(function () { toast('已切换，正在重连'); load(); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-accdel]'), function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute('data-accdel');
+        if (!confirm('删除这个账号？')) return;
+        var accounts = (data.settings.accounts || []).filter(function (a) { return a.id !== id; });
+        var patch = { accounts: accounts };
+        if (data.settings.activeAccountId === id) patch.activeAccountId = '';
+        api('POST', '/im-bridge/settings', patch).then(function () { toast('已删除'); load(); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.chatModel'), function (select) {
+      select.onchange = function () {
+        var key = select.getAttribute('data-key');
+        var value = select.value;
+        var map = JSON.parse(JSON.stringify(data.settings.modelByChat || {}));
+        if (!value) delete map[key];
+        else {
+          var parts = value.split('|');
+          map[key] = { provider: parts[0], model: parts[1] };
+        }
+        api('POST', '/im-bridge/settings', { modelByChat: map })
+          .then(function () { toast('已保存，下一轮生效'); load(); });
+      };
+    });
+    if ((el = $('pcSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', {
+        proactiveCfg: { startHour: Number($('pcStart').value), endHour: Number($('pcEnd').value), maxPerDay: Number($('pcMax').value) }
+      }).then(function () { toast('已保存'); load(); }).catch(function (e) { toast('保存失败：' + e.message); });
+    };
+    if ((el = $('dndSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', {
+        dnd: { enabled: !!(data.settings.dnd && data.settings.dnd.enabled), startHour: Number($('dndStart').value), endHour: Number($('dndEnd').value) }
+      }).then(function () { toast('已保存'); load(); });
+    };
+    if ((el = $('dndToggle'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', {
+        dnd: { enabled: !(data.settings.dnd && data.settings.dnd.enabled), startHour: Number($('dndStart').value), endHour: Number($('dndEnd').value) }
+      }).then(load);
+    };
+    if ((el = $('memToggle'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { memory: { enabled: !(data.settings.memory && data.settings.memory.enabled !== false) } })
+        .then(function () { toast('已保存'); load(); });
+    };
+    if ((el = $('memSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { memory: { everyTurns: Number($('memTurns').value), maxChars: Number($('memChars').value) } })
+        .then(function () { toast('已保存'); load(); });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-memcompact]'), function (btn) {
+      btn.onclick = function () {
+        var key = btn.getAttribute('data-memcompact');
+        btn.disabled = true;
+        btn.textContent = '压缩中…';
+        api('POST', '/im-bridge/memory', { action: 'compact', key: key })
+          .then(function () { toast('已生成记忆'); load(); })
+          .catch(function (e) { toast('失败：' + e.message); btn.disabled = false; btn.textContent = '立即压缩'; });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-memclear]'), function (btn) {
+      btn.onclick = function () {
+        if (!confirm('清除这段记忆？')) return;
+        api('POST', '/im-bridge/memory', { action: 'clear', key: btn.getAttribute('data-memclear') })
+          .then(function () { toast('已清除'); load(); });
+      };
+    });
+    if ((el = $('cacheMove'))) el.onclick = function () {
+      var dir = ($('cacheInput').value || '').trim();
+      if (!dir) { toast('填一个路径'); return; }
+      if (!confirm('把缓存迁移到 ' + dir + ' ？会移动日志、监听历史、语音和表情包。')) return;
+      el.disabled = true;
+      $('cacheOut').textContent = '迁移中…';
+      api('POST', '/im-bridge/settings', { cacheDir: dir })
+        .then(function () { $('cacheOut').textContent = '已迁移到 ' + dir; toast('已迁移'); load(); })
+        .catch(function (e) { $('cacheOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('cacheDefault'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { cacheDir: '' })
+        .then(function () { toast('已恢复默认路径'); load(); });
+    };
+    if ((el = $('cacheClean'))) el.onclick = function () {
+      if (!confirm('清理语音、旧监听图片和日志？表情包和设置不动。')) return;
+      api('POST', '/im-bridge/storage', { action: 'clean' })
+        .then(function (v) { toast('已清理：' + (v.removed || []).join('、')); load(); })
+        .catch(function (e) { toast('清理失败：' + e.message); });
+    };
+    if ((el = $('vSaveEngine'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', {
+        voice: {
+          engine: $('vEngine').value,
+          edgeVoice: ($('vEdgeVoice').value || '').trim(),
+          customUrl: ($('vCustomUrl').value || '').trim(),
+          customVoice: ($('vCustomVoice').value || '').trim()
+        }
+      }).then(function () { toast('已保存'); load(); });
+    };
+    if ((el = $('searxSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', {
+        search: {
+          engine: $('seEngine').value,
+          searxUrl: ($('searxUrl').value || '').trim(),
+          customUrl: ($('seCustomUrl').value || '').trim()
+        }
+      }).then(function () { toast('已保存'); load(); });
+    };
+    if ((el = $('memDirSave'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { memoryDir: ($('memDir').value || '').trim() })
+        .then(function () { toast('记忆位置已更新'); load(); })
+        .catch(function (e) { toast('失败：' + e.message); });
+    };
+    if ((el = $('vSamplesBtn'))) el.onclick = function () {
+      el.disabled = true;
+      $('vSamples').innerHTML = '<div class="muted">生成中，约 10–20 秒…</div>';
+      api('POST', '/im-bridge/voice/samples', { text: ($('vText').value || '').trim() || '喂，今天吃什么，我饿了' })
+        .then(function (v) {
+          var target = (data.status.chats[0] && data.status.chats[0].key) || ('private:' + (data.status.allowUsers[0] || ''));
+          var html = v.samples.map(function (s) {
+            if (!s.ok) return '<div class="row"><span>' + esc(s.label) + '</span><span class="muted">合成失败</span></div>';
+            return '<div class="row"><span>' + esc(s.label) + '</span><span class="btnrow">' +
+              '<audio controls preload="none" src="/im-bridge/audio?name=' + encodeURIComponent(s.name) + '" style="height:34px"></audio>' +
+              '<button class="small" data-sendsample="' + esc(s.name) + '" data-target="' + esc(target) + '">发到QQ</button></span></div>';
+          }).join('');
+          $('vSamples').innerHTML = html;
+          Array.prototype.forEach.call(document.querySelectorAll('[data-sendsample]'), function (btn) {
+            btn.onclick = function () {
+              api('POST', '/im-bridge/audio', { name: btn.getAttribute('data-sendsample'), target: btn.getAttribute('data-target') })
+                .then(function () { toast('已发到 QQ'); })
+                .catch(function (e) { toast('发送失败：' + e.message); });
+            };
+          });
+        })
+        .catch(function (e) { $('vSamples').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('vToggle'))) el.onclick = function () {
+      api('POST', '/im-bridge/settings', { voice: { enabled: !(data.settings.voice && data.settings.voice.enabled) } })
+        .then(function () { toast('已保存'); load(); });
+    };
+    if ((el = $('vTest'))) el.onclick = function () {
+      el.disabled = true;
+      $('vOut').textContent = '合成并发送中…';
+      api('POST', '/im-bridge/voice', { action: 'test', text: ($('vText').value || '喂，听得见吗？') })
+        .then(function (v) { $('vOut').textContent = '已发到 ' + v.target + '（' + v.file + '）'; })
+        .catch(function (e) { $('vOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('aiPersonaBtn'))) el.onclick = function () {
+      var desc = ($('aiPersonaDesc').value || '').trim();
+      if (!desc) { toast('先写一句描述'); return; }
+      el.disabled = true;
+      $('aiPersonaOut').textContent = '生成中…（约 3–10 秒）';
+      api('POST', '/im-bridge/ai/persona', { description: desc }).then(function (v) {
+        $('aiPersonaOut').innerHTML = '<b>' + esc(v.persona.name) + '</b> · ' + esc(v.persona.preset) + '\n' + esc(v.persona.prompt) +
+          '\n\n<button class="primary small" id="aiAdopt">采用这个人设</button>';
+        var adopt = $('aiAdopt');
+        if (adopt) adopt.onclick = function () {
+          var personae = (data.settings.personae || []).slice();
+          personae.push({ id: 'p' + Date.now(), name: v.persona.name, preset: v.persona.preset, prompt: v.persona.prompt });
+          api('POST', '/im-bridge/settings', { personae: personae }).then(function () { toast('已加入列表'); load(); });
+        };
+      }).catch(function (e) { $('aiPersonaOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+    if ((el = $('aiStickerBtn'))) el.onclick = function () {
+      var query = ($('aiStickerQuery').value || '').trim();
+      if (!query) { toast('先写关键词'); return; }
+      el.disabled = true;
+      $('aiStickerOut').textContent = '搜索中…';
+      api('POST', '/im-bridge/ai/stickers', { query: query }).then(function (v) {
+        $('aiStickerOut').textContent = '已添加：' + v.added.join('、');
+        toast('已添加 ' + v.added.length + ' 张'); load();
+      }).catch(function (e) { $('aiStickerOut').textContent = '失败：' + e.message; })
+        .finally(function () { el.disabled = false; });
+    };
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (btn) {
+    btn.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) { b.classList.remove('on'); });
+      btn.classList.add('on');
+      tab = btn.getAttribute('data-tab');
+      renderPane();
+    };
+  });
+  $('refresh').onclick = load;
+  applyTheme();
+  setInterval(applyTheme, 2500);
+  load();
+  // The panel lives in an iframe; when the plugin is updated this page would
+  // otherwise keep running the old code forever. Reload once the server moves on.
+  var panelVersion = '';
+  setInterval(function () {
+    api('GET', '/im-bridge/status').then(function (v) {
+      if (panelVersion === '') panelVersion = v.version;
+      else if (v.version !== panelVersion) location.reload();
+    }).catch(function () {});
+  }, 7000);
+  setInterval(function () {
+    api('GET', '/im-bridge/settings').then(function (v) { data = v; renderPill(); }).catch(function () {});
+  }, 6000);
+})();
+</script>
+</body>
+</html>

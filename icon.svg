@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="QQ / IM bridge">
+  <defs>
+    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6ea8fe" />
+      <stop offset="100%" stop-color="#3b6fe0" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0f1729" />
+  <path d="M14 18h28a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H26l-8 7v-7h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z" fill="url(#bubble)" opacity="0.18" />
+  <path d="M15 18h27a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H27l-8 7v-7h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z" fill="none" stroke="url(#bubble)" stroke-width="2.6" stroke-linejoin="round" />
+  <circle cx="29" cy="31" r="7.2" fill="none" stroke="#8fc0ff" stroke-width="2.6" />
+  <path d="M33.6 36.2 38 41" stroke="#8fc0ff" stroke-width="2.6" stroke-linecap="round" />
+  <circle cx="47" cy="17" r="4.6" fill="#5ce1a0" />
+</svg>

@@ -1,0 +1,38 @@
+# dsh-im-bridge bundle patch
+#
+# Inserts ONE Host row: the QQ ⇄ DeepSeek Harness bridge. It connects to a
+# NapCat (OneBot 11) WebSocket server and drives ordinary DSH Sessions.
+#
+# Everything the panel can change lives in the profile's settings.json, so you
+# normally only need to edit wsUrl / accessToken here (or paste them into the
+# panel's settings page).
+- insert:
+    - id: im-bridge
+      name: 'dsh-im-bridge'
+      config:
+        # NapCat 的「WebSocket 服务端」地址（不是 HTTP 端口）
+        wsUrl: 'ws://127.0.0.1:3001'
+        # NapCat 里设置的 token；没有就留空
+        accessToken: ''
+        # 允许私聊的 QQ 号（字符串）。留空 = 谁都不理；装好后在面板「联系人」里加
+        allowUsers: []
+        # 允许的 QQ 群号。留空 = 不响应任何群
+        allowGroups: []
+        # 群里必须 @机器人 才响应
+        groupRequireAt: true
+        # 机器人干活的工作目录（模型可以读写这里）。留空/删掉 = 用 DSH 当前工作目录
+        # cwd: 'C:/path/to/workspace'
+        # 新人设用哪个 agent preset（whale / chiang，或你自装的 preset id）
+        agentPreset: whale
+        # 改过人设文本就 +1：聊天会换新会话，旧会话一直用旧人格
+        presetRev: '1'
+        # Session 级模型路由；thinking 深度由面板的「智力档位」覆盖
+        model:
+          provider: deepseek-account
+          model: deepseek-flash
+        # 单条 QQ 消息长度上限，超过会拆成多条
+        maxReplyChars: 1500
+        # 机器人上线后给 allowUsers 里每个人发一条（留空 = 不发）
+        greeting: ''
+        # 自检：用一个临时会话问自己一句，结果写进日志（验人格/模型用）
+        selfTest: false
