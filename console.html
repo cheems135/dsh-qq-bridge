@@ -295,7 +295,7 @@
       <button class="tab" data-tab="sticker"><span class="ico">▣</span>素材</button>
       <div class="navgroup">系统</div>
       <button class="tab" data-tab="memory"><span class="ico">◫</span>记忆</button>
-      <button class="tab" data-tab="autonomy"><span class="ico">✧</span>自主</button>`r`n      <button class="tab" data-tab="thoughts"><span class="ico">◌</span>想法</button>
+      <button class="tab" data-tab="autonomy"><span class="ico">✧</span>自主</button>`r`n      <button class="tab" data-tab="thoughts"><span class="ico">◌</span>想法</button>`r`n      <button class="tab" data-tab="imagegen"><span class="ico">✦</span>生图</button>
       <button class="tab" data-tab="model"><span class="ico">◇</span>模型</button>
     </nav>
 
@@ -455,6 +455,7 @@
     memory: ['记忆', '压缩规则、已存记忆和存放位置'],
     autonomy: ['自主', '她自己的动作：改签名、发空间、主动找人'],
     thoughts: ['想法', '她此刻在做什么、为什么这么做'],
+    imagegen: ['生图', '硅基流动 API key、模型和落盘目录'],
     model: ['模型', '智力档位、模型、主动行为与搜索']
   };
 
@@ -470,6 +471,7 @@
     if (tab === 'memory') html = viewMemory();
     if (tab === 'autonomy') html = viewAutonomy();
     if (tab === 'thoughts') html = viewThoughts();
+    if (tab === 'imagegen') html = viewImagegen();
     if (tab === 'model') html = viewModelSettings();
     var head = PAGE_HEADS[tab] || ['', ''];
     html = '<div class="pagehead"><h1>' + esc(head[0]) + '</h1><p>' + esc(head[1]) + '</p></div>' + html;
@@ -981,6 +983,36 @@
     return out;
   }
 
+  function viewImagegen() {
+    var g = (data.settings && data.settings.imagegen) || {};
+    var models = [
+      ['Kwai-Kolors/Kolors', 'Kolors（免费）'],
+      ['Tongyi-MAI/Z-Image-Turbo', 'Z-Image-Turbo（约 0.1 元/张，写实）'],
+      ['Qwen/Qwen-Image', 'Qwen-Image（约 0.2 元/张）'],
+    ];
+    var out = '<div class="card"><h2>硅基流动生图</h2>' +
+      '<div class="muted" style="margin-bottom:8px">填了 key 就会优先用它生成；没填时回退到 pollinations（免 key，但有配额和水印）。' +
+      'Key 在 <a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noopener">cloud.siliconflow.cn/account/ak</a> 创建，只存本机。</div>' +
+      '<label class="field">API Key<input id="igKey" type="password" placeholder="sk-..." value="' + esc(g.apiKey || '') + '"></label>' +
+      '<label class="field" style="margin-top:8px">模型<select id="igModel">' +
+      models.map(function (m) {
+        return '<option value="' + m[0] + '"' + ((g.model || 'Kwai-Kolors/Kolors') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>';
+      }).join('') + '</select></label>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">' +
+      '<label class="field">尺寸<input id="igSize" value="' + esc(g.size || '1024x1024') + '"></label>' +
+      '<label class="field">步数<input id="igSteps" type="number" min="10" max="50" value="' + Number(g.steps || 25) + '"></label>' +
+      '<label class="field">CFG<input id="igCfg" type="number" step="0.5" min="1" max="20" value="' + Number(g.cfg || 7.5) + '"></label></div>' +
+      '<label class="field" style="margin-top:8px">固定 seed（0 = 随机；同一个 seed 出图更稳定）' +
+      '<input id="igSeed" type="number" min="0" value="' + Number(g.seed || 0) + '"></label>' +
+      '<label class="field" style="margin-top:8px">图片保存目录（留空用默认）' +
+      '<input id="igDir" placeholder="' + esc((data.status && data.status.genDir) || '默认 cache/photos/gen') + '" value="' + esc(g.saveDir || '') + '"></label>' +
+      '<div class="btnrow" style="margin-top:10px"><button class="primary" id="igSave">保存</button>' +
+      '<input id="igTestPrompt" placeholder="试一句，例如：一碗热腾腾的牛肉面" style="flex:1;min-width:160px">' +
+      '<button id="igTest">生成一张</button></div>' +
+      '<div id="igOut" class="muted" style="margin-top:10px;white-space:pre-wrap"></div>' +
+      '<div id="igPreview" style="margin-top:10px"></div></div>';
+    return out;
+  }
   function viewThoughts() {
     var t = thoughts || { timeline: [] };
     var items = t.timeline || [];
@@ -1724,7 +1756,38 @@
         renderPane();
       };
     });
-    if ((el = $('phSave'))) el.onclick = async function () {
+    if ((el = $('igSave'))) el.onclick = async function () {
+      await api('POST', '/im-bridge/settings', {
+        imagegen: {
+          apiKey: $('igKey').value.trim(),
+          model: $('igModel').value,
+          size: $('igSize').value.trim() || '1024x1024',
+          steps: Number($('igSteps').value) || 25,
+          cfg: Number($('igCfg').value) || 7.5,
+          seed: Number($('igSeed').value) || 0,
+          saveDir: $('igDir').value.trim()
+        }
+      });
+      toast('生图设置已保存');
+      load();
+    };
+    if ((el = $('igTest'))) el.onclick = async function () {
+      var prompt = ($('igTestPrompt').value || '').trim();
+      if (!prompt) { toast('写个提示词'); return; }
+      var out = $('igOut');
+      var preview = $('igPreview');
+      out.textContent = '生成中…（免费模型可能要等十几秒）';
+      preview.innerHTML = '';
+      try {
+        var v = await api('POST', '/im-bridge/imagegen', { prompt: prompt });
+        out.textContent = '已生成：' + v.file + '（' + Math.round(v.ms / 1000) + ' 秒）';
+        preview.innerHTML = '<img src="/im-bridge/gen/file?name=' + encodeURIComponent(v.name) + '&t=' + Date.now() +
+          '" style="max-width:100%;border-radius:12px;border:1px solid var(--line)">';
+        load();
+      } catch (e) {
+        out.textContent = '失败：' + e.message;
+      }
+    };    if ((el = $('phSave'))) el.onclick = async function () {
       await api('POST', '/im-bridge/settings', {
         photo: {
           source: $('phSource').value,

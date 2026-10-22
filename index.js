@@ -1,4 +1,4 @@
-/**
+﻿/**
  * dsh-im-bridge — bridge a chat platform (QQ via NapCat / OneBot 11 today)
  * into DeepSeek Harness sessions.
  *
@@ -945,6 +945,11 @@ export function apply(ctx, rawConfig) {
   const settingsFile = join(cfg.dataDir, 'settings.json');
   const settings = loadSettings();
 
+  // 语音合成、图片后处理都要用 Python：优先面板里填的，其次 DSH 自带运行时。
+  const pythonExe = () =>
+    settings.voice?.pythonPath?.trim() ||
+    (process.env.DSH_IM_PYTHON ?? 'python');
+
   // 旧的底层人设默认值太啰嗦（要么不吭声要么长篇），升级后自动换成新的。
   // 只在用户没改过、还是原文的情况下替换。
   if (
@@ -1081,6 +1086,27 @@ export function apply(ctx, rawConfig) {
       stickerGroup: {},
       stickerGroups: [],
       stickerSeeded: false,
+      login: { autoRecover: true, maxPerHour: 3 },
+      imagegen: {
+        enabled: true,
+        provider: 'siliconflow',
+        model: 'Kwai-Kolors/Kolors',
+        apiKey: '',
+        size: '1024x1024',
+        steps: 25,
+        cfg: 7.5,
+        seed: 0,
+        saveDir: '',
+        cropWatermark: true,
+      },
+      guard: {
+        enabled: true,
+        minGapMs: 1200,
+        maxPerMinute: 20,
+        pausedMinutes: 30,
+        recoverCooldownMs: 300000,
+        maxRecoverPerHour: 3,
+      },
       photo: {
         source: 'search',
         gender: '女',
@@ -1177,6 +1203,9 @@ export function apply(ctx, rawConfig) {
             : {},
         stickerGroups: Array.isArray(parsed.stickerGroups) ? parsed.stickerGroups.map(String) : [],
         stickerSeeded: parsed.stickerSeeded === true,
+        login: { autoRecover: true, maxPerHour: 3, ...(parsed.login && typeof parsed.login === 'object' ? parsed.login : {}) },
+        guard: { ...base.guard, ...(parsed.guard && typeof parsed.guard === 'object' ? parsed.guard : {}) },
+        imagegen: { ...base.imagegen, ...(parsed.imagegen && typeof parsed.imagegen === 'object' ? parsed.imagegen : {}) },
         photo: { ...base.photo, ...(parsed.photo && typeof parsed.photo === 'object' ? parsed.photo : {}) },
         autonomy: parsed.autonomy && typeof parsed.autonomy === 'object' ? parsed.autonomy : null,
         disabledUsers: Array.isArray(parsed.disabledUsers) ? parsed.disabledUsers.map(String) : [],
@@ -2025,12 +2054,62 @@ export function apply(ctx, rawConfig) {
     });
   }
 
-  function sendSegments(chat, segments) {
-    if (chat.kind === 'group') {
-      action('send_msg', { message_type: 'group', group_id: Number(chat.chatId) || chat.chatId, message: segments });
-    } else {
-      action('send_msg', { message_type: 'private', user_id: Number(chat.chatId) || chat.chatId, message: segments });
+  /* ---------------- 风控保护：发送节流 ---------------- */
+
+  const guardState = { lastSendAt: 0, windowStart: 0, windowCount: 0, chain: Promise.resolve(), pausedUntil: 0 };
+
+  function guardConfig() {
+    return {
+      enabled: true,
+      minGapMs: 1200,
+      maxPerMinute: 20,
+      pausedMinutes: 30,
+      recoverCooldownMs: 300000,
+      maxRecoverPerHour: 3,
+      ...(settings.guard ?? {}),
+    };
+  }
+
+  function guardDelay() {
+    const config = guardConfig();
+    if (config.enabled === false) return 0;
+    const now = Date.now();
+    let wait = Math.max(0, config.minGapMs - (now - guardState.lastSendAt));
+    if (now - guardState.windowStart > 60000) {
+      guardState.windowStart = now;
+      guardState.windowCount = 0;
     }
+    if (guardState.windowCount >= config.maxPerMinute) {
+      wait = Math.max(wait, 60000 - (now - guardState.windowStart));
+    }
+    if (guardState.pausedUntil > now) wait = Math.max(wait, guardState.pausedUntil - now);
+    return wait;
+  }
+
+  function sendSegments(chat, segments) {
+    const config = guardConfig();
+    // 所有出站消息排一条队：保证最小间隔、每分钟上限，风控期间自动挂起。
+    guardState.chain = guardState.chain
+      .then(async () => {
+        const wait = guardDelay();
+        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        guardState.lastSendAt = Date.now();
+        guardState.windowCount += 1;
+        if (chat.kind === 'group') {
+          action('send_msg', { message_type: 'group', group_id: Number(chat.chatId) || chat.chatId, message: segments });
+        } else {
+          action('send_msg', { message_type: 'private', user_id: Number(chat.chatId) || chat.chatId, message: segments });
+        }
+      })
+      .catch((error) => log(`send queue failed: ${error?.message ?? error}`));
+    if (config.enabled === false) guardState.chain = Promise.resolve();
+  }
+
+  /** 疑似被风控：暂停发送一段时间，别继续撞。 */
+  function pauseSendingForRisk(reason) {
+    const config = guardConfig();
+    guardState.pausedUntil = Date.now() + Math.max(1, config.pausedMinutes) * 60000;
+    log(`risk guard: sending paused for ${config.pausedMinutes}min (${reason})`);
   }
 
   /** `stickers/<name>.png|gif|jpg` — the folder a human can drop memes into. */
@@ -2370,7 +2449,79 @@ export function apply(ctx, rawConfig) {
 
   /** 用关键词找一张真实照片（不是表情包），存到缓存里再发。 */
   /** 免费、免密的文生图（pollinations），用来补搜索找不到高质量图的场景。 */
+  /** 硅基流动生图：OpenAI 兼容接口，返回图片 URL（一小时内有效）。 */
+  async function generateWithSiliconFlow(prompt) {
+    const config = settings.imagegen ?? {};
+    const key = String(config.apiKey ?? '').trim();
+    if (key === '') throw new Error('还没填硅基流动 API key');
+    const body = {
+      model: config.model || 'Kwai-Kolors/Kolors',
+      prompt,
+      image_size: config.size || '1024x1024',
+      batch_size: 1,
+      num_inference_steps: Number(config.steps) || 25,
+      guidance_scale: Number(config.cfg) || 7.5,
+    };
+    if (Number(config.seed) > 0) body.seed = Number(config.seed);
+    const response = await fetch('https://api.siliconflow.cn/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer ' + key,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120000),
+    });
+    const raw = await response.text();
+    if (!response.ok) throw new Error('硅基流动 HTTP ' + response.status + ' ' + raw.slice(0, 160));
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error('返回不是 JSON：' + raw.slice(0, 120));
+    }
+    const url = data?.images?.[0]?.url ?? data?.data?.[0]?.url ?? data?.images?.[0] ?? data?.data?.[0];
+    if (typeof url !== 'string' || !/^https?:/.test(url)) throw new Error('返回里没有图片地址');
+    const image = await fetch(url, { signal: AbortSignal.timeout(60000) });
+    if (!image.ok) throw new Error('下载生成图失败 HTTP ' + image.status);
+    const bytes = Buffer.from(await image.arrayBuffer());
+    if (bytes.length < 8000) throw new Error('生成图太小');
+    const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16))) ?? 'image/png';
+    const dir = generatedDir();
+    mkdirSync(dir, { recursive: true });
+    const extension = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+    const file = join(dir, 'sf-' + Date.now() + '.' + extension);
+    writeFileSync(file, bytes);
+    // 硅基流动所有生图模型右下角都有「AI生成」水印，裁掉底部一条最省事。
+    if (settings.imagegen?.cropWatermark !== false) {
+      try {
+        const cropper = join(dirname(fileURLToPath(import.meta.url)), 'tools', 'crop-watermark.py');
+        if (existsSync(cropper)) {
+          spawnSync(pythonExe(), [cropper, file], { windowsHide: true, stdio: 'ignore', timeout: 20000 });
+        }
+      } catch {
+        /* 裁不掉就保留原图 */
+      }
+    }
+    log('image generated by siliconflow (' + bytes.length + ' bytes) for "' + prompt.slice(0, 30) + '"');
+    return file;
+  }
+
+  /** 生成图的落盘目录：面板可自定义，默认 cache/photos/gen。 */
+  function generatedDir() {
+    const custom = String(settings.imagegen?.saveDir ?? '').trim();
+    return custom === '' ? join(cacheRoot, 'photos', 'gen') : custom;
+  }
+
+  /** 统一入口：有 key 走硅基流动，否则退回 pollinations。 */
   async function generatePhoto(prompt) {
+    if (String(settings.imagegen?.apiKey ?? '').trim() !== '' && settings.imagegen?.enabled !== false) {
+      return generateWithSiliconFlow(prompt);
+    }
+    return generateWithPollinations(prompt);
+  }
+
+  async function generateWithPollinations(prompt) {
     const base = (settings.photo?.genUrl || 'https://image.pollinations.ai/prompt/{prompt}')
       .replace('{prompt}', '__PROMPT__');
     const build = (text, size) =>
@@ -3554,6 +3705,108 @@ export function apply(ctx, rawConfig) {
       }
     }).catch((error) => log(`send failed: ${error?.message ?? error}`));
   }
+  /* ---------------- NapCat 掉线自愈 ---------------- */
+
+  let lastDisconnectAt = Date.now();
+  let lastRecoverAt = 0;
+  let recoverWindowStart = 0;
+  let recoverCount = 0;
+
+  /** 只杀 NapCat 拉起来的那个 QQ（命令行带 -q 机器人号），不碰用户自己的 QQ。 */
+  function killNapCatProcesses() {
+    try {
+      spawnSync('taskkill.exe', ['/F', '/IM', 'NapCatWinBootMain.exe'], { windowsHide: true, stdio: 'ignore' });
+    } catch {
+      /* ignore */
+    }
+    const qq = String(cfg.napcat.qq ?? '').trim();
+    if (qq === '') return;
+    const script =
+      "Get-CimInstance Win32_Process -Filter \"Name='QQ.exe'\" | Where-Object { $_.CommandLine -like '*-q " +
+      qq +
+      "*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }";
+    try {
+      spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+        windowsHide: true,
+        stdio: 'ignore',
+        timeout: 20000,
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+  function startNapCatLauncher() {
+    const userBat = join(cfg.napcat.dir, 'launcher-user.bat');
+    mkdirSync(cfg.dataDir, { recursive: true });
+    if (existsSync(userBat)) {
+      // 用 cmd + < nul 直接跑：隐藏窗口下 wscript 会让 launcher 卡住，QQ 根本不启动。
+      const child = spawn('cmd.exe', ['/c', '"' + userBat + '" ' + cfg.napcat.qq + ' < nul'], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        cwd: cfg.napcat.dir,
+      });
+      child.unref();
+      return true;
+    }
+    const launcher = cfg.napcat.launcher !== '' ? cfg.napcat.launcher : join(cfg.napcat.dir, 'launcher.bat');
+    if (!existsSync(launcher)) return false;
+    const command =
+      'Start-Process -FilePath "' + launcher + '" -ArgumentList "' + cfg.napcat.qq +
+      '" -WorkingDirectory "' + cfg.napcat.dir + '" -Verb RunAs';
+    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      detached: true,
+        stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+    return true;
+  }
+
+  /**
+   * 自愈：先把残留的 NapCat/它拉起的 QQ 清掉，再重新拉起一次。
+   * 手动点「快速登录」强制跑，看门狗按节流跑。
+   */
+  function recoverNapCat(reason, force = false) {
+    const config = { autoRecover: true, maxPerHour: 6, ...(settings.login ?? {}) };
+    const now = Date.now();
+    // 二维码刚生成说明 NapCat 正等着扫码：这时候重启会把码换掉，别动。
+    try {
+      const qr = join(cfg.napcat.dir, 'cache', 'qrcode.png');
+      if (existsSync(qr) && Date.now() - statSync(qr).mtimeMs < 150000) {
+        log('napcat recovery skipped: a fresh QR is waiting for scan');
+        return false;
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!force) {
+      const guard = guardConfig();
+      if (now - lastRecoverAt < Math.max(60000, guard.recoverCooldownMs ?? 300000)) return false;
+      if (now - recoverWindowStart > 3600_000) {
+        recoverWindowStart = now;
+        recoverCount = 0;
+      }
+      if (recoverCount >= (guard.maxRecoverPerHour ?? config.maxPerHour ?? 3)) {
+        log(`napcat recovery skipped: hourly cap reached (${recoverCount})`);
+        return false;
+      }
+    }
+    lastRecoverAt = now;
+    recoverCount += 1;
+    log(`napcat recovery (${reason}) #${recoverCount}`);
+    killNapCatProcesses();
+    setTimeout(() => {
+      try {
+        const started = startNapCatLauncher();
+        log(started ? 'napcat recovery: launcher started' : 'napcat recovery: launcher missing');
+      } catch (error) {
+        log(`napcat recovery failed: ${error?.message ?? error}`);
+      }
+    }, 1800);
+    return true;
+  }
+
 
   function connectSocket() {
     if (stopped || accountPaused) return;
@@ -3562,6 +3815,7 @@ export function apply(ctx, rawConfig) {
       token: cfg.accessToken,
       onOpen: () => {
         reconnectDelay = 1000;
+        lastDisconnectAt = 0;
         log('onebot websocket connected');
         client.lastAlive = Date.now();
         heartbeat = setInterval(() => {
@@ -3596,6 +3850,8 @@ export function apply(ctx, rawConfig) {
         if (heartbeat) clearInterval(heartbeat);
         heartbeat = null;
         if (stopped || accountPaused) return;
+        // 只在第一次断开时记时间：后面的失败重连不刷新它，否则看门狗永远等不到 45 秒。
+        if (lastDisconnectAt === 0) lastDisconnectAt = Date.now();
         log(`onebot websocket closed: ${error?.message ?? error}; retrying in ${reconnectDelay}ms`);
         reconnectTimer = setTimeout(connectSocket, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 15000);
@@ -4438,7 +4694,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.86.0',
+      version: '0.92.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -4462,6 +4718,13 @@ export function apply(ctx, rawConfig) {
       memory: settings.memory,
       memories,
       autonomy: { config: autonomyConfig(), state: autonomyState() },
+      genDir: generatedDir(),
+      loginGuard: {
+        autoRecover: settings.login?.autoRecover !== false,
+        recoverCount,
+        lastRecoverAt,
+        disconnectedFor: lastDisconnectAt === 0 ? 0 : Math.round((Date.now() - lastDisconnectAt) / 1000),
+      },
       basePersona: settings.basePersona,
       basePersonaDefault: DEFAULT_BASE_PERSONA,
       owner: settings.owner,
@@ -4697,6 +4960,15 @@ export function apply(ctx, rawConfig) {
                 settings.stickerGroups = patch.stickerGroups.map(String).filter((name) => name.trim() !== '');
               }
               if (Array.isArray(patch.disabledUsers)) settings.disabledUsers = patch.disabledUsers.map(String);
+              if (patch.imagegen && typeof patch.imagegen === 'object') {
+                settings.imagegen = { ...settings.imagegen, ...patch.imagegen };
+              }
+              if (patch.guard && typeof patch.guard === 'object') {
+                settings.guard = { ...settings.guard, ...patch.guard };
+              }
+              if (patch.login && typeof patch.login === 'object') {
+                settings.login = { ...settings.login, ...patch.login };
+              }
               if (patch.photo && typeof patch.photo === 'object') {
                 settings.photo = { ...settings.photo, ...patch.photo };
               }
@@ -5203,6 +5475,72 @@ export function apply(ctx, rawConfig) {
               jsonResponse(res, 500, { error: String(error?.message ?? error) });
             }
           });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/imagegen',
+        handler: (req, res) => {
+          if (req.method === 'GET') {
+            const config = settings.imagegen ?? {};
+            jsonResponse(res, 200, {
+              config: { ...config, apiKey: config.apiKey === '' ? '' : '***' + String(config.apiKey).slice(-4) },
+              hasKey: String(config.apiKey ?? '').trim() !== '',
+              dir: generatedDir(),
+            });
+            return;
+          }
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+            if (body.length > 8192) req.destroy();
+          });
+          req.on('end', () => {
+            void (async () => {
+              try {
+                const request = JSON.parse(body === '' ? '{}' : body);
+                const prompt = String(request.prompt ?? '').trim();
+                if (prompt === '') throw new Error('给个提示词');
+                const started = Date.now();
+                const file = await generatePhoto(prompt);
+                jsonResponse(res, 200, { ok: true, file, name: file.split(/[\\/]/).pop(), ms: Date.now() - started });
+              } catch (error) {
+                jsonResponse(res, 500, { error: String(error?.message ?? error) });
+              }
+            })();
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/gen/file',
+        handler: (req, res) => {
+          try {
+            const query = String(req.url ?? '').split('?')[1] ?? '';
+            const name = (query.match(/(?:^|&)name=([^&]*)/)?.[1] ?? '').replace(/[^A-Za-z0-9_.-]/g, '');
+            if (name === '') {
+              res.statusCode = 400;
+              res.end('name required');
+              return;
+            }
+            const file = join(generatedDir(), name);
+            if (!existsSync(file)) {
+              res.statusCode = 404;
+              res.end('not found');
+              return;
+            }
+            res.statusCode = 200;
+            res.setHeader('Content-Type', name.endsWith('.jpg') ? 'image/jpeg' : name.endsWith('.webp') ? 'image/webp' : 'image/png');
+            res.setHeader('Cache-Control', 'no-store');
+            res.end(readFileSync(file));
+          } catch (error) {
+            res.statusCode = 500;
+            res.end(String(error?.message ?? error));
+          }
         },
       }),
     );
@@ -6064,7 +6402,7 @@ export function apply(ctx, rawConfig) {
                 const command = `Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${ps1}' -Verb RunAs`;
                 const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
                   detached: true,
-                  stdio: 'ignore',
+        stdio: 'ignore',
                   windowsHide: true,
                 });
                 child.unref();
@@ -6072,12 +6410,22 @@ export function apply(ctx, rawConfig) {
                 jsonResponse(res, 200, { ok: true, registering: true });
                 return;
               }
-              if (action.action === 'restart') {
+              if (action.action === 'start' || action.action === 'restart') {
+                // 快速登录 / 重启：先清掉残留的 NapCat 和它拉起的 QQ，再拉起一次。
+                if (socket !== null && socket.ready === true) {
+                  jsonResponse(res, 200, { ok: true, already: true });
+                  return;
+                }
+                const started = recoverNapCat('manual-' + action.action, true);
+                jsonResponse(res, 200, { ok: true, started, via: 'recover' });
+                return;
+              }
+              if (action.action === 'restart_old') {
                 // 只杀 NapCat 的引导进程，不动 QQ 本体；然后重新拉起，换一张新二维码。
                 log('console: restarting NapCat (kill boot processes, relaunch)');
                 const killer = spawn('taskkill.exe', ['/F', '/IM', 'NapCatWinBootMain.exe'], {
                   windowsHide: true,
-                  stdio: 'ignore',
+        stdio: 'ignore',
                 });
                 killer.on('exit', () => {
                   setTimeout(() => {
@@ -6096,7 +6444,7 @@ export function apply(ctx, rawConfig) {
                           '" -WorkingDirectory "' + cfg.napcat.dir + '" -Verb RunAs';
                         spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
                           detached: true,
-                          stdio: 'ignore',
+        stdio: 'ignore',
                           windowsHide: true,
                         }).unref();
                       }
@@ -6144,7 +6492,7 @@ export function apply(ctx, rawConfig) {
                 const command = `Start-Process -FilePath "${launcher}" -ArgumentList "${cfg.napcat.qq}" -WorkingDirectory "${cfg.napcat.dir}" -Verb RunAs`;
                 const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
                   detached: true,
-                  stdio: 'ignore',
+        stdio: 'ignore',
                   windowsHide: true,
                 });
                 child.unref();
@@ -6391,6 +6739,17 @@ export function apply(ctx, rawConfig) {
 
   connectSocket();
   if (cfg.selfTest) void runSelfTest();
+
+  // 看门狗：掉线超过 45 秒就自愈一次（清残留 + 重新拉起），按小时限次。
+  const recoverTimer = setInterval(() => {
+    if (stopped || accountPaused) return;
+    if (socket !== null && socket.ready === true) return;
+    if (settings.login?.autoRecover === false) return;
+    const idle = lastDisconnectAt === 0 ? 0 : Date.now() - lastDisconnectAt;
+    if (idle < 120000) return;
+    recoverNapCat('watchdog', false);
+  }, 20000);
+  ctx.effect(() => () => clearInterval(recoverTimer));
 
   // 自主行为：每 25 分钟想一次要不要做点什么（受开关/时段/每日额度约束）。
   const autonomyTimer = setInterval(() => {
