@@ -4259,7 +4259,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.76.0',
+      version: '0.77.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;
@@ -5856,6 +5856,42 @@ export function apply(ctx, rawConfig) {
                 jsonResponse(res, 200, { ok: true, registering: true });
                 return;
               }
+              if (action.action === 'restart') {
+                // 只杀 NapCat 的引导进程，不动 QQ 本体；然后重新拉起，换一张新二维码。
+                log('console: restarting NapCat (kill boot processes, relaunch)');
+                const killer = spawn('taskkill.exe', ['/F', '/IM', 'NapCatWinBootMain.exe'], {
+                  windowsHide: true,
+                  stdio: 'ignore',
+                });
+                killer.on('exit', () => {
+                  setTimeout(() => {
+                    try {
+                      const userBat = join(cfg.napcat.dir, 'launcher-user.bat');
+                      mkdirSync(cfg.dataDir, { recursive: true });
+                      if (existsSync(userBat)) {
+                        const vbs = join(cfg.dataDir, 'restart-napcat.vbs');
+                        const line = 'CreateObject("WScript.Shell").Run "cmd /c ""' + userBat + '"" ' + cfg.napcat.qq + '", 0, False';
+                        writeFileSync(vbs, line + '\r\n', 'utf8');
+                        spawn('wscript.exe', [vbs], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+                        log('console: NapCat relaunched after restart');
+                      } else {
+                        const command =
+                          'Start-Process -FilePath "' + launcher + '" -ArgumentList "' + cfg.napcat.qq +
+                          '" -WorkingDirectory "' + cfg.napcat.dir + '" -Verb RunAs';
+                        spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+                          detached: true,
+                          stdio: 'ignore',
+                          windowsHide: true,
+                        }).unref();
+                      }
+                    } catch (error) {
+                      log('NapCat restart failed: ' + (error?.message ?? error));
+                    }
+                  }, 1500);
+                  jsonResponse(res, 200, { ok: true, restarting: true });
+                });
+                return;
+              }
               if (action.action !== 'start') {
                 jsonResponse(res, 400, { error: 'unsupported action' });
                 return;
@@ -5912,6 +5948,26 @@ export function apply(ctx, rawConfig) {
             } catch (error) {
               jsonResponse(res, 500, { error: String(error?.message ?? error) });
             }
+          });
+        },
+      }),
+    );
+    ctx.effect(() =>
+      webServer.register({
+        kind: 'exact',
+        path: '/im-bridge/qr/meta',
+        handler: (_req, res) => {
+          const file = join(cfg.napcat.dir, 'cache', 'qrcode.png');
+          if (!existsSync(file)) {
+            jsonResponse(res, 200, { exists: false, ageSeconds: null });
+            return;
+          }
+          const info = statSync(file);
+          jsonResponse(res, 200, {
+            exists: true,
+            size: info.size,
+            ageSeconds: Math.round((Date.now() - info.mtimeMs) / 1000),
+            updatedAt: info.mtimeMs,
           });
         },
       }),

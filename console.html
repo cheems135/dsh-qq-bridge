@@ -459,6 +459,7 @@
   };
 
   function renderPane() {
+    stopQrWatch();
     var html = '';
     if (tab === 'overview') html = viewOverview();
     if (tab === 'send') html = viewSend();
@@ -563,10 +564,13 @@
     if (l.connected) {
       out += '<div class="row"><span>账号 ' + esc(st.selfId || l.qq) + ' 在线</span><span class="muted">不用再登录</span></div>';
     } else {
-      out += '<div class="muted" style="margin-bottom:10px">「本地快速登录」= 拉起 NapCat（QQ ' + esc(l.qq) + '）。第一次会弹 UAC；点一次「注册免UAC启动」之后就不用再点了。</div>';
       out += '<div class="btnrow"><button class="primary" id="btnStart">本地快速登录</button>' +
         '<button id="btnQrRefresh">刷新二维码</button>' +
+        '<button id="btnRestartNapCat">重启 NapCat</button>' +
         '<button class="ghost" id="btnRegister">注册免UAC启动（一次性）</button>' +
+        '<span class="muted" id="loginHint"></span></div>';
+      out += '<div id="qrBox" style="margin-top:12px"></div>';
+      out += '<div class="muted" id="qrAge" style="margin-top:8px">正在读取二维码状态…</div>';
         '<span class="muted" id="loginHint"></span></div>';
       out += '<div id="qrBox" style="margin-top:12px"></div>';
       if (l.qrUpdatedAt) out += '<div class="muted" style="margin-top:8px">二维码更新于 ' + Math.round(l.qrAgeSeconds || 0) + ' 秒前（超过 2 分钟基本失效）</div>';
@@ -1186,18 +1190,62 @@
       .catch(function (e) { box.textContent = '读取失败：' + e.message; });
   }
 
-  function loadQr() {
+  var qrTimer = null;
+
+  function refreshQrMeta() {
+    var hint = $('qrAge');
+    if (!hint) return;
+    api('GET', '/im-bridge/qr/meta')
+      .then(function (v) {
+        if (!v.exists) {
+          hint.textContent = '还没有二维码：点「本地快速登录」，或用「重启 NapCat」换一张。';
+          hint.style.color = 'var(--ink3)';
+          return;
+        }
+        var age = Math.round(v.ageSeconds || 0);
+        if (age > 120) {
+          hint.textContent = '二维码已经 ' + age + ' 秒没更新，基本失效 —— 点「重启 NapCat」换一张。';
+          hint.style.color = 'var(--danger)';
+        } else {
+          hint.textContent = '二维码更新于 ' + age + ' 秒前（' + Math.round((v.size || 0) / 1024) + 'KB）';
+          hint.style.color = 'var(--ink3)';
+        }
+      })
+      .catch(function () {});
+  }
+
+  function paintQr() {
     var box = $('qrBox');
     if (!box) return;
     var img = new Image();
     img.onload = function () {
-      img.style.maxWidth = '220px'; img.style.borderRadius = '12px'; img.style.border = '1px solid var(--line)';
-      img.style.cursor = 'pointer'; img.title = '点击刷新';
-      img.onclick = async function () { img.src = '/im-bridge/qr?t=' + Date.now(); };
-      box.innerHTML = ''; box.appendChild(img);
+      img.style.maxWidth = '220px';
+      img.style.borderRadius = '12px';
+      img.style.border = '1px solid var(--line)';
+      img.style.cursor = 'pointer';
+      img.title = '点击刷新';
+      img.onclick = async function () { paintQr(); };
+      box.innerHTML = '';
+      box.appendChild(img);
+      refreshQrMeta();
     };
-    img.onerror = function () { box.innerHTML = '<div class="muted">还没有二维码：先点「本地快速登录」。</div>'; };
+    img.onerror = function () {
+      box.innerHTML = '<div class="muted">还没有二维码：点「本地快速登录」，或「重启 NapCat」。</div>';
+      refreshQrMeta();
+    };
     img.src = '/im-bridge/qr?t=' + Date.now();
+  }
+
+  function loadQr() { paintQr(); }
+
+  function startQrWatch() {
+    stopQrWatch();
+    paintQr();
+    qrTimer = setInterval(function () { if ($('qrBox')) paintQr(); }, 5000);
+  }
+
+  function stopQrWatch() {
+    if (qrTimer !== null) { clearInterval(qrTimer); qrTimer = null; }
   }
 
   function chatModelOptions(chatKey) {
@@ -1298,8 +1346,33 @@
         .then(function () { toast('已请求注册，请在 UAC 窗口点「是」'); })
         .catch(function (e) { $('loginHint').textContent = '注册失败：' + e.message; });
     };
-    if ((el = $('btnQrRefresh'))) el.onclick = loadQr;
-    loadQr();
+    if ((el = $('btnQrRefresh'))) el.onclick = async function () {
+      var self = this;
+      self.disabled = true;
+      paintQr();
+      toast('已重新读取二维码');
+      setTimeout(function () { self.disabled = false; }, 800);
+    };
+    if ((el = $('btnRestartNapCat'))) el.onclick = async function () {
+      var self = this;
+      self.disabled = true;
+      $('loginHint').textContent = '正在重启 NapCat，约 10 秒后出新二维码…';
+      api('POST', '/im-bridge/login', { action: 'restart' })
+        .then(function () {
+          toast('NapCat 已重启，等它出二维码');
+          var ticks = 0;
+          var wait = setInterval(function () {
+            ticks += 1;
+            paintQr();
+            if (ticks >= 12) { clearInterval(wait); self.disabled = false; }
+          }, 3000);
+        })
+        .catch(function (e) {
+          $('loginHint').textContent = '重启失败：' + e.message;
+          self.disabled = false;
+        });
+    };
+    if (!data.status.connected) startQrWatch(); else loadQr();
     if ((el = $('autoStartToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var next = !data.status.autoStart;
