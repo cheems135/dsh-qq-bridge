@@ -25,7 +25,6 @@ import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
-// 语音合成要用的 Python：优先环境变量，其次 DSH 自带运行时，最后退回 PATH。
 const DEFAULT_PYTHON = process.env.DSH_IM_PYTHON ?? 'python';
 
 export const name = 'dsh-im-bridge';
@@ -986,7 +985,7 @@ export function apply(ctx, rawConfig) {
    */
   function seedBundledStickers() {
     if (settings.stickerSeeded === true) return;
-    const bundled = join(dirname(fileURLToPath(import.meta.url)), 'assets', 'stickers');
+    const bundled = join(dirname(fileURLToPath(import.meta.url)), 'assets', 'preset');
     try {
       const manifestFile = join(bundled, 'manifest.json');
       if (!existsSync(manifestFile)) return;
@@ -996,16 +995,25 @@ export function apply(ctx, rawConfig) {
       for (const item of Array.isArray(manifest) ? manifest : []) {
         const source = join(bundled, String(item.file ?? ''));
         if (!existsSync(source)) continue;
+        const extension = String(item.file ?? '').match(/\.[a-z0-9]+$/i)?.[0] ?? '.png';
         // 同名已存在就往后编号，不覆盖用户自己的图
-        let name = String(item.name ?? '').trim() || `whale${copied + 1}`;
+        let name = String(item.name ?? '').trim() || `sticker${copied + 1}`;
         let suffix = 2;
         const base = name;
         while (resolveSticker(name) !== null) name = `${base}${suffix++}`;
-        cpSync(source, join(stickerDir, `${name}.png`));
+        cpSync(source, join(stickerDir, `${name}${extension}`));
+        // 预设里带的情绪分组和释义一起落地，装好就能用
+        if (typeof item.group === 'string' && item.group.trim() !== '') {
+          settings.stickerGroup[name] = item.group.trim();
+          if (!Array.isArray(settings.stickerGroups)) settings.stickerGroups = [];
+          if (!settings.stickerGroups.includes(item.group.trim())) settings.stickerGroups.push(item.group.trim());
+        }
+        if (typeof item.note === 'string' && item.note.trim() !== '') stickerNotes[name] = item.note.trim();
         copied += 1;
       }
       settings.stickerSeeded = true;
       saveSettings();
+      saveStickerNotes();
       log(`bundled stickers seeded: ${copied}`);
     } catch (error) {
       log(`bundled sticker seed failed: ${error?.message ?? error}`);
@@ -4251,7 +4259,7 @@ export function apply(ctx, rawConfig) {
       persona: { id: persona.id, preset: persona.preset, name: personaName },
       personae: settings.personae,
       hiddenPresets: settings.hiddenPresets,
-      version: '0.75.0',
+      version: '0.76.0',
       model: (() => {
         const route = effectiveModel();
         if (route === null) return null;

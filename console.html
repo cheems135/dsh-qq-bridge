@@ -97,6 +97,11 @@
   .pagehead p { margin: 0; color: var(--ink2); font-size: 13.5px; }
 
   /* ---------- content ---------- */
+  .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.28); z-index: 99; }
+  .modal[hidden] { display: none; }
+  .modalbox { width: min(420px, 88vw); background: var(--panel); border-radius: 16px; padding: 20px 20px 16px; box-shadow: 0 18px 50px rgba(0,0,0,.22); display: grid; gap: 12px; }
+  .modalmsg { font-size: 14px; line-height: 1.65; color: var(--ink); }
+  .modalbox .btnrow { justify-content: flex-end; }
   .warncard { border: 1px solid color-mix(in srgb, #e0a34b 45%, var(--line)); background: color-mix(in srgb, #e0a34b 8%, var(--panel)); }
   .card {
     background: var(--panel); border-radius: var(--radius);
@@ -1156,7 +1161,7 @@
     img.onload = function () {
       img.style.maxWidth = '220px'; img.style.borderRadius = '12px'; img.style.border = '1px solid var(--line)';
       img.style.cursor = 'pointer'; img.title = '点击刷新';
-      img.onclick = function () { img.src = '/im-bridge/qr?t=' + Date.now(); };
+      img.onclick = async function () { img.src = '/im-bridge/qr?t=' + Date.now(); };
       box.innerHTML = ''; box.appendChild(img);
     };
     img.onerror = function () { box.innerHTML = '<div class="muted">还没有二维码：先点「本地快速登录」。</div>'; };
@@ -1222,7 +1227,7 @@
     if ((el = $('sendTarget'))) el.onchange = function () {
       $('sendCustom').style.display = el.value === '__custom' ? '' : 'none';
     };
-    if ((el = $('sendGo'))) el.onclick = function () {
+    if ((el = $('sendGo'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var target = $('sendTarget').value === '__custom' ? ($('sendCustom').value || '').trim() : $('sendTarget').value;
       if (!target) { toast('先选发送对象'); return; }
@@ -1242,9 +1247,9 @@
     };
     [['sendFillSorry', '刚才说错了，别当真'], ['sendFillBusy', '我去忙一会儿，回头找你'], ['sendFillNight', '睡了，晚安']].forEach(function (pair) {
       var btn = $(pair[0]);
-      if (btn) btn.onclick = function () { $('sendText').value = pair[1]; };
+      if (btn) btn.onclick = async function () { $('sendText').value = pair[1]; };
     });
-    if ((el = $('btnStart'))) el.onclick = function () {
+    if ((el = $('btnStart'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       el.disabled = true;
       $('loginHint').textContent = '已请求启动，若弹 UAC 请点「是」…';
@@ -1254,7 +1259,7 @@
         setTimeout(function () { if (el) el.disabled = false; }, 6000);
       }).catch(function (e) { $('loginHint').textContent = '启动失败：' + e.message; el.disabled = false; });
     };
-    if ((el = $('btnRegister'))) el.onclick = function () {
+    if ((el = $('btnRegister'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       $('loginHint').textContent = '弹 UAC 时点「是」，之后启动就不用再点了';
       api('POST', '/im-bridge/login', { action: 'register' })
@@ -1263,7 +1268,7 @@
     };
     if ((el = $('btnQrRefresh'))) el.onclick = loadQr;
     loadQr();
-    if ((el = $('autoStartToggle'))) el.onclick = function () {
+    if ((el = $('autoStartToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var next = !data.status.autoStart;
       el.disabled = true;
@@ -1272,20 +1277,20 @@
         .catch(function (e) { toast('设置失败：' + e.message); })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('btnReconnect'))) el.onclick = function () {
+    if ((el = $('btnReconnect'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/action', { kind: 'reconnect' }).then(function (v) {
         toast(v.connected ? '已重连' : '请求已发出，但 NapCat 还没连上'); load();
       });
     };
-    if ((el = $('btnPause'))) el.onclick = function () {
+    if ((el = $('btnPause'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var paused = !data.status.accountPaused;
       api('POST', '/im-bridge/action', { kind: paused ? 'pause' : 'resume' }).then(function () {
         toast(paused ? '已停用连接（配置保留）' : '已恢复连接'); load();
       });
     };
-    if ((el = $('btnTest'))) el.onclick = function () {
+    if ((el = $('btnTest'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/action', { kind: 'test' }).then(function (v) {
         toast(v.connected ? '测试消息已发出' : 'NapCat 未连接，没发出去');
@@ -1293,14 +1298,14 @@
     };
     if ((el = $('logRefresh'))) el.onclick = loadLog;
     Array.prototype.forEach.call(document.querySelectorAll('[data-reset]'), function (btn) {
-      btn.onclick = function () {
-        if (!confirm('重置这个会话？下一条消息会开新的。')) return;
+      btn.onclick = async function () {
+        if (!await askConfirm('重置这个会话？下一条消息会开新的。')) return;
         api('POST', '/im-bridge/action', { kind: 'reset', key: btn.getAttribute('data-reset') })
           .then(function () { toast('已重置'); load(); });
       };
     });
 
-    if ((el = $('pAdd'))) el.onclick = function () {
+    if ((el = $('pAdd'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var name = $('pName').value.trim();
       var prompt = $('pPrompt').value.trim();
@@ -1319,19 +1324,19 @@
         load();
       }).catch(function (e) { toast('保存失败：' + e.message); });
     };
-    if ((el = $('pCancel'))) el.onclick = function () {
+    if ((el = $('pCancel'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       editingId = '';
       renderPane();
     };
-    if ((el = $('unhideAll'))) el.onclick = function () {
+    if ((el = $('unhideAll'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { hiddenPresets: [] }).then(function () { toast('已恢复'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-hide]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-hide');
-        if (!confirm('从列表里删除「' + id + '」？只是隐藏；要彻底卸载请去插件管理。')) return;
+        if (!await askConfirm('从列表里删除「' + id + '」？只是隐藏；要彻底卸载请去插件管理。')) return;
         var hidden = (data.settings.hiddenPresets || []).slice();
         if (hidden.indexOf(id) === -1) hidden.push(id);
         var patch = { hiddenPresets: hidden };
@@ -1340,14 +1345,14 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-view');
         viewPreset = viewPreset === id ? '' : id;
         renderPane();
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-presave]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-presave');
         var box = document.getElementById('presetEdit-' + id);
         if (!box) return;
@@ -1358,16 +1363,16 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-prerestore]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-prerestore');
-        if (!confirm('恢复成预设原文？你的修改会丢。')) return;
+        if (!await askConfirm('恢复成预设原文？你的修改会丢。')) return;
         api('POST', '/im-bridge/presets', { action: 'restore', id: id })
           .then(function () { toast('已恢复原文'); load(); })
           .catch(function (e) { toast('恢复失败：' + e.message); });
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-copy');
         var detail = presets.filter(function (x) { return x.id === id; })[0];
         if (!detail) { toast('读不到预设文本'); return; }
@@ -1390,13 +1395,13 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-use]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         api('POST', '/im-bridge/settings', { activePersonaId: btn.getAttribute('data-use') })
           .then(function () { toast('已切换'); load(); });
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         editingId = btn.getAttribute('data-edit');
         renderPane();
         var form = $('personaForm');
@@ -1406,13 +1411,13 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-del]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-del');
         var target = (data.settings.personae || []).filter(function (p) { return p.id === id; })[0];
         var isActive = data.settings.activePersonaId === id;
         var tip = '删除人设「' + (target ? target.name : id) + '」？' +
           (isActive ? '她正在用这个人设，删除后会切回「大米鲸鱼娘」。' : '');
-        if (!confirm(tip)) return;
+        if (!await askConfirm(tip)) return;
         var personae = (data.settings.personae || []).filter(function (p) { return p.id !== id; });
         var patch = { personae: personae };
         if (isActive) patch.activePersonaId = 'whale';
@@ -1423,7 +1428,7 @@
         });
       };
     });
-    if ((el = $('pExport'))) el.onclick = function () {
+    if ((el = $('pExport'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var blob = new Blob([JSON.stringify(data.settings.personae || [], null, 2)], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
@@ -1431,7 +1436,7 @@
       a.href = url; a.download = 'personae.json'; a.click();
       setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
     };
-    if ((el = $('pImportBtn'))) el.onclick = function () {
+    if ((el = $('pImportBtn'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       try {
         var incoming = JSON.parse($('pImport').value);
@@ -1446,7 +1451,7 @@
     };
 
     if ((el = $('qqInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('qqAdd').click(); };
-    if ((el = $('ownerSave'))) el.onclick = function () {
+    if ((el = $('ownerSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var list = ($('ownersInput').value || '').split(/[,，\s]+/).filter(function (v) { return v; });
       api('POST', '/im-bridge/settings', { owners: list })
@@ -1454,7 +1459,7 @@
         .catch(function (e) { toast('保存失败：' + e.message); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-ownerperm]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var key = btn.getAttribute('data-ownerperm');
         var current = (data.status && data.status.ownerPerms) || { send: true, broadcast: true, schedule: true };
         var next = { send: current.send, broadcast: current.broadcast, schedule: current.schedule };
@@ -1464,14 +1469,14 @@
           .catch(function (e) { toast('保存失败：' + e.message); });
       };
     });
-    if ((el = $('ownerUseFirst'))) el.onclick = function () {
+    if ((el = $('ownerUseFirst'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var first = (data.allowUsers || [])[0] || '';
       if (!first) { toast('白名单是空的'); return; }
       api('POST', '/im-bridge/settings', { owners: [first] })
         .then(function () { toast('号主设为 ' + first); load(); });
     };
-    if ((el = $('qqAdd'))) el.onclick = function () {
+    if ((el = $('qqAdd'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var v = $('qqInput').value.trim();
       if (!/^\d{5,12}$/.test(v)) { toast('QQ 号格式不对'); return; }
@@ -1480,13 +1485,13 @@
       api('POST', '/im-bridge/settings', { whitelist: list }).then(function () { toast('已添加'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-delqq]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var list = data.settings.whitelist.filter(function (u) { return u !== btn.getAttribute('data-delqq'); });
         api('POST', '/im-bridge/settings', { whitelist: list }).then(function () { toast('已移除'); load(); });
       };
     });
     if ((el = $('groupInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('groupAdd').click(); };
-    if ((el = $('groupAdd'))) el.onclick = function () {
+    if ((el = $('groupAdd'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var v = $('groupInput').value.trim();
       if (!/^\d{5,12}$/.test(v)) { toast('群号格式不对'); return; }
@@ -1495,17 +1500,17 @@
       api('POST', '/im-bridge/settings', { groups: list }).then(function () { toast('已添加'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-delgroup]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var list = (data.settings.groups || []).filter(function (g) { return g !== btn.getAttribute('data-delgroup'); });
         api('POST', '/im-bridge/settings', { groups: list }).then(function () { toast('已移除'); load(); });
       };
     });
 
-    if ((el = $('sToggle'))) el.onclick = function () {
+    if ((el = $('sToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { stickers: { enabled: !data.settings.stickers.enabled } }).then(load);
     };
-    if ((el = $('sUpload'))) el.onclick = function () {
+    if ((el = $('sUpload'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var name = ($('sName').value || '').trim();
       var input = $('sFile');
@@ -1523,7 +1528,7 @@
       reader.readAsDataURL(file);
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-stoggle]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var name = btn.getAttribute('data-stoggle');
         var list = (data.settings.stickerDisabled || []).slice();
         var i = list.indexOf(name);
@@ -1550,13 +1555,13 @@
         }
       };
     });
-    if ((el = $('qqReveal'))) el.onclick = function () {
+    if ((el = $('qqReveal'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       showFullQQ = !showFullQQ;
       renderPane();
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-disuser]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var user = btn.getAttribute('data-disuser');
         var list = (data.settings.disabledUsers || []).slice();
         var index = list.indexOf(user);
@@ -1567,14 +1572,14 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-sfilter]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         sFilter = btn.getAttribute('data-sfilter');
         renderPane();
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-newgroup]'), function (btn) {
-      btn.onclick = function () {
-        var name = window.prompt('新分组名（例如：开心 / 生气 / 敷衍）');
+      btn.onclick = async function () {
+        var name = await askText('新分组名（例如：开心 / 生气 / 敷衍）');
         if (!name) return;
         var list = (data.settings.stickerGroups || []).slice();
         if (list.indexOf(name.trim()) === -1) list.push(name.trim());
@@ -1583,9 +1588,9 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-sdelgroup]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var name = btn.getAttribute('data-sdelgroup');
-        if (!confirm('删除分组「' + name + '」？组里的表情会变成未分组，不会被删。')) return;
+        if (!await askConfirm('删除分组「' + name + '」？组里的表情会变成未分组，不会被删。')) return;
         var list = (data.settings.stickerGroups || []).filter(function (g) { return g !== name; });
         var map = Object.assign({}, data.settings.stickerGroup || {});
         Object.keys(map).forEach(function (k) { if (map[k] === name) delete map[k]; });
@@ -1602,13 +1607,13 @@
         if (counter) counter.textContent = Object.keys(pickedStickers).length;
       };
     });
-    if ((el = $('pickApply'))) el.onclick = function () {
+    if ((el = $('pickApply'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var names = Object.keys(pickedStickers);
       if (!names.length) { toast('先勾选表情'); return; }
       var group = $('pickGroup').value;
       if (group === '__new') {
-        var created = window.prompt('新分组名（例如：开心 / 生气 / 敷衍）');
+        var created = await askText('新分组名（例如：开心 / 生气 / 敷衍）');
         if (!created) return;
         group = created.trim();
       }
@@ -1625,38 +1630,38 @@
         load();
       }).catch(function (e) { toast('分组失败：' + e.message); });
     };
-    if ((el = $('pickClear'))) el.onclick = function () {
+    if ((el = $('pickClear'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       pickedStickers = {};
       renderPane();
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-delsticker]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var name = btn.getAttribute('data-delsticker');
-        if (!confirm('删除表情「' + name + '」？')) return;
+        if (!await askConfirm('删除表情「' + name + '」？')) return;
         api('POST', '/im-bridge/stickers', { action: 'delete', name: name }).then(function () { toast('已删除'); load(); });
       };
     });
 
     Array.prototype.forEach.call(document.querySelectorAll('#msgSeg button'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         msgFilter = btn.getAttribute('data-filter');
         renderPane();
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-chat]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         msgChat = btn.getAttribute('data-chat');
         renderPane();
       };
     });
-    if ((el = $('mClear'))) el.onclick = function () {
+    if ((el = $('mClear'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
-      if (!confirm('清空监听记录？图片文件不会删。')) return;
+      if (!await askConfirm('清空监听记录？图片文件不会删。')) return;
       api('POST', '/im-bridge/messages', { action: 'clear' }).then(function () { toast('已清空'); load(); });
     };
 
-    if ((el = $('pvGo'))) el.onclick = function () {
+    if ((el = $('pvGo'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var text = ($('pvText').value || '').trim();
       if (!text) { toast('先说一句'); return; }
@@ -1672,7 +1677,7 @@
         .finally(function () { el.disabled = false; });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-pv]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-pv');
         var select = $('pvPersona');
         if (select) select.value = id;
@@ -1680,19 +1685,19 @@
         if (box) { box.focus(); box.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
       };
     });
-    if ((el = $('baseSave'))) el.onclick = function () {
+    if ((el = $('baseSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { basePersona: $('basePersona').value })
         .then(function () { toast('已保存，下一条消息生效'); load(); })
         .catch(function (e) { toast('保存失败：' + e.message); });
     };
-    if ((el = $('baseReset'))) el.onclick = function () {
+    if ((el = $('baseReset'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { basePersona: '' })
         .then(function () { toast('已恢复默认'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-iq]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var level = btn.getAttribute('data-iq');
         var hint = $('iqHint');
         if (hint) hint.textContent = '切换中…';
@@ -1717,14 +1722,14 @@
         }
       };
     }
-    if ((el = $('thReflect'))) el.onclick = function () {
+    if ((el = $('thReflect'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var on = !(data.settings.autonomy && data.settings.autonomy.reflect === false);
       api('POST', '/im-bridge/settings', { autonomy: { reflect: on } })
         .then(function () { toast(on ? '已开启复盘' : '已关闭复盘'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
-    if ((el = $('autoSim'))) el.onclick = function () {
+    if ((el = $('autoSim'))) el.onclick = async function () {
       var btn = this;
       btn.disabled = true;
       btn.textContent = '模拟中…';
@@ -1741,16 +1746,16 @@
         .catch(function (e) { toast('失败：' + e.message); })
         .finally(function () { btn.disabled = false; btn.textContent = '模拟一天'; });
     };
-    if ((el = $('warnHide'))) el.onclick = function () {
+    if ((el = $('warnHide'))) el.onclick = async function () {
       var self = this;
       try { window.localStorage.setItem('qqb-warn', '1'); } catch (e) {}
       self.blur();
       renderPane();
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-goautonomy]'), function (btn) {
-      btn.onclick = function () { tab = 'autonomy'; renderPane(); };
+      btn.onclick = async function () { tab = 'autonomy'; renderPane(); };
     });
-    if ((el = $('thTick'))) el.onclick = function () {
+    if ((el = $('thTick'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       reportClient('点击 想法-想一次');
       // 用 this 而不是外层共享的 el：el 早被后面几十个绑定改写成别的元素了。
@@ -1769,20 +1774,20 @@
         .catch(function (e) { toast('失败：' + e.message); })
         .finally(function () { btn.disabled = false; btn.textContent = '现在想一次'; });
     };
-    if ((el = $('autoMaster'))) el.onclick = function () {
+    if ((el = $('autoMaster'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var next = !(data.status.autonomy && data.status.autonomy.config && data.status.autonomy.config.enabled);
       api('POST', '/im-bridge/settings', { autonomy: { enabled: next } })
         .then(function () { toast(next ? '自主模式已开启' : '自主模式已关闭'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
-    if ((el = $('autoStop'))) el.onclick = function () {
+    if ((el = $('autoStop'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/autonomy', { action: 'stop' })
         .then(function () { toast('已紧急停止'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
-    if ((el = $('autoTick'))) el.onclick = function () {
+    if ((el = $('autoTick'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       reportClient('点击 自主-想一次');
       el.disabled = true;
@@ -1798,7 +1803,7 @@
         .finally(function () { btn.disabled = false; btn.textContent = '现在想一次'; });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-auto]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var key = btn.getAttribute('data-auto');
         var patch = { autonomy: {} };
         patch.autonomy[key] = !(data.status.autonomy.config[key]);
@@ -1807,7 +1812,7 @@
           .catch(function (e) { toast('失败：' + e.message); });
       };
     });
-    if ((el = $('autoSave'))) el.onclick = function () {
+    if ((el = $('autoSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         autonomy: {
@@ -1824,19 +1829,19 @@
       }).then(function () { toast('已保存'); load(); }).catch(function (e) { toast('失败：' + e.message); });
     };
     if ((el = $('mProvider'))) el.onchange = function () { fillModels(''); };
-    if ((el = $('mSave'))) el.onclick = function () {
+    if ((el = $('mSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { model: { provider: $('mProvider').value, model: $('mModel').value } })
         .then(function () { toast('已切换，下一条消息生效'); load(); })
         .catch(function (e) { toast('保存失败：' + e.message); });
     };
-    if ((el = $('mReset'))) el.onclick = function () {
+    if ((el = $('mReset'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { model: null })
         .then(function () { toast('已恢复默认'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
-    if ((el = $('accAdd'))) el.onclick = function () {
+    if ((el = $('accAdd'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var url = ($('accUrl').value || '').trim();
       if (!/^wss?:\/\//.test(url)) { toast('地址要以 ws:// 开头'); return; }
@@ -1850,15 +1855,15 @@
       api('POST', '/im-bridge/settings', { accounts: accounts }).then(function () { toast('已添加'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-accuse]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         api('POST', '/im-bridge/settings', { activeAccountId: btn.getAttribute('data-accuse') })
           .then(function () { toast('已切换，正在重连'); load(); });
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-accdel]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var id = btn.getAttribute('data-accdel');
-        if (!confirm('删除这个账号？')) return;
+        if (!await askConfirm('删除这个账号？')) return;
         var accounts = (data.settings.accounts || []).filter(function (a) { return a.id !== id; });
         var patch = { accounts: accounts };
         if (data.settings.activeAccountId === id) patch.activeAccountId = '';
@@ -1879,36 +1884,36 @@
           .then(function () { toast('已保存，下一轮生效'); load(); });
       };
     });
-    if ((el = $('pcSave'))) el.onclick = function () {
+    if ((el = $('pcSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         proactiveCfg: { startHour: Number($('pcStart').value), endHour: Number($('pcEnd').value), maxPerDay: Number($('pcMax').value) }
       }).then(function () { toast('已保存'); load(); }).catch(function (e) { toast('保存失败：' + e.message); });
     };
-    if ((el = $('dndSave'))) el.onclick = function () {
+    if ((el = $('dndSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         dnd: { enabled: !!(data.settings.dnd && data.settings.dnd.enabled), startHour: Number($('dndStart').value), endHour: Number($('dndEnd').value) }
       }).then(function () { toast('已保存'); load(); });
     };
-    if ((el = $('dndToggle'))) el.onclick = function () {
+    if ((el = $('dndToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         dnd: { enabled: !(data.settings.dnd && data.settings.dnd.enabled), startHour: Number($('dndStart').value), endHour: Number($('dndEnd').value) }
       }).then(load);
     };
-    if ((el = $('memToggle'))) el.onclick = function () {
+    if ((el = $('memToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memory: { enabled: !(data.settings.memory && data.settings.memory.enabled !== false) } })
         .then(function () { toast('已保存'); load(); });
     };
-    if ((el = $('memSave'))) el.onclick = function () {
+    if ((el = $('memSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memory: { everyTurns: Number($('memTurns').value), maxChars: Number($('memChars').value) } })
         .then(function () { toast('已保存'); load(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-memcompact]'), function (btn) {
-      btn.onclick = function () {
+      btn.onclick = async function () {
         var key = btn.getAttribute('data-memcompact');
         btn.disabled = true;
         btn.textContent = '压缩中…';
@@ -1918,17 +1923,17 @@
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-memclear]'), function (btn) {
-      btn.onclick = function () {
-        if (!confirm('清除这段记忆？')) return;
+      btn.onclick = async function () {
+        if (!await askConfirm('清除这段记忆？')) return;
         api('POST', '/im-bridge/memory', { action: 'clear', key: btn.getAttribute('data-memclear') })
           .then(function () { toast('已清除'); load(); });
       };
     });
-    if ((el = $('cacheMove'))) el.onclick = function () {
+    if ((el = $('cacheMove'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var dir = ($('cacheInput').value || '').trim();
       if (!dir) { toast('填一个路径'); return; }
-      if (!confirm('把缓存迁移到 ' + dir + ' ？会移动日志、监听历史、语音和表情包。')) return;
+      if (!await askConfirm('把缓存迁移到 ' + dir + ' ？会移动日志、监听历史、语音和表情包。')) return;
       el.disabled = true;
       $('cacheOut').textContent = '迁移中…';
       api('POST', '/im-bridge/settings', { cacheDir: dir })
@@ -1936,19 +1941,19 @@
         .catch(function (e) { $('cacheOut').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('cacheDefault'))) el.onclick = function () {
+    if ((el = $('cacheDefault'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { cacheDir: '' })
         .then(function () { toast('已恢复默认路径'); load(); });
     };
-    if ((el = $('cacheClean'))) el.onclick = function () {
+    if ((el = $('cacheClean'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
-      if (!confirm('清理语音、旧监听图片和日志？表情包和设置不动。')) return;
+      if (!await askConfirm('清理语音、旧监听图片和日志？表情包和设置不动。')) return;
       api('POST', '/im-bridge/storage', { action: 'clean' })
         .then(function (v) { toast('已清理：' + (v.removed || []).join('、')); load(); })
         .catch(function (e) { toast('清理失败：' + e.message); });
     };
-    if ((el = $('vSaveEngine'))) el.onclick = function () {
+    if ((el = $('vSaveEngine'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         voice: {
@@ -1959,7 +1964,7 @@
         }
       }).then(function () { toast('已保存'); load(); });
     };
-    if ((el = $('searxSave'))) el.onclick = function () {
+    if ((el = $('searxSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         search: {
@@ -1969,13 +1974,13 @@
         }
       }).then(function () { toast('已保存'); load(); });
     };
-    if ((el = $('memDirSave'))) el.onclick = function () {
+    if ((el = $('memDirSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memoryDir: ($('memDir').value || '').trim() })
         .then(function () { toast('记忆位置已更新'); load(); })
         .catch(function (e) { toast('失败：' + e.message); });
     };
-    if ((el = $('vSamplesBtn'))) el.onclick = function () {
+    if ((el = $('vSamplesBtn'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       el.disabled = true;
       $('vSamples').innerHTML = '<div class="muted">生成中，约 10–20 秒…</div>';
@@ -1990,7 +1995,7 @@
           }).join('');
           $('vSamples').innerHTML = html;
           Array.prototype.forEach.call(document.querySelectorAll('[data-sendsample]'), function (btn) {
-            btn.onclick = function () {
+            btn.onclick = async function () {
               api('POST', '/im-bridge/audio', { name: btn.getAttribute('data-sendsample'), target: btn.getAttribute('data-target') })
                 .then(function () { toast('已发到 QQ'); })
                 .catch(function (e) { toast('发送失败：' + e.message); });
@@ -2000,12 +2005,12 @@
         .catch(function (e) { $('vSamples').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('vToggle'))) el.onclick = function () {
+    if ((el = $('vToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { voice: { enabled: !(data.settings.voice && data.settings.voice.enabled) } })
         .then(function () { toast('已保存'); load(); });
     };
-    if ((el = $('vTest'))) el.onclick = function () {
+    if ((el = $('vTest'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       el.disabled = true;
       $('vOut').textContent = '合成并发送中…';
@@ -2014,7 +2019,7 @@
         .catch(function (e) { $('vOut').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('aiPersonaBtn'))) el.onclick = function () {
+    if ((el = $('aiPersonaBtn'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var desc = ($('aiPersonaDesc').value || '').trim();
       if (!desc) { toast('先写一句描述'); return; }
@@ -2024,7 +2029,7 @@
         $('aiPersonaOut').innerHTML = '<b>' + esc(v.persona.name) + '</b> · ' + esc(v.persona.preset) + '\n' + esc(v.persona.prompt) +
           '\n\n<button class="primary small" id="aiAdopt">采用这个人设</button>';
         var adopt = $('aiAdopt');
-        if (adopt) adopt.onclick = function () {
+        if (adopt) adopt.onclick = async function () {
           var personae = (data.settings.personae || []).slice();
           personae.push({ id: 'p' + Date.now(), name: v.persona.name, preset: v.persona.preset, prompt: v.persona.prompt });
           api('POST', '/im-bridge/settings', { personae: personae }).then(function () { toast('已加入列表'); load(); });
@@ -2032,7 +2037,7 @@
       }).catch(function (e) { $('aiPersonaOut').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('pageGo'))) el.onclick = function () {
+    if ((el = $('pageGo'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var url = ($('pageUrl').value || '').trim();
       if (!/^https?:\/\//i.test(url)) { toast('贴一个 http(s) 链接'); return; }
@@ -2051,7 +2056,7 @@
         .catch(function (e) { $('pageOut').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('harvestGo'))) el.onclick = function () {
+    if ((el = $('harvestGo'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var raw = ($('harvestQueries').value || '').trim();
       if (!raw) { toast('写几个关键词'); return; }
@@ -2071,7 +2076,7 @@
         .catch(function (e) { $('harvestOut').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('noteFill'))) el.onclick = function () {
+    if ((el = $('noteFill'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       el.disabled = true;
       $('noteMeta').textContent = '看图识别中…';
@@ -2086,7 +2091,7 @@
         .catch(function (e) { $('noteMeta').textContent = '失败：' + e.message; })
         .finally(function () { el.disabled = false; });
     };
-    if ((el = $('visGo'))) el.onclick = function () {
+    if ((el = $('visGo'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var input = $('visFile');
       var file = input && input.files && input.files[0];
@@ -2109,7 +2114,7 @@
       };
       reader.readAsDataURL(file);
     };
-    if ((el = $('aiStickerBtn'))) el.onclick = function () {
+    if ((el = $('aiStickerBtn'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var query = ($('aiStickerQuery').value || '').trim();
       if (!query) { toast('先写关键词'); return; }
@@ -2124,7 +2129,7 @@
   }
 
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (btn) {
-    btn.onclick = function () {
+    btn.onclick = async function () {
       Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) { b.classList.remove('on'); });
       btn.classList.add('on');
       tab = btn.getAttribute('data-tab');
@@ -2149,5 +2154,11 @@
   }, 6000);
 })();
 </script>
-</body>
+<div class="modal" id="modal" hidden>
+  <div class="modalbox">
+    <div class="modalmsg" id="modalMsg"></div>
+    <input id="modalInput" placeholder="">
+    <div class="btnrow"><button id="modalCancel">取消</button><button class="primary" id="modalOk">确定</button></div>
+  </div>
+</div></body>
 </html>
