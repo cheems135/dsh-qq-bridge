@@ -34,5 +34,28 @@
         maxReplyChars: 1500
         # 机器人上线后给 allowUsers 里每个人发一条（留空 = 不发）
         greeting: ''
+        # 偶尔自己想起你：隔一段时间问模型一句「有话要说吗」，不想说就跳过
+        proactive:
+          enabled: true
+          minMinutes: 120
+          maxMinutes: 300
+          startHour: 9
+          endHour: 23
+          maxPerDay: 3
+          minIdleMinutes: 30
+        # 聊天中途你不吭声了：她会催你、损你，或者自己起个新话题（最多两次）
+        silence:
+          enabled: true
+          minMinutes: 18
+          maxMinutes: 35
+          maxNudges: 2
+        # 她说完隔一会儿又补一句（像真人想起什么），概率 25%
+        afterthought:
+          enabled: true
+          chance: 0.25
+          minSeconds: 25
+          maxSeconds: 70
         # 自检：用一个临时会话问自己一句，结果写进日志（验人格/模型用）
         selfTest: false
+        selfTestPrompt: '用一句话介绍你自己。'
+        selfTestImage: ''

@@ -10,7 +10,17 @@
 
 - **双向桥接**：NapCat 的 WebSocket → 桥接 → `sessionController` 创建/续聊 DSH 会话 → 回复拆成多条发回 QQ
 - **像人一样说话**：回复按 `|||` 或空行拆成多个气泡，间隔 0.6–2.8 秒，模拟打字节奏
-- **一个面板管全部**：10 个页面（概览 / 发消息 / 监听 / 人设 / 联系人 / 素材 / 记忆 / 自主 / 想法 / 模型）
+- **一个面板管全部**：18 个页面、5 个分组（工作台 / 消息中心 / 角色与互动 / 素材与表达 / 系统设置）
+
+## 这次更新（v1.19）
+
+- **图像生成**：硅基流动（Kolors）与 RunningHub（工作流 / AI App）两种后端，参数与 Key 在面板里配
+- **语音重做**：引擎扩到甜妹（edge-tts）/ MiniMax / Breeze TTS 2（官方或自建 vLLM-Omni）/ 自定义 HTTP / SAPI，并新增语音消息转文字（硅基流动 SenseVoice）
+- **多模态输入**：收到的视频会抽帧看画面，链接会抓正文，都带读取状态标注
+- **更像人**：情绪系统、生活记忆与日历、说完补一句、沉默追问、号主钱包感知
+- **上下文与学习**：生图 / 语音 / 检索前先回看最近几条消息，减少指代错位；从对话里攒「语言与知识观察」，只作证据、不训练权重
+- **运维**：登录页可扫码登录 / 登出 / 重启 NapCat，新增备份导出与合并恢复、工具页与日志页
+- **面板重构**：从平铺 10 页改成 5 组 18 页，角色档案可按联系人或群单独配置
 
 ---
 
@@ -22,7 +32,7 @@
 - 建议先用小号；自主行为的每日额度尽量调低；出现验证码或异常登录提示立刻停用
 - 账号被封、内容发错、被他人投诉等后果由使用者自行承担
 
-## 自主行为（0.6x 起）
+## 自主行为
 
 她不只是被动回复，还能按规则自己做决定：
 
@@ -41,24 +51,44 @@
 ### 聊天与人格
 
 - 内置一套人设预设（`whale` 日常口语），可直接在面板里改文本，保存即生效
-- 自定义人设：名字 + 提示词（固定用 whale 底座），支持导入导出
+- 多套自定义人设：名字 + 提示词，支持导入导出；「角色档案」可给单个联系人或群指定人设、模型与音色
 - 「底层性格」：排在所有人设之前的一层通用规则（情绪安抚、按时间问候、看图不描述画面），可编辑
+- **情绪系统**：心情随对话和事件变化、会衰减，并影响下一轮的说话方式
 - AI 生成人设：一句描述 → 模型写出提示词并入库
 - 试聊预览：不经过 QQ，直接用人设提示词问一次模型，看她的语气对不对
 
 ### 记忆
 
 - 按轮数自动压缩：聊到 N 轮就把最近对话压成一小段「给以后的自己看」的记忆，然后换新会话，记忆带进新会话
+- 本地全文检索（MiniSearch）按需召回，不上传、不依赖外部记忆服务
+- **生活记忆与日历**：她会记得今天大概在做什么，并按日期归档
 - 记忆文件和缓存目录都可以挪位置，换路径不丢配置
 - 面板里能看到每条记忆的生成时间，可单独重压或清除
 
-### 素材：表情包与语音
+### 素材：表情包与照片
 
 - 本地表情库：上传、分组（勾选批量分组）、启用/停用
 - 她会自己在合适的时候发图（情绪词触发），也会用 `[表情包:名字]` 精确指定
 - `[表情包:搜 关键词]`：手边没有合适的图时联网搜图、下载、发出去
-- 语音：`[语音]` 标记 → 合成语音消息。引擎支持 edge-tts（微软在线音色）或自定义 HTTP TTS（GPT-SoVITS / CosyVoice 之类返回音频字节即可）
-- 试听与音色对比样本，直接在面板里播放
+- 「素材采集」页：按关键词、网页或参考图找新素材，可批量入库
+- 「照片来源」页：搜图或生成，设定她的外观与照片偏好
+
+### 语音
+
+- `[语音]` 标记 → 合成语音消息；面板可试听、对比不同音色
+- 引擎：甜妹（edge-tts，免费）/ MiniMax（情绪增强）/ Breeze TTS 2（官方 API 或自建 vLLM-Omni）/ 自定义 HTTP TTS（GPT-SoVITS、CosyVoice 之类返回音频字节即可）/ Windows SAPI 兜底
+- **听语音**：你发的语音消息会转成文字再进 prompt（硅基流动 SenseVoice，需要在设置里填同样的 Key）
+
+### 图像生成
+
+- 两种后端：**硅基流动**（默认 `Kwai-Kolors/Kolors`）与 **RunningHub**（跑工作流或 AI App，可上传参考图）
+- 参数：尺寸、步数、CFG、种子、去水印，Key 与工作流 ID 都在面板「图像生成」页
+- 生成结果直接作为消息发回，也可以给她当参考形象
+
+### 视频与链接
+
+- 收到 QQ 视频会抽几张带时间点的画面，回答只依据真正读到的画面，读不到的部分会说明
+- 收到的链接会抓正文再回答，抓取失败会标注「未读取」
 
 ### 查资料
 
@@ -74,6 +104,7 @@
   - `[定时:分钟|QQ号|内容]` 定时发送（最长 24 小时）
 - 代发内容会在发送前清洗掉「号主让我转告」这类归属信息，对方看到的就是她在说话
 - 三项权限可分别关闭；目标必须在白名单内
+- 号主余额 / 额度低于阈值时她可以提一句，非号主看不到金额
 
 ### 模型与成本
 
@@ -84,8 +115,11 @@
 
 ### 运维
 
+- 连接页：扫码登录、登出、重启 NapCat、查看连接与自恢复状态
 - 监听页：收发记录，按对话分组、按方向筛选、每 2 秒自动刷新、消息图片可直接看
 - 存储：日志/监听历史/语音/表情包可以整体迁到别的盘，占用按类统计，支持一键清理
+- 备份：导出人设、记忆与素材；恢复前先预览再合并
+- 日志页：运行记录与错误堆栈
 - 本地快速登录：面板点一下拉起 NapCat（隐藏窗口、无需 UAC），可选「开机自动登录」
 - 连接可随时停用（保留配置），恢复后自动重连
 
@@ -103,13 +137,11 @@
 dsh plugin --profile <你的 profile> add /path/to/this/repo
 ```
 
-或者把本仓库放进 profile 的 `cordis.patch.yml` 作为 bundle 引用。
-
 装好后打开 **设置 → QQ 桥接**，按面板引导：
 
 1. 填 WebSocket 地址和 token（默认 `ws://127.0.0.1:3001`）
 2. 「联系人」页把自己的 QQ 加进白名单，并设为号主
-3. 「概览」页点「本地快速登录」拉起 NapCat
+3. 「连接」页点「本地快速登录」拉起 NapCat（或用已有的 NapCat）
 4. 发一条消息，看到回复就通了
 
 ## 配置
@@ -128,23 +160,33 @@ dsh plugin --profile <你的 profile> add /path/to/this/repo
 | `model` | Session 级模型路由（provider / model） |
 | `maxReplyChars` | 单条消息上限，超过拆条 |
 | `greeting` | 上线后主动打招呼的内容，留空不发 |
-| `selfTest` | 用临时会话自检一次，结果写日志 |
+| `proactive` | 主动找你的频率、时段与每日上限 |
+| `silence` | 你不吭声时她追问的间隔与次数 |
+| `afterthought` | 说完隔一会儿再补一句的概率与间隔 |
+| `selfTest` / `selfTestPrompt` | 用临时会话自检一次，结果写日志 |
 
-面板里还能配：智力档位、主动行为（定时找你 / 沉默追问 / 说完补一句）、勿扰时段、搜索与语音引擎、号主与权限、记忆压缩与存放位置、缓存位置、开机自启。
+面板里还能配：图像生成与语音引擎、语音识别 Key、搜索引擎、情绪与生活记忆、号主与权限、记忆压缩与存放位置、缓存位置、开机自启。
 
 ### 环境变量
 
 | 变量 | 作用 |
 |---|---|
 | `DSH_PRESET_DIR` | 「查看/编辑预设人设文本」从哪个目录找 `*-preset/cordis.patch.yml`；不设则该项不可用（其它功能不受影响） |
-| `DSH_IM_PYTHON` | edge-tts 用的 Python 解释器；不设则依次找 DSH 自带运行时与 PATH 里的 `python` |
+| `DSH_IM_PYTHON` | edge-tts / 图片后处理用的 Python 解释器；不设则用 PATH 里的 `python` |
 
 ## QQ 里能用的指令
 
 | 指令 | 作用 |
 |---|---|
 | `/new` | 结束当前会话，下条消息开新会话（丢上下文，保留记忆） |
-| `/档位 eco\|standard\|high\|max` | 切智力档位并重开会话 |
+| `/cancel` | 中止当前正在跑的一轮 |
+| `/帮助` | 列出号主能在聊天里改的设置 |
+| `/档位 省\|标准\|高\|最高` | 切智力档位并重开会话 |
+| `/语音 on\|off`、`/表情 on\|off`、`/主动 on\|off` | 开关语音、表情包、主动找你 |
+| `/白名单 加\|删 QQ号` | 增删私聊白名单 |
+| `/搜索 host\|wikipedia\|ddg\|searx` | 切换搜索引擎 |
+| `/记忆 压缩\|清除` | 立即压缩或清空记忆 |
+| `/状态` | 看一眼连接、档位、人设与会话状态 |
 | `[表情包:名字]` / `[表情包:搜 关键词]` | 发表情包 / 联网找图 |
 | `[语音] …` | 合成语音发出来 |
 | `[查:词]` | 查资料再用她的话答 |
@@ -155,18 +197,20 @@ dsh plugin --profile <你的 profile> add /path/to/this/repo
 
 - **一次只连一个机器人账号**：多账号是切换，不是同时在线
 - 部分能力是 Windows 向的：隐藏启动 NapCat、开机自启、SAPI 兜底音色；其它平台能跑但用不了这几项
-- **没有语音识别**：她听不了你发的语音消息，只处理文字和图片
-- 记忆压缩是「总结式」的，不是向量检索；压过头的细节找不回来
+- 语音识别与图像生成要填第三方 Key（硅基流动 / RunningHub），不填就只有本地能力
+- 视频只看抽样画面、不解析音轨；没抽到的地方她会说不知道
+- 记忆是「总结 + 本地检索」，不是向量库；压过头的细节找不回来
 
 ## 安全
 
 - 白名单为空时她**不理任何人**，这是默认状态
 - 号主指令的目标必须白名单内，否则直接拒绝并记日志
 - 面板路由挂在 DSH 的本地 Web 服务上，只监听本机
+- 第三方 Key 保存在本机 profile 的 `settings.json` 里，不会随面板接口回传明文
 
 ## English
 
-A QQ (NapCat / OneBot 11) bridge for DeepSeek Harness. It turns a DSH Session into a QQ chat partner: persona presets, custom personae, a baseline behaviour layer, sticker library with groups and web search, TTS voice notes (edge-tts or your own HTTP TTS), web lookup with pluggable engines, periodic memory compaction, a thinking-depth dial, owner-only relay commands, and an 8-page management panel with live monitoring and cost tracking.
+A QQ (NapCat / OneBot 11) bridge for DeepSeek Harness. It turns a DSH Session into a QQ chat partner: persona presets, per-contact profiles, an emotional state, local memory with full-text recall, sticker library with groups and web image search, photo sourcing, TTS voice notes (edge-tts / MiniMax / Breeze / custom HTTP / SAPI) plus speech-to-text for incoming voice, image generation via SiliconFlow or RunningHub, sampled video frames, web lookup with pluggable engines, owner-only relay commands, and an 18-page management panel with live monitoring, backup and cost tracking.
 
 Install it as a DSH bundle, point it at your NapCat WebSocket, whitelist yourself — then talk to your harness from QQ.
 
