@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 export function createDesktopController({getCacheDir,authorize=()=>true,spawnImpl=spawn,platform=process.platform,nativeExecute,beforeAction}={}){
- const actions=['observe','windows','shortcuts','launch-shortcut','click','scroll','type','press','focus','launch'];let busy=false;
+ const actions=['wake','observe','windows','shortcuts','launch-shortcut','click','scroll','type','press','focus','launch'];let busy=false;
  async function act(args={},context={}){
   if(platform!=='win32')throw Error('当前运行在手机，请使用手机的Pilot工具');
   if(!authorize(context))throw Error('当前对话没有电脑操作权限');
@@ -16,7 +16,6 @@ export function createDesktopController({getCacheDir,authorize=()=>true,spawnImp
   if(args.action==='launch'&&!['browser','notepad','calculator','explorer'].includes(args.app))throw Error('请选择browser、notepad、calculator或explorer；其他应用可通过桌面开始菜单打开');
   if(args.action==='launch'&&args.url){const u=new URL(args.url);if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error('只打开不含凭据的网页地址');}
   if(String(args.text||'').length>6000)throw Error('单次输入过长，请分段输入');
-  if(['click','scroll','type','press'].includes(args.action)&&!/^\d+$/.test(String(args.windowId||'')))throw Error('先observe电脑并使用返回的windowId，避免操作错窗口');
   if(beforeAction&&['click','type','press'].includes(args.action)){const observed=await act({action:'observe'},{...context,operationObservation:true});if(!authorize(context))throw Error('观察后设备权限已改变');await beforeAction(args,context,observed);}
   const dir=join(getCacheDir(),'desktop');mkdirSync(dir,{recursive:true});const input={...args,file:join(dir,'desktop-'+randomUUID()+'.png')};busy=true;
   try{if(nativeExecute){const native=await nativeExecute(input,context);if(native){if(!authorize(context))throw Error('权限已改变，旧桌面结果停止');return native;}}return await new Promise((resolve,reject)=>{

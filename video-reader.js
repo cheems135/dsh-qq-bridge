@@ -19,11 +19,13 @@ function run(exe,args,{timeout=10000,allowFailure=false,spawnImpl=spawn}={}){
 export function createVideoReader({getConfig,getCacheDir,getPlatformFile,fetchImpl=globalThis.fetch,spawnImpl=spawn}={}){
   let busy=false;
   function plusReady(){const c=getConfig()||{};return c.videoPlus!==false&&!!c.videoPlusPythonPath&&existsSync(c.videoPlusPythonPath)&&existsSync(c.ffprobePath||'');}
-  function status(){const c=getConfig()||{},enhanced=plusReady();return{available:!!c.ffmpegPath&&existsSync(c.ffmpegPath),enhanced,maxBytes:enhanced?128*1024*1024:MAX_BYTES,maxFrames:enhanced?8:4,audioAnalysis:enhanced,source:enhanced?'video-watch-plus-local':'ffmpeg-local',whisper:enhanced&&existsSync(join(c.whisperModelPath||'','model.bin'))};}
+  function status(){const c=getConfig()||{},enhanced=plusReady();return{available:!!c.ffmpegPath&&existsSync(c.ffmpegPath),enhanced,liveWindow:enhanced,maxBytes:enhanced?128*1024*1024:MAX_BYTES,maxFrames:enhanced?8:4,audioAnalysis:enhanced,source:enhanced?'video-watch-plus-local':'ffmpeg-local',whisper:enhanced&&existsSync(join(c.whisperModelPath||'','model.bin'))};}
   async function readPlus(data){
     const config=getConfig(),dir=join(getCacheDir(),'videos','sample-'+randomUUID());mkdirSync(dir,{recursive:true});
     try{
-      const request={outDir:dir,runtime:config,maxFrames:8};
+      const request={outDir:dir,runtime:config,maxFrames:Math.min(12,Math.max(4,Number(data.maxFrames)||8)),cacheDir:join(getCacheDir(),"videos","watch-cache")};
+      if(Number.isFinite(Number(data.start))&&Number(data.start)>=0)request.start=Math.max(0,Number(data.start));
+      if(Number.isFinite(Number(data.window))&&Number(data.window)>0)request.window=Math.min(300,Math.max(1,Number(data.window)));
       if(data.web===true)request.url=String(data.url||'');
       else{
         let bytes,url=String(data.url||(/^https:\/\//i.test(String(data.file||''))?data.file:''));
@@ -86,7 +88,8 @@ export function createVideoReader({getConfig,getCacheDir,getPlatformFile,fetchIm
       const duration=Number(match[1])*3600+Number(match[2])*60+Number(match[3]);if(!duration||duration>300)throw Error('目前支持 5 分钟以内的视频片段');
       const fps=Number(metadata.match(/\b([\d.]+) fps\b/)?.[1])||25;
       const safeEnd=Math.max(0,duration-Math.max(0.1,1/fps));
-      const frames=[],times=[0,0.33,0.66,0.95].map(r=>safeEnd*r);
+      const winStart=Math.max(0,Math.min(Number(data.start)||0,safeEnd)),winEnd=Number(data.window)>0?Math.max(winStart+.1,Math.min(safeEnd,winStart+Number(data.window))):safeEnd;
+      const frames=[],times=[0,0.33,0.66,0.95].map(r=>winStart+(winEnd-winStart)*r);
       const deadline=Date.now()+20000;
       for(let i=0;i<times.length;i++){
         const file=join(dir,'frame-'+i+'.jpg');owned.push(file);
@@ -94,7 +97,7 @@ export function createVideoReader({getConfig,getCacheDir,getPlatformFile,fetchIm
         if(statSync(file).size>2*1024*1024)throw Error('视频帧过大');
         frames.push({at:Math.round(times[i]*10)/10,part:{type:'image',mediaType:'image/jpeg',name:'video-frame-'+i,data:readFileSync(file).toString('base64')}});
       }
-      return{duration,frames,audioDecoded:false,status:'sampled'};
+      return{duration,frames,audioDecoded:false,status:'sampled',window:{start:Math.round(winStart*100)/100,end:Math.round(winEnd*100)/100,requested:Number(data.window)>0}};
     }finally{
       for(const file of owned)try{unlinkSync(file);}catch{}
       if(dir)try{rmdirSync(dir);}catch{} // No recursive delete; only our tracked temporary files.

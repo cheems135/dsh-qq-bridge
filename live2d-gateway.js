@@ -195,8 +195,10 @@ export function getLive2dGateway(){
       const key=scopeKey(scope),current=activityIdentity(b,key),now=Date.now();
       const part=sensationText(event.part,40)||'unknown',partLabel=sensationText(event.partLabel,40)||part,subpart=sensationText(event.subpart,40);
       const action=TOUCH_ACTIONS.has(event.action)?event.action:'tap',durationMs=Math.max(0,Math.min(60000,Number(event.durationMs)||0));
+      const count=Math.max(1,Math.min(50,Number(event.count)||1));
+      const parts=Array.isArray(event.parts)?event.parts.slice(0,8).map(item=>({part:sensationText(item?.part,40)||'unknown',partLabel:sensationText(item?.partLabel,40)||sensationText(item?.part,40)||'未知接触',subpart:sensationText(item?.subpart,40),count:Math.max(1,Math.min(50,Number(item?.count)||1))})):[];
       const entry=shared.activity.sensations.get(current.identity)||{...current,events:[]};
-      entry.events.push({at:now,part,partLabel,subpart,action,durationMs});
+      entry.events.push({at:now,part,partLabel,subpart,action,durationMs,count,parts});
       while(entry.events.length>40)entry.events.shift();
       shared.activity.sensations.set(current.identity,entry);
       return {ok:true,at:now,...current};
@@ -239,6 +241,17 @@ export function getLive2dGateway(){
       ensure();
       if(typeof file!=='string'||!file.trim())throw Error('QQ 人设语音没有返回完整音频文件');
       return file;
+    },
+    // Mirror the same synthesized file into the owner's QQ chat. Local playback
+    // must continue even when the bridge is offline or the queue refuses.
+    async deliverVoice(file,options={}){
+      const b=shared.backend,key='companion:desktop';
+      if(!b||shared.companion?.enabled?.()!==true)throw Error('QQ 灵魂同步已关闭');
+      if(typeof b.deliverVoice!=='function')return {ok:false,reason:'unsupported'};
+      const stamp=b.identity(key);b.check();
+      const result=await b.deliverVoice(String(file||''),options);
+      if(stamp!==b.identity(key))throw Error('QQ 桥接账号或人设已改变');
+      return result;
     },
     async publishMood(input={}){
       const b=shared.backend,key='companion:desktop';

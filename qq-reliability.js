@@ -6,7 +6,10 @@ export function cleanOutgoingText(value='') {
   if(/"nodeInfoList"\s*:|"generation_job_id"\s*:/.test(String(value)))return '';
   let text=String(value).replace(/(?:\[|【)(?:语音|声音)(?:[:：\]】]|$)[\s\S]*/g,'')
     .replace(/\[(?:图|图片|照片)[:：][^\]]*\]/g,'')
-    .replace(/\[(?:发送|群发|定时|设置|查|收藏表情)[:：][^\]]*\]/g,'');
+    .replace(/\[(?:发送|群发|定时|设置|查|收藏表情)[:：][^\]]*\]/g,'')
+    // Emoji pictographs render as QQ's yellow faces and are not part of her
+    // text voice; kaomoji and ordinary punctuation are untouched.
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,'');
   text=text.split(/\r?\n/).filter(line=>!/^\s*(?:\{?\s*"(?:nodeInfoList|fieldName|fieldValue|apiKey|authorization|generation_job_id)"\s*:|(?:file:\/\/\/)?[A-Z]:[\\/].*(?:photos[\\/](?:gen|requests)|voice[\\/]|speech[\\/]))/i.test(line)).join('\n');
   return text.replace(/\n{3,}/g,'\n\n').trim();
 }

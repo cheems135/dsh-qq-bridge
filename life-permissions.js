@@ -1,4 +1,4 @@
-export function lifeRisk(args={},observation={}){
+function rawLifeRisk(args={},observation={}){
  const label=String(observation.label||''),url=String(observation.url||args.url||''),name=String(args.toolName||''),action=String(args.action||''),command=String(args.command||args.cmd||args.arguments?.command||'');
  if(name==='bridge_browser'&&observation.mediaControl===true)return '';
  if(observation.loginPage&&observation.loginControl==='credential')return observation.password?'privacy':'login';
@@ -8,11 +8,20 @@ export function lifeRisk(args={},observation={}){
  if(/发布|投稿|publish|post\s*now/i.test(label)||/publish|post_create|set_(?:self_)?(?:longnick|signature)|update_profile|set_profile/.test(name)||args.intent==='publish')return 'publish';
  if(/发送评论|发表评论|提交评论|post\s*comment/i.test(label)||/评论|comment/i.test(label)&&['fill','input','type','press'].includes(action)||/comment/.test(name)||args.intent==='comment')return 'comment';
  if(/删除|清空|永久移除|恢复出厂|格式化|delete|erase|format disk/i.test(label)||/^(?:delete|remove|unlink|wipe|format)$/.test(action)||/(?:^|_)delete|remove_file|delete_file|format_disk/.test(name)||/\b(?:rm\s|del\s+\/|Remove-Item\b|diskpart\b|mkfs\b|format\s+[a-z]:)/i.test(command)||args.intent==='delete')return 'delete';
- if(/关闭.{0,8}(?:防火墙|杀毒|防护)|修改.{0,8}(?:权限|密码)|授权.{0,8}(?:管理员|root)|disable.{0,8}(?:firewall|antivirus)/i.test(label+' '+command)||/\b(?:chmod\s+777|Set-ExecutionPolicy|reg\s+delete|pip\s+install|npm\s+install|curl.{0,80}\|.{0,8}(?:sh|bash|iex))\b/i.test(command)||args.intent==='security')return 'security';
+ if(/关闭.{0,8}(?:防火墙|杀毒|防护)|修改.{0,8}(?:权限|密码)|授权.{0,8}(?:管理员|root)|disable.{0,8}(?:firewall|antivirus)/i.test(label+' '+command)||/\b(?:chmod\s+777|Set-ExecutionPolicy|reg\s+delete|netsh\s+advfirewall|Set-MpPreference|sc\s+stop|net\s+stop|Stop-Service|curl.{0,80}\|.{0,8}(?:sh|bash|iex))\b/i.test(command)||args.intent==='security')return 'security';
  if(observation.password===true||observation.containsCredentials===true||/password|credential|secret|cookie|private.?key|密码|身份证|信用卡/i.test(label)||/credential|read_secret|export_cookie|password_store/i.test(name)||args.intent==='privacy')return 'privacy';
  if(/send_?(?:email|mail)|invite_user|share_public/i.test(name))return 'permission';
  return ['permission','choice'].includes(args.intent)?args.intent:'';
 }
+// 仍然拦住的只有：付款、隐私/凭据、账号登录、删除、系统安全。
+// 其余（发布、评论、普通权限类动作、任选其一）交给角色自己判断。
+const GATED = new Set(['payment','privacy','login','delete','security']);
+export function lifeRisk(args={},observation={}){
+ const kind = rawLifeRisk(args, observation);
+ if(kind==='delete'&&(observation.ownArtifact===true||args.ownArtifact===true))return '';
+ return GATED.has(kind) ? kind : '';
+}
+
 export function assertLifeOperation(job,args={},observation={}){
  if(!job)return;
  if(job.status==='waiting_user')throw Error('需要等待本人决定，当前日程操作暂停');

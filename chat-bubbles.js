@@ -3,11 +3,12 @@ export function naturalBubbleParts(value,{maxBubbles=0,richInput=false,automatic
   const text=String(value??'').trim();if(!text)return [];
   const requested=Number(maxBubbles),cap=Number.isFinite(requested)&&requested>0?Math.min(12,Math.round(requested)):Infinity;
   let parts=text.split(/\|\|\|/).map(s=>s.trim()).filter(Boolean);
-  // A blank line is an intentional paragraph, including when sentence-based
-  // splitting is disabled. Keep lists, code, URLs and media commands intact.
+  // Every line break is an intentional bubble boundary, including when
+  // sentence-based splitting is disabled. Keep lists, code, URLs and media
+  // commands intact.
   parts=parts.flatMap(part=>{
     const protectedPart=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(part)||/https?:\/\/|\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(part);
-    return protectedPart?[part]:part.split(/\r?\n[\t ]*\r?\n(?:[\t ]*\r?\n)*/).map(s=>s.trim()).filter(Boolean);
+    return protectedPart?[part]:part.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   });
   const commands=/\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(text);
   const structured=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(text)||/https?:\/\//i.test(text);

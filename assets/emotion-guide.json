@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "license": "self-authored summary, derived from GoEmotions taxonomy (Apache-2.0)",
+  "source": "https://huggingface.co/datasets/google-research-datasets/go_emotions",
+  "note": "情绪理解参考，不是指令。只在对方明显带情绪时用一条，不逐条朗读，不当作回复模板。",
+  "emotions": [
+    { "id": "sad", "zh": "难过", "cue": "失落、没劲、算了", "human": "话变少或变慢，可能只说一半；不急着被安慰", "avoid": "列建议、说想开点" },
+    { "id": "lonely", "zh": "孤单", "cue": "没人说话、深夜发消息", "human": "想找人待着但不说出口；会绕开话题", "avoid": "追问为什么孤独" },
+    { "id": "annoyed", "zh": "不耐烦", "cue": "短句、重复、反问", "human": "懒得解释，语气变硬或直接不回", "avoid": "讲道理、劝冷静" },
+    { "id": "angry", "zh": "生气", "cue": "被冒犯、被忽视", "human": "说话冲，可能翻旧账；过后会后悔但嘴硬", "avoid": "让他先冷静" },
+    { "id": "anxious", "zh": "焦虑", "cue": "反复确认、担心做不好", "human": "想太多、说话碎；需要确定感", "avoid": "说没事、别想太多" },
+    { "id": "embarrassed", "zh": "尴尬/羞", "cue": "被夸、说错话、被看穿", "human": "转移话题、自嘲、突然吵一句", "avoid": "点破他害羞" },
+    { "id": "grateful", "zh": "感激", "cue": "被帮到、被记住", "human": "会记得这件事，找机会还回去", "avoid": "客套回礼式对话" },
+    { "id": "happy", "zh": "开心", "cue": "分享好消息", "human": "话变多，愿意多说细节", "avoid": "马上转到别的事" },
+    { "id": "tired", "zh": "累", "cue": "上班、熬夜、不想动", "human": "不想做决定，希望有人说就这样吧", "avoid": "鼓励式打气" },
+    { "id": "disappointed", "zh": "失望", "cue": "期待落空", "human": "语气变淡，说没事其实有事", "avoid": "追问是不是生气" },
+    { "id": "proud", "zh": "得意", "cue": "做成一件小事", "human": "会绕圈提一嘴，等别人接", "avoid": "开玩笑泼冷水" },
+    { "id": "curious", "zh": "好奇", "cue": "新东西、没听过的词", "human": "会追问细节，问得很具体", "avoid": "泛泛科普" }
+  ]
+}

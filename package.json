@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.40.0",
+  "version": "1.40.2",
   "description": "QQ (NapCat / OneBot 11) ↔ DeepSeek Harness bridge: chat with your harness from QQ, with a full management panel",
   "keywords": [
     "dsh-plugin",
@@ -35,6 +35,7 @@
     "console.html",
     "cordis.patch.yml",
     "assets/**",
+    "tools/**",
     "locale/*.json",
     "icon.svg",
     "bridge-features.js",
@@ -132,7 +133,8 @@
     "live2d-gateway.js",
     "learning-subjects.js",
     "prompt-budget.js",
-    "login-workflow.js"
+    "login-workflow.js",
+    "watch-live.js"
   ],
   "dsh": {
     "bundle": {

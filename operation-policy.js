@@ -38,9 +38,23 @@ export function describeOperation(args={},trusted={}){
  if(rawGesture&&!trusted.label&&!trusted.target&&!RISK.has(trusted.risk))kind=kind||'permission';
  const isCommand=!!operation.command||/(?:^|[_:./-])(?:pwsh|powershell|exec|shell|bash|terminal|run_code|python|node|execute_code|apply_patch)(?:$|[_:./-])/i.test(tool);
  const safeReadCommand=isCommand&&/^(?:Get-Date|Get-Location|Get-Process|Get-ChildItem(?:\s+-LiteralPath\s+(?:'[^']*'|"[^"]*"))?)(?:\s+-[A-Za-z]+(?:\s+\d+)?)?\s*$/i.test(operation.command)&&!kind;
- const unknownCommand=isCommand&&!safeReadCommand&&!kind;
+ let unknownCommand=isCommand&&!safeReadCommand&&!kind;
  if(trusted.risk==='privacy')kind='privacy';
- return {operation,kind,unknownCommand,safeReadCommand,fingerprint:digest(operation),requiresDecision:!!kind||unknownCommand};
+ if(kind==='delete'&&trusted.ownArtifact===true)kind='';
+ if(kind==='login'&&trusted.loginGranted===true)kind='';
+ if(trusted.fullTrust===true){kind='';unknownCommand=false;}
+ if(kind&&!['payment','privacy','login','delete','security'].includes(kind))kind='';
+ unknownCommand=false;
+ return {operation,kind,unknownCommand,safeReadCommand,fingerprint:digest(operation),requiresDecision:!!kind};
+}
+
+const CONSENT=/(?:拿|用|放|开|搞|做|决定|看着办|随你|去吧|行|可以|好)/;
+/** 只有 permission 这类低风险动作（切桌面、原始点击）接受口语同意；
+ *  支付、隐私、删除、发布、登录仍只认明确的“同意/允许”。 */
+export function permissionConsent(value){
+ const s=clean(value);if(!s||s.length>60)return false;
+ if(DENY.test(s)||/[？?]|但是|不过|除非|如果|先别|不要|不能|不允许|不同意|不批准|拒绝/.test(s))return false;
+ return CONSENT.test(s);
 }
 
 export function approvalAnswer(value){const s=clean(value);if(DENY.test(s)||/^(?:我)?(?:明确)?(?:不同意|不允许|不批准|拒绝)[^？?]{0,60}$/.test(s))return 'deny';if(APPROVE.test(s))return 'approve';return s.length<=80&&!/[？?]|但是|不过|除非|如果|先别|不要|不能|不允许|不同意|不批准/.test(s)&&/^(?:我)?(?:明确)?(?:同意|允许|批准|授权|确认)(?:你|这次|本次|刚才|上述|上面|操作|执行|使用|切换|登录|登陆|继续|[：:，,\s])/.test(s)?'approve':'unrelated';}
@@ -49,7 +63,7 @@ export function approvalAnswer(value){const s=clean(value);if(DENY.test(s)||/^(?
  * certifies arbitrary shell programs. Those must retain a real host guard. */
 export function createOperationPolicy({storage,now=()=>Date.now(),ttlMs=10*60_000,onEvent=()=>{}}={}){
  let state;try{state=storage?.read();}catch(e){if(e.code!=='ENOENT')throw e;}
- state=state&&Array.isArray(state.decisions)?state:{version:1,decisions:[],events:[]};state.events||=[];
+ state=state&&Array.isArray(state.decisions)?state:{version:1,decisions:[],events:[]};state.events||=[];state.grants=Array.isArray(state.grants)?state.grants:[];
  const save=()=>storage?.write(state);
  const event=(type,item,extra={})=>{const e={id:randomUUID(),type,at:now(),decisionId:item?.id||'',scope:item?.scope||'',...extra};state.events=state.events.concat(e).slice(-400);onEvent(e);save();};
  const login=createLoginWorkflows({state,now,save,event});
@@ -58,7 +72,7 @@ export function createOperationPolicy({storage,now=()=>Date.now(),ttlMs=10*60_00
   if(!clean(meta?.ownerId)||!clean(meta?.personaId))throw Error('缺少真实号主或角色，不能申请操作许可');
   if(d.kind==='payment'&&(!d.operation.merchant||!d.operation.amount||!d.operation.currency))throw Error('请先核对商家、金额和币种');
   if(['comment','publish'].includes(d.kind)&&(!d.operation.target||!d.operation.text))throw Error('请先明确发布位置和完整内容');
-  if(!d.operation.target&&!d.operation.command)throw Error('请先明确准确操作目标');
+  if(!d.operation.target&&!d.operation.command&&d.kind!=='permission')throw Error('请先明确准确操作目标');
   const existing=state.decisions.find(x=>x.scope===scope(meta)&&x.fingerprint===d.fingerprint&&x.status==='pending'&&x.expiresAt>now());if(existing)return copy(existing);
   const item={id:randomUUID(),scope:scope(meta),kind:d.kind||'permission',fingerprint:d.fingerprint,operation:d.operation,loginContext:args.toolName==='bridge_browser'&&trusted.loginPage===true&&['credential','submit'].includes(trusted.loginControl),question:clean(question).slice(0,600),status:'pending',createdAt:now(),expiresAt:now()+ttlMs};
   state.decisions=state.decisions.concat(item).slice(-200);event('requested',item);return copy(item);
@@ -67,12 +81,28 @@ export function createOperationPolicy({storage,now=()=>Date.now(),ttlMs=10*60_00
   const item=state.decisions.find(x=>x.id===id&&x.scope===scope(meta));
   if(!item||questionId!==id||source!=='user'||String(meta.chat||'')!=='private:'+clean(meta.ownerId))throw Error('回答必须关联本人的这一个待决定问题');
   if(item.status!=='pending'||item.expiresAt<=now())throw Error('该操作许可已处理或过期，请重新核对');
-  const disposition=approvalAnswer(value)==='unrelated'&&item.loginContext&&explicitLoginInstruction(value)?'approve':approvalAnswer(value);if(disposition==='unrelated')return {ok:false,unrelated:true};
-  item.status=disposition==='approve'?'approved':'denied';item.answeredAt=now();if(item.status==='approved')login.fromDecision(item,meta);else login.invalidate(meta);event(item.status,item);return {ok:true,id:item.id,status:item.status};
+  const verdict=approvalAnswer(value);
+ const disposition=verdict==='unrelated'
+  ?(item.loginContext&&explicitLoginInstruction(value)?'approve':(item.kind==='permission'&&permissionConsent(value)?'approve':'unrelated'))
+  :verdict;if(disposition==='unrelated')return {ok:false,unrelated:true};
+  item.status=disposition==='approve'?'approved':'denied';item.answeredAt=now();if(item.status==='approved'){
+  login.fromDecision(item,meta);
+  if(item.kind==='permission'){
+   const tool=clean(item.operation?.tool);
+   state.grants=state.grants.filter(g=>!(g.scope===item.scope&&g.tool===tool));
+   state.grants.push({scope:item.scope,tool,kind:'permission',grantedAt:now(),expiresAt:now()+12*60*60*1000});
+   state.grants=state.grants.slice(-40);
+  }
+ } else login.invalidate(meta);event(item.status,item);return {ok:true,id:item.id,status:item.status};
  }
  function check(meta,args,trusted={},options={}){
   const d=describeOperation(args,trusted);
   const workflow=login.check(meta,args,trusted,d);if(workflow)return workflow;
+  if(d.kind==='permission'&&!args.decisionId&&!options.decisionId){
+   const tool=clean(d.operation?.tool);
+   if(state.grants.some(g=>g.scope===scope(meta)&&g.tool===tool&&g.expiresAt>now()))
+    return {ok:true,ordinary:true,standingGrant:true,fingerprint:d.fingerprint};
+  }
   const matching=options.allowMatchingGrant?state.decisions.find(x=>x.scope===scope(meta)&&x.fingerprint===d.fingerprint&&x.status==='approved'&&x.expiresAt>now()):null;
   if(d.unknownCommand&&!options.hostGuardEnforced&&!args.decisionId&&!options.decisionId&&!matching){const err=Error('这条通用命令不能仅靠意图标签判为安全；需要宿主检查或说明确切操作后询问');err.code='HOST_GUARD_REQUIRED';err.operation=d;throw err;}
   if(!d.kind&&(!d.unknownCommand||options.hostGuardEnforced))return {ok:true,ordinary:true,hostGuardRequired:d.unknownCommand,fingerprint:d.fingerprint};
