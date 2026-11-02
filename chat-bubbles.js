@@ -1,11 +1,17 @@
 // Preserve deliberate chat rhythm without splitting explanations, lists or code.
-export function naturalBubbleParts(value,{maxBubbles=3,richInput=false}={}){
+export function naturalBubbleParts(value,{maxBubbles=0,richInput=false,automaticBreaks=true}={}){
   const text=String(value??'').trim();if(!text)return [];
-  const cap=Math.min(4,Math.max(1,Math.round(Number(maxBubbles)||1)));
+  const requested=Number(maxBubbles),cap=Number.isFinite(requested)&&requested>0?Math.min(12,Math.round(requested)):Infinity;
   let parts=text.split(/\|\|\|/).map(s=>s.trim()).filter(Boolean);
+  // A blank line is an intentional paragraph, including when sentence-based
+  // splitting is disabled. Keep lists, code, URLs and media commands intact.
+  parts=parts.flatMap(part=>{
+    const protectedPart=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(part)||/https?:\/\/|\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(part);
+    return protectedPart?[part]:part.split(/\r?\n[\t ]*\r?\n(?:[\t ]*\r?\n)*/).map(s=>s.trim()).filter(Boolean);
+  });
   const commands=/\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(text);
   const structured=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(text)||/https?:\/\//i.test(text);
-  if(parts.length===1&&cap>1&&!commands&&!structured&&text.length<=500){
+  if(automaticBreaks&&parts.length===1&&cap>1&&!commands&&!structured&&text.length<=500){
     const lines=text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
     if(lines.length>1&&lines.every(s=>s.length<=140))parts=lines;
     else if(richInput&&text.length<=240){

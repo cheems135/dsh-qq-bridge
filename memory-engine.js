@@ -80,7 +80,7 @@ export function integrateMemory(value,candidates,evidence,{mode='auto',now=Date.
   return{...result,memory,activated,updated,reviewed,changed:result.added>0||activated>0||updated>0||reviewed>0};
 }
 const segmenter=typeof Intl.Segmenter==='function'?new Intl.Segmenter('zh-CN',{granularity:'word'}):null;
-const stop=new Set(['我','你','他','她','它','的','了','是','在','也','就','都','和','啊','吗','呢','吧','呀','哦','嗯','这个','那个','什么','怎么','可以','喜欢','不喜欢','用户','对方','现在','一下','知道','记得','还记得','告诉','东西','有','没有']);
+const stop=new Set(['我','你','他','她','它','的','了','是','在','也','就','都','和','啊','吗','呢','吧','呀','哦','嗯','这个','那个','什么','怎么','可以','喜欢','不喜欢','用户','对方','现在','一下','知道','记得','还记得','告诉','东西','有','没有','今天','刚才','讲给','说给','发给']);
 export function memoryTokens(value){
   const raw=String(value||'').normalize('NFKC').toLowerCase();const words=segmenter?[...segmenter.segment(raw)].filter(s=>s.isWordLike).map(s=>s.segment):raw.match(/[a-z0-9_]+|[\u3400-\u9fff]{2}/g)||[];
   // A few explicit domain aliases cover everyday recommendations; this is not embedding search.

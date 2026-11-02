@@ -1,0 +1,1456 @@
+{
+  "version": 1,
+  "license": "MIT",
+  "referenceOnly": true,
+  "sourceRevision": "81064865221d3503251d633f3d0b651004c938a6",
+  "dialogues": [
+    {
+      "id": "lccc-1",
+      "turns": [
+        "三姐吃瓜",
+        "三姐想喝旺仔",
+        "我也想喝",
+        "你去买",
+        "我买回来就是我喝",
+        "我不管我也要",
+        "你来取",
+        "我怕去了就出不来了"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-2",
+      "turns": [
+        "我觉得主餐有点腻……薯条不粘酱超好吃！！！那个炸的鱼条也好吃！！",
+        "没点别的了~早知道应该再问问你的",
+        "你讲在看电影我就没多说……"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-3",
+      "turns": [
+        "嫉妒使我丑陋",
+        "我发群里那个火锅叫蜀捞还有小龙虾！",
+        "等你回来我们去吃！"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-4",
+      "turns": [
+        "啊。这不是我喜欢吃的那种糖么。同名你给我留一个毕业的时候给我",
+        "哈哈，去大同买的多会去学校了我看能不能憋住",
+        "不么，你憋住。我要一颗就一颗",
+        "应该行，但是估计干了",
+        "冷藏",
+        "脑补一下，一个冰箱里放的各种饭菜，然后有一个糖糖在角落里",
+        "哈哈哈。真逗了"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-5",
+      "turns": [
+        "西安全是好吃的",
+        "星星，我们走",
+        "星星像皮皮虾么",
+        "皮皮星"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-6",
+      "turns": [
+        "只吃阿肥发扁食的默默走过～～～～",
+        "你们在农大街？我也快回去了",
+        "没！我刚上完外教课回到宿舍！",
+        "哦。。。。那快回去吧。天冷",
+        "恩恩！早回来啦！啃猪肉脯中～～～",
+        "这也是补冬咯。。。有肉就好",
+        "别别，这样会显的更寒酸可怜啊！",
+        "。。同学，有你这样想的嘛。。。我回来啦！！？"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-7",
+      "turns": [
+        "你那些朋友名字真搞笑",
+        "他们原本都是怪人",
+        "他们n包括你吗？",
+        "不，哈哈哈哈"
+      ],
+      "tags": [
+        "情绪",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-8",
+      "turns": [
+        "你怎么变的眼睛大了，开眼角了？",
+        "？？？？？？？？我眼睛一直不小好吗",
+        "哈哈哈哈，你最美"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-9",
+      "turns": [
+        "抱抱",
+        "你啥时候开学啊",
+        "3号不想告诉你怕你难过",
+        "那你还说！"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-10",
+      "turns": [
+        "我的天美炸，晚上是不是不吃饭",
+        "不是！我是大肥猪！！！",
+        "不超过140都是仙女"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-11",
+      "turns": [
+        "警告！老人儿童等不得在冰面玩耍，以免给警察添麻烦！",
+        "老人抄近道，掉下去了",
+        "我刚刚还在纳闷怎么会掉进去"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-12",
+      "turns": [
+        "啥时候回？张老先生给你寄吃的了~",
+        "啊？真的啊我那回就是开个玩笑的啦",
+        "真的是真的",
+        "太不好意思了"
+      ],
+      "tags": [
+        "日常",
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-13",
+      "turns": [
+        "你还能一个动作半个小时",
+        "要试试吗",
+        "举报了",
+        "开个玩笑，这么认真干嘛",
+        "我就吓吓你",
+        "你知道？"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-14",
+      "turns": [
+        "甜心～你最近太甜了文案里读不出哀伤",
+        "哈哈哈哈哈你忘记小号",
+        "小号简直是齁满世界都是小粉红"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-15",
+      "turns": [
+        "我今天想请客户吃还没吃成也",
+        "请客户居然不去九九",
+        "客户也要分几种哈办正事的一般都不得出去吃"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-16",
+      "turns": [
+        "一路走好~",
+        "我到啦",
+        "记得带礼物，刚回来，累趴"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-17",
+      "turns": [
+        "你买材料我做",
+        "太贤惠了我也想次",
+        "新子肯定会做毕竟双鱼是完美的",
+        "哈哈哈哈哈哈哈是！双鱼最完美！"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-18",
+      "turns": [
+        "你好哇•﹏•",
+        "我不好，老子要睡了，你也快睡吧",
+        "你现在还可以睡！！"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-19",
+      "turns": [
+        "还不睡。",
+        "我现在在家！！",
+        "嗯，国庆放假了",
+        "不是，我请假了"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-20",
+      "turns": [
+        "为什么穿长袖",
+        "10度你说呢哈哈",
+        "啥地方天气温度这么好",
+        "西藏啊",
+        "好疯狂的节奏"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-21",
+      "turns": [
+        "谢谢亲爱的〜知道你一直在〜熟悉的名儿熟悉的头像〜谢谢你",
+        "不行哭了啊，快去睡眼睛肿了心疼你～",
+        "不哭啦〜嘿嘿〜晚安啦你也早睡",
+        "睡吧不行回啦"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-22",
+      "turns": [
+        "听说长得好看的姑娘都有",
+        "我特别纠结就是今天提醒我续费成功可是我没续费啊。。",
+        "厉害了！那就是有人在默默地给你续费",
+        "不会吧谁这么好",
+        "就是说嘛！要不然就是系统错误了，但是不可能",
+        "我现在特别怕事偷偷的扣了我的钱",
+        "嗯嗯，对哈，这点没想到，系统自动续费"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-23",
+      "turns": [
+        "腿变长了",
+        "角度好",
+        "该请拍照的吃饭了",
+        "这种人真不多",
+        "其实我也是这样的",
+        "你在做梦",
+        "看来你还不了解我"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-24",
+      "turns": [
+        "哎呦，来了帝都也不说一声",
+        "哈哈~~在帝都封闭培训呢~晚上华丽姐会回来看我们!等回来了求蹭饭~",
+        "哈哈当然OK啊"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-25",
+      "turns": [
+        "梦见自己在做白日梦",
+        "讨打",
+        "大晚上不睡觉发些憋憋言",
+        "心累",
+        "累个毛线睡个懒觉起来屁事没得了快去睡了"
+      ],
+      "tags": [
+        "日常",
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-26",
+      "turns": [
+        "宝宝你是不是傻",
+        "哈哈哈哈哈网红回复我了",
+        "么么"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-27",
+      "turns": [
+        "趴着睡、脸朝下",
+        "胸也平了",
+        "脸朝下、身子朝上不要谢我",
+        "机智如你"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-28",
+      "turns": [
+        "原来我是后知后觉",
+        "哈哈哈哈哈，涛哥，你反应迟钝了",
+        "最近秀逗了，好久回重庆约哟",
+        "一定哟"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-29",
+      "turns": [
+        "这个搭配有什么奇怪啊？惊艳啥在广东是最常见的汤",
+        "是啦是啦，我是说马蹄啦！",
+        "就是加马蹄啊玉米马蹄排骨偶尔再加点胡萝卜都是这样做的",
+        "好吧，我今天就打算加胡萝卜",
+        "看看广州人多会吃啊",
+        "我是天生广州人…"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-30",
+      "turns": [
+        "抬头都是爱你的形状！",
+        "谢谢里面都是我爱吃的",
+        "祝你早日增肥成功",
+        "夏天来了想胖都难"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-31",
+      "turns": [
+        "嗯~很好听的呢~第一次发现毛聪唱的比以前的好听多了~",
+        "大邱慧今天在哪里看的撒？我们咋没看到你……",
+        "你猜~"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-32",
+      "turns": [
+        "最近有各种检查，有点忙.",
+        "哈哈，你现在是科员是吧？容易高升吗？",
+        "哪有那么容易，",
+        "你可以的，我就等你高升，把我调到民宗"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-33",
+      "turns": [
+        "铃声是说电话铃声。",
+        "给我设的是啥哈哈",
+        "你又不给我打电话。"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-34",
+      "turns": [
+        "所以说书记现在睡哪了",
+        "窝也铺了我的床她也能睡随她便基本上",
+        "好想见见书记",
+        "后天下大雪别上钟了来这儿坐坐！",
+        "去你家烫火锅吃呀！！！",
+        "好哇！！",
+        "那你好好准备吧就近期了准备好了随时喊我我带上一二只就过去欺负书记了",
+        "？？？？2打1？？？？"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-35",
+      "turns": [
+        "我只关心你吃了没？有没有朋友来接你啊？",
+        "快饿死了",
+        "哥哥落地签搞定了么？快去吃饭吧",
+        "没有，以后真的再也不办落地签了，排队能排死。原来还有特快通道，现在只能干等",
+        "可能太多旅行团搞落地签，所以排长队。"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-36",
+      "turns": [
+        "发博啦我哥真棒！！！",
+        "虫妃",
+        "厉害了牛奶，你竟然捞到我了！！",
+        "专业捕捞大队队长"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-37",
+      "turns": [
+        "哈哈，理解我听不懂你们讲闽南话的痛苦了吧",
+        "太理解。哈哈",
+        "去广东开店？",
+        "哪里。看看而已。",
+        "旅游啊"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-38",
+      "turns": [
+        "我最近很烦恼",
+        "没有啊！",
+        "我就是有很烦恼"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-39",
+      "turns": [
+        "新鲜的莲子",
+        "和掌柜的一样是吃货。",
+        "每个吃货都是幸福的",
+        "狂点头中。"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-40",
+      "turns": [
+        "你好像我一个朋友",
+        "我就是个大众脸..她乖不乖~",
+        "乖漂亮的女娃",
+        "嘿嘿那我很开心~"
+      ],
+      "tags": [
+        "情绪",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-41",
+      "turns": [
+        "呼呼在国内也要加油棒棒哒",
+        "上机了吧？",
+        "刚登机",
+        "现在开始睡觉吧~到供餐前可以睡一小觉",
+        "我努力"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-42",
+      "turns": [
+        "我对人生感到迷茫了怎么破",
+        "来找老纳帮你化解一下冤孽？",
+        "冤孽倒不至于，只是突然失去了生活的真谛，不知道到底应该怎样才算是有意义的生活",
+        "起的早点儿？哈哈",
+        "好吧"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-43",
+      "turns": [
+        "我一直欣赏那种喝完酒就乖乖睡觉的人，对于我来说，一切放纵的事都是酒后做的。",
+        "例如……",
+        "旁若无人的大哭……",
+        "也不出格"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-44",
+      "turns": [
+        "好吧！我就觉得周末很不开心的！",
+        "为什么",
+        "因为没有事",
+        "额额额好吧没事可以在宿舍睡大觉啊一样很海森的"
+      ],
+      "tags": [
+        "日常",
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-45",
+      "turns": [
+        "你在家？还是在青岛？",
+        "我在家啊，青岛隔壁邻居装修，太吵了，不能住",
+        "我刚洗了个澡。昨晚加班了，今天还没去呢",
+        "我去！那你还用去么？都这个点了，去了直接是夜班啦",
+        "去啊哈哈",
+        "七夕快乐哈~姐一个人过。。。",
+        "我可以去找你家老高过，哈哈哈哈",
+        "太好了，赶紧去吧，至少陪的是自家人，没便宜别人，哈哈"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-46",
+      "turns": [
+        "郭女士正在领略祖国的大好河山，而你在床上饥寒交迫哈哈哈哈哈哈哈哈",
+        "太惨了来擦掉一切陪我睡快点",
+        "还是去找火炉·鼻",
+        "咱都一起睡四年了",
+        "所以你的身体我早就厌倦了",
+        "？？？？渣你就是个渣！！"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-47",
+      "turns": [
+        "狠开心的一天！",
+        "萝卜很好吃对吧",
+        "早上的白萝卜不好吃，晚上的胡萝卜好吃",
+        "原来兔子也会挑萝卜吃，才知道！",
+        "不是啊。。那个牛杂萝卜都不够入味，好浪费",
+        "不够入味，我听臀叔说八角味好重，然后我就解释说都是锅底产品，不过白萝卜我一块都没吃，因为选择太多了，都忘了",
+        "偶喜欢焖得软软的萝卜牛腩=v="
+      ],
+      "tags": [
+        "日常",
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-48",
+      "turns": [
+        "啧啧...太有缘..不知道下回会碰到你跟谁约~",
+        "回忆一下你每次碰到我我都在干什么！从散步到逛街到吃饭喝茶！下次是不是就看到该让我灭你口是事了？！",
+        "碰到你已经不再惊讶了..."
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-49",
+      "turns": [
+        "终于找到你了…不容易呀！",
+        "没什么好看的",
+        "还不睡？厉害的，这样老的快",
+        "恩那时已经睡了"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-50",
+      "turns": [
+        "鱼糕，哎",
+        "说多了都是泪，",
+        "心累"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-51",
+      "turns": [
+        "我给你截图！发朋友圈！让他看看你点名道姓表扬他！",
+        "哎呦。。这多不好意思。。。我还没这么夸过谁呢。。。而且你觉得他会开心吗等于骂了他家人啊。。。。",
+        "没被点名的才得琢磨琢磨呢吧",
+        "反正换我我是不会开心的。。。。"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-52",
+      "turns": [
+        "举个爪",
+        "啥啊",
+        "你不是找男盆友嘛，我报个名还不行啊",
+        "嘿嘿行呗"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-53",
+      "turns": [
+        "你先把胡子牛起来",
+        "等我多吃几年老坛酸菜！还有泡菜",
+        "等着等着"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-54",
+      "turns": [
+        "好想吃面",
+        "面馆走起",
+        "最近都起的很晚，日常失眠，早上起不来",
+        "羡慕起的很晚"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-55",
+      "turns": [
+        "谢谢女神关心慢慢消化情绪中",
+        "亲爱的注意安全",
+        "哈哈哈刚看完偶吧会的",
+        "我还没看呢",
+        "必须要紧跟步伐这一集研究了好久才看懂",
+        "咋研究的啊？"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-56",
+      "turns": [
+        "内人太贤惠噜！",
+        "哎呀好害羞",
+        "内人毕业以后开店吗肯定超抢手",
+        "有段时间确实有想过但感觉还有很长一段路要走现在的水平还远远不够",
+        "哈哈慢慢来肯定会越来越好的！！反正我肯定支持你你",
+        "嗯嗯！好！我一定不会让你失望的！！"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-57",
+      "turns": [
+        "恭喜恭喜",
+        "唉,就怕昙花一现..",
+        "最起码羡过我就很羡慕了"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-58",
+      "turns": [
+        "这是这是要减肥的节奏？啥都不管用，管住嘴迈开腿最管用",
+        "已经在管迈了，连续三天晚6点后不吃东西，每天还跳会儿绳",
+        "这需要一个漫长的过程，要坚持啊",
+        "上帝保佑"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-59",
+      "turns": [
+        "在下名叫魏无线",
+        "道友你好～",
+        "不应该是，机油你好吗",
+        "噗哈哈"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-60",
+      "turns": [
+        "想认真的问一个很严肃的问题：女盆友吃饭说随便，我买了一份麻辣烫她怎么不吃说她困了？好生气！",
+        "你气啥？你女朋友都没生气呢。",
+        "我女盆友可能脾气好，不稀罕生气？",
+        "吃狗粮"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-61",
+      "turns": [
+        "快去看南国野兽！",
+        "我理解你痛苦了，都开三点了还没睡",
+        "我最近晚上比较亢奋确实很痛苦"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-62",
+      "turns": [
+        "可妮笑起来好甜啊",
+        "和琪琪一样都是软妹子哦",
+        "琪琪才不是软妹子呢",
+        "看起来软的那种也算哦！"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-63",
+      "turns": [
+        "胖子，早点睡",
+        "你竟然一首都没添加到我喜欢",
+        "那你是不是喜欢宋冬野的盗墓笔记阿"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-64",
+      "turns": [
+        "养个小猫",
+        "未来是大猫，哈哈",
+        "哈哈想到了"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-65",
+      "turns": [
+        "真是觉得浪费666头一次让我从喜欢到讨厌的一个",
+        "+1，他和赫兹，真的占地方",
+        "可不你说这两个位置给谁不好"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-66",
+      "turns": [
+        "晚安我的大玉玉",
+        "接下来我要收集纯洁的黑照",
+        "你赢不了我",
+        "因为我太善良臭p纯",
+        "哈哈哈你最善良啦"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-67",
+      "turns": [
+        "可爱要抱",
+        "别光看到可爱。养猫很累的。",
+        "知道呀养个娃嘛"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-68",
+      "turns": [
+        "杰伦结婚了，应该高兴呢。",
+        "我也21岁，差距啊",
+        "你不适合，你太高了。"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-69",
+      "turns": [
+        "你随州话辣么6，来吧",
+        "请拐子饭吗？请就来",
+        "来来来，请请请"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-70",
+      "turns": [
+        "不是一直说减肥来着吗？",
+        "额，偶尔吃一吃，不打紧的，地下全是生活用品哦",
+        "同为吃货。。。懂得"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-71",
+      "turns": [
+        "你是减肥了还是整容咯？好像很瘦了什么好秘方？",
+        "又减肥又整容，简直丑得体无完肤，失败得不能再失败了。",
+        "你好有钱，去整容；你好有时间去减肥",
+        "变化有那么大吗？整容都有人信",
+        "开玩笑的"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-72",
+      "turns": [
+        "笑屁~来陪我上课",
+        "不对！还有例会",
+        "不对~我也有例会"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-73",
+      "turns": [
+        "喝酒吧",
+        "俺这个蒜吃的山东不",
+        "想你了，想念你的笑",
+        "有没有女孩子想我想念我的笑啊？"
+      ],
+      "tags": [
+        "日常",
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-74",
+      "turns": [
+        "你的影评完全就是我想说的。而很多人说不好看，很烂，我真的不能理解她们的智商",
+        "基本上在电影院里，叽叽喳喳的都是没看明白的。我二刷的时候，碰到一对情侣还吵吵电影什么时候结束",
+        "我昨天也是遇到一对情侣。。好烦。。就不能散了场再说吗，一点都注意公共场合的素质"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-75",
+      "turns": [
+        "好乖好乖，",
+        "哈哈",
+        "都自己喂还是送人呢。",
+        "送人"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-76",
+      "turns": [
+        "过几天喝酒走",
+        "聊天请挪地儿我要睡觉",
+        "睡吧睡醒了call我"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-77",
+      "turns": [
+        "柚子？？吃的吗？",
+        "就是吃的那个！",
+        "能长出果子吗？",
+        "花盆太小，估计不能",
+        "那为什么不种花？",
+        "吃柚子剩下的种子，不是故意买的",
+        "这也成？？？我也要种。",
+        "很简单的，网上就有教程，基本上中进去浇浇水就可以了"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-78",
+      "turns": [
+        "你什么意思？！",
+        "都是你的剧透我一个劲猜哪个警察是凶手",
+        "猜到了嘛？哈哈哈哈哈哈哈",
+        "我最开始猜男的后来又觉得是女的后来又觉得很奇怪",
+        "我刚开始也以为是那个女医生。"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-79",
+      "turns": [
+        "七夕快乐呀美宝宝",
+        "快乐很简单～只要有源源不断的钞票",
+        "钞票才是真让我快乐的源泉哈哈哈",
+        "对吧，今天我爱钱，明天钱不爱我",
+        "哈哈哈哪有钱一直爱你的",
+        "好的，钱一直爱我们"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-80",
+      "turns": [
+        "困了，补一觉再讲",
+        "学生党无压力",
+        "我爱小冰",
+        "一声叹息，我没懂",
+        "有点彪吧",
+        "彪这个词已经运用的如此广泛了?",
+        "呃呃呃呃，我睡了",
+        "嗯嗯嗯?"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-81",
+      "turns": [
+        "我看着他哪次都穿MB，以外是真的",
+        "随便一讲没想到被赞上热门不知道会不会被和谐",
+        "哈哈哈哈，静观其变咯"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-82",
+      "turns": [
+        "好怕怕我家的金毛大骨头都不敢喂了感觉他吃下去是什么样拉出来就什么样而且还会导致她拉肚子才八个多月大",
+        "本来就不该喂",
+        "多谢告知"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-83",
+      "turns": [
+        "祝你胖胖胖～～",
+        "这2天，这个地方，我吃了3顿！！！下次你有机会来长沙，我请你吃吖！",
+        "好的好的～～"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-84",
+      "turns": [
+        "不是一个月就回来嘛！？还木有来我家吃饭呢在成都好好加油！！有机会去成都一定找你哦",
+        "我要回来要回来哈~呵呵~还要在澳洲呆个把月辞职什么的~咱们还是有时间哇~以后来成都找俺~包吃包喝~",
+        "哇哇！这么好！回来一定吃一顿哈",
+        "那必须的哇~我在成都恭候你们啊~"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-85",
+      "turns": [
+        "所以你是不是快过生日了",
+        "哈哈哈哈对",
+        "要求回复跟三楼有同等待遇",
+        "别做梦了"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-86",
+      "turns": [
+        "愚民已久，人们往往就吃这一套。",
+        "而我又没有胆量站起来反驳",
+        "小事上自己明白就好了"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-87",
+      "turns": [
+        "你不是11点党么",
+        "一不小心聊人生聊到失眠",
+        "那你继续我该睡觉了",
+        "哈哈哈哈说完就睡着了"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-88",
+      "turns": [
+        "赶紧的找个男盆友呀！",
+        "额！急不来的，可以考虑租一个过过节！哈哈！",
+        "这个可以有！哈哈。。",
+        "主意不错吧！想租什么样的都行！",
+        "确实不错啊！"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-89",
+      "turns": [
+        "包办婚姻还能和离可是老师不能",
+        "哈哈，以往也是不能轻易离的～即使不幸福也要互相折磨",
+        "相看两生厌",
+        "太可怕"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-90",
+      "turns": [
+        "终于见到熊猫了，祝贺",
+        "哈哈还好一般的幸福就是见到斑马很开心",
+        "噗你也喜欢斑马？",
+        "是啊小时候看动物世界就喜欢了吧你到家了嘛",
+        "刚到"
+      ],
+      "tags": [
+        "情绪",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-91",
+      "turns": [
+        "这么高这么帅，让别人失恋才对",
+        "唉然而我是被甩的",
+        "别难过，会好起来的。",
+        "嗯嗯谢谢你"
+      ],
+      "tags": [
+        "情绪"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-92",
+      "turns": [
+        "去那么大老远，想家是正常的~",
+        "我想吃烧鹅",
+        "吃图片吧，反正图已带走",
+        "就是想吃烧鹅",
+        "去找啥宝啥猫",
+        "今天感恩节，想吃烧鹅"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-93",
+      "turns": [
+        "回去几天，你要去哪里啊",
+        "回家几天还得再来长沙",
+        "你现在在长沙工作吗",
+        "没有，目前还在玩",
+        "你应该在家工作吧",
+        "没有喔",
+        "哇，我要晕了，到底是怎样啊",
+        "哈哈"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-94",
+      "turns": [
+        "看你的头像和名字我猜也是了名字还会卖萌在网上骗老男人？哈哈哈",
+        "您素质真的感人，快闭嘴吧您嘞",
+        "多出去走走别整天宅在家里嫉妒别人外面的世界是美好的"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-95",
+      "turns": [
+        "么小宝宝照片差评",
+        "下周榆林可也，上可照，肯定没他舅帅",
+        "哈哈哈后生跟他舅一样优秀恭喜恭喜啦"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-96",
+      "turns": [
+        "虽然圆圆很可爱，但是不是我儿子哈哈哈哈哈",
+        "可是我说的是凯凯啊！！！！你看到最后凯凯的表情～",
+        "哈哈哈哈我也是吗！！！我看一下哈哈哈在上班我都没点开"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-97",
+      "turns": [
+        "每天都有各种美食吃，然后还不胖，还那么美，人生赢家啊",
+        "你都好久没见我了我都要炸了",
+        "哈哈哈，等我去了带我去吃好吃的，然后发给坏坏",
+        "好嘞气死坏坏"
+      ],
+      "tags": [
+        "日常",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-98",
+      "turns": [
+        "带来南宁跟我逛街",
+        "它老人家不适合奔波",
+        "人家都没结婚还小",
+        "那就别结婚了",
+        "你自己单身也就算了还要加条狗",
+        "哈哈哈哈高兴啊"
+      ],
+      "tags": [
+        "情绪",
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-99",
+      "turns": [
+        "你在等白马王子么？",
+        "没有。我拉肚子了",
+        "我我以为是白雪公主吃毒苹果的桥段"
+      ],
+      "tags": [
+        "日常"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    },
+    {
+      "id": "lccc-100",
+      "turns": [
+        "爱你的包",
+        "去买一个吧……当手拿包配大衣也好看",
+        "哈哈。等回去发钱"
+      ],
+      "tags": [
+        "打趣"
+      ],
+      "source": "LCCC toy_data",
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+    }
+  ]
+}

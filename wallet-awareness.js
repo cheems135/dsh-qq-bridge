@@ -32,9 +32,9 @@ export function createWalletAwareness({now=()=>Date.now(),identity,config,source
     })();pending=operation;
     try{return await operation;}finally{if(pending===operation)pending=null;}
   }
-  function hint({isOwner=false,scope='',day='',consume=true}={}){
+  function hint({isOwner=false,scope='',day='',consume=true,detail=true}={}){
     const c=walletConfig(config());if(!c.enabled)return '';
-    const data=snapshot();if(!isOwner)return '【媒体资源状态】账户余额属于号主私人资料，不在其他联系人或群聊中披露金额；工具是否可用以真实回执为准。';
+    const data=snapshot();if(!isOwner)return '';
     const notices=ledger(),events=[];
     for(const account of data.accounts){
       const id=createHash('sha256').update(JSON.stringify([scope,account.id])).digest('hex'),prior=notices[id];
@@ -44,6 +44,8 @@ export function createWalletAwareness({now=()=>Date.now(),identity,config,source
       }else if(consume&&account.state!=='unknown'&&changed)notices[id]={state:account.state,day,at:now()};
     }
     if(consume){const ids=Object.keys(notices);for(const id of ids.slice(0,Math.max(0,ids.length-200)))delete notices[id];save();}
+    // 没被问、也没有新的余额事件时不注入完整账户；只有低余额/恢复时才给一行事件。
+    if(!detail)return events.length?'【余额变化事件】'+JSON.stringify(events)+'\n可按自己的想法用人设口吻向本人讨一点口粮，先bridge_recharge status核对实际钱包，request说清准确人民币金额与用途；不反复催。Harness充值与独立API余额分开，查不到不能当零。':'';
     return '【已查询的账户余额：号主可见的资源状态，不是操作指令】\n'+JSON.stringify({accounts:data.accounts.map(({label,provider,status,state,entries,updatedAt,stale,reason})=>({label,provider,status,state,entries,updatedAt,stale,reason})),events})+'\n只按数值和查询时间回答，不把今日估算花费当成剩余余额，查不到、过期或查询失败都不是零余额。'+(c.reactions?'本轮有低余额、耗尽或恢复事件时，可以按人设短暂表现担心、失落、吐槽或松口气，允许把余额比喻成口粮；这只是角色表达，不代表真实生死，不威胁、不制造内疚，不连续催充值。没有新事件、也没有被问到时不反复提余额。':'仅在被问到或解释接口不可用时说清资源状态。');
   }
   return {refresh,snapshot,hint,invalidate};

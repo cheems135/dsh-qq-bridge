@@ -12,8 +12,8 @@ export function normalizeWorkflowEntry(value, index = 0) {
   return {
     id: clip(source.id, 80).replace(/[^a-zA-Z0-9_-]/g, '') || 'workflow-' + index,
     name: clip(source.name, 80) || '工作流 ' + (index + 1),
-    promptModel:normalizePromptModel(source.promptModel),fixedPromptMode:source.fixedPromptMode==='preserve'?'preserve':'refine',triggerWords:nodeText(source.triggerWords).slice(0,500),
-    style:IMAGE_STYLES.includes(source.style)?source.style:'auto', referenceMode:source.referenceMode==='off'?'off':'auto',referenceTarget:normalizeTargets(source.referenceTarget?[source.referenceTarget]:[])[0]||null,referenceReuseMissing:source.referenceReuseMissing!==false,
+    promptLanguage:['zh','en'].includes(source.promptLanguage)?source.promptLanguage:'',promptModel:normalizePromptModel(source.promptModel),fixedPromptMode:source.fixedPromptMode==='preserve'?'preserve':'refine',triggerWords:nodeText(source.triggerWords).slice(0,500),
+    style:IMAGE_STYLES.includes(source.style)?source.style:'auto', referenceMode:source.referenceMode==='off'?'off':'auto',referenceTarget:normalizeTargets(source.referenceTarget?[source.referenceTarget]:[])[0]||null,referenceReuseMissing:false,
     note: clip(source.note, 500), mode, workflowId, webappId,usePersonalQueue:source.usePersonalQueue===true||source.usePersonalQueue==='true'?'true':'false',
     autoDetect:source.autoDetect!==undefined?source.autoDetect===true:!source.promptNodeId,
     promptTargets:normalizeTargets(source.promptTargets),negativeTargets:normalizeTargets(source.negativeTargets),

@@ -46,5 +46,5 @@ export function consumeMoodHint(v,{now=Date.now(),config={}}={}){
   const baseline=tone?'【本对话当前情绪底色】'+tone+'。按人设自然体现在措辞和节奏中，强度克制；这不是新话题，不需要报告心情，不重复旧事。用户当前问题、情绪和明确要求优先。':'';
   if(!e||e.id===state.consumed||state.saidAt.length>=c.maxHintsPerDay||now-e.at>2*3600000)return{state,text:baseline};
   state.consumed=e.id;state.saidAt.push(now);
-  return{state,text:[baseline,'【本对话近期情绪变化：可修正的状态估计，不是台词或用户事实】\n'+JSON.stringify({reason:e.reason,evidence:e.quote,at:e.at})+'\n仅在当前语境合适时体现在语气中，不复述这些字段，不夸大或延续委屈，不因对方暂时不回而催促。当前问题和纠正优先。'].filter(Boolean).join('\n')};
+  return{state,text:[baseline,'【近期心情】'+clean(e.reason,120)+'（依据：'+clean(e.quote,60)+'）。只在语境合适时体现在语气里，不复述，不催促。'].filter(Boolean).join('\n')};
 }

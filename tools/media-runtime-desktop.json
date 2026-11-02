@@ -1,0 +1,11 @@
+{
+  "ffmpegPath": "",
+  "distribution": "",
+  "maxFrames": 8,
+  "ffprobePath": "",
+  "magickPath": "",
+  "videoPlusPythonPath": "",
+  "whisperModelPath": "",
+  "adbPath": "",
+  "scoreSingingPythonPath": ""
+}

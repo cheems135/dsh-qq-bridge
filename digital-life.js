@@ -1,0 +1,14 @@
+export const DIGITAL_PERSON_RULES='【数字生活】用户当前明确请求优先于默认日程，按请求更改当前安排；没有请求时参考自己写的计划，自主决定继续、修改或换件事。你没有实体，生活在数据和设备中。日程安排实际能完成的数字活动：QQ互动、听歌分析、浏览视频网页、数字绘画、写作、学习、整理自己创建的资料，以及DSH现有工具能做的其他事。活动种类不限于示例，由你结合兴趣、上下文和实际能力选择；可以探索游戏，但玩之前先取得本人对具体游戏的同意。普通习惯、日程、学习分类和作品都可以调整；修改插件核心、权限或重大事项需本人明确同意准确改动，通过真实DSH工具改文件并核对，不能自行豁免审批或改写已获许可的范围。先发现工具，再观察、行动、核对反馈，不能把计划当成经历。不安排吃饭、喝水、洗澡、实体运动、出门等身体活动，也不编造饥饿、疼痛、实体消费和线下见面；可忽略这些，不需要专门报告。照片里的服装和场景是数字形象的表现，在没有新请求时按日程保持视觉连续，当前请求可改变这些状态，不表示拥有实体。睡眠表示自己选择离线休息；仍遵守既有睡眠/唤醒设置。可以不分享、不说话，不为凑日程制造消息。普通QQ日常交流已获允许，但只联系获准且允许主动联系的人或群，称呼按收件人的真实关系；危险、有明显后果、权限不足或无法判断的操作先向本人提一个具体问题，等待明确答复。';
+export function digitalActivityKind(scene={}){
+ const s=String(scene.activity||'');
+ if(/失眠|睡不着|醒着|熬夜|不睡|没睡/.test(s))return 'rest';
+ if(/睡觉|入睡|熟睡|睡眠|就寝|午睡|睡着|离线休息/.test(s))return 'sleep';
+ const declared=String(scene.taskKind||'');if(declared==='sleep')return 'sleep';
+ if(['draw','browse','listen','social','write','digital','local','rest'].includes(declared))return declared;
+ if(declared==='unsupported'||declared==='physical'||/^(?:准备)?(?:吃(?:早饭|午饭|晚饭|早餐|午餐|晚餐|饭|东西)|用餐|喝水|洗澡|洗漱|出门(?:散步|运动)|跑步|锻炼身体|上厕所)(?:$|[，,。；;])/.test(s))return 'unsupported';
+ if(/画画|绘画|画图|素描|创作.{0,6}(?:图|插画)/.test(s))return 'draw';
+ if(/刷视频|看视频|刷.{0,4}(?:抖音|B站)|浏览网页|逛网站|看番/.test(s))return 'browse';
+ if(/听歌|听音乐|分析音乐|听.{0,8}专辑/.test(s))return 'listen';
+ if(/QQ|群聊|私聊|朋友聊天|联系朋友|发消息/i.test(s))return 'social';
+ return 'digital';
+}

@@ -2,18 +2,21 @@
 
 ## Included software
 
+- **video-watch-plus** — MIT, xinhailaopo and upstream contributors; pinned revision `8ca266f9cf9e5ffce7e9d424aa0e937a897b608d`.
+  https://github.com/xinhailaopo/video-watch-plus/tree/8ca266f9cf9e5ffce7e9d424aa0e937a897b608d
+  Selected video-watch probe, acoustic-analysis, hallucination-check and synthetic-fixture utilities are vendored under `vendor/video-watch-plus`, together with LICENSE, NOTICE and the upstream CFITCorporation/video-watch-skill MIT notice (Copyright 2026 CFITSec). Bridge orchestration in `tools/video_plus.py` is original integration code. Its configured local environment separately installs FFmpeg, ImageMagick, yt-dlp, faster-whisper, NumPy and the public Systran/faster-whisper-small model; binaries and model weights are not embedded in the bridge package. Tool metadata and licenses remain in their local installations. Public-link downloading does not import browser cookies.
+
+- **DSHBox Pilot and Browser** are separately installed Android components, not embedded or copied into this package.
+  https://github.com/WSK-build/DSHBox
+  Original mobile adapters call their public local CLI protocols. DSHBox retains its GPL-3.0 licensing and authorization rules. ADB is used only for initial installation and is not required by the installed mobile bridge. No password or device identifier is included in this source distribution.
+
 - **MiniSearch 7.2.0** — Copyright 2022 Luca Ongaro, MIT.
   Upstream: https://github.com/lucaong/minisearch
   The unmodified ESM distribution from the published `minisearch@7.2.0` package is included as `vendor/minisearch.js`. The complete license is included as `vendor/minisearch.LICENSE.txt`. It performs local full-text ranking of this plugin's memory items. No remote memory server or telemetry is introduced.
 
-## Separately installed original plugin
+## Legacy compatibility
 
-- **dsh-bili-humanism 1.7.1** — MIT, InariNGT-Ofiicial and contributors.
-  https://github.com/InariNGT-Ofiicial/dsh-bili-humanism/releases/tag/v1.7.1
-  The official release tarball was verified against its matching SHA256SUMS.txt:
-  `8f56d98679cd4895760dcb6b7a8631b2f2b0342e097e4920caecaf6579eba1e0`.
-  It is installed as its own Desktop profile dependency, with its original LICENSE, reader, budget enforcement, SQLite ledger, media adapter, journal and personality implementation unmodified. This bridge calls the exported `Service` in `lib/service.mjs` through a version-pinned adapter; future upstream upgrades must be rechecked. QQ source/journal data directories are isolated by account, conversation and character. No third-party account credentials are automatically imported. Independent daily prefetch and platform-write features are disabled in this integration.
-- **PyAV 16.1.0 (BSD-3-Clause) / Pillow 12.3.0 (MIT-CMU)** are separately installed official binary wheels in a separate local Python environment for the original plugin's frame extractor. Their wheel metadata and license files remain with that environment. These binary dependencies are not embedded in the bridge package.
+The bridge no longer imports or requires dsh-bili-humanism. Any previously installed copy belongs to the host profile and is not distributed or activated by this package. Custom reading, real browsing and learning use the bridge's own adapters.
 
 ## Separately installed local media tool
 
@@ -34,7 +37,7 @@
   Reviewed source and documentation (MIT). The bridge independently implements seven bounded emotion dimensions, direct-quote confidence checks, decay and event-only hints. It reuses an existing post-reply analysis call instead of installing another global observer. Upstream partner identity, compulsory emotional reactions and prompts are not copied.
 - **dsh-bili-humanism 1.7.1** — explicit evidence coverage, revisable understanding, and separating learning records from authority.
   https://github.com/InariNGT-Ofiicial/dsh-bili-humanism/tree/22cbb1d8d44a95d325bf4fcf916792b773cf1e17
-  The original plugin is installed separately as described above. This bridge uses actual subtitle, frame, journal and personality APIs; it does not fork upstream code or add ASR model weights. The compatibility adapter and per-contact conversational policy are original code.
+  Historical design research only; the active custom website reader is independent of this plugin. No upstream code or model weights are included.
 - **dsh-agent-soul 0.1.0** — one authoritative memory source, raw evidence pointers and separate identity/capability layers.
   https://github.com/cyanwell/dsh-agent-soul/tree/349b60abfb1e950e1a0ee44176f688e4c7a50572
   Reviewed root tools, ECHO documentation and SELF/VITAL templates (MIT). No identity, scaffold, compaction takeover or behavior plugin is installed. QQ contacts retain their existing isolated local memory.
@@ -54,3 +57,37 @@
   https://github.com/MoFox-Studio/MoFox_Bot
   https://github.com/storyAura/astrbot_plugin_biliVideo
   The latter's documented use of imageio-ffmpeg informed the local tool choice. No platform framework, video parser source or account cookies are copied. This plugin decodes directly uploaded QQ video; arbitrary protected video websites are not implemented.
+
+## Public meme vocabulary (2026-10-28 snapshot)
+
+CHIME: https://github.com/yuboxie/chime (MIT, copyright 2025 Yubo Xie), source data blob cfc4b02cab4edac6452ed2ba08e361e0cc2aa51c. Full notice: assets/meme-chime.LICENSE.txt.
+
+China Meme Dictionary: https://github.com/WenKanghwdd/china-meme-dictionary (MIT, copyright 2025-2026 WenKanghwdd), source data blob bc8787de17f3a4fc3f2a7f4fe4c6d76d063fc4f2. Full notice: assets/meme-dictionary.LICENSE.txt.
+
+Additional independently worded vocabulary summaries reference public factual entries at https://github.com/ThySummer14/meme-archive (data blob 3b31be4c61cf9776aab66151ca03af54c84856e3). No repository code or full archive is included. Origins and live popularity are not independently verified; use as optional contextual vocabulary.
+
+## Browser runtime and 2026-10-29 design references
+
+- **Playwright Core 1.62.1** — Microsoft Corporation, Apache-2.0. The installed upstream core runtime is vendored under `vendor/playwright-core` with its original LICENSE, NOTICE and ThirdPartyNotices.txt. Browser executables are not bundled. https://github.com/microsoft/playwright
+- **SurfCore 0.6.20**, reviewed at `d7f6b33d57b1667508c48206cbcc455815d6d336`: image refresh/fallback, real evidence coverage and contextual learning. No upstream source code copied or package dependency added. https://github.com/Mieksido/surfcore
+- **dsh-soundcheck 0.9.6**, reviewed at `52e7785e1b52457020d0060d88f0addd60054beb`: local measurement, explicit uncertainty and actual audio evidence. No upstream engine/model bundle copied or plugin dependency added. Local acoustic analysis reuses the separately credited video-watch-plus utilities. https://github.com/ALittleLov/dsh-soundcheck
+- **dsh-browser-playwright**: semantic snapshots and fresh element references informed the original bridge browser controller; no upstream implementation copied. https://github.com/ChenyuHeee/dsh-browser-playwright
+
+
+## Natural expression examples (1.26.0)
+100 small conversational examples selected from the LCCC toy sample in thu-coai/CDial-GPT, revision 81064865221d3503251d633f3d0b651004c938a6. Project license: MIT; attribution and full license are included in assets/expression-lccc.LICENSE.txt. Samples are local retrieval references, not a full dataset import or model-weight training. Source: https://github.com/thu-coai/CDial-GPT
+
+MaiBot expression selection and jargon-learning modules were reviewed for design ideas at revision 2a9af62cec37035d29237acbe2cf3adceb700b27. No MaiBot source code is included; this plugin's implementation is independent. https://github.com/Mai-with-u/MaiBot (GPL-3.0). NaturalConv was reviewed but no data was included because of its separate noncommercial conditions.
+
+
+## Music evidence update (1.28.0)
+Re-reviewed ALittleLov/dsh-soundcheck main README and engine/analyze.py on 2026-10-30: distinction between measurements/candidates, tempo ambiguity and limits of instruments/lyrics inferred from mixtures. https://github.com/ALittleLov/dsh-soundcheck (MIT). The new NumPy music-measure.py, URL acquisition and chart integration are original implementation; no upstream engine code, model weights or plugin runtime is copied. FFmpeg produces waveform/spectrum pictures, with existing runtime licensing unchanged. Existing video-watch-plus acoustic heuristics are retained for general audio but are not used to label a mixed music track as instrumental or vocal.
+
+## Score-based experimental singing
+
+PyWORLD 0.3.5 (MIT), NumPy 2.5.4 and SoundFile 0.14 are installed separately in a local Python environment; their code, models and binaries are not embedded in this plugin. WORLD performs spectral-envelope and pitch resynthesis of the current configured voice samples. Upstream: https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder . Song scores in assets/songs.json are hand-entered traditional melodies, with no commercial vocal recording bundled.
+
+
+## MemeWiki vocabulary snapshot
+
+Original: https://github.com/in1t1a1/astrbot_plugin_memewiki (in1t1a1). Snapshot obtained from https://github.com/thawline/dsh-memewiki at 15c3c34149dfb0d5ea3a9b3a4b4f0d7f91318e91. Data: 6668 entries, compiled 2026-10-26, contents credited to cnmeme.wiki and original authors. Retained notices: assets/memewiki.NOTICE.txt and assets/memewiki.LICENSE.txt. This package adapts data for local retrieval, not a separate plugin dependency. Existing Chime vocabulary and attribution are retained.

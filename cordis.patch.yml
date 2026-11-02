@@ -1,11 +1,10 @@
 # dsh-im-bridge bundle patch
 #
-# Inserts ONE Host row: the QQ ⇄ DeepSeek Harness bridge. It connects to a
-# NapCat (OneBot 11) WebSocket server and drives ordinary DSH Sessions.
+# Adds ONE Host row: the QQ ⇄ DeepSeek Harness bridge. It connects to a
+# NapCat (OneBot 11) WebSocket server and drives normal DSH Sessions.
 #
-# Everything the panel can change lives in the profile's settings.json, so you
-# normally only need to edit wsUrl / accessToken here (or paste them into the
-# panel's settings page).
+# The `config` block is the initial configuration. Once the panel has saved
+# settings, those in the profile's settings.json win.
 - insert:
     - id: im-bridge
       name: 'dsh-im-bridge'
@@ -32,8 +31,6 @@
           model: deepseek-flash
         # 单条 QQ 消息长度上限，超过会拆成多条
         maxReplyChars: 1500
-        # 机器人上线后给 allowUsers 里每个人发一条（留空 = 不发）
-        greeting: ''
         # 偶尔自己想起你：隔一段时间问模型一句「有话要说吗」，不想说就跳过
         proactive:
           enabled: true
@@ -55,7 +52,7 @@
           chance: 0.25
           minSeconds: 25
           maxSeconds: 70
-        # 自检：用一个临时会话问自己一句，结果写进日志（验人格/模型用）
+        # 启动自检：用一个临时会话问自己一句话，结果写进日志（验人格/模型用）
         selfTest: false
         selfTestPrompt: '用一句话介绍你自己。'
         selfTestImage: ''

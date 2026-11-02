@@ -1,7 +1,8 @@
 // Bounded local FFmpeg sampling, following the frame-first approach used by
 // MoFox and AstrBot video integrations. No third-party parsing proxy or cookies.
-import {readFileSync,writeFileSync,mkdirSync,statSync,unlinkSync,rmdirSync,existsSync} from 'node:fs';
-import {join} from 'node:path';
+import {readFileSync,writeFileSync,mkdirSync,statSync,unlinkSync,rmdirSync,existsSync,readdirSync} from 'node:fs';
+import {join,basename} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 const MAX_BYTES=32*1024*1024;
@@ -17,11 +18,51 @@ function run(exe,args,{timeout=10000,allowFailure=false,spawnImpl=spawn}={}){
 }
 export function createVideoReader({getConfig,getCacheDir,getPlatformFile,fetchImpl=globalThis.fetch,spawnImpl=spawn}={}){
   let busy=false;
-  function status(){const c=getConfig()||{};return{available:!!c.ffmpegPath&&existsSync(c.ffmpegPath),maxBytes:MAX_BYTES,maxFrames:4,source:'ffmpeg-local'};}
+  function plusReady(){const c=getConfig()||{};return c.videoPlus!==false&&!!c.videoPlusPythonPath&&existsSync(c.videoPlusPythonPath)&&existsSync(c.ffprobePath||'');}
+  function status(){const c=getConfig()||{},enhanced=plusReady();return{available:!!c.ffmpegPath&&existsSync(c.ffmpegPath),enhanced,maxBytes:enhanced?128*1024*1024:MAX_BYTES,maxFrames:enhanced?8:4,audioAnalysis:enhanced,source:enhanced?'video-watch-plus-local':'ffmpeg-local',whisper:enhanced&&existsSync(join(c.whisperModelPath||'','model.bin'))};}
+  async function readPlus(data){
+    const config=getConfig(),dir=join(getCacheDir(),'videos','sample-'+randomUUID());mkdirSync(dir,{recursive:true});
+    try{
+      const request={outDir:dir,runtime:config,maxFrames:8};
+      if(data.web===true)request.url=String(data.url||'');
+      else{
+        let bytes,url=String(data.url||(/^https:\/\//i.test(String(data.file||''))?data.file:''));
+        if(url){
+          if(!trustedMedia(url))throw Error('请提供直接上传的视频或支持的视频卡片');
+          const response=await fetchImpl(url,{redirect:'error',signal:AbortSignal.timeout(30000)});if(!response.ok)throw Error('视频附件下载失败');
+          if(Number(response.headers?.get?.('content-length'))>128*1024*1024)throw Error('视频超过128MB');
+          const chunks=[];let size=0;
+          if(response.body?.getReader){const reader=response.body.getReader();try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>128*1024*1024)throw Error('视频超过128MB');chunks.push(Buffer.from(value));}}finally{try{await reader.cancel();}catch{}}bytes=Buffer.concat(chunks);}else bytes=Buffer.from(await response.arrayBuffer());
+        }else{
+          const id=String(data.file_id||data.file||'');if(!/^[\w-]{8,160}(?:\.(?:mp4|webm|mov|mkv|avi))?$/i.test(id))throw Error('没有可读取的视频文件标识');
+          const file=await getPlatformFile(id);if(!file||!existsSync(file)||statSync(file).size>128*1024*1024)throw Error('视频不可读取或超过128MB');bytes=readFileSync(file);
+        }
+        if(!bytes?.length||bytes.length>128*1024*1024)throw Error('视频为空或超过128MB');
+        request.media=join(dir,'input.mp4');writeFileSync(request.media,bytes);
+      }
+      const value=await new Promise((resolve,reject)=>{
+        let output='',done=false;const child=spawnImpl(config.videoPlusPythonPath,[fileURLToPath(new URL('./tools/video_plus.py',import.meta.url))],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+        const timer=setTimeout(()=>{if(done)return;done=true;child.kill();reject(Error('视频增强分析超时，未取得的部分不能当作已观看'));},Math.min(600000,Number(config.analysisTimeoutMs)||180000));
+        child.stdout?.on('data',b=>{output+=String(b);if(output.length>2*1024*1024){child.kill();}});
+        child.stderr?.on('data',()=>{});
+        child.on('error',()=>{if(done)return;done=true;clearTimeout(timer);reject(Error('本地视频增强环境未能启动'));});
+        child.on('close',()=>{if(done)return;done=true;clearTimeout(timer);try{const parsed=JSON.parse(output);if(!parsed.ok)throw Error(parsed.error||'视频读取失败');resolve(parsed);}catch(error){reject(error);}});
+        child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(request));
+      });
+      const frames=[];for(const f of value.frames||[]){if(f.file!==basename(f.file)||!/^frame-\d+\.jpg$/.test(f.file))throw Error('视频画面路径无效');const bytes=readFileSync(join(dir,f.file));if(bytes.length>3*1024*1024||bytes[0]!==255||bytes[1]!==216)throw Error('视频画面无效');frames.push({at:f.at,part:{type:'image',mediaType:'image/jpeg',name:'video-frame-'+frames.length,data:bytes.toString('base64')}});}
+      return {...value,frames};
+    }finally{
+      // This UUID directory was just created by this operation; remove its files only.
+      for(const name of readdirSync(dir))try{const file=join(dir,name);if(statSync(file).isFile())unlinkSync(file);}catch{}
+      try{rmdirSync(dir);}catch{}
+    }
+  }
   async function read(data={}){
     if(!status().available)throw Error('视频抽帧工具未安装');if(busy)throw Error('正在读取另一段视频，请稍后再发');busy=true;
     let dir='',owned=[];
     try{
+      if(plusReady())return await readPlus(data);
+      if(data.web)throw Error('增强视频环境尚未就绪');
       let bytes,url=String(data.url||'');
       if(!url&&/^https:\/\//i.test(String(data.file||'')))url=data.file;
       if(url){

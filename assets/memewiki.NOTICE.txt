@@ -1,0 +1,34 @@
+dsh-memewiki
+============
+
+这是对 AstrBot 插件 astrbot_plugin_memewiki 的 DSH（DeepSeek Harness）移植版本。
+
+原项目
+------
+- 名称：astrbot_plugin_memewiki
+- 作者：in1t1a1
+- 地址：https://github.com/in1t1a1/astrbot_plugin_memewiki
+- 许可：见原仓库
+
+词库数据
+--------
+- 文件：data/memes.db（6668 条）
+- 来源：原仓库随包分发的词库，数据由 cnmeme.wiki 整理
+- 构建时间：2026-10-26
+
+本移植版做了哪些改动
+--------------------
+见 README.md 的「与原版的差异」一节。简述：
+
+1. 运行环境从 AstrBot（Python）重写为 DSH 插件（Node.js ESM，零依赖）。
+2. 词库改用 Node 22.13+ 自带的 node:sqlite，只读打开，不需要额外依赖。
+3. 预查注入从 AstrBot 的 on_llm_request 临时文本改为 DSH 的 systemPrompt.context。
+4. 新增设置页：词条增删改查、词条总数、「自动思考梗」开关。
+5. 新增匹配层：标题包含查询词（查询 ≥3 字时启用），解决短查询查不到长标题的问题。
+6. 去除联网兜底（cnmeme.wiki API），只走本地词库，避免把聊天片段发往第三方。
+7. 未移植：/梗 图片卡片（Pillow）、/黑话 命令、AstrBot WebUI 面板。
+
+许可说明
+--------
+本仓库代码以 MIT 许可发布。词库数据（data/memes.db）版权归原作者与 cnmeme.wiki，
+本项目仅做格式适配与读取，不主张其版权。

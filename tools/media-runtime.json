@@ -1,7 +1,14 @@
 {
-  "ffmpegPath": "",
-  "distribution": "",
-  "maxFrames": 4,
-  "humanismPackagePath": "",
-  "humanismPythonPath": ""
+  "ffmpegPath": "/usr/bin/ffmpeg",
+  "ffprobePath": "/usr/bin/ffprobe",
+  "magickPath": "/usr/bin/magick",
+  "fontPath": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+  "maxFrames": 8,
+  "videoPlusPythonPath": "/root/projects/.dsh/tools/qq-bridge-mobile-media/bin/python",
+  "whisperModelPath": "/root/projects/.dsh/tools/qq-bridge-mobile-media/models/small",
+  "whisperThreads": 2,
+  "analysisTimeoutMs": 360000,
+  "pilotRoot": "/opt/pilot",
+  "pilotPath": "/opt/pilot/bin/pilot",
+  "distribution": "DSHBox Debian ARM64 standalone"
 }

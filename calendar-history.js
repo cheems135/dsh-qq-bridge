@@ -29,5 +29,17 @@ export function calendarHistory({rows=[],audits=[],outbox=[],accountId='',allowe
     const text=(job.segments||[]).filter(s=>s.type==='text').map(s=>s.data?.text||'').join('\n');if(!text.trim())continue;
     add({chat:job.chat,accountId,personaId,time:job.at,dir:'out',localId:job.id,messageId:job.messageId,delivery:'sent',text});
   }
-  return {entries:entries.sort((a,b)=>a.time-b.time),scanned:rows.length+audits.length+outbox.length,unknown:entries.filter(r=>r.personaId==='legacy').length};
+  // Group traffic is high-volume: collapse raw group messages into 10-minute
+  // activity receipts before they reach the daily/monthly memory summarizer.
+  const compacted=[],groupBuckets=new Map();
+  for(const entry of entries){
+    if(!String(entry.chat||'').startsWith('group:')){compacted.push(entry);continue;}
+    const bucket=Math.floor(Number(entry.time||0)/600000),key=entry.chat+':'+bucket;
+    let item=groupBuckets.get(key);
+    if(!item){item={...entry,dir:'in',messageId:'group-receipt:'+bucket,localId:'',speakerId:'',speakerName:'群聊摘要',text:'',userText:'',_lines:[]};groupBuckets.set(key,item);}
+    const line=(entry.dir==='out'?'她：':'群友：')+String(entry.text||entry.userText||'').replace(/\s+/g,' ').trim().slice(0,120);
+    if(line.replace(/^(?:她|群友)：/,'').trim())item._lines.push(line);
+  }
+  for(const item of groupBuckets.values()){const lines=[...new Set(item._lines)].slice(0,10);item.text=item.userText=lines.join('；').slice(0,700);delete item._lines;compacted.push(item);}
+  return {entries:compacted.sort((a,b)=>a.time-b.time),scanned:rows.length+audits.length+outbox.length,unknown:compacted.filter(r=>r.personaId==='legacy').length};
 }

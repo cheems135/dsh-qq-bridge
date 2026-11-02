@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "songs": [
+    {
+      "id": "two-tigers",
+      "title": "两只老虎",
+      "aliases": ["两只老虎跑得快", "两只老虎跑的快", "Frere Jacques", "Frère Jacques"],
+      "language": "zh-CN",
+      "tempo": 96,
+      "meter": "4/4",
+      "source": {"kind": "traditional", "name": "Frère Jacques / 两只老虎传统旋律", "arrangement": "C大调单声部，按字记谱；无原曲录音或声音素材"},
+      "confirmed": true,
+      "score": [
+        {"lyric":"两","midi":60,"beats":1},{"lyric":"只","midi":62,"beats":1},{"lyric":"老","midi":64,"beats":1},{"lyric":"虎","midi":60,"beats":1},
+        {"lyric":"两","midi":60,"beats":1},{"lyric":"只","midi":62,"beats":1},{"lyric":"老","midi":64,"beats":1},{"lyric":"虎","midi":60,"beats":1},
+        {"lyric":"跑","midi":64,"beats":1},{"lyric":"得","midi":65,"beats":1},{"lyric":"快","midi":67,"beats":2},
+        {"lyric":"跑","midi":64,"beats":1},{"lyric":"得","midi":65,"beats":1},{"lyric":"快","midi":67,"beats":2},
+        {"lyric":"一","midi":67,"beats":0.5},{"lyric":"只","midi":69,"beats":0.5},{"lyric":"没","midi":67,"beats":0.5},{"lyric":"有","midi":65,"beats":0.5},{"lyric":"耳","midi":64,"beats":1},{"lyric":"朵","midi":60,"beats":1},
+        {"lyric":"一","midi":67,"beats":0.5},{"lyric":"只","midi":69,"beats":0.5},{"lyric":"没","midi":67,"beats":0.5},{"lyric":"有","midi":65,"beats":0.5},{"lyric":"尾","midi":64,"beats":1},{"lyric":"巴","midi":60,"beats":1},
+        {"lyric":"真","midi":60,"beats":1},{"lyric":"奇","midi":55,"beats":1},{"lyric":"怪","midi":60,"beats":2},
+        {"lyric":"真","midi":60,"beats":1},{"lyric":"奇","midi":55,"beats":1},{"lyric":"怪","midi":60,"beats":2}
+      ],
+      "shortNotes": 14,
+      "limitations": "WORLD按谱音高与时值控制实验；保留当前样本音色，不保证专业歌声、咬字或音色完全一致。"
+    }
+  ]
+}

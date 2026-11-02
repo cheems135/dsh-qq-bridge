@@ -10,8 +10,19 @@ export function recentOperationContext(rows,{key='',accountId='',personaId='',fl
 }
 export function operationContextStamp(context){return createHash('sha256').update(JSON.stringify(context)).digest('hex');}
 export function operationContextHint(context){return '【操作前最近8条对话】\n'+OPERATION_CONTEXT_RULES+'\n'+JSON.stringify(context);}
+function reviewObject(raw){
+ if(typeof raw!=='string')return raw;
+ const text=raw.trim().slice(0,64000);
+ try{return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{}
+ // Accept a valid JSON object surrounded by a short explanation or a reasoning block.
+ // Extract complete balanced objects, respecting quoted braces, and reject ambiguity.
+ const candidates=[];let start=-1,depth=0,quoted=false,escaped=false;
+ for(let i=0;i<text.length;i++){const c=text[i];if(start<0){if(c==='{'){start=i;depth=1}continue}if(quoted){if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c==='"')quoted=false;continue}if(c==='"'){quoted=true;continue}if(c==='{')depth++;if(c==='}'&&--depth===0){try{const value=JSON.parse(text.slice(start,i+1));if(value&&typeof value==='object'&&!Array.isArray(value)&&operationText(value.intent,200))candidates.push(value)}catch{}start=-1;quoted=false;escaped=false}}
+ if(candidates.length===1)return candidates[0];
+ throw Error('情境判断没有返回可用格式，本次未调用外部功能');
+}
 export function parseOperationReview(raw,{kind,request,emotion='auto'}={}){
- let data;try{data=typeof raw==='string'?JSON.parse(raw.trim().replace(/^```(?:json)?\s*|\s*```$/g,'')):raw;}catch{throw Error('情境判断没有返回可用格式，本次未调用外部功能');}
+ const data=reviewObject(raw);
  if(!data||typeof data!=='object'||Array.isArray(data)||!operationText(data.intent,200))throw Error('情境判断没有给出当前意图，本次未调用外部功能');
  const delivery=data.delivery&&typeof data.delivery==='object'?data.delivery:{},allowed=['auto','natural','happy','gentle','sad','surprised','serious'];
  const selected=emotion!=='auto'&&allowed.includes(emotion)?emotion:allowed.includes(delivery.emotion)?delivery.emotion:'natural';

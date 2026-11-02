@@ -68,7 +68,7 @@ export function extractIncoming(message, selfId='') {
       if(kind==='music'&&!author&&description&&description!==title)author=description.slice(0,160);
       if(type==='music'&&!platform)platform=({qq:'QQ 音乐',163:'网易云音乐',custom:'自定义音乐'})[String(data.type)]||String(data.type||'');
       const mediaId=String(data.id||'').slice(0,100);
-      const card={type,kind,title,description,author,platform,duration,mediaId};cards.push(card);
+      const card={type,kind,title,description,author,platform,duration,mediaId,...(target?{url:target}:{}),...(kind==='music'&&pick('musicurl','audiourl','playurl')?{audioUrl:pick('musicurl','audiourl','playurl')}: {})};cards.push(card);
       texts.push('[分享卡片] '+[title,author&&'作者/歌手：'+author,description!==author&&description].filter(Boolean).join(' · '));
     }
   }
@@ -104,7 +104,7 @@ export function publicAddress(address) {
 export function redactUrl(value) {
   try{const u=new URL(value);u.username='';u.password='';u.hash='';for(const key of [...u.searchParams.keys()])if(/token|auth|secret|key|cookie|skey|signature|credential/i.test(key))u.searchParams.set(key,'[redacted]');return u.href.slice(0,1800)}catch{return ''}
 }
-export async function publicGet(value,{signal,resolve=lookup,maxBytes=1500000}={}) {
+export async function publicGet(value,{signal,resolve=lookup,maxBytes=1500000,binary=false,timeoutMs=4500}={}) {
   const u=new URL(value);
   if(!['http:','https:'].includes(u.protocol)||u.username||u.password||(u.port&&!['80','443'].includes(u.port)))throw new Error('只读取公开 HTTP / HTTPS 网页');
   const host=u.hostname.replace(/^\[|\]$/g,'');
@@ -129,6 +129,7 @@ export async function publicGet(value,{signal,resolve=lookup,maxBytes=1500000}={
           else if(compression==='br')bytes=brotliDecompressSync(bytes,{maxOutputLength:maxBytes});
           else if(compression==='deflate')bytes=inflateSync(bytes,{maxOutputLength:maxBytes});
           if(bytes.length>maxBytes)throw new Error('解压后网页超过大小限制');
+          if(binary){resolveResponse({status:res.statusCode,headers:res.headers,bytes});return;}
           const contentType=String(res.headers['content-type']||'text/html');
           if(!/text\/|application\/(?:xhtml\+xml|json)/i.test(contentType))throw new Error('链接是文件或媒体，未读取正文');
           const charset=contentType.match(/charset=["']?([\w-]+)/i)?.[1]||'utf-8';
@@ -137,7 +138,7 @@ export async function publicGet(value,{signal,resolve=lookup,maxBytes=1500000}={
         }catch(error){reject(error)}
       });
     });
-    req.setTimeout(4500,()=>req.destroy(new Error('网页读取超时')));req.on('error',reject);req.end();
+    req.setTimeout(Math.max(1000,Math.min(30000,timeoutMs)),()=>req.destroy(new Error('网页读取超时')));req.on('error',reject);req.end();
   });
 }
 export function pageContent(html) {
@@ -162,14 +163,18 @@ export function pageContent(html) {
   }
   return {title,description,body:restricted?'':body.slice(0,10000),status:restricted?'restricted':body.length>=120?'read':title||description?'metadata':'empty',mediaType,author,duration,siteName};
 }
-export async function readSharedLink(url,{read=publicGet,signal=AbortSignal.timeout(8500)}={}) {
+export async function readSharedLink(url,{read=publicGet,signal=AbortSignal.timeout(8500),includeLinks=false}={}) {
   let target=new URL(url).href;
   try{
     for(let count=0;count<5;count++){
       const response=await read(target,{signal});
       if(response.location&&[301,302,303,307,308].includes(response.status)){target=new URL(response.location,target).href;continue;}
       if(response.status<200||response.status>=300)throw new Error('网页返回 HTTP '+response.status);
-      return {url:redactUrl(url),finalUrl:redactUrl(target),...pageContent(response.body)};
+      const links=[];
+      if(includeLinks)for(const a of String(response.body||'').slice(0,1500000).matchAll(/<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi)){
+        try{const u=new URL(decodeEntities(a[1]??a[2]),target);if(!['http:','https:'].includes(u.protocol)||u.username||u.password)continue;u.hash='';const href=redactUrl(u.href);if(links.some(l=>l.url===href))continue;links.push({url:href,title:decodeEntities(a[3].replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim().slice(0,180)});if(links.length>=60)break;}catch{}
+      }
+      return {url:redactUrl(url),finalUrl:redactUrl(target),...pageContent(response.body),...(includeLinks?{links}:{})};
     }
     throw new Error('链接跳转次数过多');
   }catch(error){return{url:redactUrl(url),finalUrl:redactUrl(target),status:'failed',title:'',description:'',body:'',error:String(error.message||error).slice(0,200)}}
@@ -222,7 +227,7 @@ export function safeBackup(settings,memories,{includeMessages=false,messages=[]}
   const profiles=Object.fromEntries(Object.entries(settings.contactProfiles||{}).filter(([key])=>chatKeyValid(key)).map(([key,value])=>[key,normalizeProfile(value)]));
   const modelByChat=Object.fromEntries(Object.entries(settings.modelByChat||{}).filter(([key,v])=>chatKeyValid(key)&&v&&/^[\w.-]{1,100}$/.test(v.provider)&&/^[\w./:@-]{1,150}$/.test(v.model)).map(([key,v])=>[key,{provider:String(v.provider),model:String(v.model)}]));
   const safe={personae:(settings.personae||[]).map(p=>({id:String(p.id),name:String(p.name),preset:String(p.preset||'whale'),prompt:String(p.prompt||'')})),activePersonaId:String(settings.activePersonaId||''),basePersona:String(settings.basePersona||''),presetNames:{...settings.presetNames},presetPrompts:{...settings.presetPrompts},
-    whitelist:(settings.whitelist||[]).map(String),groups:(settings.groups||[]).map(String),owners:(settings.owners||[]).map(String),userNotes:{...settings.userNotes},disabledUsers:(settings.disabledUsers||[]).map(String),contactProfiles:profiles,
+    whitelist:(settings.whitelist||[]).map(String),groups:(settings.groups||[]).map(String),owners:(settings.owners||[]).map(String),userNotes:{...settings.userNotes},disabledUsers:(settings.disabledUsers||[]).map(String),disabledGroups:(settings.disabledGroups||[]).map(String),contactProfiles:profiles,
     modelByChat,companion:settings.companion?{enabled:settings.companion.enabled!==false,continuity:settings.companion.continuity!==false,respectPauses:settings.companion.respectPauses!==false,waitMode:settings.companion.waitMode||'natural'}:undefined,memory:{schedule:settings.memory?.schedule==='turns'?'turns':'daily',mode:settings.memory?.mode==='review'?'review':'auto',enabled:settings.memory?.enabled!==false,everyTurns:settings.memory?.everyTurns||40,maxChars:settings.memory?.maxChars||400},dnd:{enabled:!!settings.dnd?.enabled,startHour:settings.dnd?.startHour??23,endHour:settings.dnd?.endHour??9},proactiveCfg:{startHour:settings.proactiveCfg?.startHour??9,endHour:settings.proactiveCfg?.endHour??23,maxPerDay:settings.proactiveCfg?.maxPerDay??3},
     stickerDisabled:[...(settings.stickerDisabled||[])],stickerGroup:{...settings.stickerGroup},stickerGroups:[...(settings.stickerGroups||[])]};
   return{format:'dsh-im-bridge-backup',version:1,createdAt:Date.now(),settings:safe,memories:Object.fromEntries(Object.entries(memories||{}).filter(([key])=>chatKeyValid(key)).map(([key,value])=>[key,normalizeMemory(value)])),...(includeMessages?{messages:messages.slice(-1000).map(m=>({time:m.time,chat:m.chat,dir:m.dir,text:String(m.text||'').slice(0,20000)}))}:{}),assets:[]};
@@ -236,7 +241,7 @@ export function validateBackup(input) {
   out.settings.proactiveCfg={startHour:Math.min(23,Math.max(0,Number(source.proactiveCfg?.startHour)||9)),endHour:Math.min(24,Math.max(1,Number(source.proactiveCfg?.endHour)||23)),maxPerDay:Math.min(20,Math.max(1,Number(source.proactiveCfg?.maxPerDay)||3))};
   out.settings.basePersona=out.settings.basePersona.slice(0,20000);
   if(out.settings.personae.length>200||Object.keys(out.memories).length>1000)throw new Error('备份条目数量超过限制');
-  for(const name of ['whitelist','groups','owners','disabledUsers'])out.settings[name]=out.settings[name].filter(v=>/^\d{5,20}$/.test(v)).slice(0,1000);
+  for(const name of ['whitelist','groups','owners','disabledUsers','disabledGroups'])out.settings[name]=out.settings[name].filter(v=>/^\d{5,20}$/.test(v)).slice(0,1000);
   for(const name of ['presetNames','presetPrompts'])out.settings[name]=Object.fromEntries(Object.entries(out.settings[name]||{}).filter(([key])=>/^[\w-]{1,100}$/.test(key)).map(([key,v])=>[key,String(v).slice(0,20000)]));
   out.settings.userNotes=Object.fromEntries(Object.entries(out.settings.userNotes||{}).filter(([key])=>/^\d{5,20}$/.test(key)).map(([key,v])=>[key,String(v).slice(0,100)]));
   out.settings.personae=out.settings.personae.filter(p=>/^[\w-]{1,100}$/.test(p.id)).map(p=>({...p,name:p.name.slice(0,100),prompt:p.prompt.slice(0,20000),preset:/^[\w-]{1,100}$/.test(p.preset)?p.preset:'whale'}));
