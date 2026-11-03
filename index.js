@@ -831,6 +831,7 @@ export function apply(ctx, rawConfig) {
     if (entry !== undefined) delete entry.turns;
   }
   const chats = new Map(); // sessionId -> chat runtime
+  const panelChats = new Map(); // DSH 面板会话 -> 面板号主上下文（不进入 QQ 消息路由）
   let lifeMemory=null,lifeExecution=null,expressionLearning=null,memoryHub=null,lifeSchedulePending=null;
   let memeStudy=null;
   let operationPolicy=null,executionRuntime=null;
@@ -9551,11 +9552,30 @@ export function apply(ctx, rawConfig) {
   ctx.effect(()=>()=>personaGrowth?.close());
   const resolvePathForCapture=value=>resolve(String(value)).replace(/\\/g,'/');
   phoneController=createPhoneController({getConfig:()=>settings.phone,getRuntime:()=>installedMediaRuntime,getDataDir:()=>cfg.dataDir,getCacheDir:()=>cacheRoot,peer:()=>deviceSync,authorize:context=>{if(settings.agency.phone===false||stopped||(accountPaused&&!context.usbPeer)||context.generation!==(featureState.generation||0)||context.accountId!==(settings.activeAccountId||''))return false;if(context.panel||context.usbPeer)return true;const chat=chats.get(context.sessionId);return !!chat&&currentOwnerToolDenial(chat,{name:'phone_learning'})===undefined;}});
+  /** DSH 面板会话不是 QQ 私聊，但同样由号主本人在本机操作。给它一份只存在于
+   * 内存里的「面板号主」会话，复用同一人设、记忆与操作许可账本；不会进入 QQ
+   * 消息路由，也不会出现在联系人或聊天列表里。settings.panelAccess=false 可关闭。 */
+  function panelChatFor(sessionId){
+    if(settings.panelAccess===false)return null;
+    const owner=String(settings.owners?.[0]||'');if(!owner)return null;
+    const key='private:'+owner,hit=panelChats.get(sessionId);
+    if(hit&&hit.key===key&&hit.userId===owner){panelChats.delete(sessionId);panelChats.set(sessionId,hit);return hit;}
+    const meta={kind:'user',userWords:'面板直接操作',allowSideEffects:true,inboundVersion:0,auditId:'',panel:true};
+    const chat={sessionId,key,kind:'private',userId:owner,isOwner:true,panel:true,title:'DSH 面板 · 号主',turns:new Map([['panel',{meta}]]),pendingTurns:[],inboundVersion:0,supersedingVersion:0,sendChain:Promise.resolve(),ownerAccess:'full'};
+    panelChats.set(sessionId,chat);
+    if(panelChats.size>50)panelChats.delete(panelChats.keys().next().value);
+    log('panel session granted owner device access: '+sessionId);
+    return chat;
+  }
   function agencyContext(exec){
-    const sessionId=String(exec?.agent?.id||''),chat=chats.get(sessionId);
+    const sessionId=String(exec?.agent?.id||''),chat=chats.get(sessionId)||panelChatFor(sessionId);
     if(!chat?.isOwner||chat.kind!=='private'||!settings.owners.includes(String(chat.userId)))throw Error('设备工具仅对当前号主私聊开放');
+    const toolName=String(exec?.name||'');
+    if(chat.panel&&(/^phone_/.test(toolName)||toolName==='bridge_device'&&exec?.arguments?.target==='phone')&&(settings.realism?.safety?.phone===false||settings.agency.phone===false))throw Error('拟真安全设置已关闭手机自动化，本轮不执行手机工具。');
     const meta=[...chat.turns.values()].at(-1)?.meta||chat.pendingTurns?.at(-1);
-    const context={sessionId,scope:JSON.stringify([settings.activeAccountId||'',chat.key,activePersona(chat.key).id,featureState.revisions[chat.key]||0]),generation:featureState.generation||0,accountId:settings.activeAccountId||'',personaId:activePersona(chat.key).id,key:chat.key,chat,meta,signal:exec.signal,toolName:exec.name,exec};context.workspaceLease=workspaceLeases.resolve(context);return context;
+    const context={sessionId,scope:JSON.stringify([settings.activeAccountId||'',chat.key,activePersona(chat.key).id,featureState.revisions[chat.key]||0]),generation:featureState.generation||0,accountId:settings.activeAccountId||'',personaId:activePersona(chat.key).id,key:chat.key,chat,meta,signal:exec.signal,toolName:exec.name,exec};
+    if(chat.panel)context.panel=true;
+    context.workspaceLease=workspaceLeases.resolve(context);return context;
   }
   function operationMeta(context){return {accountId:context.accountId,personaId:context.personaId,ownerId:context.chat?.userId||String(context.key||'').slice(8),chat:context.key};}
   function operationTrusted(args,context,observed={}){
@@ -9646,9 +9666,9 @@ export function apply(ctx, rawConfig) {
   }
   function agencyAuthorized(context,target){
     const localReadOnly=context?.localDesktopObservation===true&&target==='desktop';
-    if(!context||stopped||accountPaused||(!localReadOnly&&lifeExecution?.asleep(calendarMeta('',context.personaId)))||!settings.agency.enabled||target&&settings.agency[target]===false||target==='desktop'&&!desktopEnvironmentAllowed(context)||context.accountId!==(settings.activeAccountId||'')||context.generation!==(featureState.generation||0)||context.personaId!==activePersona(context.key).id)return false;
+    if(!context||stopped||accountPaused||(!localReadOnly&&!context.panel&&lifeExecution?.asleep(calendarMeta('',context.personaId)))||!settings.agency.enabled||target&&settings.agency[target]===false||target==='desktop'&&!desktopEnvironmentAllowed(context)||context.accountId!==(settings.activeAccountId||'')||context.generation!==(featureState.generation||0)||context.personaId!==activePersona(context.key).id)return false;
     if(context.reading)return settings.owners.includes(String(context.key).replace(/^private:/,''))&&recordsAllowed(context.key)&&context.signature===JSON.stringify(settings.websites);
-    if(chats.get(context.sessionId)!==context.chat||context.scope!==JSON.stringify([settings.activeAccountId||'',context.key,activePersona(context.key).id,featureState.revisions[context.key]||0]))return false;
+    if((chats.get(context.sessionId)||panelChats.get(context.sessionId))!==context.chat||context.scope!==JSON.stringify([settings.activeAccountId||'',context.key,activePersona(context.key).id,featureState.revisions[context.key]||0]))return false;
     const denial=ownerToolDenial(context.chat,context.meta,{owners:settings.owners,paused:accountPaused,stopped,freeTools:true,autonomous:settings.agency.autonomous&&context.meta?.kind==='proactive'&&autonomyConfig().enabled&&context.meta.initiativeAccountId===(settings.activeAccountId||'')&&context.meta.initiativePersonaId===activePersona(context.key).id,supersedingVersion:context.chat.supersedingVersion||0,auditStatus:auditById(context.meta?.auditId)?.status||''});
     return denial===undefined;
   }
@@ -10015,7 +10035,7 @@ export function apply(ctx, rawConfig) {
     flush:async()=>{flushGroupCalendar('',true);await flushGroupLearning(null,true);saveSettings();saveState();saveFeatures();writeAtomic(messagesFile,messages);},
     pause:async()=>{accountPaused=true;saveState();socket?.close();if(reconnectTimer)clearTimeout(reconnectTimer);reconnectTimer=null;cancelFeatureWork('切换运行设备，旧任务已停止');for(const chat of chats.values()){clearSilenceTimer(chat);clearAfterTimer(chat);try{await ctx.sessionController.cancel({sessionId:chat.sessionId});}catch{}}refreshInitiativeTimers();},
     resume:async({explicit=false}={})=>{repairLocalOneBotBinding();if(settings.autoStart||explicit){const live=await readLoginState(true);if(!live.webuiReachable)await localNapCat.start();}if(explicit)skipCatchUpOnce=true;accountPaused=false;state.manuallyLoggedOut=false;saveState();refreshInitiativeTimers();connectSocket();},
-    reload:async()=>{profilesReloading=true;try{const loaded=loadSettings();for(const name of Object.keys(settings))delete settings[name];Object.assign(settings,loaded);saveSettings();usage=loadUsage();stickerNotes=loadStickerNotes();try{personaImages=JSON.parse(readFileSync(personaImageManifest,'utf8'));}catch{personaImages=Object.create(null);}cfg.silence=settings.toggles.silence===false?null:defaults.silence;cfg.afterthought=settings.toggles.afterthought===false?null:defaults.afterthought;wallet?.invalidate();messages=existsSync(messagesFile)?JSON.parse(readFileSync(messagesFile,'utf8')):[];const loadedState=loadState(cfg.stateFile,log);for(const name of Object.keys(state))delete state[name];Object.assign(state,loadedState,{accountPaused:true,chats:{}});chats.clear();saveState();const loadedFeatures=JSON.parse(readFileSync(featureFile,'utf8'));for(const name of Object.keys(featureState))delete featureState[name];Object.assign(featureState,loadedFeatures);featureState.generation=(featureState.generation||0)+1;for(const job of featureState.outbox||[])if(['queued','sending'].includes(job.status)){job.status='cancelled';job.error='设备同步后取消旧待发任务';}for(const job of featureState.inbox||[])if(['queued','processing'].includes(job.status)){job.status='cancelled';job.error='设备同步后取消旧输入任务';}saveFeatures();lifeMemory?.reload();learningMemory?.reload();websiteReader?.reload();personaGrowth?.reload();configuredModels.clear();const a=settings.accounts.find(x=>x.id===settings.activeAccountId);if(a){cfg.wsUrl=a.wsUrl;cfg.accessToken=a.token;}deviceProfiles?.reload();}finally{profilesReloading=false;}},
+    reload:async()=>{profilesReloading=true;try{const loaded=loadSettings();for(const name of Object.keys(settings))delete settings[name];Object.assign(settings,loaded);saveSettings();usage=loadUsage();stickerNotes=loadStickerNotes();try{personaImages=JSON.parse(readFileSync(personaImageManifest,'utf8'));}catch{personaImages=Object.create(null);}cfg.silence=settings.toggles.silence===false?null:defaults.silence;cfg.afterthought=settings.toggles.afterthought===false?null:defaults.afterthought;wallet?.invalidate();messages=existsSync(messagesFile)?JSON.parse(readFileSync(messagesFile,'utf8')):[];const loadedState=loadState(cfg.stateFile,log);for(const name of Object.keys(state))delete state[name];Object.assign(state,loadedState,{accountPaused:true,chats:{}});chats.clear();panelChats.clear();saveState();const loadedFeatures=JSON.parse(readFileSync(featureFile,'utf8'));for(const name of Object.keys(featureState))delete featureState[name];Object.assign(featureState,loadedFeatures);featureState.generation=(featureState.generation||0)+1;for(const job of featureState.outbox||[])if(['queued','sending'].includes(job.status)){job.status='cancelled';job.error='设备同步后取消旧待发任务';}for(const job of featureState.inbox||[])if(['queued','processing'].includes(job.status)){job.status='cancelled';job.error='设备同步后取消旧输入任务';}saveFeatures();lifeMemory?.reload();learningMemory?.reload();websiteReader?.reload();personaGrowth?.reload();configuredModels.clear();const a=settings.accounts.find(x=>x.id===settings.activeAccountId);if(a){cfg.wsUrl=a.wsUrl;cfg.accessToken=a.token;}deviceProfiles?.reload();}finally{profilesReloading=false;}},
     credential:async(value)=>{const credentials=ctx.get('credentials');if(value!==undefined){if(value)await credentials?.set?.('DEEPSEEK_API_KEY',value);return;}return (await credentials?.resolve?.('DEEPSEEK_API_KEY'))?.value||'';},
     phone:async body=>{if(settings.agency.phone===false&&!['status','cancel'].includes(body.action))throw Error('本机手机操作权限已关闭');const result=await phoneController.act(body,{usbPeer:true,panel:true,generation:featureState.generation||0,accountId:settings.activeAccountId||''});if(result?.file&&existsSync(result.file)){const root=resolvePathForCapture(cacheRoot),file=resolvePathForCapture(result.file);if(file.startsWith(root+'/')){const bytes=readFileSync(result.file);if(bytes.length<=8*1024*1024&&bytes.subarray(0,8).toString('hex')==='89504e470d0a1a0a')return {...result,imageTransfer:{data:bytes.toString('base64'),mediaType:'image/png'}};}}return result;},
     register:route=>ctx.effect(()=>{if(webServer?.register)return webServer.register(route);return()=>{};}),log:()=>{},
