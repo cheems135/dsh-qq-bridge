@@ -20,6 +20,14 @@ export function requestsImage(value=''){
     return /(?:想看|看看|给我看|让我看|给我瞅|想瞅|想瞧|让我瞧|想见见).{0,10}(?:你(?:的|现在|在|今天|此刻|本人|长|穿|样子|一眼)|自拍|穿搭|窗外|眼前|那边的风景)|(?:看看|看一眼|瞅瞅|瞧瞧)(?:你|你的样子)/.test(text);
   });
 }
+export function requestsDrawing(value=''){
+  return parts(value).some(text=>{
+    if(meta(text)||/(?:照片|自拍|拍照|摄影|生成图|ai图|表情包)/i.test(text))return false;
+    if(/(?:怎么画|画法|画得|画完|画好|画的|画了|画的是什么|画了什么|画面|漫画|动画|画风|画笔|笔画|画师|作画过程)/.test(text))return false;
+    if(/(?:不要|不用|别|停止|不需要|先别|无需).{0,6}(?:画|绘制)/.test(text))return false;
+    return /(?:请|帮我|给我|替我|能不能|可不可以|可以|想要|我要|我想(?:要|看)?).{0,8}(?:画|绘制|手绘|涂鸦)|(?:画|绘制|手绘|涂鸦)(?:一|两|几|个|张|幅|下|点|只)/.test(text);
+  });
+}
 export function requestsSinging(value=''){
  const text=String(value||'');
  if(meta(text)||/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(text.trim())||/(?:不要|不用|不想|别|停止|不需要|先别).{0,6}(?:唱|清唱|哼)|歌词.{0,4}(?:意思|分析)|怎么.{0,4}(?:唱歌|清唱)/.test(text))return false;
@@ -36,8 +44,9 @@ export function requestsVoice(value=''){
 }
 export function directMediaIntent(value=''){
   const quoted=/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(String(value).trim());
-  const kinds=quoted?[]:['image','voice'].filter(kind=>kind==='image'?requestsImage(value):requestsVoice(value));
-  return {kinds,source:'direct',request:operationText(value,900)};
+  const draw=!quoted&&requestsDrawing(value);
+  const kinds=quoted?[]:['image','voice'].filter(kind=>kind==='image'?(!draw&&requestsImage(value)):requestsVoice(value));
+  return {kinds,draw,source:'direct',request:operationText(value,900)};
 }
 // Only current human words authorize media; attachments and recalled messages do not.
 export function selectMediaIntent(value='',decision={},available={image:true,voice:true}){
@@ -50,6 +59,7 @@ export function selectMediaIntent(value='',decision={},available={image:true,voi
   return {kinds:kinds.filter(kind=>!veto(kind)),source:'contextual',confidence,form,reason:operationText(decision.reason||'',160),request:operationText(decision.request||text,900)};
 }
 export function mediaIntentHint(intent){
+  if(intent?.draw)return '【本轮画画请求】对方要的是你亲手画的，不是 AI 生图：用 bridge_drawing 亲手画（create 建画布 → path/line/ellipse 起稿、分层上色 → render 看效果再改），画完用 bridge_life_share 把导出的 PNG 发到当前对话。不要用 [图:…] 走生图，也不要说这是 AI 画的；画不好就直说哪里不行。';
   if(!intent?.kinds?.length)return '';
   return (requestsSinging(intent.request)?'【本轮清唱请求】已有按谱歌曲库（内置两只老虎，也可由号主教谱）。点歌使用 [语音:清唱] 后放实际歌词，不加说话开场；程序按当前真实点歌请求查确认歌谱，再用当前音色合成实际旋律和节拍。未知歌曲需要歌谱或示范，不用自由旋律冒充原曲。明确要求原创时才走实验自由清唱。不要仅凭旧语音印象声称不能唱；成功与否以实际工具结果为准。\n':'')+'【本轮已理解的媒体请求】'+JSON.stringify(intent)+'\n这是对方自然表达的当前要求，不受自主分享次数或间隔限制。'+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
 }
