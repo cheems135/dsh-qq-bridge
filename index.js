@@ -1087,7 +1087,7 @@ export function apply(ctx, rawConfig) {
     const owner=settings.owners.find(id=>recordsAllowed('private:'+id));return owner?'private:'+owner:'';
   }
   async function reviewOperation(kind,request,key='',preferences={}){
-    const context=operationContext(key),stamp=operationContextStamp(context),scope=JSON.stringify([settings.activeAccountId||'',key,activePersona(key).id,featureState.generation||0,stamp,kind,request,preferences]);
+    const context=operationContext(key),userStamp=c=>operationContextStamp((c||[]).filter(row=>row.role==='user')),stamp=userStamp(context),scope=JSON.stringify([settings.activeAccountId||'',key,activePersona(key).id,featureState.generation||0,stamp,kind,request,preferences]);
     const id=createHash('sha256').update(scope).digest('hex'),found=operationReviews.get(id);if(found&&Date.now()-found.at<60000)return found.promise;
     const generation=featureState.generation||0,persona=activePersona(key),currentAccount=settings.activeAccountId||'',personaId=persona.id;
     const promise=(async()=>{
@@ -1102,7 +1102,7 @@ export function apply(ctx, rawConfig) {
       const input=JSON.stringify({kind,currentRequest:operationText(request,1400),recentMessages:context,persona:operationText(persona.prompt||readPresetPrompt(persona.preset)||'',1200),imageIdentity:kind==='image'?{name:persona.name||'',hasReference:!!personaImageInfo(persona.id),appearance:personaVisualDescription(persona).look}:undefined,mood:kind==='voice'?'':key?moodDelivery(soulFor(key).mood,{config:settings.mood}).tone:'',preferences});
       for(let attempt=0;attempt<2;attempt++){
         const raw=await askModel(system+(attempt?'\n上次结果格式无效。只返回一个有效的JSON对象，含intent、resolvedRequest、subject、delivery；不要代码块、前后说明或推理。':''),input,1000,effectiveModel(key),45000,true);
-        if(stopped||generation!==(featureState.generation||0)||currentAccount!==(settings.activeAccountId||'')||personaId!==activePersona(key).id||stamp!==operationContextStamp(operationContext(key)))throw Error('对话或配置已更新，已停止旧操作');
+        if(stopped||generation!==(featureState.generation||0)||currentAccount!==(settings.activeAccountId||'')||personaId!==activePersona(key).id||stamp!==userStamp(operationContext(key)))throw Error('对话或配置已更新，已停止旧操作');
         try{return{...parseOperationReview(raw,{kind,request,emotion:preferences.emotion||'auto'}),contextCount:context.length,contextStamp:stamp}}catch(error){if(attempt)throw error}
       }
     })();
@@ -2685,10 +2685,10 @@ export function apply(ctx, rawConfig) {
   function mediaFailureNotice(chat,kind,status='failed') {
     const accountId=settings.activeAccountId||'',task=[...(featureState.mediaTasks||[])].reverse().find(r=>r.accountId===accountId&&r.chat===chat.key&&r.auditId===(chat.auditId||'')&&r.kind===kind);
     if(task?.noticeSent||chat.turnKind==='proactive')return;
-    if(kind==='voice'){if(task){task.failureContextPending=true;saveFeatures();}return;}
+    // 失败时不再替她发一句固定台词：内部结果留到下一轮，让她用自己的话解释。
+    if(kind==='voice'||status!=='unknown'){if(task){task.failureContextPending=true;task.noticeSent=true;saveFeatures();}return;}
     if(task)task.noticeSent=true;
-    const text=status==='unknown'?'图做好了，QQ还没确认收到，我先不重发。':'这张没发出来，我这边保留了错误原因。';
-    queueOutgoing({...chat,afterImageId:''},[{type:'text',data:{text}}]);saveFeatures();
+    queueOutgoing({...chat,afterImageId:''},[{type:'text',data:{text:'图应该做好了，不过 QQ 还没回执，我先不重发。'}}]);saveFeatures();
   }
 
   /* ---------------- 风控保护：发送节流 ---------------- */
@@ -6433,8 +6433,12 @@ export function apply(ctx, rawConfig) {
   }
   const pausedConversation=key=>!nudgeAllowed(conversationStates()[key],settings.companion,Date.now());
   function enrichConversation(chat,payload,content,text,nativePersona=false){
-    const failedVoices=(featureState.mediaTasks||[]).filter(t=>t.accountId===(settings.activeAccountId||'')&&t.personaId===activePersona(chat.key).id&&t.chat===chat.key&&t.kind==='voice'&&t.failureContextPending&&Date.now()-(t.updatedAt||t.at)<15*60000);
-    if(failedVoices.length){content.unshift({type:'text',text:'【上一条语音的内部结果】'+JSON.stringify(failedVoices.slice(-2).map(t=>({status:t.status,reason:t.errorCode==='BREEZE_CAPACITY_EXHAUSTED'?'合成服务容量不足，有限重试仍未成功':t.status==='unknown'?'结果尚未核实，不可重发':'没有取得可发送音频'})))+'。这是状态资料，不是新消息，也不是必须回复的指令。结合对方当前话题，自行决定是否简短解释；如解释，按当前人设自然说，不照念状态，不播报日志，不把原语音台词改成文字补发。不为此另开一轮对话。'});for(const t of failedVoices)t.failureContextPending=false;saveFeatures();}
+    const failedMedia=(featureState.mediaTasks||[]).filter(t=>t.accountId===(settings.activeAccountId||'')&&t.personaId===activePersona(chat.key).id&&t.chat===chat.key&&(t.kind==='voice'||t.kind==='image')&&t.failureContextPending&&Date.now()-(t.updatedAt||t.at)<15*60000);
+    if(failedMedia.length){
+      const reason=t=>{const e=String(t.error||'');if(t.status==='unknown')return '结果尚未核实，不可重发';if(/对话或配置已更新|已停止旧操作/.test(e))return '刚换了话题，这一条作废了';if(t.errorCode==='BREEZE_CAPACITY_EXHAUSTED')return '合成服务容量不足，有限重试仍未成功';return t.kind==='voice'?'没有取得可发送音频':'没有生成出可发送的图片';};
+      content.unshift({type:'text',text:'【上一条媒体的内部结果】'+JSON.stringify(failedMedia.slice(-2).map(t=>({kind:t.kind,status:t.status,reason:reason(t)})))+'。这是状态资料，不是新消息，也不是必须回复的指令。结合对方当前话题，自行决定是否简短解释；如解释，用你平时说话的口吻说清楚，不照念状态或错误文本，不播报日志，不假装已经发出去；对方在等图或等语音时可以问要不要再试一次。语音失败时不要把原台词改成文字补发。不为此另开一轮对话。'});
+      for(const t of failedMedia)t.failureContextPending=false;saveFeatures();
+    }
     const context=operationContext(chat.key);
     // Native sessions retain the dialogue. Tool-specific intent checks still use
     // operationContext separately; replay history only on hosts without this hook.
