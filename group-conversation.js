@@ -50,7 +50,13 @@ export function mergeGroupWindow(batch,plan){
 }
 
 export function visibleAssistantText(turn={}){
- return (turn.visibleParts??(turn.hadToolCalls?[]:turn.parts)??[]).join('\n\n').trim();
+  const visible=(turn.visibleParts??[]).join('\n\n').trim();
+  if(visible)return visible;
+  const parts=(turn.parts??[]).filter(t=>String(t||'').trim());
+  const last=parts.length?String(parts.at(-1)).trim():'';
+  if(!last)return '';
+  if(/^【(?:当前情绪底色|近期心情|本轮相处方式|本轮群聊分寸|对方现在)[^】]*】/.test(last))return '';
+  return last;
 }
 export function collectAssistantMessage(turn,message,text){
  const content=Array.isArray(message?.content)?message.content:[];

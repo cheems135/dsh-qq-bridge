@@ -10,7 +10,7 @@ const text=(value,max=500)=>String(value??'').replace(/[\u0000-\u0008\u000b\u000
 const clone=value=>JSON.parse(JSON.stringify(value));
 export const LIFE_PHASES=[{id:'night',label:'夜间',start:0,end:360},{id:'morning',label:'早间',start:360,end:720},{id:'afternoon',label:'午后',start:720,end:1080},{id:'evening',label:'晚间',start:1080,end:1440}];
 export function lifeConfig(value={}){const v=value&&typeof value==='object'?value:{};return {enabled:v.enabled!==false,execute:v.execute!==false,sleep:v.sleep!==false,maxTasksPerDay:Number(v.maxTasksPerDay)===0?0:Math.max(1,Math.min(99,Number(v.maxTasksPerDay)||8))};}
-export function calendarNow(at=Date.now(),timeZone='Asia/Shanghai'){
+export function calendarNow(at=Date.now(),timeZone=undefined){
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(at)).map(p=>[p.type,p.value]));
   return {day:parts.year+'-'+parts.month+'-'+parts.day,minute:Number(parts.hour)*60+Number(parts.minute),clock:parts.hour+':'+parts.minute};
 }

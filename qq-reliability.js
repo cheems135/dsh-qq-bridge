@@ -7,6 +7,10 @@ export function cleanOutgoingText(value='') {
   let text=String(value).replace(/(?:\[|【)(?:语音|声音)(?:[:：\]】]|$)[\s\S]*/g,'')
     .replace(/\[(?:图|图片|照片)[:：][^\]]*\]/g,'')
     .replace(/\[(?:发送|群发|定时|设置|查|收藏表情)[:：][^\]]*\]/g,'')
+    // 内部提示词块与签名标记绝不能出现在对话里
+    .replace(/⟦\/?qqctx[^⟧]*⟧/g, '')
+    .replace(/(?:^|\n)[ \t]*【(?:当前情绪底色|近期心情|本轮相处方式|本轮群聊分寸|对方现在|你刚才想接的话|说话方式|自然对话与留白|群聊自主参与|群聊表达|图片语境)[^】]*】[^\n]*/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
     // Emoji pictographs render as QQ's yellow faces and are not part of her
     // text voice; kaomoji and ordinary punctuation are untouched.
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,'');
