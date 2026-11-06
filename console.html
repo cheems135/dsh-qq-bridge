@@ -605,7 +605,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
 .page-diary .diary-date{display:flex;gap:10px;align-items:baseline}
 @media(max-width:600px){.page-diary .diary-sheet>.diary-text{font-size:19px;letter-spacing:.01em}.page-diary .diary-title{font-size:22px}}
 
-.save-dock{position:sticky;top:0;z-index:1400;display:flex;align-items:center;justify-content:flex-end;gap:14px;min-height:54px;padding:8px 24px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:0 3px 16px #294e780d}.save-dock small{color:var(--ink2);font-size:12px}.save-dock button{min-width:112px}.save-dock[data-state="dirty"] small{color:var(--warn)}.save-dock[data-state="failed"] small{color:var(--danger)}@media(max-width:600px){.save-dock{padding:8px 14px;gap:10px}.save-dock small{font-size:11px;flex:1}.save-dock button{min-width:104px;padding:8px 12px}}
+.save-dock{position:fixed;top:auto;right:24px;bottom:18px;z-index:1400;display:flex;align-items:center;justify-content:flex-end;gap:14px;min-height:54px;max-width:calc(100vw - 48px);padding:8px 16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 28px #294e7824}.save-dock small{max-width:min(55vw,520px);overflow-wrap:anywhere}body{padding-bottom:92px}html[data-device-ui="phone"] .save-dock{left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));max-width:none}html[data-device-ui="phone"] body{padding-bottom:calc(170px + env(safe-area-inset-bottom))!important}.save-dock small{color:var(--ink2);font-size:12px}.save-dock button{min-width:112px}.save-dock[data-state="dirty"] small{color:var(--warn)}.save-dock[data-state="failed"] small{color:var(--danger)}@media(max-width:600px){.save-dock{padding:8px 14px;gap:10px}.save-dock small{font-size:11px;flex:1}.save-dock button{min-width:104px;padding:8px 12px}}
 </style><script src="/im-bridge/ui/device-ui.js"></script></head>
 <body>
 <section class="save-dock" id="saveDock" aria-label="保存当前页面设置"><small id="saveDockStatus" role="status" aria-live="polite">保存当前页设置</small><button id="saveCurrentPage" class="primary" type="button" disabled>一键保存</button></section>
@@ -5089,3 +5089,14 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
 
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
