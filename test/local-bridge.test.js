@@ -414,3 +414,10 @@ test('actual QQ route attaches saved identity bytes for ordinary portrait synony
 
 
 
+
+test('local merged-forward input includes actual image URLs and directory before the model turn',async()=>{
+ const h=setup(),s=h.sandbox;
+ s.sharedContext=async(payload,key)=>{assert.equal(key,h.chat.key);assert.equal(payload.message[0].type,'forward');return {images:[{type:'image',mediaType:'image/png',data:'aW1hZ2U='}],text:'转发真实目录，图片0:1已附上，其他未读'};};
+ await h.routeLocalTurn(h.chat,'看看转发里的图',false,{message_id:99001,message:[{type:'forward',data:{id:'real-observed-id'}}]});
+ const current=h.calls[0].body.messages.at(-1).content;assert(Array.isArray(current));assert.equal(current.filter(p=>p.type==='image_url').length,1);assert.equal(current.find(p=>p.type==='image_url').image_url.url,'data:image/png;base64,aW1hZ2U=');assert(current.some(p=>p.type==='text'&&p.text.includes('其他未读')));
+});
