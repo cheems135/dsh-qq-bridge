@@ -15,7 +15,7 @@ export function chooseLocalRoute(snapshot,requirements={}, {enabled=true,hostToo
  if(!snapshot)return api('本地服务暂不可用');
  if(snapshot.serviceReachable===false)return api('本地服务暂不可用');
  if(snapshot.busy)return {target:'wait',reason:'本地任务排队中，空闲后继续本轮'};
- if(snapshot.status==='unavailable')return api('本地服务暂不可用');
+ if(snapshot.status==='unavailable')return api(snapshot.reason||'本地服务暂不可用');
  const features=snapshot.features||{};
  for(const key of ['text','json','tools','vision','asr','image','speech','video','native','special']){
   if(!requirements[key])continue;

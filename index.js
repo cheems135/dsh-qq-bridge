@@ -5784,12 +5784,12 @@ export function apply(ctx, rawConfig) {
     const base=String(settings.localChat?.baseUrl||'http://127.0.0.1:8777').replace(/\/+$/,'');
     if(!isLoopbackUrl(base))return {status:'unavailable',features:{},reason:'本地网关必须使用本机回环地址'};
     try{
-      const current=await requestLocalJson(base+'/v1/local/capabilities',{timeoutMs:4000});if(!current.ok)throw Error('本地能力检查暂不可用');let value=current.body;
-      if(!value.busy&&(force||value.status!=='ready'||vision&&typeof value.features?.vision?.supported!=='boolean')){const tested=await requestLocalJson(base+'/v1/local/capabilities/probe',{method:'POST',body:{vision,force},timeoutMs:180000});if(!tested.ok)throw Error('本地能力测试未完成');value=tested.body;}
+      const current=await requestLocalJson(base+'/v1/local/capabilities',{timeoutMs:4000});if(!current.ok)throw Error(current.body?.error?.message||('本地能力检查接口 HTTP '+current.status));let value=current.body;
+      if(!value.busy&&(force||value.status!=='ready'||vision&&typeof value.features?.vision?.supported!=='boolean')){const tested=await requestLocalJson(base+'/v1/local/capabilities/probe',{method:'POST',body:{vision,force},timeoutMs:180000});if(!tested.ok)throw Error(tested.body?.error?.message||('本地能力测试接口 HTTP '+tested.status));value=tested.body;}
       const audio=audioAnalysis?.status?.();value={...value,features:{...value.features,asr:{supported:audio?.available===true&&audio?.transcription===true,reason:audio?.transcription?'本机语音识别已配置':'本机语音识别尚未就绪'}}};
       if(typeof applyMixedCapabilities==='function')value=applyMixedCapabilities(value);
       return value;
-    }catch{return {status:'unavailable',features:{},reason:'无法完成本地能力检查'};}
+    }catch(error){return {status:'unavailable',features:{},reason:'本地能力检查未完成：'+localErrorDetail(error).slice(0,240)};}
   }
   function localWaitHistory(scope){return (featureState.localWaitNotices||[]).filter(row=>row.accountId===scope.accountId&&row.personaId===scope.personaId&&row.key===scope.key).slice(-3).map(row=>row.text);}
   function rememberLocalWait(scope,text){featureState.localWaitNotices=[...(featureState.localWaitNotices||[]),{accountId:scope.accountId,personaId:scope.personaId,key:scope.key,text,at:Date.now()}].slice(-40);saveFeatures();}
@@ -8668,7 +8668,7 @@ export function apply(ctx, rawConfig) {
               if(patch.websites&&typeof patch.websites==='object'){if(Array.isArray(patch.websites.sources)&&patch.websites.sources.some(row=>!websiteConfig({sources:[row]}).sources.length))throw Error('来源中有无效或包含凭据的网页地址');settings.websites=websiteConfig({...settings.websites,...patch.websites});}
               if(patch.personaGrowth&&typeof patch.personaGrowth==='object')settings.personaGrowth=growthConfig({...settings.personaGrowth,...patch.personaGrowth});
               if(patch.phone&&typeof patch.phone==='object'){settings.phone=phoneConfig({...settings.phone,...patch.phone});phoneController?.cancel();}
-              if(patch.agency&&typeof patch.agency==='object'){settings.agency=agencyConfig({...settings.agency,...patch.agency});phoneController?.cancel();}
+              if(patch.agency&&typeof patch.agency==='object'){const next=agencyConfig({...settings.agency,...patch.agency});if(isDesktop&&next.browserExecutable&&patch.agency.browserExecutable!==undefined){if(!/^(?:[a-z]:[\\/]|\\\\)/i.test(next.browserExecutable)||!next.browserExecutable.toLowerCase().endsWith('.exe')||!existsSync(next.browserExecutable)||!statSync(next.browserExecutable).isFile())throw Error('浏览器路径需要是电脑上实际存在的 .exe 程序完整路径');}settings.agency=next;phoneController?.cancel();}
               if(patch.life&&typeof patch.life==='object')settings.life=lifeConfig({...settings.life,...patch.life});
               if(patch.wallet&&typeof patch.wallet==='object')settings.wallet=walletConfig({...settings.wallet,...patch.wallet});
               if (patch.memory && typeof patch.memory === 'object') {
@@ -10722,7 +10722,7 @@ export function apply(ctx, rawConfig) {
     const denial=ownerToolDenial(context.chat,context.meta,{owners:settings.owners,paused:accountPaused,stopped,freeTools:true,autonomous:settings.agency.autonomous&&context.meta?.kind==='proactive'&&autonomyConfig().enabled&&context.meta.initiativeAccountId===(settings.activeAccountId||'')&&context.meta.initiativePersonaId===activePersona(context.key).id,supersedingVersion:context.chat.supersedingVersion||0,auditStatus:auditById(context.meta?.auditId)?.status||''});
     return denial===undefined;
   }
-  browserController=createBrowserController({getDataDir:()=>cfg.dataDir,getCacheDir:()=>cacheRoot,getHeadless:c=>workspaceMode(settings.agency,c)!=='desktop',authorize:c=>agencyAuthorized(c,'browser'),beforeAction:(args,c,observation)=>{if(c.exec)executionRuntime.begin(c.exec,c,{...args,toolName:'bridge_browser'},observation);}});
+  browserController=createBrowserController({getDataDir:()=>cfg.dataDir,getCacheDir:()=>cacheRoot,getExecutablePath:()=>isDesktop?settings.agency.browserExecutable:'',getHeadless:c=>workspaceMode(settings.agency,c)!=='desktop',authorize:c=>agencyAuthorized(c,'browser'),beforeAction:(args,c,observation)=>{if(c.exec)executionRuntime.begin(c.exec,c,{...args,toolName:'bridge_browser'},observation);}});
   desktopController=createDesktopController({getCacheDir:()=>cacheRoot,authorize:c=>agencyAuthorized(c,'desktop'),nativeExecute:createNativeDesktop({getTools:()=>ctx.get('tools'),getAgent:id=>ctx.get('agents')?.get(id)}),beforeAction:async(args,c,observed)=>{
     let proof={};const focused=observed.focused,element=args.action==='click'?(observed.controls||[]).find(e=>args.x>=e.x&&args.x<e.x+e.width&&args.y>=e.y&&args.y<e.y+e.height):focused;
     if(element&&!element.password)proof={risk:'safe',label:element.label||observed.title,target:observed.title};

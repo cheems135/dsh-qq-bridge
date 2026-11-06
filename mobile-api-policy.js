@@ -3,7 +3,7 @@ export const mobileApiMessage='手机版仅支持 API，请在“连接与搭配
 const apiTypes=new Set(['openai','anthropic','responses','runninghub']);
 export function apiOnlySettings(value={},apiOnly=true){
  if(!apiOnly)return value;
- return {...value,localChat:{...value.localChat,enabled:false,apiComplement:false,initiativeEnabled:false},comfyui:{...value.comfyui,enabled:false,localVoiceDir:''},agency:{...value.agency,desktop:false,workspace:'internal'},voice:{...value.voice,...(value.voice?.engine==='localai'?{engine:'none',enabled:false}:{})}};
+ return {...value,localChat:{...value.localChat,enabled:false,apiComplement:false,initiativeEnabled:false},comfyui:{...value.comfyui,enabled:false,localVoiceDir:''},agency:{...value.agency,desktop:false,workspace:'internal',browserExecutable:''},voice:{...value.voice,...(value.voice?.engine==='localai'?{engine:'none',enabled:false}:{})}};
 }
 export function apiOnlyConnections(value={},apiOnly=true){
  if(!apiOnly)return value;

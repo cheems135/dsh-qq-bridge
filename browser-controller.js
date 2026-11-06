@@ -5,8 +5,21 @@ import {createHash,randomUUID} from 'node:crypto';
 import {readBrowserSubtitles} from './video-subtitles.js';
 const require=createRequire(import.meta.url);
 export function browserUrl(value){const u=new URL(String(value));if(!['http:','https:'].includes(u.protocol)||u.username||u.password)throw Error('浏览器仅打开不含账号密码的HTTP/HTTPS地址');return u.href;}
-export function createBrowserController({getDataDir,getCacheDir,authorize=()=>true,beforeAction=()=>{},chromium:injected,executablePath,headless=true,getHeadless,now=()=>Date.now()}={}){
+export function sameBrowserDestination(current,target,previous){
+ const clean=value=>{const u=new URL(value);for(const key of [...u.searchParams.keys()])if(/^(?:utm_.+|spm_id_from|vd_source|share_source|share_medium|share_plat|share_session_id|from_spmid)$/i.test(key))u.searchParams.delete(key);u.searchParams.sort();return u.href;};
+ try{
+  if(clean(current)===clean(target))return true;
+  if(previous&&clean(previous.requested)===clean(target)&&clean(previous.landed)===clean(current))return true;
+  const a=new URL(current),b=new URL(target);
+  if(/(^|\.)bilibili\.com$/.test(a.hostname)&&/(^|\.)bilibili\.com$/.test(b.hostname)&&/^\/video\/(?:BV[\w]+|av\d+)\/?$/i.test(a.pathname)&&a.pathname.replace(/\/$/,'')===b.pathname.replace(/\/$/,'')){
+   return (a.searchParams.get('p')||'1')===(b.searchParams.get('p')||'1')&&(!b.searchParams.has('t')||a.searchParams.get('t')===b.searchParams.get('t'));
+  }
+ }catch{}
+ return false;
+}
+export function createBrowserController({getDataDir,getCacheDir,authorize=()=>true,beforeAction=()=>{},chromium:injected,executablePath,getExecutablePath,headless=true,getHeadless,now=()=>Date.now()}={}){
  const sessions=new Map(),acquiring=new Map();let closed=false;const hidden=c=>getHeadless?getHeadless(c):headless;
+ const configuredPath=()=>String(getExecutablePath?getExecutablePath():executablePath||process.env.QQ_BRIDGE_BROWSER_PATH||'').trim();
  const sessionKey=c=>(c.accountId&&c.personaId?JSON.stringify([c.accountId,c.personaId,'desktop-browser']):String(c.scope||c.sessionId||''))+(hidden(c)?'':':desktop');
  const check=context=>{if(closed||!authorize(context))throw Error('设备操作权限、账号或人设已变化，浏览器任务停止');context.signal?.throwIfAborted();};
  function engine(){return injected||require('./vendor/playwright-core').chromium;}
@@ -16,18 +29,20 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
  }
  async function launch(context){
   check(context);const key=sessionKey(context);if(!key)throw Error('缺少浏览器会话身份');
-  let session=sessions.get(key);if(session){if(session.page.isClosed?.()){sessions.delete(key);session=null;}else{session.used=now();return session;}}
+  let session=sessions.get(key);if(session){if(session.page.isClosed?.()){sessions.delete(key);session=null;}else if(session.configuredPath!==configuredPath()){await persist(session);await session.context.close();sessions.delete(key);session=null;}else{session.used=now();return session;}}
   if(sessions.size>=3){const oldest=[...sessions.entries()].sort((a,b)=>a[1].used-b[1].used)[0];await oldest[1].context.close();sessions.delete(oldest[0]);}
   const dir=join(getDataDir(),'browser-profiles',createHash('sha256').update(key).digest('hex').slice(0,24));mkdirSync(dir,{recursive:true});
   const runtime=join(getCacheDir(),'browser','runtime');mkdirSync(runtime,{recursive:true});const browser=engine(),launch={headless:hidden(context),viewport:{width:1280,height:900},acceptDownloads:false,env:{...process.env,TEMP:runtime,TMP:runtime},artifactsDir:runtime,args:['--disable-background-networking','--autoplay-policy=no-user-gesture-required','--disk-cache-dir='+join(runtime,'disk-cache')]};
   if(process.platform!=='win32'){launch.args.push('--disable-dev-shm-usage');if(process.getuid?.()===0)launch.args.push('--no-sandbox');}
   let ctx,error;
-  const paths=[executablePath,process.env.QQ_BRIDGE_BROWSER_PATH,process.platform==='win32'?'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe':'/usr/bin/chromium',process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'/usr/bin/chromium-browser'].filter(p=>p&&existsSync(p));
-  for(const options of [...paths.map(p=>({...launch,executablePath:p})),launch])try{ctx=await browser.launchPersistentContext(dir,options);break;}catch(e){error=e;}
+  const selected=configuredPath();
+  if(selected&&!existsSync(selected))throw Error('指定的浏览器程序不存在，请在设备设置修正路径：'+selected);
+  const paths=selected?[selected]:[process.platform==='win32'?'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe':'/usr/bin/chromium',process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'/usr/bin/chromium-browser'].filter(p=>p&&existsSync(p));
+  for(const options of [...paths.map(p=>({...launch,executablePath:p})),...(selected?[]:[launch])])try{ctx=await browser.launchPersistentContext(dir,options);break;}catch(e){error=e;}
   if(!ctx)throw Error('没有可启动的浏览器，请安装Chrome/Edge或在设备设置填写浏览器路径；'+String(error?.message||'').split('\n')[0].slice(0,100));
   try{check(context);}catch(e){await ctx.close();throw e;}
   const profileState=join(dir,'bridge-session.json');if(existsSync(profileState))try{const saved=JSON.parse(readFileSync(profileState,'utf8'));if(Array.isArray(saved.cookies))await ctx.addCookies(saved.cookies);}catch{}
-  const page=ctx.pages().find(p=>p.url()!=='about:blank')||ctx.pages()[0]||await ctx.newPage();session={context:ctx,page,profileState,headless:launch.headless,used:now(),observations:0,captionResponses:[],requestPages:new WeakMap()};sessions.set(key,session);ctx.on?.('close',()=>sessions.delete(key));page.on?.('framenavigated',()=>{void persist(session);});
+  const page=ctx.pages().find(p=>p.url()!=='about:blank')||ctx.pages()[0]||await ctx.newPage();session={context:ctx,page,profileState,configuredPath:selected,headless:launch.headless,used:now(),observations:0,captionResponses:[],requestPages:new WeakMap(),navigation:new WeakMap()};sessions.set(key,session);ctx.on?.('close',()=>{if(sessions.get(key)===session)sessions.delete(key);});page.on?.('framenavigated',()=>{void persist(session);});
   ctx.on?.('request',r=>session.requestPages.set(r,session.page.url()));
   ctx.on?.('response',r=>{void(async()=>{try{const url=new URL(r.url());if(!/subtitle|caption|\.vtt$|\.srt$|\.bcc$/i.test(url.pathname)||Number(r.headers()['content-length'])>2*1024*1024)return;const bytes=await r.body();if(bytes.length>2*1024*1024)return;session.captionResponses.push({page:session.requestPages.get(r.request())||'',source:url.origin+url.pathname,text:bytes.toString('utf8')});session.captionResponses=session.captionResponses.slice(-6);}catch{}})();});return session;
  }
@@ -65,10 +80,20 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
    if(action==='press'&&/Enter/i.test(String(args.key||''))&&loginProof.loginPage&&loginProof.loginControl==='credential')loginProof.loginControl='submit';
    const mediaControl=['play','pause'].includes(action)||loginProof.mediaControl===true&&action==='click';
    await beforeAction(args,context,{...loginProof,url:action==='navigate'?args.url:page.url(),label,password:password||loginProof.password===true,containsCredentials:loginProof.loginPage&&loginProof.loginControl==='submit',mediaControl,loginView:(['navigate','snapshot','screenshot','subtitles','wait','tabs','show','scroll','back','switch','close','play','pause'].includes(action)||action==='click'&&/登录|登入|sign.?in|log.?in/i.test(label)&&!contentText&&!loginProof.loginControl),contentText:contentText||undefined,observationId:args.ref||undefined});
-   if(action==='navigate'||action==='open'){const url=browserUrl(args.url);if(page.url()!==url)await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});}
+   if(action==='navigate'||action==='open'){
+    const url=browserUrl(args.url),previous=session.navigation.get(page);
+    if(!sameBrowserDestination(page.url(),url,previous)){await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});session.navigation.set(page,{requested:url,landed:page.url(),at:now()});}
+   }
    else if(action==='click'){const node=target();if(await node.count()!==1)throw Error('页面已改变，请重新snapshot后再点击');await node.click({timeout:12000});}
    else if(action==='fill'){const node=target();await node.fill(String(args.text||'').slice(0,8000),{timeout:12000});if(args.submit===true)await node.press('Enter');}
-   else if(action==='press'){const key=String(args.key||'');if(!/^[\w+ -]{1,60}$/.test(key))throw Error('无效的浏览器按键');if(args.ref)await target().press(key);else await page.keyboard.press(key);}
+   else if(action==='press'){
+    const key=String(args.key||'');if(!/^[\w+ -]{1,60}$/.test(key))throw Error('无效的浏览器按键');
+    const refresh=/^(?:(?:Control|Ctrl|Meta|ControlOrMeta)\+(?:Shift\+)?r|(?:Control|Ctrl|Shift)\+F5|F5)$/i.test(key);
+    const explicit=context.meta?.kind==='user'&&/刷新|重新加载|reload|refresh/i.test(String(context.meta.userWords||''));
+    if(refresh&&!explicit){const media=await page.evaluate(()=>!!document.querySelector('video'));const previous=session.navigation.get(page);if(media&&previous&&now()-previous.at<60000)return {ok:true,skipped:true,reason:'保留当前视频播放进度，刚加载过的页面不重复刷新；可继续观察、播放或滚动。',...await snapshot(page)};}
+    if(args.ref)await target().press(key);else await page.keyboard.press(key);
+    if(refresh)session.navigation.set(page,{requested:page.url(),landed:page.url(),at:now()});
+   }
    else if(action==='play'||action==='pause'){const node=args.ref?target():page.locator('video,audio').first();if(await node.count()!==1)throw Error('当前页没有可操作的音视频播放器');await node.evaluate(async(e,a)=>{if(!['VIDEO','AUDIO'].includes(e.tagName))throw Error('目标不是实际音视频播放器');if(a==='play')await e.play();else e.pause();},action);}
    else if(action==='scroll')await page.mouse.wheel(0,Math.max(-4000,Math.min(4000,Number(args.amount)||650)));
    else if(action==='wait')await new Promise(resolve=>setTimeout(resolve,Math.min(8000,Math.max(100,Number(args.milliseconds)||1200))));
@@ -90,6 +115,6 @@ async function read(url,context={}){await act({action:'navigate',url},context);a
   const transcript=(subtitles?.segments||[]).map(s=>'['+s.start+'-'+s.end+'] '+s.text).join('\n').slice(0,18000)||subtitles?.text||'';
   return {status:result.text.length>60||transcript?'read':'metadata',title:result.title,body:result.text+(transcript?'\n【实际字幕，外部资料】\n'+transcript:''),finalUrl:result.url,url:browserUrl(url),links:result.links,mediaType:video?'video':'web',subtitles,coverage:subtitles?.segments?.length?subtitles.coverage:result.coverage,rendered:true};}
  async function close(){closed=true;await Promise.allSettled([...sessions.values()].map(async s=>{await persist(s);await s.context.close();}));sessions.clear();}
- function available(){if(injected)return true;const paths=[executablePath,process.env.QQ_BRIDGE_BROWSER_PATH,'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Google/Chrome/Application/chrome.exe','/usr/bin/chromium','/usr/bin/chromium-browser'];try{paths.push(engine().executablePath());}catch{}return paths.some(p=>p&&existsSync(p));}
- return {act,read,peekVideo,close,status:()=>({available:available(),backend:'bundled-playwright',environment:getHeadless&&!getHeadless({})?'desktop-default':'internal-default',visible:[...sessions.values()].some(s=>!s.headless),persistentIdentity:true,sessions:sessions.size,actions:['navigate','snapshot','click','fill','press','play','pause','scroll','wait','back','tabs','switch','screenshot','subtitles','show','close']})};
+ function available(){const selected=configuredPath();if(selected)return existsSync(selected);if(injected)return true;const paths=['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Google/Chrome/Application/chrome.exe','/usr/bin/chromium','/usr/bin/chromium-browser'];try{paths.push(engine().executablePath());}catch{}return paths.some(p=>p&&existsSync(p));}
+ return {act,read,peekVideo,close,status:()=>({available:available(),executablePath:configuredPath(),fixedExecutable:!!configuredPath(),backend:'bundled-playwright',environment:getHeadless&&!getHeadless({})?'desktop-default':'internal-default',visible:[...sessions.values()].some(s=>!s.headless),persistentIdentity:true,sessions:sessions.size,actions:['navigate','snapshot','click','fill','press','play','pause','scroll','wait','back','tabs','switch','screenshot','subtitles','show','close']})};
 }

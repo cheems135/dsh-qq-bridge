@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.58.3",
+  "version": "1.58.4",
   "private": true,
   "type": "module",
   "description": "QQ桥接：Android DSHBox / Windows Harness 共用版，设备切换与USB完整同步",

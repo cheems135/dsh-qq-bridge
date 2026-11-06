@@ -75,3 +75,8 @@ test('mode changes abort old API calls and cancel old bridge jobs exactly once',
  s.save();assert.equal(oldController.signal.aborted,true);assert.equal(s.apiModeController.signal.aborted,false);assert.equal(transitions.length,2);s.save();assert.equal(transitions.length,2);s.settings.localChat.enabled=false;s.save();assert.equal(transitions.length,4);
 });
 
+test('local capability failures preserve their reason and never enable an unselected API fallback',()=>{
+ const snapshot={status:'unavailable',serviceReachable:true,reason:'本地能力测试接口 HTTP 503'};
+ const result=chooseLocalRoute(snapshot,{text:true},{enabled:true,apiComplement:false});
+ assert.equal(result.target,'unavailable');assert.equal(result.reason,snapshot.reason);
+});

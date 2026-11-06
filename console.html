@@ -604,8 +604,11 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
 .page-diary .diary-title{font-size:24px;font-weight:400}
 .page-diary .diary-date{display:flex;gap:10px;align-items:baseline}
 @media(max-width:600px){.page-diary .diary-sheet>.diary-text{font-size:19px;letter-spacing:.01em}.page-diary .diary-title{font-size:22px}}
+
+.save-dock{position:sticky;top:0;z-index:1400;display:flex;align-items:center;justify-content:flex-end;gap:14px;min-height:54px;padding:8px 24px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:0 3px 16px #294e780d}.save-dock small{color:var(--ink2);font-size:12px}.save-dock button{min-width:112px}.save-dock[data-state="dirty"] small{color:var(--warn)}.save-dock[data-state="failed"] small{color:var(--danger)}@media(max-width:600px){.save-dock{padding:8px 14px;gap:10px}.save-dock small{font-size:11px;flex:1}.save-dock button{min-width:104px;padding:8px 12px}}
 </style><script src="/im-bridge/ui/device-ui.js"></script></head>
 <body>
+<section class="save-dock" id="saveDock" aria-label="保存当前页面设置"><small id="saveDockStatus" role="status" aria-live="polite">保存当前页设置</small><button id="saveCurrentPage" class="primary" type="button" disabled>一键保存</button></section>
 <nav class="mobile-returnbar" aria-label="离开插件与返回首页">
   <a id="returnDsh" href="/" target="_top">← 返回 DSH</a>
   <button id="returnOverview" data-go="overview" type="button">插件首页</button>
@@ -1439,6 +1442,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     lines.push('ComfyUI 版本：' + (s.version || '未知') + (s.reachable ? '' : '（' + (s.error || '无法连接') + '）'));
     if (v.queue) lines.push('队列：运行 ' + v.queue.running + ' · 等待 ' + v.queue.pending);
     var detection=v.capabilities&&v.capabilities.detection;
+    if(v.version&&v.version==='1.52.1')lines.push('本地网关仍是旧进程 '+v.version+'；空闲时重启本地网关以加载已安装更新。');
     lines.push('使用模式：'+(v.localChat&&v.localChat.enabled?(v.localChat.apiComplement?'本地优先，已开启 API 补全':'本地独立运行，不自动调用 API'):'API；本地页试聊仍仅测试本机'));
     if(detection){lines.push('能力检测：'+({pending:'待检测',ready:'已检测',unavailable:'服务未就绪'}[detection.status]||detection.status)+(detection.busy?' · 本机有任务，稍后再检测':''));var names={text:'文字',json:'结构化分析',tools:'工具协议',vision:'看图',image:'生图工作流',video:'视频工作流',speech:'语音服务',native:'原生终端任务',special:'特殊流程'};Object.keys(detection.features||{}).forEach(function(key){var item=detection.features[key];lines.push((names[key]||key)+'：'+(item.supported===true?'可用':item.supported===false?'未接入 / 未通过':'待检测')+' · '+item.reason);});lines.push('容量：上下文 '+detection.contextWindow+' token · 输出上限 '+detection.maxOutputTokens+' token');}
     status.textContent = lines.join('\n');
@@ -1666,7 +1670,8 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
   }
   function bindServiceConnections(){
     paintConnectionDraft();void refreshConnections();
-    $('connectionWholeMode').onchange=function(){var local=this.value==='local';$('connectionComplement').disabled=!local;if(!local)$('connectionComplement').checked=false;};
+    $('connectionWholeMode').onchange=function(){var local=this.value==='local';$('connectionComplement').disabled=!local;if(!local)$('connectionComplement').checked=false;$('connectionModeNotice').textContent='模式尚未应用，点击“应用整体模式”后生效。';};
+    $('connectionComplement').onchange=function(){$('connectionModeNotice').textContent='API 补充设置尚未应用，请点击“应用整体模式”。';};
     $('connectionModeSave').onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/settings',{localChat:{enabled:$('connectionWholeMode').value==='local',apiComplement:$('connectionWholeMode').value==='local'&&$('connectionComplement').checked}});await refreshConnections();toast('整体模式已应用');}catch(e){$('connectionModeNotice').textContent='未应用：'+e.message;}finally{if(button.isConnected)button.disabled=connectionState?.routes?.enabled===true;}};
 
     ['connectionName','connectionUrl','connectionKey','connectionChat','connectionImage','connectionVideo','connectionSpeech','connectionVoice','connectionType','connectionImageMode','connectionChatPath','connectionImagePath','connectionSpeechPath','connectionAudioFormat'].forEach(function(id){$(id).oninput=captureConnection;});
@@ -2229,7 +2234,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
   function agencyMarkup(){
     var a=featureData?.agency||{},c=data.settings.agency||a.config||{},i=featureData?.imageInput||{},activity=(featureData?.deviceActivity||[]).slice(-6).reverse();
     function toggle(id,label,value){return '<label class="check-field"><input id="'+id+'" type="checkbox"'+(value!==false?' checked':'')+'>'+label+'</label>';}
-    var out='<div class="card"><div class="section-heading"><h2>自主操作设备</h2><span class="tag">'+(a.registered?'DSH 工具已接入':'工具待加载')+'</span></div><p class="muted">由她结合当前想法选择工具，观察、操作，再核对实际反馈。可以进入网页具体内容、播放、截图、滚动和看评论；手机调用 DSHBox Pilot，电脑使用浏览器或桌面工具。日程和网页标题不会被当成已经执行或看过的证据。</p><div class="form-two">'+toggle('agEnabled','允许号主使用设备工具',c.enabled)+toggle('agAutonomous','允许自主轮次浏览和操作',c.autonomous)+toggle('agBrowser','允许操作真实浏览器',c.browser)+toggle('agDesktop','允许观察和操作电脑',c.desktop)+toggle('agPhone','允许使用手机 Pilot',c.phone)+'</div><p class="muted">'+(a.browser?.available?'内部独立浏览器已就绪，默认不弹出桌面窗口。':'手机端使用 Pilot 操作本机浏览器与应用。')+' 系统要求的无障碍或截图授权仍以设备显示的状态为准。</p><label class="field">默认运行环境<select id="agWorkspace"><option value="internal"'+(c.workspace!=='desktop'?' selected':'')+'>内部独立窗口（不占桌面）</option><option value="desktop"'+(c.workspace==='desktop'?' selected':'')+'>桌面应用</option></select><small class="muted">单次明确要求可临时使用桌面；只有修改这里或本人要求默认切换才会长期改变。</small></label><button id="agSave" class="primary">保存设备权限</button><h3>最近实际操作</h3>';
+    var out='<div class="card"><div class="section-heading"><h2>自主操作设备</h2><span class="tag">'+(a.registered?'DSH 工具已接入':'工具待加载')+'</span></div><p class="muted">由她结合当前想法选择工具，观察、操作，再核对实际反馈。可以进入网页具体内容、播放、截图、滚动和看评论；手机调用 DSHBox Pilot，电脑使用浏览器或桌面工具。日程和网页标题不会被当成已经执行或看过的证据。</p><div class="form-two">'+toggle('agEnabled','允许号主使用设备工具',c.enabled)+toggle('agAutonomous','允许自主轮次浏览和操作',c.autonomous)+toggle('agBrowser','允许操作真实浏览器',c.browser)+toggle('agDesktop','允许观察和操作电脑',c.desktop)+toggle('agPhone','允许使用手机 Pilot',c.phone)+'</div><p class="muted">'+(a.browser?.available?'内部独立浏览器已就绪，默认不弹出桌面窗口。':'手机端使用 Pilot 操作本机浏览器与应用。')+' 系统要求的无障碍或截图授权仍以设备显示的状态为准。</p><label class="field">默认运行环境<select id="agWorkspace"><option value="internal"'+(c.workspace!=='desktop'?' selected':'')+'>内部独立窗口（不占桌面）</option><option value="desktop"'+(c.workspace==='desktop'?' selected':'')+'>桌面应用</option></select><small class="muted">单次明确要求可临时使用桌面；只有修改这里或本人要求默认切换才会长期改变。</small></label>'+(mobileApiOnly()?'':'<label class="field">固定浏览器程序路径<input id="agBrowserExecutable" value="'+esc(c.browserExecutable||'')+'" placeholder="C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"><small class="muted">填写 .exe 完整路径，不是网址。指定后只使用这个浏览器，路径失效会报明原因；留空可恢复自动发现。API 与本地模型共用。更换路径后，下次浏览会重开插件自己的浏览器会话并保留登录资料，不退出你手动打开的浏览器。</small></label>')+'<button id="agSave" class="primary">保存浏览器与设备设置</button><h3>最近实际操作</h3>';
     out+=activity.length?activity.map(function(v){return '<p class="muted">'+esc(new Date(v.at).toLocaleString()+' · '+v.name+' / '+v.action+' · '+(v.ok?'返回了实际结果':'未完成'))+'</p>';}).join(''):'<p class="muted">还没有操作记录。可在号主私聊里让她打开网页或按自己的兴趣浏览。</p>';
     out+='<h3>QQ 来图</h3><p class="muted">本次运行已读 '+Number(i.received||0)+' 张，失败 '+Number(i.failed||0)+' 张；支持从 QQ 图片标识重新取得原图。</p>'+(i.lastError?'<p class="err">'+esc(i.lastError)+'</p>':'');
     return out+'</div>';
@@ -3202,13 +3207,13 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       }).catch(function(error){$('localModelsHint').textContent=error.message;}).finally(function(){button.disabled=false;});
     };
     if ((el = $('localSave'))) el.onclick = function () {
-      saveLocalConfig(this);
+      return saveLocalConfig(this);
     };
     if((el=$('localInitiativeSave')))el.onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/settings',{localChat:{initiativeEnabled:$('localInitiativeEnabled').checked}});data.localChat=data.localChat||{};data.localChat.initiativeEnabled=$('localInitiativeEnabled').checked;toast('本地主动聊天设置已保存');await refreshLocalRun();}catch(error){toast('保存失败：'+error.message);}finally{button.disabled=false;}};
     function saveLocalConfig(button) {
       button.disabled = true;
       var config = captureLocalForm();
-      localPost({
+      return localPost({
         action: 'save',
         gatewayUrl: $('localGatewayUrl').value.trim(),
 
@@ -4385,11 +4390,64 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     renderDraftNotice();
   }
   function renderDraftNotice() {
+    syncFloatingSave();
     var notice = $('draftNotice');
     if (!notice) return;
     var count = Object.keys(pageDrafts[tab] || {}).length;
     notice.hidden = !count;
     if ($('draftText')) $('draftText').textContent = '有 ' + count + ' 项未保存修改 · 草稿仅保留在当前窗口';
+  }
+  var floatingSaveBusy=false, floatingSaveCapture=null;
+  function floatingSaveTargets() {
+    var dirty=pageDrafts[tab]||{},buttons=new Set();
+    var allowed=new Set(['agSave','phSave','grSave','shSave','soulSave','vgSave','igSave','mSave','memSave','memDirSave','ownerSave','groupSave','baseSave','autoSave','vSave','vSaveEngine','vsSave','voiceStudioSave','searxSave','pickApply','mfSave','pfSave','dlSave','connectionModeSave','connectionRoutesSave','connectionSave','localSave','localInitiativeSave','cacheSave','pSave','careSave','learnSave','pcSave','wSave','accSave','lifeSave','profileSave','rlSave','rhSave']);
+    var fields=Array.from($('pane')?.querySelectorAll('input,textarea,select')||[]);
+    Object.keys(dirty).forEach(function(key){
+      var field=fields.find(function(el){return formKey(el)===key;});if(!field)return;
+      var id=field.id,target='';
+      if(/^connection(?:WholeMode|Complement)$/.test(id))target='connectionModeSave';
+      else if(/^connectionRoute/.test(id))target='connectionRoutesSave';
+      else if(/^connection/.test(id))target='connectionSave';
+      else if(id==='localInitiativeEnabled')target='localInitiativeSave';
+      else if(/^local/.test(id))target='localSave';
+      else if(/^ag/.test(id))target='agSave';
+      else if(/^v(?:Engine|Custom|Mood|Mini|Breeze)/.test(id))target='vSaveEngine';
+      else if(/^(?:ig|rh)/.test(id))target='igSave';
+      else if(/^(?:mood|websites|videoPlus)/.test(id))target='soulSave';
+      else if(id==='basePersona')target='baseSave';
+      else if(id==='memDir')target='memDirSave';
+      else if(/^vg/.test(id))target='vgSave';
+      if(target&&$(target)&&!$(target).disabled){buttons.add(target);return;}
+      var card=field.closest('.card'),options=card?Array.from(card.querySelectorAll('button[id]')).filter(function(b){return allowed.has(b.id)&&!b.disabled&&typeof b.onclick==='function';}):[];
+      if(options.length===1)buttons.add(options[0].id);
+    });
+    return [...buttons];
+  }
+  function syncFloatingSave(message,state) {
+    var button=$('saveCurrentPage'),status=$('saveDockStatus'),dock=$('saveDock');if(!button||!status)return;
+    var count=Object.keys(pageDrafts[tab]||{}).length,targets=floatingSaveTargets();
+    button.disabled=floatingSaveBusy||!targets.length;button.textContent=floatingSaveBusy?'正在保存…':'一键保存';
+    if(message)status.textContent=message;else if(floatingSaveBusy)status.textContent='正在提交当前页设置…';else status.textContent=count?'本页 '+count+' 项未保存修改':'当前页没有未保存的设置';
+    dock.dataset.state=state||(count?'dirty':'saved');
+  }
+  async function saveFloatingPage() {
+    if(floatingSaveBusy)return;rememberDraft(tab);var origin=tab,targets=floatingSaveTargets();
+    if(!targets.length){syncFloatingSave('本页没有可一键保存的设置；操作或草稿请使用对应按钮。');return;}
+    floatingSaveBusy=true;syncFloatingSave();var failure='';
+    try{
+      for(var id of targets){
+        if(tab!==origin||renderedTab!==origin)break;
+        var button=$(id);if(!button||button.disabled||typeof button.onclick!=='function')continue;
+        floatingSaveCapture=[];
+        try{await button.onclick.call(button,new Event('click'));}catch(error){failure=error.message;}
+        var results=await Promise.allSettled(floatingSaveCapture);floatingSaveCapture=null;
+        var rejected=results.find(function(r){return r.status==='rejected';});if(rejected)failure=rejected.reason?.message||'保存请求未成功';
+        if(failure)break;
+      }
+    }finally{floatingSaveCapture=null;floatingSaveBusy=false;rememberDraft(tab);
+      var remaining=Object.keys(pageDrafts[tab]||{}).length;
+      syncFloatingSave(failure?'未保存成功：'+failure:remaining?'部分修改尚未保存，请检查本页对应设置。':'当前页设置已保存',failure?'failed':remaining?'dirty':'saved');
+    }
   }
   function fieldsSavedBasic(url, payload, editId) {
     var keys = [];
@@ -4397,7 +4455,11 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     if (url === '/im-bridge/send') return ['sendText','sendVoice','sendSticker','sendTarget','sendCustom'];
     if (url === '/im-bridge/presets') return ['pName@' + (editId || 'new'), 'pPrompt@' + (editId || 'new')];
     if (url === '/im-bridge/stickers') return ['sName','sFile'];
+    if(url==='/im-bridge/service-connections'&&payload.action==='save')return Object.keys(readForm()).filter(function(key){return /^connection/.test(key)&&!/^connection(?:WholeMode|Complement|Route)/.test(key);});
+    if(url==='/im-bridge/service-connections'&&payload.action==='routes')return Object.keys(readForm()).filter(function(key){return /^connectionRoute/.test(key);});
+    if (url === '/im-bridge/local' && payload.action==='save') return Object.keys(readForm()).filter(function(key){return /^local/.test(key);});
     if (url !== '/im-bridge/settings') return keys;
+    if ('localChat' in payload) add(['connectionWholeMode','connectionComplement','localInitiativeEnabled']);
     if ('companion' in payload) add(['careEnabled','careContinuity','carePauses','careWait','careExpression','careCasual','careBubbles']);
     if ('mood' in payload) add(['moodEnabled','moodEvery','moodConfidence','moodDecay']);
     if ('learning' in payload) add(['learnEnabled','learnPassive','learnActive','learnFocus','learnInterval','learnDaily']);
@@ -4412,17 +4474,18 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     if ('model' in payload) add(['mProvider','mModel']);
     if ('memory' in payload && ('everyTurns' in payload.memory || 'maxChars' in payload.memory)) add(['memTurns','memChars','memMode','memSchedule']);
     if ('life' in payload) add(['lifeEnabled','lifeExecute','lifeSleep','lifeBudget']);
+    if ('realism' in payload) add(Object.keys(readForm()).filter(function(key){return /^rl/.test(key);}));
     if ('wallet' in payload) add(['wEnabled','wReactions','wMoney','wCoins']);
     if ('memoryDir' in payload) add(['memDir']);
     if ('cacheDir' in payload) add(['cacheInput']);if('mediaRetention' in payload)add(['cacheAuto','cacheDays','cacheMax']);
     if ('proactiveCfg' in payload) add(['pcStart','pcEnd','pcMax']);
     if ('search' in payload) add(['seEngine','searxUrl','seCustomUrl']);
     if ('photo' in payload) add(['phSource','phGender','phLook','phMinWidth']);
-    if ('voice' in payload && Object.keys(payload.voice).some(function (k) { return k !== 'enabled'; })) add(['vEngine','vCustomUrl','vCustomVoice','vMood','vMiniKey','vMiniVoice','vMiniModel']);
+    if ('voice' in payload && Object.keys(payload.voice).some(function (k) { return k !== 'enabled'; })) add(Object.keys(readForm()).filter(function(key){return /^v(?:Engine|Custom|Mood|Mini|Breeze)/.test(key);}));
     if('qzoneAccess' in payload)add(['qzoneEnabled']);
     if('videogen' in payload)add(['vgEnabled','vgSeconds','vgSize','vgAction','vgCamera','vgProfile','vgName','vgUrl','vgKey','vgModel','vgMode','vgCreatePath','vgStatusPath','vgContentPath']);
     if ('imagegen' in payload) { add(['igEnabled','igProvider','igDir','igKey','igModel','igSize','igSteps','igCfg','igSeed','rhKey']); add(Object.keys(readForm()).concat(Object.keys(pageDrafts.imagegen||{})).filter(function(key){return /^(?:rh(?:Name|Note|Mode|Id|Node|Field|Instance|Extra|Style|Reference|PromptModel|FixedMode|Triggers|Queue|Auto)@|studio:)/.test(key);})); }
-    if ('agency' in payload) add(['agEnabled','agAutonomous','agBrowser','agDesktop','agPhone','agWorkspace']);
+    if ('agency' in payload) add(['agEnabled','agAutonomous','agBrowser','agDesktop','agPhone','agWorkspace','agBrowserExecutable']);
     if ('phone' in payload) add(['phEnabled','phAutonomous','phDevice','phPayMode','phPayMethod','phAmount','phDailyAmount']);
     if('personaGrowth' in payload) add(['grEnabled','grDaily','grDailyDays','grDailyMinUser']);
     if ('autonomy' in payload && 'shareMedia' in payload.autonomy) add(['shEnabled','shVoice','shImages','shDuring','shIdle','shSchedule']);
@@ -4449,7 +4512,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     var submitted = writes ? readForm() : {};
     var editId = renderedEditingId;
     if (writes) mutationEpoch += 1;
-    return requestApi(method, url, payload).then(function (value) {
+    var operation=requestApi(method, url, payload).then(function (value) {
       if (writes) {
         mutationEpoch += 1;
         markSaved(origin, submitted, fieldsSaved(url, payload || {}, editId));
@@ -4457,6 +4520,8 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       }
       return value;
     }, function (error) { if (writes) mutationEpoch += 1; throw error; });
+    if(writes&&floatingSaveCapture)floatingSaveCapture.push(operation);
+    return operation;
   }
   async function navigate(page, updateHash) {
     if(!NAV_GROUPS.some(function(g){return g.pages.indexOf(page)>=0;}))page='overview';
@@ -4513,7 +4578,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     if($('grScope'))$('grScope').onchange=function(){rememberDraft('persona');growthSelection=this.value;renderPane();};
     if($('grProcess'))$('grProcess').onclick=async function(){try{await api('POST','/im-bridge/features/persona-growth',{action:'process'});await load();toast('已检查已归档的日观察和月度成长');}catch(e){toast(e.message);}};
     document.querySelectorAll('[data-growth-revert]').forEach(function(button){button.onclick=async function(){try{var scope=(featureData.personaGrowth?.scopes||[]).filter(function(s){return (s.meta.key||'')+'|'+s.meta.personaId===growthSelection;})[0];await api('POST','/im-bridge/features/persona-growth',{action:'revert',id:button.getAttribute('data-growth-revert'),key:scope.meta.key||'',personaId:scope.meta.personaId});await load();toast('这次成长已回退');}catch(e){toast(e.message);}};});
-    if($('agSave'))$('agSave').onclick=async function(){try{await api('POST','/im-bridge/settings',{agency:{enabled:$('agEnabled').checked,autonomous:$('agAutonomous').checked,browser:$('agBrowser').checked,desktop:$('agDesktop').checked,phone:$('agPhone').checked,workspace:$('agWorkspace').value}});await load();toast('设备权限已保存');}catch(e){toast(e.message);}};
+    if($('agSave'))$('agSave').onclick=async function(){try{if($('agBrowserExecutable')&&typeof data.settings.agency?.browserExecutable!=='string')throw Error('浏览器路径设置需要新版后台，请先自行重启 DSH 再保存；原有设置已保留。');await api('POST','/im-bridge/settings',{agency:{enabled:$('agEnabled').checked,autonomous:$('agAutonomous').checked,browser:$('agBrowser').checked,desktop:$('agDesktop').checked,phone:$('agPhone').checked,workspace:$('agWorkspace').value,...($('agBrowserExecutable')?{browserExecutable:$('agBrowserExecutable').value.trim()}:{})}});await load();toast('设备权限已保存');}catch(e){toast(e.message);}};
     if($('phStatus'))$('phStatus').onclick=async function(){try{await api('POST','/im-bridge/features/phone',{action:'status'});await load();toast('手机连接已检查');}catch(e){toast(e.message);}};
     if($('phObserve'))$('phObserve').onclick=async function(){var result=$('phResult');try{var r=await api('POST','/im-bridge/features/phone',{action:'observe'});result.textContent='已读取当前界面：'+(r.package||'系统界面')+' · '+r.width+' × '+r.height+'；截图保存在本机缓存。';}catch(e){result.textContent=e.message;}};
     if($('phClearPassword'))$('phClearPassword').onclick=async function(){try{await api('POST','/im-bridge/features/phone',{action:'clear-password'});await load();toast('本地密码已移除');}catch(e){toast(e.message);}};
@@ -4550,6 +4615,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     bindPersonaTools();
   }
   function initEnhancements() {
+    $('saveCurrentPage').onclick=saveFloatingPage;
     $('modal').setAttribute('role', 'dialog');
     $('modal').setAttribute('aria-modal', 'true');
     $('modal').setAttribute('aria-labelledby', 'modalMsg');
