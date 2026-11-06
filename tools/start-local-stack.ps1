@@ -1,4 +1,4 @@
-﻿param([switch]$PlanOnly)
+param([switch]$PlanOnly)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'local-service-startup.ps1')
 $work = 'D:\CodexData\work\qq-local-background-services'
@@ -22,14 +22,19 @@ try {
     }
     # Prefer the effective gateway URL if it is already available.
     try { $config = Invoke-RestMethod ($gateway + '/config') -TimeoutSec 2; if ($config.comfyUrl) { $comfy = $config.comfyUrl } } catch {}
-    $voice = if ($env:VOICE_URL) { $env:VOICE_URL } else { 'http://127.0.0.1:7870' }
+    $voiceConfig = if ($config.voiceService) { $config.voiceService } elseif ($savedConfig.voiceService) { $savedConfig.voiceService } else { [pscustomobject]@{type='voicelab';baseUrl=$(if ($env:VOICE_URL) {$env:VOICE_URL} else {'http://127.0.0.1:7870'})} }
+    # Public gateway configuration masks the credential; use it only from the matching saved service.
+    if ($savedConfig.voiceService.apiKey -and $voiceConfig.baseUrl -eq $savedConfig.voiceService.baseUrl) { $voiceConfig.apiKey = $savedConfig.voiceService.apiKey }
+    $voice = $voiceConfig.baseUrl
     $labels = @{ comfy='图片与本地模型服务'; voice='语音服务'; gateway='本地桥接' }
-    $states = @{ reused='已运行，直接连接'; started='后台启动成功'; 'would-start'='尚未启动，启动路径已准备' }
+    $states = @{ reused='已运行，直接连接'; started='后台启动成功'; 'would-start'='尚未启动，启动路径已准备'; manual='请手动启动所选服务，或配置启动程序和状态接口'; disabled='已关闭' }
     foreach ($kind in @('comfy','voice','gateway')) {
         try {
             $origin = switch ($kind) { 'comfy' { $comfy } 'voice' { $voice } 'gateway' { $gateway } }
             # Reuse is checked before installation discovery, including manual launches.
-            if (Test-LocalServiceReady $kind $origin) {
+            if ($kind -eq 'voice' -and (($config -and $config.voiceEnabled -eq $false) -or (-not $config -and $savedConfig -and $savedConfig.voiceEnabled -eq $false))) {
+                $result = [pscustomobject]@{service=$kind;state='disabled';origin=$origin}
+            } elseif (($kind -eq 'voice' -and (Test-ConfiguredVoiceReady $voiceConfig $origin)) -or ($kind -ne 'voice' -and (Test-LocalServiceReady $kind $origin))) {
                 $result = [pscustomobject]@{service=$kind;state='reused';origin=$origin}
             } elseif ($kind -eq 'gateway') {
                 if ($PlanOnly) { $result = [pscustomobject]@{service=$kind;state='would-start';origin=$origin} }
@@ -39,8 +44,19 @@ try {
                     $result = [pscustomobject]@{service=$kind;state='started';origin=$origin}
                 }
             } else {
-                $spec = if ($kind -eq 'comfy') { Get-ComfyStartupSpec $comfy } else { Get-VoiceStartupSpec $voice $settings.comfyui.localVoiceDir $work }
-                $result = Start-LocalService $spec $work -PlanOnly:$PlanOnly
+                if ($kind -eq 'voice' -and $voiceConfig.startupExecutable -and ($voiceConfig.statusPath -or $voiceConfig.type -eq 'openai' -or $voiceConfig.type -eq 'voicelab')) {
+                    $spec = @{Kind='voice';Origin=$voice;Executable=$voiceConfig.startupExecutable;Arguments=$voiceConfig.startupArguments;Directory=$voiceConfig.startupDirectory;Required=@();Environment=@{};VoiceService=$voiceConfig}
+                    $result = Start-LocalService $spec $work -PlanOnly:$PlanOnly
+                } elseif ($kind -eq 'voice' -and $voiceConfig.type -ne 'voicelab') {
+                    $result = [pscustomobject]@{service=$kind;state='manual';origin=$origin}
+                } else {
+                    $voiceDir = if ($voiceConfig.directory) { $voiceConfig.directory } elseif (-not $savedConfig.voiceService) { $settings.comfyui.localVoiceDir } else { '' }
+                    if ($kind -eq 'voice' -and -not $voiceDir) { $result = [pscustomobject]@{service=$kind;state='manual';origin=$origin} }
+                    else {
+                        $spec = if ($kind -eq 'comfy') { Get-ComfyStartupSpec $comfy } else { Get-VoiceStartupSpec $voice $voiceDir $work }
+                        $result = Start-LocalService $spec $work -PlanOnly:$PlanOnly
+                    }
+                }
             }
             $results += $result
             Write-Host ($labels[$kind] + '：' + $states[$result.state] + ' ' + $origin)

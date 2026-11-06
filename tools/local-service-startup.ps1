@@ -16,6 +16,26 @@ function Test-LocalServiceReady($Kind, $Origin) {
     return $false
 }
 
+function Test-ConfiguredVoiceReady($Service, $Origin) {
+    if (-not $Service) { return (Test-LocalServiceReady 'voice' $Origin) }
+    $endpoint = if ($Service.statusPath) { $Service.statusPath } elseif ($Service.type -eq 'voicelab') { '/api/status' } elseif ($Service.type -eq 'openai') { 'models' } else { '' }
+    if (-not $endpoint) { return $false }
+    try {
+        $base = [uri]($Origin.TrimEnd('/') + '/')
+        $url = [uri]::new($base, [string]$endpoint)
+        if ($url.Authority -ne $base.Authority -or $url.Scheme -ne $base.Scheme) { return $false }
+        $headers = @{}
+        if ($Service.apiKey) { $headers.Authorization = 'Bearer ' + $Service.apiKey }
+        $null = Invoke-RestMethod $url.AbsoluteUri -Headers $headers -MaximumRedirection 0 -TimeoutSec 2
+        return $true
+    } catch { return $false }
+}
+
+function Test-StartupSpecReady($Spec) {
+    if ($Spec.Kind -eq 'voice' -and $Spec.VoiceService) { return (Test-ConfiguredVoiceReady $Spec.VoiceService $Spec.Origin) }
+    return (Test-LocalServiceReady $Spec.Kind $Spec.Origin)
+}
+
 function Get-LocalServicePort($Origin) {
     $uri = [uri]$Origin
     if (-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'http' -or $uri.Host -notin @('127.0.0.1','localhost','[::1]')) {
@@ -26,7 +46,7 @@ function Get-LocalServicePort($Origin) {
 
 function Start-LocalService($Spec, $LogDirectory, [int]$WaitSeconds = 180, [switch]$PlanOnly) {
     $port = Get-LocalServicePort $Spec.Origin
-    if (Test-LocalServiceReady $Spec.Kind $Spec.Origin) {
+    if (Test-StartupSpecReady $Spec) {
         return [pscustomobject]@{ service=$Spec.Kind; state='reused'; origin=$Spec.Origin }
     }
     if ($PlanOnly) { return [pscustomobject]@{ service=$Spec.Kind; state='would-start'; origin=$Spec.Origin } }
@@ -50,7 +70,7 @@ function Start-LocalService($Spec, $LogDirectory, [int]$WaitSeconds = 180, [swit
     }
     $deadline = (Get-Date).AddSeconds($WaitSeconds)
     do {
-        if (Test-LocalServiceReady $Spec.Kind $Spec.Origin) {
+        if (Test-StartupSpecReady $Spec) {
             return [pscustomobject]@{ service=$Spec.Kind; state='started'; origin=$Spec.Origin; pid=$child.Id; stdout=$outLog; stderr=$errLog }
         }
         $child.Refresh()

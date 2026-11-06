@@ -18,7 +18,7 @@ export function createCapabilityDetector({getConfig,root,workDir,probe,services=
  }
  async function snapshot(){const value=structuredClone(load()||base()),service=await services();value.busy=service.busy===true;value.serviceReachable=service.reachable!==false;if(service.reachable===false)value.status='unavailable';
   for(const kind of ['image','video']){const specs=mediaWorkflowSpecs(getConfig()).filter(row=>row.kind===kind);const valid=specs.some(spec=>{try{const graph=JSON.parse(readFileSync(resolve(root,spec.file),'utf8'));return !!graph[spec.inputs?.prompt?.node]?.inputs&&spec.inputs.prompt.field in graph[spec.inputs.prompt.node].inputs&&!!graph[spec.output?.node];}catch{return false;}});value.features[kind]=state(service.reachable!==false&&valid,valid?'本地工作流文件及输入输出已登记；未进行媒体生成实测':'没有可用的本地'+(kind==='image'?'图片':'视频')+'工作流','workflow');}
-  value.features.speech=state(getConfig().voiceEnabled&&service.voice===true,getConfig().voiceEnabled&&service.voice?'本地语音服务可连接':'本地语音服务未就绪','service');return value;
+  value.features.speech=state(getConfig().voiceEnabled&&service.voice===true,getConfig().voiceEnabled&&service.voice?(service.voiceReason||'本地语音服务可连接'):'本地语音服务未就绪','service');return value;
  }
  async function detect({vision=false,force=false}={}){
   if(running){const value=await running;if(vision&&getConfig().visionMode!=='off'&&typeof value.features.vision?.supported!=='boolean'&&!value.busy&&value.serviceReachable)return detect({vision});return value;}

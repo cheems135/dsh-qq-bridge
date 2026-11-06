@@ -573,9 +573,9 @@ html[data-theme="dark"] .diary-intro h2{color:#d0b6ce}html[data-theme="dark"] .d
 .diary-original{border-top:1px dashed #e2eefb!important}
 .diary-page-number{color:#b9d3ef!important}
 
-/* 手账方格纸：浅蓝小格 + 左侧装订线 */
-.diary-sheet{background-color:#fff!important;background-image:linear-gradient(#eef6ff 1px,transparent 1px),linear-gradient(90deg,#eef6ff 1px,transparent 1px),linear-gradient(90deg,#dbeafb 1px,transparent 1px)!important;background-size:22px 22px,22px 22px,100% 100%!important;background-position:0 0,0 0,26px 0!important;background-repeat:repeat,repeat,no-repeat!important;padding-left:30px!important}
-.diary-sheet .diary-text{background:transparent!important}
+/* 私人手账：浅蓝白格纹纸页 */
+.diary-sheet{background-color:#fff!important;background-image:conic-gradient(#e2f0fc 25%,#fff 0 50%,#e2f0fc 0 75%,#fff 0)!important;background-size:32px 32px!important;background-position:0 0!important;background-repeat:repeat!important;padding-left:30px!important;border:1px solid #c7e0f6!important}.diary-sheet .diary-text{background:rgba(255,255,255,.88)!important;border-radius:14px;padding:14px 18px}.diary-sheet .diary-title{background:#ffffffdd;border-radius:10px;padding:8px 12px}
+
 .diary-sheet .diary-date{background:#fff!important;display:inline-block!important;padding:0 6px!important;border-radius:6px!important}
 
 /* 整体浅蓝主题（覆盖默认紫色系） */
@@ -1412,6 +1412,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       localSetValue('localHistoryChars', c.historyChars || 12000);
       localSetValue('localVoiceEnabled', c.voiceEnabled !== false);
       localSetValue('localVoicePreset', c.voicePreset || '');
+      Object.keys(localVoiceFields).forEach(function(key){if(key!=='apiKey')localSetValue('localVoice'+localVoiceFields[key],c.voiceService?.[key]||'');});
       localSetValue('localDialoguePriority',c.dialoguePriority||'quality');
       localSetValue('localFastDialogue',c.fastDialogue!==false);localSetValue('localStreamDialogue',c.streamDialogue!==false);
       localSetValue('localVisionMode', c.visionMode || 'auto');
@@ -1449,9 +1450,9 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     }
     var vb = $('localVoiceBadge'), vi = $('localVoiceInfo');
     if (vb && v.localVoice) {
-      vb.textContent = v.localVoice.running ? '正在运行' : (v.localVoice.exists ? '未启动' : '路径不存在');
+      vb.textContent = v.localVoice.running ? '已连接' : (v.localVoice.state==='unknown'?'未验证（无状态接口）':'暂未连接');
       vb.className = 'tag' + (v.localVoice.running ? ' accent-tag' : '');
-      vi.textContent = '目录：' + v.localVoice.dir + '\n端口：' + v.localVoice.port + (v.localVoice.exists ? '\n启动脚本：Start-VoiceLab.bat' : '\n没有在这个目录找到 VoiceLab');
+      vi.textContent = '协议：' + (v.localVoice.engine||'未配置') + '\n地址：' + (v.localVoice.baseUrl||'未配置') + '\n设备：' + (v.localVoice.device||'gpu') + (v.localVoice.dir?'\n启动目录：'+v.localVoice.dir:'') + (v.localVoice.state==='unknown'?'\n此服务没有只读状态接口，实际合成时检查连接。':'');
     }
     if (workflowsChanged) renderPane();
   }
@@ -1513,6 +1514,22 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     });
   }
 
+  var localVoiceFields = {"type": "Protocol", "baseUrl": "Url", "model": "Model", "apiKey": "Key", "device": "Device", "ttsPath": "TtsPath", "statusPath": "StatusPath", "voicesPath": "VoicesPath", "unloadPath": "UnloadPath", "bodyTemplate": "Body", "responseMode": "Return", "responseField": "Field", "directory": "Directory", "startupExecutable": "StartupExecutable", "startupArguments": "StartupArguments", "startupDirectory": "StartupDirectory"};
+  function captureLocalVoiceService() {
+    var result=Object.assign({},localConfigDraft.voiceService||{});
+    Object.keys(localVoiceFields).forEach(function(key){var field=$('localVoice'+localVoiceFields[key]);if(field)result[key]=field.value.trim();});
+    result.clearApiKey=!!$('localVoiceClearKey')?.checked;
+    return result;
+  }
+  function localVoiceConfigMarkup(service) {
+    var v=service||{},out='<div class="form-two"><label class="field">语音协议<select id="localVoiceProtocol"><option value="voicelab">VoiceLab</option><option value="openai">OpenAI 兼容语音（本机服务）</option><option value="json">自定义 JSON 接口</option></select></label><label class="field">服务地址<input id="localVoiceUrl" placeholder="http://127.0.0.1:7870"></label><label class="field">语音模型<input id="localVoiceModel" placeholder="服务要求的模型 ID，不限模型名称"></label><label class="field">运行设备<select id="localVoiceDevice"><option value="gpu">GPU：8GB 模式需确认释放显存</option><option value="cpu">CPU：语音服务不占用显存</option></select></label></div><p class="muted">连接本机或局域网语音服务，无需固定软件或安装位置。OpenAI 兼容服务填含 /v1 的地址；音色可直接填写 ID，未提供列表接口时无需读取。服务需返回 WAV 音频。</p><details><summary>接口、请求模板与启动设置</summary><p class="muted">接口路径留空使用协议默认值。自定义 JSON 模板支持 {{text}}、{{voice}}、{{model}}、{{instruction}}；参数保持原有 JSON 类型。返回可以是 WAV 文件、JSON 中的 base64 或同站点音频 URL；字段可写 audio.url。不会执行返回内容里的命令，也不会转用云端。</p>';
+    [['TtsPath','合成接口','例如 /tts'],['StatusPath','只读状态接口','例如 /health；无接口则生成时验证'],['VoicesPath','音色列表接口','例如 /voices；没有则直接填音色 ID'],['UnloadPath','释放 GPU 模型接口（POST）','非 VoiceLab 服务请按软件提供的接口填写'],['Field','音频返回字段','例如 data.audio'],['Directory','VoiceLab 安装目录（仅用于自动启动）','任选安装位置，已运行的服务无需填写'],['StartupExecutable','其他语音服务启动程序（可选）','例如 D:/MyTTS/python/python.exe'],['StartupArguments','启动参数','例如 "D:/MyTTS/server.py" --port 8001'],['StartupDirectory','启动工作目录','例如 D:/MyTTS']].forEach(function(row){out+='<label class="field">'+row[1]+'<input id="localVoice'+row[0]+'" placeholder="'+esc(row[2])+'"></label>';});
+    out+='<label class="field">本地服务密钥（可选，留空保留）<input id="localVoiceKey" type="password" autocomplete="new-password" placeholder="'+(v.hasApiKey?'已保存密钥':'本地通常不需要')+'"></label><label class="check-field"><input id="localVoiceClearKey" type="checkbox">清除已保存的本地服务密钥</label><label class="field">自定义 JSON 请求模板<textarea id="localVoiceBody" rows="5"></textarea></label><label class="field">自定义接口返回类型<select id="localVoiceReturn"><option value="audio">直接返回 WAV 音频</option><option value="base64">JSON 音频 base64 字段</option><option value="url">JSON 同站点音频 URL 字段</option></select></label><p class="muted">自动启动只在你运行本地启动脚本时执行；留空则由你启动服务。自定义服务自动启动需提供只读状态接口。更换接口不会自动重启或停止现有任务。GPU 服务没有释放接口时，8GB 模式会暂停叠加加载并说明原因。</p></details>';
+    // Fill defaults through escaped markup, so draft survives tab changes.
+    var template=document.createElement('template');template.innerHTML=out;
+    Object.keys(localVoiceFields).forEach(function(key){var field=template.content.querySelector('#localVoice'+localVoiceFields[key]);if(!field)return;var value=key==='apiKey'?(v.apiKey||''):(v[key]??({type:'voicelab',device:'gpu',responseMode:'audio',baseUrl:'http://127.0.0.1:7870',bodyTemplate:'{"text":"{{text}}","voice":"{{voice}}"}'}[key]||''));if(field.tagName==='SELECT'){Array.from(field.options).forEach(function(o){o.toggleAttribute('selected',o.value===value);});}else if(field.tagName==='TEXTAREA')field.textContent=value;else field.setAttribute('value',value);});
+    return template.innerHTML;
+  }
   function captureLocalForm() {
     if (!$('localBackend')) return localConfigDraft;
     var library = captureLocalWorkflows();
@@ -1533,6 +1550,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       idleUnloadMinutes: Number($('localIdle').value),
       voiceEnabled: $('localVoiceEnabled').checked,
       voicePreset: $('localVoicePreset').value.trim(),
+      voiceService:captureLocalVoiceService(),
       dialoguePriority:$('localDialoguePriority').value,fastDialogue:$('localFastDialogue').checked,streamDialogue:$('localStreamDialogue').checked,
       visionMode: $('localVisionMode').value,
       memoryProfile: $('localMemoryProfile').value,
@@ -1700,9 +1718,9 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     out += '<div class="btnrow"><button id="localChat"'+(localTrialBusy?' disabled':'')+'>开始试聊</button></div>';
     out += '<pre id="localChatOut" class="muted" style="white-space:pre-wrap;margin:6px 0 0"></pre><pre id="localReceipts" class="muted" style="white-space:pre-wrap;margin:6px 0 0"></pre></section>';
 
-    out += '<section class="card"><div class="section-heading"><h2>本地语音 BreezeTTS2</h2><span class="tag" id="localVoiceBadge">检查中…</span></div>';
-    out += '<p class="muted">本地 VoiceLab（TTS + 转写），默认端口 7870。路径来自插件设置，改了位置在这里能看到是否存在。</p>';
-    out += '<label class="field">本地音色<input id="localVoicePreset" list="localVoicePresets" value="' + esc(form.voicePreset || '') + '" placeholder="留空：自动使用已有默认音色"><datalist id="localVoicePresets"></datalist></label><button id="localLoadVoices">读取 VoiceLab 音色</button><p id="localVoicePresetHint" class="muted">可选择音色名称或 ID；不会使用 API / Windows 的音色设置。修改后保存配置。</p>';
+    out += '<section class="card"><div class="section-heading"><h2>本地语音服务</h2><span class="tag" id="localVoiceBadge">检查中…</span></div>';
+    out += localVoiceConfigMarkup(form.voiceService);
+    out += '<label class="field">本地音色<input id="localVoicePreset" list="localVoicePresets" value="' + esc(form.voicePreset || '') + '" placeholder="留空：自动使用已有默认音色"><datalist id="localVoicePresets"></datalist></label><button id="localLoadVoices">读取音色列表</button><p id="localVoicePresetHint" class="muted">可选择音色名称或 ID；不会使用 API / Windows 的音色设置。修改后保存配置。</p>';
     out += '<div id="localVoiceInfo" class="muted" style="white-space:pre-wrap">正在读取…</div></section>';
     return out;
   }
@@ -3232,7 +3250,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       localDraftEditing = true;
       captureLocalForm();
     }
-    ['localBackend','localModelBaseUrl','localModelId','localChatWorkflow','localTemperature','localMaxTokens','localHistoryChars','localVoiceEnabled','localVoicePreset','localFastDialogue','localDialoguePriority','localStreamDialogue','localVisionMode','localMemoryProfile','localUrl','localGatewayUrl','localWarm','localIdle','localDefaultImage','localDefaultVideo'].forEach(function (id) {
+    ['localBackend','localModelBaseUrl','localModelId','localChatWorkflow','localTemperature','localMaxTokens','localHistoryChars','localVoiceEnabled','localVoicePreset','localFastDialogue','localDialoguePriority','localStreamDialogue','localVisionMode','localMemoryProfile','localUrl','localGatewayUrl','localWarm','localIdle','localDefaultImage','localDefaultVideo','localVoiceClearKey'].concat(Object.values(localVoiceFields).map(function(name){return 'localVoice'+name;})).forEach(function (id) {
       var field = $(id);
       if (!field) return;
       field.addEventListener('input', rememberLocalEdit);
@@ -3267,9 +3285,9 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     });
     if ((el = $('localLoadVoices'))) el.onclick = function () {
       var button=this;button.disabled=true;
-      localPost({action:'list-voices'}).then(function(result){
+      localPost({action:'save',config:captureLocalForm()}).then(function(){return localPost({action:'list-voices'});}).then(function(result){
         $('localVoicePresets').innerHTML=(result.voices||[]).map(function(voice){return '<option value="'+esc(voice.id)+'">'+esc(voice.name)+'</option>';}).join('');
-        $('localVoicePresetHint').textContent=(result.voices||[]).length?'已读取 '+result.voices.length+' 个音色；在输入框选择后保存。':'没有可用音色，请先在 VoiceLab 创建参考音色。';
+        $('localVoicePresetHint').textContent=(result.voices||[]).length?'已读取 '+result.voices.length+' 个音色；在输入框选择后保存。':'服务未提供音色列表，可直接填写音色 ID；VoiceLab 请先创建参考音色。';
       }).catch(function(error){$('localVoicePresetHint').textContent='读取音色失败：'+error.message;}).finally(function(){button.disabled=false;});
     };
     if ((el = $('localProbe'))) el.onclick=function(){var button=this;button.disabled=true;$('localStatus').textContent='正在使用短测试核验能力；不会发送 QQ，也不会调用云端模型。';api('POST','/im-bridge/local',{action:'probe-capabilities'}).then(function(){return localRefresh();}).catch(function(e){$('localStatus').textContent='本地能力检查暂未完成：'+e.message;}).finally(function(){button.disabled=false;});};
@@ -5005,13 +5023,3 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-

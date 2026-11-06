@@ -130,6 +130,7 @@ export function createNapCatLoginClient({ napcatDir, workDir = napcatDir, readFi
       if (!data || typeof data.isLogin !== 'boolean') throw error('WEBUI_STATUS', 'NapCat 返回了无效登录状态。');
       return { isLogin: data.isLogin, isOffline: data.isOffline === true, loginPhase: phases.has(data.loginPhase) ? data.loginPhase : 'offline', qrLoginAccepted: data.qrLoginAccepted === true, coreReady: data.coreReady === true, qrcodeurl: qrUrl(data.qrcodeurl), hasLoginError: !!data.loginError };
     },
+    async getLoginInfo() { const data=await call('GetQQLoginInfo'); const uin=String(data?.uin||data?.user_id||''); if(!/^\d{5,12}$/.test(uin))throw error('ACCOUNT_UNKNOWN','QQ 尚未返回已登录账号'); return {uin,online:data.online===true}; },
     async getQRCode() { const data = await call('GetQQLoginQrcode'); const url = qrUrl(data?.qrcode); if (!url) throw error('QR_NOT_READY', 'QQ 尚未生成有效二维码。'); return { qrcodeurl: url }; },
     async refreshQR() {
       const data = await call('RefreshQRcode', {}, 14500);

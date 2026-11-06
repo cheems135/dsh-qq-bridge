@@ -56,7 +56,7 @@ html[data-device-ui="phone"] .life-copy h1,html[data-device-ui="phone"] .life-co
 html[data-device-ui="phone"] .life-copy p,html[data-device-ui="phone"] .life-eyebrow,html[data-device-ui="phone"] .life-state{color:var(--ink2)!important}
 html[data-device-ui="phone"] .quick-tile,html[data-device-ui="phone"] .companion-columns .diary-peek{background:var(--panel)!important;color:var(--ink);border-color:var(--line)}
 html[data-device-ui="phone"] .diary-shelf{background:var(--panel)!important;border-color:var(--line)!important;box-shadow:none!important}
-html[data-device-ui="phone"] .diary-sheet{background-color:var(--paper)!important;background-image:repeating-linear-gradient(transparent 0,transparent 31px,var(--paper-rule) 31px,var(--paper-rule) 32px)!important;background-size:auto!important;background-position:0 0!important;border-color:var(--line)!important;color:var(--ink)!important}
+html[data-device-ui="phone"] .diary-sheet{background-color:#fff!important;background-image:conic-gradient(#e2f0fc 25%,#fff 0 50%,#e2f0fc 0 75%,#fff 0)!important;background-size:32px 32px!important;background-position:0 0!important;border-color:var(--line)!important;color:var(--ink)!important}
 html[data-device-ui="phone"] .diary-sheet .diary-text,html[data-device-ui="phone"] .diary-preview,html[data-device-ui="phone"] .diary-title{color:var(--ink)!important}
 html[data-device-ui="phone"] .diary-sheet .diary-date{background:var(--paper)!important}
 html[data-device-ui="phone"] .diary-date,html[data-device-ui="phone"] .diary-date b,html[data-device-ui="phone"] .diary-date span,html[data-device-ui="phone"] .diary-intro h2,html[data-device-ui="phone"] .diary-doodle,html[data-device-ui="phone"] .diary-kaomoji{color:var(--accent-ink)!important}

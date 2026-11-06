@@ -6,7 +6,7 @@ import {gatewayMediaOverrides,withoutInternalMediaTools} from './service-media-t
 import {prepareLocalGroupContext} from './local-group-context.js';
 import {localGroupReplyRisk} from './local-group-quality.js';
 import {createBridgeIssues,unresolvedLocalReceipts} from './bridge-issues.js';
-import {localVoices,selectLocalVoice,validateLocalWav} from './local-voice.js';
+import {selectLocalVoice,voiceServiceState,serviceVoices,requestLocalSpeech,releaseVoiceService} from './local-voice.js';
 import {prepareLocalImagePrompt} from './local-image-prompt.js';
 import {createInvocationJournal,invocationKind} from './invocation-journal.js';
 import {understandLocalTurn} from './local-understanding.js';
@@ -208,7 +208,7 @@ export function createLocalModelServer({
   let config = loadConfig(configPath, env);
   const stats = {startedAt: Date.now(), chat: 0, turns: 0, speech: 0, captions: 0, errors: 0, lastChatAt: 0, lastSpeechAt: 0, lastError: ''};
   const execution=createLocalRunStatus();
-  const voiceUrl = String(env.VOICE_URL || 'http://127.0.0.1:7870').replace(/\/+$/, '');
+  const voiceService = () => config.voiceService;
   const voiceId = String(env.VOICE_PRESET || '');
   const logFile = env.LOCAL_AI_LOG_FILE || join(env.LOCALAPPDATA || tmpdir(), 'local-ai.log');
   const log = message => {
@@ -245,17 +245,17 @@ export function createLocalModelServer({
   const contextPressure = new Map();
   const toolBroker = createLocalToolBroker();
   const inspections = new Map();
-  const journalFile=join(env.LOCAL_AI_WORK_DIR||join(tmpdir(), 'qq-bridge-local-ai-routing'),'invocations-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let invocationRows=[];
+  const journalFile=join(env.LOCAL_AI_WORK_DIR||'D:/CodexData/work/local-ai-routing','invocations-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let invocationRows=[];
   try{const value=JSON.parse(readFileSync(journalFile,'utf8'));if(Array.isArray(value))invocationRows=value;}catch{}
   const invocationJournal=createInvocationJournal({getRows:()=>invocationRows,setRows:rows=>invocationRows=rows,save:()=>{mkdirSync(dirname(journalFile),{recursive:true});writeFileSync(journalFile+'.tmp',JSON.stringify(invocationRows));renameSync(journalFile+'.tmp',journalFile);}});
   const issueFile=join(env.LOCAL_AI_WORK_DIR||dirname(configPath),'bridge-issues-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let issueRows=[];
   try{issueRows=JSON.parse(readFileSync(issueFile,'utf8'));}catch{}
   const issues=createBridgeIssues({getRows:()=>issueRows,setRows:rows=>issueRows=rows,save:()=>{mkdirSync(dirname(issueFile),{recursive:true});writeFileSync(issueFile+'.tmp',JSON.stringify(issueRows));renameSync(issueFile+'.tmp',issueFile);}});
   const issueScope=context=>({...context?.recordScope,backend:'local'});
-  const capabilityDetector=createCapabilityDetector({getConfig:()=>config,root,workDir:env.LOCAL_AI_WORK_DIR||join(tmpdir(), 'qq-bridge-local-ai-routing'),services:async()=>{
-    const value=await executionStatus();let voice=false,voiceBusy=false;
-    try{const response=await fetchImpl(voiceUrl+'/api/status',{signal:AbortSignal.timeout(1500)});voice=response.ok;if(response.ok){const body=await response.json();voiceBusy=body.busy===true;}}catch{}
-    return {reachable:config.backend!=='comfyui'||value.comfyQueue.reachable,busy:voiceBusy||value.execution.active.length>0||config.backend==='comfyui'&&(value.comfyQueue.running>0||value.comfyQueue.pending>0),voice};
+  const capabilityDetector=createCapabilityDetector({getConfig:()=>config,root,workDir:env.LOCAL_AI_WORK_DIR||'D:/CodexData/work/local-ai-routing',services:async()=>{
+    const value=await executionStatus();let voice=voiceService().type!=='voicelab',voiceBusy=false,voiceReason='已手动配置语音协议，实际生成时验证连接与 WAV 回执';
+    try{const state=await voiceServiceState(voiceService(),{fetchImpl,signal:AbortSignal.timeout(1500)});voice=state.alive===true||voiceService().type!=='voicelab';voiceBusy=state.busy;voiceReason=state.alive===true?'本地语音只读状态接口可连接；尚未进行合成实测':'已手动配置语音协议，实际生成时验证连接与 WAV 回执';}catch{}
+    return {reachable:config.backend!=='comfyui'||value.comfyQueue.reachable,busy:voiceBusy||value.execution.active.length>0||config.backend==='comfyui'&&(value.comfyQueue.running>0||value.comfyQueue.pending>0),voice,voiceReason};
   },probe:async({kind,nonce})=>{
     const task=execution.start('capability','analysis'),signal=AbortSignal.timeout(180000),onProgress=event=>execution.update(task,event);
     try{
@@ -369,8 +369,7 @@ export function createLocalModelServer({
   async function voiceAlive() {
     const scoped = mergeDeadline(undefined, 2000, '本地语音状态检查');
     try {
-      const response = await fetchImpl(voiceUrl + '/api/status', {signal: scoped.signal});
-      return response.ok;
+      return (await voiceServiceState(voiceService(),{fetchImpl,signal:scoped.signal})).alive;
     } catch {
       return false;
     } finally {
@@ -381,10 +380,7 @@ export function createLocalModelServer({
   async function freeVoiceModel(signal) {
     const scoped = mergeDeadline(signal, 10000, '释放本地语音模型');
     try {
-      const status=await fetchImpl(voiceUrl+'/api/status',{signal:scoped.signal});
-      if(status.ok){const state=await status.json();if(state.busy===true)return false;if(state.loaded===false)return true;}
-      const response=await fetchImpl(voiceUrl + '/api/model/unload', {method: 'POST', signal: scoped.signal});
-      return response.ok;
+      return await releaseVoiceService(voiceService(),{fetchImpl,signal:scoped.signal});
     } catch (error) {
       if (signal?.aborted) throw error;
       return false;
@@ -403,7 +399,7 @@ export function createLocalModelServer({
 
   async function prepareComfy(kind, signal,onProgress=()=>{},forceReset=false) {
     const voiceFreed=await freeVoiceModel(signal);
-    if(config.memoryProfile==='8gb'&&!voiceFreed&&await voiceAlive())throw new Error('本地语音模型未能释放，8GB 方案暂不叠加加载视觉或聊天模型');
+    if(config.memoryProfile==='8gb'&&!voiceFreed&&(await voiceAlive())!==false)throw new Error('本地语音模型未确认释放。若语音运行在 CPU，请在本地语音设置选择 CPU；GPU 服务需配置释放接口或先手动卸载。');
     if (forceReset || config.memoryProfile === '8gb' && activeComfyKind !== kind) await freeChatModel(signal,onProgress);
     activeComfyKind = kind;
   }
@@ -412,29 +408,20 @@ export function createLocalModelServer({
     if (!config.voiceEnabled) throw new Error('本地语音已在网关配置里关闭');
     if (!String(text || '').trim()) throw new Error('语音文字不能为空');
     if(String(text).length>2000)throw Error('一次本地语音最多 2000 字，请分段合成，原文未截断。');
-    if (!await voiceAlive()) throw new Error('本地语音服务没在运行');
     onProgress({phase:'waiting_gpu'});
     return enqueueGpu(async () => {
-      const voices=await localVoices({url:voiceUrl,fetchImpl,signal});
-      const selectedVoice=selectLocalVoice(voices,{requested:preset,configured:config.voicePreset||voiceId});
-      const status=await fetchImpl(voiceUrl+'/api/status',{signal});if(status.ok&&(await status.json()).busy)throw Error('VoiceLab 正在处理另一段语音，已有任务保留运行，请稍后重试。');
-      await freeChatModel(signal,onProgress);
+      const service=structuredClone(voiceService());
+      const state=await voiceServiceState(service,{fetchImpl,signal});
+      if(state.busy)throw Error('本地语音服务正在处理另一项任务，已有任务保留运行，请稍后重试。');
+      // Some speech services have no read-only status route; POST is authoritative.
+      const voices=await serviceVoices(service,{fetchImpl,signal});
+      const configured=config.voicePreset||voiceId;
+      const selectedVoice=service.type==='voicelab'?selectLocalVoice(voices,{requested:preset,configured}):String(preset&&preset!=='default'?preset:configured);
+      if(service.device!=='cpu')await freeChatModel(signal,onProgress);
       onProgress({phase:'speech'});
-      const form = new FormData();
-      form.append('mode','auto');
-      form.append('text', String(text));
-      form.append('preset_id', selectedVoice);
-      const instruction=localVoiceInstruction(emotion);if(instruction)form.append('instruction',instruction);
       const scoped = mergeDeadline(signal, 240000, '本地语音合成');
       try {
-        const response = await fetchImpl(voiceUrl + '/api/tts', {
-          method: 'POST',
-          body: form,
-          signal: scoped.signal,
-        });
-        if (!response.ok) throw new Error('本地语音合成失败：HTTP ' + response.status + ' ' + (await response.text()).slice(0, 200));
-        const bytes = Buffer.from(await response.arrayBuffer());
-        validateLocalWav(bytes,response.headers);
+        const bytes=await requestLocalSpeech(service,{text:String(text),voice:selectedVoice,instruction:localVoiceInstruction(emotion),fetchImpl,signal:scoped.signal});
         stats.speech += 1;
         stats.lastSpeechAt = Date.now();
         return bytes;
@@ -449,7 +436,7 @@ export function createLocalModelServer({
     mkdirSync(config.mediaDir, {recursive: true});
     const file = join(config.mediaDir, `tts-${Date.now()}-${randomUUID().slice(0, 8)}.wav`);
     writeFileSync(file, bytes);
-    return {ok: true, kind: 'speech', file, media: [{kind: 'speech', file}], text: '本地语音文件已生成', coverage: 'VoiceLab 实际返回音频，文件已写入本地媒体目录'};
+    return {ok: true, kind: 'speech', file, media: [{kind: 'speech', file}], text: '本地语音文件已生成', coverage: '已从所选本地语音服务收到 WAV 音频并写入本地媒体目录'};
   }
 
   async function captionImage(file, signal, question = '',onProgress=()=>{}) {
@@ -482,7 +469,7 @@ export function createLocalModelServer({
     const latest = rows.map(message => message.role).lastIndexOf('user');
     const message=messages[latest];
     if (message) {
-      const files = imageDataFiles(message.content, env.LOCAL_AI_WORK_DIR || join(tmpdir(), 'qq-bridge-local-ai-runtime'));
+      const files = imageDataFiles(message.content, env.LOCAL_AI_WORK_DIR || 'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
       if (!files.length) return rows;
       if(files.directory)tempFiles.push(files.directory);
       const route=config.visionMode==='auto'&&config.memoryProfile==='8gb'&&config.backend==='comfyui'&&files.length>1?'caption':visionRoute();
@@ -674,7 +661,7 @@ export function createLocalModelServer({
           try {
             return await enqueueGpu(async () => {
               const voiceFreed=await freeVoiceModel(deadline.signal);
-              if(config.memoryProfile==='8gb'&&!voiceFreed&&await voiceAlive())throw new Error('语音模型未能释放，8GB 方案暂不叠加加载生图模型');
+              if(config.memoryProfile==='8gb'&&!voiceFreed&&(await voiceAlive())!==false)throw new Error('本地语音模型未确认释放，8GB 方案未叠加生图；请配置释放接口，或将 CPU 语音服务标记为 CPU。');
               if (args.image && !selected.inputs?.image?.node) throw new Error('这份工作流没有配置源图片输入映射，请选择支持图片输入的工作流');
               await freeChatModel(deadline.signal,options?.onProgress);
               options?.onProgress?.({phase:'tool',tool:kind});
@@ -727,7 +714,7 @@ export function createLocalModelServer({
       if(!mediaTask.subjectAmbiguous&&(mediaTask.source==='followup'||mediaTask.ambiguous))prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:mediaTask.ambiguous?'【本轮重复发送请求】当前可靠上下文无法确认要重复哪份媒体。先按角色口吻简短确认要发什么；没有实际任务时不能说图片正在渲染、语音正在合成或已经发送。':'【本轮媒体续接】当前人类要求重复前面的媒体请求：'+mediaTask.effectiveRequest+'。请实际执行对应工具，不只答应，不把旧助手的口头承诺当作成功回执。'});
       let personaReference=null;
       if(turnContext.personaImage?.dataUrl&&mediaTask.image){
-        const files=imageDataFiles([{type:'image_url',image_url:{url:turnContext.personaImage.dataUrl}}],env.LOCAL_AI_WORK_DIR||join(tmpdir(), 'qq-bridge-local-ai-runtime'));
+        const files=imageDataFiles([{type:'image_url',image_url:{url:turnContext.personaImage.dataUrl}}],env.LOCAL_AI_WORK_DIR||'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
         if(files.directory)tempFiles.push(files.directory);
         if(files[0]){personaReference={file:files[0],description:String(turnContext.personaImage.description||'').slice(0,500),camera:String(turnContext.personaImage.camera||'').slice(0,700),sha256:createHash('sha256').update(readFileSync(files[0])).digest('hex')};sourceImages.add(resolve(files[0]));}
       }
@@ -791,7 +778,7 @@ export function createLocalModelServer({
           const {localObservations=[],...result}=typeof raw==='string'?{ok:true,text:raw}:raw||{};
           const observed=[];
           for(const observation of localObservations.slice(0,2)){
-            const files=imageDataFiles([{type:'image_url',image_url:{url:observation.url}}],env.LOCAL_AI_WORK_DIR||join(tmpdir(), 'qq-bridge-local-ai-runtime'));
+            const files=imageDataFiles([{type:'image_url',image_url:{url:observation.url}}],env.LOCAL_AI_WORK_DIR||'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
             if(files.directory)tempFiles.push(files.directory);
             for(const file of files){try{const caption=await captionImage(file,signal,request,onProgress);observed.push({at:observation.at,text:caption.text,coverage:'本机视觉工作流对实际截图的分析，不能证明完整观看或听过音频'});}catch(error){if(signal?.aborted)throw error;observed.push({at:observation.at,error:String(error.message||error).slice(0,200),coverage:'取得实际画面，但本地视觉分析失败，不能推测图中内容'});}}
           }
@@ -879,11 +866,11 @@ export function createLocalModelServer({
     return {
       ok: true,
       service: 'local-ai',
-      version: '1.52.1',
+      version: '1.58.3',
       execution:execution.snapshot(),
       config: publicLocalConfig(config),
       chat: {backend: config.backend, model: config.modelId, chatWorkflow: config.chatWorkflow, comfy: comfy.reachable === true, workflows: comfy.workflows || []},
-      voice: {enabled: config.voiceEnabled, engine: 'voicelab', alive: config.voiceEnabled ? await voiceAlive() : false},
+      voice: {enabled: config.voiceEnabled, engine: voiceService().type, baseUrl:voiceService().baseUrl, device:voiceService().device, directory:voiceService().directory, statusPath:voiceService().statusPath, alive: config.voiceEnabled ? await voiceAlive() : false},
       capabilities: {
         detection:await capabilityDetector.snapshot(),
         streaming: {enabled:config.streamDialogue,available:config.backend==='comfyui'?(await runtime.streamStatus?.())?.available===true:null,backend:config.backend},
@@ -914,7 +901,7 @@ export function createLocalModelServer({
       return;
     }
     if(url.pathname==='/v1/local/issues'&&req.method==='GET'){sendJson(res,200,{issues:issues.list()});return;}
-    if(url.pathname==='/v1/local/voices'&&req.method==='GET'){void localVoices({url:voiceUrl,fetchImpl,signal:AbortSignal.timeout(5000)}).then(voices=>sendJson(res,200,{voices,selected:config.voicePreset||voiceId})).catch(error=>sendJson(res,502,{error:{message:String(error.message)}}));return;}
+    if(url.pathname==='/v1/local/voices'&&req.method==='GET'){void serviceVoices(voiceService(),{fetchImpl,signal:AbortSignal.timeout(5000)}).then(voices=>sendJson(res,200,{voices,selected:config.voicePreset||voiceId})).catch(error=>sendJson(res,502,{error:{message:String(error.message)}}));return;}
     if(url.pathname==='/v1/local/invocations'&&req.method==='GET'){sendJson(res,200,{records:invocationJournal.list({limit:240}),mediaRoot:resolve(config.mediaDir)});return;}
     if(url.pathname==='/v1/local/capabilities'&&req.method==='GET'){
       void capabilityDetector.snapshot().then(value=>sendJson(res,200,value)).catch(error=>sendJson(res,503,{error:{message:String(error.message)}}));return;
@@ -996,7 +983,7 @@ export function createLocalModelServer({
 
     if (req.method === 'GET' && url.pathname === '/v1/models') {
       const data = [{id: config.modelId, object: 'model', owned_by: 'local-gateway'}];
-      if (config.voiceEnabled) data.push({id: 'local-tts', object: 'model', owned_by: 'local-voicelab'});
+      if (config.voiceEnabled) data.push({id: 'local-tts', object: 'model', owned_by: 'local-'+voiceService().type});
       for (const workflow of mediaWorkflowSpecs(config)) {
         data.push({id: workflow.id, object: 'model', owned_by: 'local-comfyui', name: workflow.name, kind: workflow.kind});
       }
@@ -1185,7 +1172,3 @@ if (direct) {
     process.exitCode = 1;
   });
 }
-
-
-
-

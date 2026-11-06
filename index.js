@@ -1124,7 +1124,7 @@ export function apply(ctx, rawConfig) {
       }finally{deadline.close();}
     };
     if(req.method==='GET'){
-      void(async()=>{try{const health=await gateway('/health');const voiceDir=String(settings.comfyui?.localVoiceDir||'');jsonResponse(res,200,{ok:true,...health,config:health.config,localChat:{enabled:settings.localChat?.enabled===true,apiComplement:settings.localChat?.apiComplement===true,baseUrl:gatewayBase()},gateway:{reachable:true},status:{reachable:health.chat?.comfy===true,baseUrl:health.config?.comfyUrl||'',workflows:health.chat?.workflows||[]},localVoice:{...health.voice,running:health.voice?.alive===true,exists:!!voiceDir&&existsSync(voiceDir),dir:voiceDir,port:7870}});}
+      void(async()=>{try{const health=await gateway('/health');const voiceDir=String(health.config?.voiceService?.directory||settings.comfyui?.localVoiceDir||'');jsonResponse(res,200,{ok:true,...health,config:health.config,localChat:{enabled:settings.localChat?.enabled===true,apiComplement:settings.localChat?.apiComplement===true,baseUrl:gatewayBase()},gateway:{reachable:true},status:{reachable:health.chat?.comfy===true,baseUrl:health.config?.comfyUrl||'',workflows:health.chat?.workflows||[]},localVoice:{...health.voice,running:health.voice?.alive===true,exists:!!voiceDir&&existsSync(voiceDir),dir:voiceDir,baseUrl:health.voice?.baseUrl||'',engine:health.voice?.engine||'',device:health.voice?.device||'',state:health.voice?.alive===null?'unknown':health.voice?.alive?'online':'offline'}});}
         catch(error){jsonResponse(res,502,{ok:false,error:'本地网关不可用：'+String(error?.message||error).slice(0,240),gateway:{reachable:false}});}})();
       return;
     }
@@ -1752,7 +1752,7 @@ export function apply(ctx, rawConfig) {
         baseUrl: 'http://127.0.0.1:8188',
         keepWarm: true,
         idleUnloadMinutes: 10,
-        localVoiceDir: 'D:\\下载\\BreezeTTS2_V2',
+        localVoiceDir: '',
         workflows: {
           caption: { file: 'assets/comfyui/caption.json', inputs: { text: { node: '6', field: '提示词' }, image: { node: '9', field: 'image' } }, output: { node: '47', field: 'text' }, timeoutMs: 180000 },
           chat: { file: 'assets/comfyui/chat-4b.json', inputs: { text: { node: '1', field: '用户消息' }, history: { node: '1', field: '对话历史JSON' } }, output: { node: '1', field: '助手回复' }, timeoutMs: 300000 },
@@ -5269,7 +5269,7 @@ export function apply(ctx, rawConfig) {
   let recoveryLaunchTimer = null;
 
   /** 只杀 NapCat 拉起来的那个 QQ（命令行带 -q 机器人号），不碰用户自己的 QQ。 */
-  function localLoginAccount(){let host;try{host=new URL(cfg.wsUrl).hostname.replace(/^\[|\]$/g,'').toLowerCase();}catch{throw Error('本机QQ连接地址无效');}if(!['127.0.0.1','localhost','::1'].includes(host))throw Error('请使用当前设备本机的QQ服务');const qq=String(lastSelfId||cfg.napcat.qq||'');if(!/^\d{5,12}$/.test(qq))throw Error('请先配置本机机器人账号');return qq;}
+  function localLoginAccount(required=true){let host;try{host=new URL(cfg.wsUrl).hostname.replace(/^\[|\]$/g,'').toLowerCase();}catch{throw Error('本机QQ连接地址无效');}if(!['127.0.0.1','localhost','::1'].includes(host))throw Error('请使用当前设备本机的QQ服务');const qq=String(lastSelfId||cfg.napcat.qq||'');if(required&&!/^\d{5,12}$/.test(qq))throw Error('请先配置本机机器人账号');return qq;}
 
   // Kept as an internal compatibility alias; never terminates all NapCat processes.
   function killNapCatProcesses() {
@@ -8473,6 +8473,7 @@ export function apply(ctx, rawConfig) {
         localLoginAccount(false);
         const status = await loginClient.getStatus();
         state.webuiReachable = true;
+        if(status.isLogin&&!status.isOffline){const info=await loginClient.getLoginInfo();const expected=localLoginAccount(false);if(expected&&expected!==info.uin)throw Error('本机 QQ 登录账号与当前机器人账号不一致，请先核对账号后再连接');lastSelfId=info.uin;}
         state.qqLoggedIn = status.isLogin && !status.isOffline;
         state.status = status.loginPhase;
         if (status.qrLoginAccepted && !state.qqLoggedIn) state.status = 'qrcode_scanned';
@@ -10163,6 +10164,7 @@ export function apply(ctx, rawConfig) {
               const action = JSON.parse(body || '{}').action;
               if (!['start', 'restart', 'qr-refresh'].includes(action)) { jsonResponse(res, 400, { error: '仅支持本机启动、重启或刷新二维码。' }); return; }
               if(action==='qr-refresh'){jsonResponse(res,200,await requestFreshQr());return;}
+              await readLoginState(true);
               const result=await performLocalLogin({action,qq:localLoginAccount(false),readStatus:()=>readLoginState(true),napcat:localNapCat,client:loginClient,getQr:()=>qrMeta(),refreshQr:()=>requestFreshQr(),isStopped:()=>stopped});
               const standby=!!deviceSync&&!deviceSync.allowRun();
               loginSnapshot = null;
@@ -10170,6 +10172,7 @@ export function apply(ctx, rawConfig) {
               state.manuallyLoggedOut = false;
               saveState();
               if (!standby&&!socket?.ready) {
+                repairLocalOneBotBinding();
                 if (reconnectTimer !== null) clearTimeout(reconnectTimer);
                 reconnectTimer = null;
                 socket?.close(); socket = null;
@@ -10198,12 +10201,11 @@ export function apply(ctx, rawConfig) {
           jsonResponse(res, 200, {
             qqProcesses: count('QQ.exe'),
             napcatProcesses: count('NapCatWinBootMain.exe'),
-            port3001: socket !== null && socket.ready ? 'connected' : 'closed',
+            port3001: socket !== null && socket.ready ? 'connected' : 'not-connected',
+            bridgePaused:accountPaused,
             qrAgeSeconds: qrAge,
             advice:
-              qrAge !== null && qrAge > 150
-                ? 'NapCat 没写出新二维码。多半是桌面 QQ 已经在运行，注入失败：检查 NapCat 运行状态后再点击「启动 NapCat / 扫码登录」；不要退出其他正在使用的 QQ。'
-                : '',
+              accountPaused ? 'QQ 登录与桥接接管分别管理：当前桥接已暂停，请在确认使用此设备后恢复连接。' : 'WebSocket 未连接不代表 NapCat 端口未启动；请结合 QQ 登录状态和设备接管状态检查。',
           });
         },
       }),
@@ -11284,6 +11286,3 @@ export function apply(ctx, rawConfig) {
     log('plugin disposed');
   });
 }
-
-
-

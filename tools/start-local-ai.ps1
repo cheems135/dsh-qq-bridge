@@ -12,7 +12,7 @@ foreach ($serviceProcessId in $listeners) {
     }
     if (-not $Restart) {
         $existingHealth = Invoke-RestMethod ($serviceOrigin + '/health') -TimeoutSec 10
-        if ($existingHealth.version -eq '1.52.1') { Write-Output ('local-ai ready: ' + $serviceOrigin); exit 0 }
+        if ($existingHealth.version -eq '1.58.3') { Write-Output ('local-ai ready: ' + $serviceOrigin); exit 0 }
         throw 'An older gateway is still running. When idle, use tools/start-local-ai.ps1 -Restart to update it.'
     }
     $restartStatus = Invoke-RestMethod ($serviceOrigin + '/v1/local/status') -TimeoutSec 5
@@ -42,5 +42,3 @@ for ($serviceAttempt = 0; $serviceAttempt -lt 40; $serviceAttempt++) {
     Start-Sleep -Milliseconds 250
 }
 throw 'Gateway did not become ready. Check the local-ai logs.'
-
-

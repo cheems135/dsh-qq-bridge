@@ -1,8 +1,9 @@
 import {localImageMetadata} from './local-image-template.js';
+import {normalizeVoiceService} from './local-voice.js';
 import {existsSync, statSync} from 'node:fs';
 import {extname, isAbsolute, relative, resolve, sep} from 'node:path';
 
-export const LOCAL_MEDIA_DEFAULT = resolve(process.cwd(), 'outputs', 'local-media');
+export const LOCAL_MEDIA_DEFAULT = 'D:/CodexData/workspaces/2026-11-04/qq/outputs/local-media';
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.gif']);
@@ -86,6 +87,7 @@ export function defaultLocalConfig(env = process.env) {
     keepWarm: true,
     voiceEnabled: true,
     voicePreset: '',
+    voiceService: normalizeVoiceService({baseUrl:env.VOICE_URL||'http://127.0.0.1:7870'}),
     fastDialogue: true,
     dialoguePriority: 'quality',
     streamDialogue: true,
@@ -287,6 +289,7 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
     keepWarm: merged.keepWarm !== false,
     voiceEnabled: merged.voiceEnabled !== false,
     voicePreset: String(merged.voicePreset||'').trim().slice(0,160),
+    voiceService: normalizeVoiceService(input.voiceService||{},base.voiceService||defaultLocalConfig().voiceService),
     fastDialogue: merged.fastDialogue !== false,
     dialoguePriority:merged.dialoguePriority==='speed'?'speed':'quality',
     streamDialogue: merged.streamDialogue !== false,
@@ -410,5 +413,7 @@ export function validateLocalAttachment(attachment) {
 }
 
 export function publicLocalConfig(config) {
-  return normalizeLocalConfig(config);
+  const value=normalizeLocalConfig(config);
+  value.voiceService={...value.voiceService,hasApiKey:!!value.voiceService.apiKey,apiKey:''};
+  return value;
 }
