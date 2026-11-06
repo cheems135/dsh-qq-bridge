@@ -98,7 +98,7 @@ test('Qzone replies only to a read comment in the same scope, with exact parent 
 });
 test('Qzone automatic replies select other people on own posts and skip already submitted targets',async()=>{
  const f=fixture();await f.service.publish({text:'这张图的颜色',images:[]},context);
- const target=await f.service.nextReply(context);assert.equal(target.id,'4');assert.equal(target.postText,'这张图的颜色');
+ await f.service.comments({tid:'post-1',uin:auth.uin},context);const target=await f.service.nextReply(context);assert.equal(target.id,'4');assert.equal(target.postText,'这张图的颜色');
  await f.service.publish({text:'同感',target:{tid:target.tid,uin:target.owner},commentId:target.id,commentUin:target.uin},context);
  assert.equal(await f.service.nextReply(context),null);assert.equal(await f.service.nextReply({...context,accountId:'other'}),null);
 });

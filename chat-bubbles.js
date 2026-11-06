@@ -31,3 +31,22 @@ export function stickerMessageGroups(segments=[]){
   for(const segment of segments){if(segment.type==='at')continue;if(segment.type==='image'){flush();groups.push([...mentions,segment]);}else text.push(segment);}
   flush();return groups;
 }
+
+// Sharing preserves each URL verbatim while allowing the surrounding speech
+// to keep its deliberate paragraphs and conversational pauses.
+export function shareBubbleParts(value){
+ const text=String(value??'').trim();if(!text)return [];
+ if(/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(text))return naturalBubbleParts(text,{automaticBreaks:false});
+ const result=[];
+ for(const fragment of text.split(/(https?:\/\/[^\s<>]+)/gi)){
+  if(!fragment.trim())continue;
+  if(/^https?:\/\//i.test(fragment)){result.push(fragment);continue;}
+  for(const paragraph of naturalBubbleParts(fragment,{automaticBreaks:false})){
+   const sentences=paragraph.match(/[^。！？!?]+[。！？!?]+[”’"」』]*|[^。！？!?]+$/gu)||[paragraph];
+   let current='',count=0;
+   for(const sentence of sentences){if(current&&(current.length+sentence.length>120||count>=2)){result.push(current.trim());current='';count=0;}current+=sentence;count++;}
+   if(current.trim())result.push(current.trim());
+  }
+ }
+ return result;
+}

@@ -16,8 +16,8 @@ export function mobileRule(name,fallback,apiOnly=false){return apiOnly?(compact[
 const toolDescriptions={
  bridge_browser:'操作内部独立真实浏览器。默认复用同账号人设的登录与标签页；snapshot原地观察，页面变化后再用新ref操作，不反复navigate/刷新/重开。navigate打开，click/fill/press/scroll操作，play/pause播放，subtitles取真实字幕，screenshot取图，tabs/switch切页。先观察→操作→核对；标题/播放不等于看懂全片，音轨未读不声称听过。show仅明确桌面模式。登录缺扫码/系统验证时请本人完成对应一步；付款仍准确确认，评论按独立选择。',
  bridge_device:'操作手机真实设备，target=phone。先capabilities取得DSHBox Pilot能力，再pilot传capability及arguments；也可observe/launch/tap/swipe/input/key/wake。黑屏或锁屏先wake，安全锁需本人解锁。按真实快照观察→操作→核对，派发不等于完成；付款仍准确确认，账号、人设与设备不能混用。',
- bridge_qq_profile:'QQ签名与空间：signature改签名，qzone发布，status查记录/登录，check-session只读检查，comments传实际tid/uin读取评论，reply传已读的commentId/commentUin与text准确回复，verify按记录id读回核对。images只用bridge_social_image准备的实际file；可搜图/截图/生成/画作，上传失败不降纯文字。公开内容不泄露私聊；评论按独立开关/手动选择，未核实不报成功。',
- bridge_life_share:'分享实际作品或已读链接。targets看允许对象；send省略target为当前对话，其他对象使用targets的完整key；作品或网页须真实核实。caption写具体感受与对方兴趣，不作任务汇报、不机械追问。status按deliveryId查QQ发送证据，排队不等于送达；不要求日程任务。',
+ bridge_qq_profile:'QQ签名与空间：signature改签名，qzone发布，status查记录/登录，check-session只读检查，friends选允许好友，feed传uin浏览动态（省略看自己），comment传已读tid/uin/text评论；想逛时才读，不持续轮询。comments传实际tid/uin读取评论，reply传已读的commentId/commentUin与text准确回复，verify按记录id读回核对。images只用bridge_social_image准备的实际file；可搜图/截图/生成/画作，上传失败不降纯文字。公开内容不泄露私聊；评论按独立开关/手动选择，未核实不报成功。',
+ bridge_life_share:'分享实际作品或已读链接。targets看允许对象；send省略target为当前对话，其他对象使用targets的完整key；作品或网页须真实核实。caption写具体感受与对方兴趣，按自然停顿换行分段，不作任务汇报、不机械追问。status按deliveryId查QQ发送证据，排队不等于送达；不要求日程任务。',
  bridge_life_qq:'QQ日常：targets查允许对象，recent读近期文字，历史原图用bridge_qq_read history；send发自然消息，status按deliveryId核对实际发送。可以不说话，不群发、不联系列表外对象，排队不算送达。',
 };
 export function mobileToolDescription(name,fallback,platform=process.platform){return platform==='win32'?fallback:(toolDescriptions[name]||fallback);}

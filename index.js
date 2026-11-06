@@ -101,7 +101,7 @@ import {createLearningMemory,learningConfig,validateLearningArchive} from './lea
 import {researchLearning} from './learning-research.js';
 import {calendarHistory} from './calendar-history.js';
 import {createLifeMemory,lifeConfig,calendarNow,validateCalendarArchive} from './life-memory.js';
-import {naturalBubbleParts,stickerMessageGroups} from './chat-bubbles.js';
+import {naturalBubbleParts,stickerMessageGroups,shareBubbleParts} from './chat-bubbles.js';
 import {createWalletAwareness,walletConfig,nativeWalletEntries} from './wallet-awareness.js';
 import { replyTurnHint, replyRepetition, shouldLookupReply, DEFAULT_NATURAL_PERSONA, NATURAL_TASK_RULES, planMediaVerification, verifyMediaTask, mediaEvidenceNote, guardMediaReply, normalizeSearchSources } from './tone-routing.js';
 import {watchSegment,playerPosition} from './watch-live.js';
@@ -650,7 +650,8 @@ function renderForChat(text) {
 
 /** Bound short chat bubbles without losing text, operation boundaries or length limits. */
 function splitBursts(text, limit, options={maxBubbles:1}) {
-  return naturalBubbleParts(text,options).flatMap(part=>splitMessage(part,limit));
+  const sharing=options.shareLinks===true&&/https?:\/\//i.test(text)&&!/[\uE200]|\[(?:发送|群发|定时|语音|表情包)[:：\]]/.test(text);
+  return (sharing?shareBubbleParts(text):naturalBubbleParts(text,options)).flatMap(part=>splitMessage(part,limit));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1033,8 +1034,8 @@ export function apply(ctx, rawConfig) {
     const tasks=Object.values(featureState.activityShares||{}).filter(j=>j.meta?.accountId===context.accountId&&j.meta?.personaId===context.personaId&&j.chat===context.key);
     if(context.meta?.lifeJobId)tasks.push(lifeExecution.job(context.meta.lifeJobId,calendarMeta('',context.personaId,context.accountId)));
     const item=tasks.flatMap(j=>j.shares||[]).find(s=>s.deliveryId===id);if(!item)throw Error('没有找到当前账号人设在本对话提交的这次消息');
-    const ids=item.deliveryIds||[item.deliveryId],rows=ids.map(id=>featureState.outbox.find(o=>o.id===id)),status=rows.every(r=>r?.status==='sent')?'sent':rows.some(r=>r?.status==='failed')?'failed':rows.some(r=>!r||r.status==='unknown')?'unknown':'pending';
-    return {ok:true,deliveryId:item.deliveryId,deliveryIds:ids,status,substantive:rows.every(r=>r?.verification?.state==='observed'),verified:rows.every(r=>r?.verification?.state==='observed'),verification:{state:rows.every(r=>r?.verification?.state==='observed')?'observed':'unconfirmed',recipient:'unknown',read:'unknown'},checks:rows.filter(Boolean).map(deliveryCheckSummary),coverage:rows.every(r=>r?.verification?.state==='observed')?'已在QQ目标会话读回本次消息；对方接收和已读情况未知':status==='sent'?'QQ已接收，后台正在读回核对；不要重复发送，不能声称对方已收到':'尚未取得平台接收回执，不宣称已收到'};
+    const ids=item.deliveryIds||[item.deliveryId],partial=item.expectedParts&&ids.length<item.expectedParts,rows=ids.map(id=>featureState.outbox.find(o=>o.id===id)),status=partial?'failed':rows.every(r=>r?.status==='sent')?'sent':rows.some(r=>r?.status==='failed')?'failed':rows.some(r=>!r||r.status==='unknown')?'unknown':'pending';
+    return {ok:true,deliveryId:item.deliveryId,deliveryIds:ids,status,substantive:(!partial&&rows.every(r=>r?.verification?.state==='observed')),verified:(!partial&&rows.every(r=>r?.verification?.state==='observed')),verification:{state:(!partial&&rows.every(r=>r?.verification?.state==='observed'))?'observed':'unconfirmed',recipient:'unknown',read:'unknown'},checks:rows.filter(Boolean).map(deliveryCheckSummary),coverage:(!partial&&rows.every(r=>r?.verification?.state==='observed'))?'已在QQ目标会话读回本次消息；对方接收和已读情况未知':status==='sent'?'QQ已接收，后台正在读回核对；不要重复发送，不能声称对方已收到':'尚未取得平台接收回执，不宣称已收到'};
   }
   function outgoingActivityChat(context,target){
     const [kind,id]=target.split(':'),reply=context.meta?.kind==='user'&&target===context.key;
@@ -4545,9 +4546,10 @@ export function apply(ctx, rawConfig) {
     storage:{read:()=>JSON.parse(readFileSync(join(cfg.dataDir,'qzone-social.json'),'utf8')),write:data=>writeAtomic(join(cfg.dataDir,'qzone-social.json'),data)},
     authorize:c=>!stopped&&!accountPaused&&socket?.ready===true&&c.connectionRevision===qzoneConnectionRevision&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&(c.generation===undefined||c.generation===(featureState.generation||0))&&recordsAllowed(c.key)&&settings.owners.includes(String(c.key).replace(/^private:/,''))&&(!c.scope||agencyAuthorized(c)),
     getAuth:()=>qzoneSession().getAuth(),
+    allowTarget:uin=>String(uin)===String(lastSelfId)||effectiveUsers().includes(String(uin)),
     onAuthFailure:()=>{qzoneSession().invalidate('auth-required');void maintainQzoneSession().catch(()=>{});},
     loadImage:socialImage,
-    onRecord:(row,c)=>recordInvocation({id:'qzone:'+(row.id||row.kind+':'+row.at),tool:row.kind==='comment-poll'?'qq.qzone.comments':row.kind==='reply'?'qq.qzone.reply':'qq.qzone.publish',kind:'tool',status:['receipt','verification'].includes(row.stage)?'returned':['failed','comment-poll-failed'].includes(row.stage)?'failed':'started',arguments:{text:row.text,target:row.target,commentId:row.commentId,commentUin:row.commentUin,imageCount:row.imageCount,images:row.images},result:{stage:row.stage,status:row.status,uploaded:row.uploaded,files:row.uploaded?.map(image=>image.file).filter(Boolean),itemId:row.itemId,imageCount:row.imageCount,coverage:row.coverage,nextPollAt:row.nextPollAt,verification:row.verification},error:typeof row.error==='object'?row.error.message:row.error},{...invocationScope(c.key),backend:'api'})
+    onRecord:(row,c)=>recordInvocation({id:'qzone:'+(row.id||row.kind+':'+row.at),tool:row.kind==='comment-poll'?'qq.qzone.comments':row.kind==='reply'?'qq.qzone.reply':row.kind==='comment'?'qq.qzone.comment':'qq.qzone.publish',kind:'tool',status:['receipt','verification'].includes(row.stage)?'returned':['failed','comment-poll-failed'].includes(row.stage)?'failed':'started',arguments:{text:row.text,target:row.target,commentId:row.commentId,commentUin:row.commentUin,imageCount:row.imageCount,images:row.images},result:{stage:row.stage,status:row.status,uploaded:row.uploaded,files:row.uploaded?.map(image=>image.file).filter(Boolean),itemId:row.itemId,imageCount:row.imageCount,coverage:row.coverage,nextPollAt:row.nextPollAt,verification:row.verification},error:typeof row.error==='object'?row.error.message:row.error},{...invocationScope(c.key),backend:'api'})
   }));}
   async function naturalizePublicText(text,c,{kind='post',comment=null}={}){
     const persona=activePersona(c.key),generation=featureState.generation||0,account=settings.activeAccountId||'';
@@ -4565,9 +4567,28 @@ export function apply(ctx, rawConfig) {
     try{const result=await qzone().publish({text,images:operation.images||[]},context);finishQqAction(evidence,result);if(result.ok)queueSocialReadback(result.id,context);executionRuntime.finish(execution.exec,execution.context,result);return result;}
     catch(error){finishQqAction(evidence,{status:error.deliveryUnknown?'unknown':'failed',verified:false,error:String(error.message)});executionRuntime.finish(execution.exec,execution.context,null,{error:String(error.message)});throw error;}
   }
+  async function qzoneFriends(context){
+    const c=socialContext(context),stamp=JSON.stringify([c.accountId,c.personaId,featureState.generation||0]);
+    const raw=await request('get_friend_list',{},12000);
+    if(stopped||accountPaused||stamp!==JSON.stringify([settings.activeAccountId||'',activePersona(c.key).id,featureState.generation||0]))throw Error('好友读取期间会话已改变');
+    return {ok:true,friends:(Array.isArray(raw)?raw:raw?.friends||[]).filter(f=>effectiveUsers().includes(String(f.user_id||f.uin))).map(f=>({uin:String(f.user_id||f.uin),name:String(f.remark||f.nickname||'').slice(0,80)})),coverage:'实际QQ好友与保留的允许名单交集；没有实际好友关系或不在名单内的目标不可评论'};
+  }
+  async function qzoneFriendTarget(uin,context){
+    if(!uin||String(uin)===String(lastSelfId))return String(lastSelfId);
+    const result=await qzoneFriends(context);if(!result.friends.some(f=>f.uin===String(uin)))throw Error('该账号不是当前允许访问的实际QQ好友');return String(uin);
+  }
+  async function commentQzone(args,context){
+    if(!autonomyConfig().qzoneReplies)throw Error('空间评论与回复开关已关闭');
+    const c=socialContext(context),uin=await qzoneFriendTarget(args.uin,c);
+    const observed=qzone().status(c).posts.find(p=>p.uin===uin&&p.tid===String(args.tid));if(!observed)throw Error('请先实际浏览目标动态');
+    const expression=await naturalizePublicText(args.text,c,{kind:'reply',comment:{text:'',postText:observed.text}});if(expression==='[skip]')return {ok:false,skipped:true};
+    const operation=await socialOperation('qq.qzone.comment',expression,{context:c.panel?undefined:c,target:'qq:post:'+uin+':'+args.tid});
+    try{const result=await qzone().publish({text:expression,images:args.images||[],target:{uin,tid:String(args.tid)},comment:true},c);if(result.ok)queueSocialReadback(result.id,c);executionRuntime.finish(operation.exec,c,result);return result;}catch(error){executionRuntime.finish(operation.exec,c,null,{error:String(error.message)});throw error;}
+  }
   async function replyQzone(args,context){
     if(!autonomyConfig().qzoneReplies)throw Error('空间评论回复已关闭，请在主动互动页单独开启');
     const c=socialContext(context);
+    await qzoneFriendTarget(args.uin,c);
     const observed=qzone().status(c).comments.find(r=>r.owner===String(args.uin)&&r.tid===String(args.tid)&&r.id===String(args.commentId)&&r.uin===String(args.commentUin));
     if(!observed)throw Error('目标评论尚未实际读取，先刷新该动态评论再回复');
     if(!/(?:原文|照发|一字不改)/.test(c.meta?.userWords||'')){const expression=await naturalizePublicText(args.text,c,{kind:'reply',comment:{text:observed.text,postText:qzone().status(c).entries.find(r=>r.kind==='publish'&&r.itemId===observed.tid)?.text||''}});if(expression==='[skip]')return {ok:false,skipped:true,coverage:'这次没有合适的评论回应，未提交'};args={...args,text:expression};}
@@ -4779,7 +4800,7 @@ export function apply(ctx, rawConfig) {
       candidates.push({ action: 'signature' });
     }
     if(config.explore&&settings.agency.enabled&&settings.agency.autonomous&&(browserController?.status()?.available||settings.phone.enabled&&phoneLastStatus.connected)){const target=initiativeUsers.find(id=>settings.owners.includes(id)&&!pausedConversation('private:'+id));if(target)candidates.push({action:'explore',target});}
-    if(config.qzoneReplies){const owner=initiativeUsers.find(id=>settings.owners.includes(id));if(owner){const key='private:'+owner;try{const comment=await qzone().nextReply(socialContext({key,accountId,personaId:activePersona(key).id,panel:true,generation}));if(comment)candidates.push({action:'qzoneReply',target:owner,comment,event:true});}catch{log('空间评论读取暂不可用，保留其他主动活动');}}}
+
     if (candidates.length === 0) {
       saveState();
       return { action: 'none', reason: '没有触发条件' };
@@ -4794,7 +4815,7 @@ export function apply(ctx, rawConfig) {
     if(pick.action==='group')choices.push('- group：在群里自然接一句或起个话题，不@任何人；只有确实想聊才发，没话说选 none。');
     if(pick.action==='webshare')choices.push('- webshare：根据已经读到的自定义网页资料，选择是否给当前号主分享一个真实链接和一句具体感受；没有想分享的选none，不假装看过视频。');
     if(pick.action==='qzoneReply')choices.push('- qzoneReply：回应自己动态下刚刚实际读到的一条评论，只回应这条具体内容，不重复动态文案，不带入私聊资料。不想回复可none。');
-    if(pick.action==='explore')choices.push('- explore：围绕自己的具体兴趣用实际浏览、B站、音频或创作工具做一件小事。先取得内容与结果，再决定记住、分享、发图或发布空间；没有兴趣可以none。');
+    if(pick.action==='explore')choices.push('- explore：围绕自己的具体兴趣用实际浏览、B站、音频或创作工具做一件小事。也可按兴趣逛QQ空间，先bridge_qq_profile friends选允许好友，再feed读取自己或好友动态及可见评论，遇到想接的话用comment或reply；不必每次都访问，也不定时检查评论。先取得内容与结果，再决定记住、分享、发图或发布空间；没有兴趣可以none。');
     if(pick.action==='phone')choices.push('- phone：用真实手机完成贴合兴趣的浏览或学习任务。先发现Pilot能力，再由你选择页面、点击、播放、截图或读评论，根据实际反馈决定下一步；不要求使用固定phone_learning流程。想分享才分享真正取得的链接和具体发现；没兴趣可选none。付款仍按本机设置，不编造订单。');
     const contextKey=pick.action==='group'?pick.key:(pick.target?'private:'+pick.target:panelOperationKey('')),selectedPersona=activePersona(contextKey);
     const groupContext=pick.action==='group'?groupTranscriptLines(pick.key):'';
@@ -5018,7 +5039,7 @@ export function apply(ctx, rawConfig) {
     const messageGeneration = featureState.generation || 0;
     const pictureCommands = [];
     const protectedBody = body.replace(/\[(?:图|图片|照片)[:：]\s*([^\]\n]{1,800})\]/g, mark => { pictureCommands.push(mark); return '\uE200PIC' + (pictureCommands.length - 1) + '\uE201'; });
-    const bursts = splitBursts(protectedBody, replyCharLimit(),{...companionSettings(),...(chat.kind==='private'?{maxBubbles:0,automaticBreaks:false}:{}),richInput:auditById(chat.auditId)?.richInput===true&&(chat.kind!=='group'||chat.groupPlan?.depth==='detailed')});
+    const bursts = splitBursts(protectedBody, replyCharLimit(),{shareLinks:true,...companionSettings(),...(chat.kind==='private'?{maxBubbles:0,automaticBreaks:false}:{}),richInput:auditById(chat.auditId)?.richInput===true&&(chat.kind!=='group'||chat.groupPlan?.depth==='detailed')});
     const chunks = (cfg.plainText ? bursts.map((burst) => renderForChat(burst)) : bursts).filter((chunk) => chunk !== '').map(chunk=>chunk.replace(/\uE200PIC(\d+)\uE201/g,(_mark,index)=>pictureCommands[Number(index)]||''));
     if (chunks.length === 0) return;
     const liveGroup=chat.kind==='group'?chats.get(state.chats[chat.key]?.sessionId):null;
@@ -6004,7 +6025,7 @@ export function apply(ctx, rawConfig) {
       if(/https?:\/\//.test(replyText))replyText=await naturalizeLinkForChat(replyText,chat.key,{request:String(text||''),sharing:chat.turnKind==='proactive'});
       if(replyText==='[skip]')replyText='';
       const streamedTail=removeStreamedPrefix(replyText,streamed);
-      for(const part of splitBursts(streamedTail.tail,replyCharLimit(),{maxBubbles:0,automaticBreaks:false}))segments.push({type:'text',data:{text:part}});
+      for(const part of splitBursts(streamedTail.tail,replyCharLimit(),{shareLinks:true,maxBubbles:0,automaticBreaks:false}))segments.push({type:'text',data:{text:part}});
       for(const message of attachmentErrors)reportBridgeIssue({id:deliveryKey+':attachment:'+textHash(message),kind:'media',message},{...invocationScope(chat.key,audit?.id),backend:'local'});
       if(!segments.length&&!streamed.length&&(failedReceipts.length||result.error)){if(audit){audit.status='failed';audit.endedAt=Date.now();saveFeatures();}return true;}
       if(!segments.length&&!streamed.length&&!replyText){audit.status='silent';audit.answer='';audit.endedAt=Date.now();saveFeatures();return true;}
@@ -10903,7 +10924,10 @@ export function apply(ctx, rawConfig) {
         if(args.action==='check-session'){const connection=await maintainQzoneSession(true);return {ok:connection.state==='ready',connection,coverage:connection.reason};}
         if(args.action==='status')return {ok:true,...qzone().status(socialContext(context)),connection:qzoneConnectionStatus(),settings:{replies:autonomyConfig().qzoneReplies,images:autonomyConfig().qzoneImages}};
         if(args.action==='verify')return {ok:true,verification:await qzone().verifyEntry(String(args.id||''),socialContext(context))};
-        if(args.action==='comments')return qzone().comments({tid:String(args.tid),uin:String(args.uin)},socialContext(context));
+        if(args.action==='friends')return qzoneFriends(context);
+        if(args.action==='feed')return qzone().feed({uin:await qzoneFriendTarget(args.uin,context),limit:args.limit},socialContext(context));
+        if(args.action==='comment')return commentQzone(args,context);
+        if(args.action==='comments')return qzone().comments({tid:String(args.tid),uin:await qzoneFriendTarget(args.uin,context)},socialContext(context));
         if(args.action==='reply')return replyQzone(args,context);
         if(args.action==='qzone'&&context.meta?.qzoneOnly){if(context.meta.qzoneSubmitted)throw Error('本轮空间已提交，不自动重复发布');if(!autonomyConfig().qzone)throw Error('空间发布已关闭');context.meta.qzoneSubmitted=true;}
         const result=await (args.action==='signature'?setSignature(args.text,{context,decisionId:args.decisionId}):publishQzone(args.text,{context,decisionId:args.decisionId,images:args.images}));if(args.action==='qzone'&&context.meta?.qzoneOnly){context.meta.qzoneSubmitted=true;context.meta.directTextSent=true;}return result;
@@ -11014,17 +11038,19 @@ export function apply(ctx, rawConfig) {
         }
         if(!item)throw Error('先实际读取具体内容，再分享链接；不能把标题或计划当作看过');
         const old=(j.shares||[]).find(s=>s.target===local.target&&s.file===(local.file||'')&&s.url===(local.url||''));
-        if(old)return {ok:true,duplicate:true,deliveryId:old.deliveryId,queued:true,coverage:'本次已经排队，不重复发送；等待实际QQ回执'};
+        if(old){const partial=!!old.expectedParts&&(old.deliveryIds||[old.deliveryId]).length<old.expectedParts;return {ok:!partial,duplicate:true,deliveryId:old.deliveryId,deliveryIds:old.deliveryIds||[old.deliveryId],partial,queued:true,coverage:partial?'上次只排队了部分分享，请查看逐条记录，不重复整组发送':'本次已经排队，不重复发送；等待实际QQ回执'};}
         const caption=String(local.caption||'').trim().slice(0,6000);
         const shareText=local.url?await naturalizeLinkForChat([caption,local.url].filter(Boolean).join('\n'),local.target,{request:context.meta?.userWords||'',sharing:true,evidence:item}):caption;
         if(shareText==='[skip]')return {ok:true,skipped:true,queued:false,coverage:'这轮没有自然想分享的话，未发送链接或任务回执'};
         if(!agencyAuthorized(context))throw Error('分享整理期间会话已改变');
-        const segments=local.file?[{type:'image',data:{file:local.file}}]:[];if(shareText)segments.push({type:'text',data:{text:shareText}});
+        const groups=[...(local.file?[[{type:'image',data:{file:local.file}}]]:[]),...shareBubbleParts(shareText).map(text=>[{type:'text',data:{text}}])];
         executionRuntime.begin(context.exec,context,{...local,toolName:'bridge_life_share'});
         const outgoing=outgoingActivityChat(context,local.target);outgoing.deliveryKey='artifact:'+j.id+':'+local.target+':'+textHash(local.file||local.url);
-        const deliveryId=sendSegments(outgoing,segments);
-        if(deliveryId)rememberActivityShare(context,j,{target:local.target,file:local.file||'',url:local.url||'',deliveryId});
-        return {ok:!!deliveryId,queued:!!deliveryId,deliveryId,coverage:'只有QQ确认回执才算送达'};
+        const deliveryIds=[];for(const [index,segments]of groups.entries()){const id=sendSegments({...outgoing,deliveryKey:outgoing.deliveryKey+':part:'+index},segments);if(!id)break;deliveryIds.push(id);}
+        const deliveryId=deliveryIds[0],complete=deliveryIds.length===groups.length;
+        if(deliveryId)rememberActivityShare(context,j,{target:local.target,file:local.file||'',url:local.url||'',deliveryId,deliveryIds,expectedParts:groups.length});
+        if(deliveryId&&String(local.target)===String(context.key)&&context.meta)context.meta.directTextSent=true;
+        return {ok:complete&&!!deliveryId,queued:!!deliveryId,deliveryId,deliveryIds,partial:!complete,coverage:complete?'图片、配话与链接已分别按顺序排队，逐条QQ回执后才算送达':'只有部分分享进入队列，不重复整组发送；请查看每条发送记录'};
       },
     };
   }

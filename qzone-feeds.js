@@ -100,3 +100,20 @@ export function feedsPost(value,{tid,uin}){
  }
  return {matched:false,text:'',imageCount:null,coverage:'当前空间列表尚未覆盖目标动态，不能据此判定发布失败'};
 }
+
+// Parse one observed post per card; never invent IDs from captions or comments.
+export function feedsTimeline(value,{uin,limit=20}={}){
+ const entries=value?.data?.data||value?.data?.feeds||[],posts=[],seen=new Set();
+ for(const entry of Array.isArray(entries)?entries:[]){
+  if(typeof entry?.html!=='string'||entry.html.length>2*1024*1024)continue;
+  const markers=[...entry.html.matchAll(/<[^>]+\bname\s*=\s*["']feed_data["'][^>]*>/gi)];
+  if(markers.length!==1)continue;
+  const a=attrs(markers[0][0]),owner=a['data-uin'],tid=a['data-tid'];
+  if(!/^\d{5,20}$/.test(owner||'')||! /^[\w-]{1,200}$/.test(tid||'')||uin&&owner!==String(uin))continue;
+  const key=owner+':'+tid;if(seen.has(key))continue;seen.add(key);
+  const body=postBody(entry.html,markers[0]);
+  posts.push({uin:owner,tid,text:text(postInfo(body)),imageCount:postImageCount(body),at:Number(entry.abstime)||0,source:'feeds3',untrusted:true});
+  if(posts.length>=limit)break;
+ }
+ return posts;
+}

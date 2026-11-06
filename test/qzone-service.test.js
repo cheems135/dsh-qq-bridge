@@ -111,38 +111,12 @@ test('Qzone replies send the exact stored nested reply identifiers and parent au
  assert.equal(savedReply.parentUin,'87654321');
 });
 
-test('Qzone discovery scans the latest 20 accepted own posts from seven days and polls successfully every 60 seconds',async()=>{
- const entries=[];
- for(let index=0;index<25;index+=1){
-  const at=index===0?base-7*86400000-1:base+index;
-  entries.push(post('post-'+String(index).padStart(2,'0'),at));
- }
- const state=memory(entries),requested=[];
- let clock=base+30000;
- const service=createQzoneService({
-  storage:state.storage,
-  getAuth:async()=>auth,
-  now:()=>clock,
-  fetchImpl:async(url,options)=>{
-   const target=new URL(url),tid=target.searchParams.get('tid')||new URLSearchParams(options.body).get('tid');if(target.pathname.includes('getdetail'))requested.push(tid);
-   return Response.json(commentResponse(tid));
-  }
- });
-
- const first=await service.nextReply(context);
- assert.equal(first.id,'901');
- assert.equal(first.uin,'87654321');
- assert.equal(first.postText,'动态 post-24');
- assert.deepEqual(new Set(requested),new Set(Array.from({length:20},(_,index)=>'post-'+String(index+5).padStart(2,'0'))));
-
- clock+=59999;
- assert.equal((await service.nextReply(context)).id,'901');
- assert.equal(requested.length,20);
- clock+=1;
- assert.equal((await service.nextReply(context)).id,'901');
- assert.equal(requested.length,40);
- assert.equal(service.status(context).poll.nextPollAt,clock+60000);
- assert.equal(await service.nextReply({...context,accountId:'other'}),null);
+test('Qzone cached reply selection never polls old posts, even after time passes',async()=>{
+ const state=memory([post('post-24')]);let requests=0,clock=base;
+ const service=createQzoneService({storage:state.storage,getAuth:async()=>auth,now:()=>clock,fetchImpl:async()=>{requests++;return Response.json(commentResponse('post-24'));}});
+ for(let i=0;i<30;i++){clock+=60000;assert.equal(await service.nextReply(context),null);assert.equal(service.status(context).poll.nextPollAt,null);}
+ assert.equal(requests,0);assert.equal(service.status(context).poll.state,'on_visit');
+ await service.comments({tid:'post-24',uin:auth.uin},context);assert.equal(requests,1);assert.equal((await service.nextReply(context)).id,'901');clock+=86400000;assert.equal((await service.nextReply(context)).id,'901');assert.equal(requests,1);
 });
 
 test('Qzone reply discovery excludes own comments and deduplicates accepted and unknown attempts per scope',async()=>{
@@ -158,55 +132,12 @@ test('Qzone reply discovery excludes own comments and deduplicates accepted and 
  }
 });
 
-test('Qzone poll failures are visible without secrets or URLs and retry after short bounded backoff',async()=>{
- const state=memory([post('post-1')]),records=[];
- let clock=base,calls=0,fail=true;
- const service=createQzoneService({
-  storage:state.storage,
-  getAuth:async()=>auth,
-  now:()=>clock,
-  onRecord:(row,c)=>records.push({row,c}),
-  fetchImpl:async(url)=>{
-   if(new URL(url).pathname.includes('getdetail'))calls+=1;
-   if(fail)throw Error(`network ${auth.cookie} https://private.test/path?token=RAW-COOKIE-SECRET`);
-   return Response.json({code:0,data:{commentlist:[{commentid:700,uin:87654321,name:'读者',content:'恢复后的评论'}]}});
-  }
- });
-
- assert.equal(await service.nextReply(context),null);
- assert.equal(calls,1);
- let status=service.status(context).poll;
- assert.equal(status.state,'retrying');
- assert.equal(status.failureCount,1);
- assert.equal(status.nextPollAt,base+15000);
- assert.equal(status.error.code,'QZONE_POLL_FAILED');
- assert.equal(records.length,1);
- assert.equal(records[0].row.stage,'comment-poll-failed');
-
- clock=base+14999;
- assert.equal(await service.nextReply(context),null);
- assert.equal(calls,1);
- clock=base+15000;
- assert.equal(await service.nextReply(context),null);
- assert.equal(calls,2);
- status=service.status(context).poll;
- assert.equal(status.failureCount,2);
- assert.equal(status.nextPollAt,clock+30000);
-
- fail=false;clock+=30000;
- const target=await service.nextReply(context);
- assert.equal(target.id,'700');
- status=service.status(context).poll;
- assert.equal(status.state,'scheduled');
- assert.equal(status.failureCount,0);
- assert.equal(status.error,null);
- assert.equal(status.nextPollAt,clock+60000);
-
- const visible=JSON.stringify({records,status});
- assert.equal(visible.includes('RAW-COOKIE-SECRET'),false);
- assert.equal(visible.includes('https://private.test'),false);
+test('a failed explicit visit cannot schedule background retries or trigger reply discovery network calls',async()=>{
+ let requests=0;const state=memory([post('post-1')]);const service=createQzoneService({storage:state.storage,getAuth:async()=>auth,now:()=>base,fetchImpl:async()=>{requests++;throw Error('network unavailable');}});
+ await assert.rejects(service.comments({tid:'post-1',uin:auth.uin},context));const count=requests;
+ for(let i=0;i<30;i++)assert.equal(await service.nextReply(context),null);
+ assert.equal(requests,count);assert.equal(service.status(context).poll.nextPollAt,null);assert.equal(service.status(context).poll.checking,false);
 });
-
 
 test('Qzone falls back to observed feed previews when detail GET fails, then replies to the exact root',async()=>{
  const state=memory([post('post-1')]),requests=[];
@@ -216,7 +147,7 @@ test('Qzone falls back to observed feed previews when detail GET fails, then rep
   if(url.includes('feeds3_html_more'))return Response.json({code:0,data:{data:[{html:'<i name="feed_data" data-tid="post-1" data-uin="12345678"></i><li data-type="commentroot" data-tid="8" data-uin="87654321" data-nick="甲"><div class="comments-content"><a>甲</a>: 这个挺好</div></li>'}]}});
   return Response.json({code:0,commentid:'9'});
  }});
- const target=await service.nextReply(context);assert.equal(target.id,'8');assert.equal(target.text,'这个挺好');
+ await service.comments({tid:'post-1',uin:auth.uin},context);const target=await service.nextReply(context);assert.equal(target.id,'8');assert.equal(target.text,'这个挺好');
  await service.publish({text:'对吧，我也是被这里戳中了',target:{uin:auth.uin,tid:'post-1'},commentId:target.id,commentUin:target.uin},context);
  const params=new URLSearchParams(requests.at(-1).body);assert.equal(params.get('commentId'),'8');assert.equal(params.get('commentUin'),'87654321');assert.equal(params.get('t1_tid'),'post-1');
  assert.equal(await service.nextReply(context),null);assert.equal(requests.filter(r=>r.url.includes('re_feeds')).length,1);
