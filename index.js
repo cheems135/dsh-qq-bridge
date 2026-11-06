@@ -1,5 +1,7 @@
 import {loadVideoModules} from './media-module-loader.js';
 import {mobileSessionRules} from './mobile-dialogue.js';
+import {mobileRule} from './mobile-prompt.js';
+import {normalizeQqPoke,qqHumanWords} from './qq-poke.js';
 import {queuedDeliverySelection,knownUnsentRetry,cancelOutgoingDelivery} from './delivery-outbox.js';
 import {createQzoneSession} from './qzone-session.js';
 import {loadQzoneCredentials,probeQzoneCredentials} from './qzone-auth.js';
@@ -1064,7 +1066,7 @@ export function apply(ctx, rawConfig) {
     const agent=ctx.get('agents')?.get(sessionId),chat=chats.get(sessionId);
     if(!agent||!chat)return false;
     if(sessionInstructions.has(sessionId))buildSessionInstructions(chat,activePersona(chat.key),sessionId,true);
-    const instructions=uniqueRules([BUDGET_MARKER,sessionInstructions.get(sessionId)||'',...(settings.memory.enabled?[]:[CORE_CONTINUITY_RULES]),'【操作前上下文规则】'+OPERATION_CONTEXT_RULES,SOCIAL_SPEECH_RULES]);
+    const instructions=uniqueRules([BUDGET_MARKER,sessionInstructions.get(sessionId)||'',...(settings.memory.enabled?[]:[CORE_CONTINUITY_RULES]),'【操作前上下文规则】'+mobileRule('operation',OPERATION_CONTEXT_RULES,!isDesktop),mobileRule('social',SOCIAL_SPEECH_RULES,!isDesktop)]);
     const installed=installedAgentContexts.get(agent);if(installed?.chat===chat&&installed.instructions===instructions)return installed.persona;
     if(installed)for(const dispose of installed.cleanups)dispose?.();
     const scope=agent.ctx,cleanups=[];let persona=false;
@@ -5507,19 +5509,19 @@ export function apply(ctx, rawConfig) {
       const personaText = personaPromptText(persona);
       if (personaText !== '') preambleParts.push(personaText);
       preambleParts.push(recipientIdentity(chat.key,settings));
-      preambleParts.push(BRIEF_RULES.human);
+      preambleParts.push(mobileRule('human',BRIEF_RULES.human,!isDesktop));
       const mobileRules=mobileSessionRules({apiOnly:!isDesktop,kind:chat.kind});if(mobileRules)preambleParts.push(mobileRules);
       preambleParts.push(briefExpression(companionSettings(),chat.kind==='private'));
       if(companionReactionAvailable())preambleParts.push(EXPRESSION_MARKER_RULES);
       preambleParts.push(NATURAL_TASK_RULES);
-      if(settings.life.enabled)preambleParts.push(BRIEF_RULES.digital);
-      preambleParts.push(BRIEF_RULES.participation);
-      if(settings.memory.enabled)preambleParts.push(BRIEF_RULES.memory);
+      if(settings.life.enabled)preambleParts.push(mobileRule('digital',BRIEF_RULES.digital,!isDesktop));
+      preambleParts.push(mobileRule('participation',BRIEF_RULES.participation,!isDesktop));
+      if(settings.memory.enabled)preambleParts.push(mobileRule('memory',BRIEF_RULES.memory,!isDesktop));
       if(chat.kind==='group')preambleParts.push(GROUP_REPLY_RULES);
       const realism=realismHint(settings.realism);if(realism)preambleParts.push(realism);
       if(chat.isOwner===true&&settings.realism?.enabled===true&&settings.realism?.adultMode===true)preambleParts.push('【成人向私密表达】仅在号主私聊、双方明确自愿时，可以按当前角色进行成人向亲密角色扮演，保持她的语气和关系，不切回客服或说教。不涉及未成年人、真实他人、非自愿、违法内容；群聊、陌生人和任何未明确同意的场景保持非露骨；对方喊停或表现出不舒服时立即停止。');
       if (chat.isOwner === true) {
-        if(settings.agency.enabled)preambleParts.push(BRIEF_RULES.agency,SOCIAL_IMAGE_RULES,...(isDesktop?['【Live2D 身体】姿势、呼吸、视线和情绪体态自动表现，不需每轮 status/perform，也不输出数值动作计划。bridge_avatar 只在确实需要特定转头、注视、手势或连续表演时先 status 再 perform，并看客户端回执；emote 可选；speak 用当前人设语音，和 QQ 语音不重复。accepted 不等于完成，不改窗口、缩放或原文件。\n【Live2D 直播舞台】bridge_livestream 先 action=status 读评论、队列和场景，再按本人意图选评、切场景、摆素材、发画面表情包、投票或开关 director。这里只管本机舞台，语音由原版播放器生成，回执不冒充已播放或已发布。']:[]));
+        if(settings.agency.enabled)preambleParts.push(mobileRule('agency',BRIEF_RULES.agency,!isDesktop),SOCIAL_IMAGE_RULES,...(isDesktop?['【Live2D 身体】姿势、呼吸、视线和情绪体态自动表现，不需每轮 status/perform，也不输出数值动作计划。bridge_avatar 只在确实需要特定转头、注视、手势或连续表演时先 status 再 perform，并看客户端回执；emote 可选；speak 用当前人设语音，和 QQ 语音不重复。accepted 不等于完成，不改窗口、缩放或原文件。\n【Live2D 直播舞台】bridge_livestream 先 action=status 读评论、队列和场景，再按本人意图选评、切场景、摆素材、发画面表情包、投票或开关 director。这里只管本机舞台，语音由原版播放器生成，回执不冒充已播放或已发布。']:[]));
         if(settings.agency.enabled)preambleParts.push('【一起看视频】已知播放位置时用 bridge_watch 的 live/at 只取当前这一小段画面和该窗口音轨，不反复抽全片；不知道播到第几秒就问“看到几秒了”，不猜。');
         if(settings.phone.enabled)preambleParts.push('【手机设备】先 bridge_capabilities 发现工具；用 bridge_device target=phone action=capabilities 取 DSHBox Pilot 真实能力；屏幕黑或锁屏先 action=wake，安全锁屏要请本人解锁。再自主观察、点击、输入、滚动或打开应用，按反馈决定下一步。付款和验证码沿用本机设置，派发动作不等于完成。');
         if(settings.phone.enabled&&isDesktop)preambleParts.push("【当前运行设备】Windows Harness；手机操作走已配对安卓的 USB 通道，不要把电脑桌面当手机屏幕。没有数据线或手机端未运行就如实说未连接。");
@@ -5549,12 +5551,12 @@ export function apply(ctx, rawConfig) {
             '想让桥接上网找新的，写 [表情包:搜 关键词]；找跟他刚发那张类似的，写 [表情包:搜图]。',
         );
       }
-      if(settings.voice.enabled||settings.imagegen.enabled!==false)preambleParts.push(BRIEF_RULES.form);
+      if(settings.voice.enabled||settings.imagegen.enabled!==false)preambleParts.push(mobileRule('form',BRIEF_RULES.form,!isDesktop));
       if(settings.imagegen.enabled!==false){
-        preambleParts.push(BRIEF_RULES.image);
+        preambleParts.push(mobileRule('image',BRIEF_RULES.image,!isDesktop));
         preambleParts.push(imageCapabilityHint(chat.key,false));
       }
-      if(settings.voice.enabled)preambleParts.push(BRIEF_RULES.voice);
+      if(settings.voice.enabled)preambleParts.push(mobileRule('voice',BRIEF_RULES.voice,!isDesktop));
       // Recall current, relevant memories each turn; do not freeze stale facts in the persona preamble.
       const instructions=uniqueRules(preambleParts);
       // 会话可能是重建的（换人设/压缩/重启）。把监听里最近的几句带上，别像失忆。
@@ -5872,6 +5874,7 @@ export function apply(ctx, rawConfig) {
     localTurns.set(chat.key,active);
     let audit=null;const streamed=[];let noticeSent=payload._bridgeWaitNoticeSent===true;
     try{
+    if(payload._bridgePoke)payload._bridgeMemoryUserText=qqHumanWords(segmentsOf(payload.message));
     let voiceFailure='';const incomingVoice=segmentsOf(payload.message).filter(part=>part.type==='record').slice(0,2);
     if(incomingVoice.length){
       active.phase='transcription';
@@ -5961,7 +5964,7 @@ export function apply(ctx, rawConfig) {
       let response;
       const routedMedia={...(typeof serviceConnections!=='undefined'&&serviceConnections?routedHostMediaTools(chat):{}),...localQqTools(chat,active)};
       if(chat.kind==='private'&&chat.isOwner===true&&settings.agency?.enabled&&agencyTools?.localTools||Object.keys(routedMedia).length){
-        const localContext={localTurn:true,capabilities:{tools:payload._bridgeModelCapabilities?.features?.tools?.supported===true},localTurnId:deliveryKey,sessionId:'local:'+deliveryKey,scope:JSON.stringify([scope.accountId,chat.key,scope.personaId,featureState.revisions[chat.key]||0]),generation:featureState.generation||0,accountId:scope.accountId,personaId:scope.personaId,key:chat.key,chat,meta:{kind:'user',userWords:String(text),allowSideEffects:true},signal:gatewayDeadline.signal};
+        const localContext={localTurn:true,capabilities:{tools:payload._bridgeModelCapabilities?.features?.tools?.supported===true},localTurnId:deliveryKey,sessionId:'local:'+deliveryKey,scope:JSON.stringify([scope.accountId,chat.key,scope.personaId,featureState.revisions[chat.key]||0]),generation:featureState.generation||0,accountId:scope.accountId,personaId:scope.personaId,key:chat.key,chat,meta:{kind:'user',userWords:payload._bridgeMemoryUserText??String(text),allowSideEffects:!payload._bridgePoke||!!payload._bridgeMemoryUserText},signal:gatewayDeadline.signal};
         active.localContext=localContext;
         localContext.workspaceLease=workspaceLeases.resolve(localContext);
         response=await runWithHostTools({baseUrl,messages:requestMessages,turnContext,onEvent,tools:{...(chat.kind==='private'&&chat.isOwner===true&&settings.agency?.enabled&&agencyTools?.localTools?agencyTools.localTools(localContext):{}),...routedMedia},signal:gatewayDeadline.signal});
@@ -6051,7 +6054,7 @@ export function apply(ctx, rawConfig) {
     const nickname = String(payload.sender?.card || payload.sender?.nickname || userId);
     const text = extractIncoming(payload.message, selfId).text;
     // Only the verified sender's own text can authorize; quoted bodies cannot.
-    const approvalText=segmentsOf(payload.message).filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('\n').trim();
+    const approvalText=qqHumanWords(segmentsOf(payload.message));
     if(!isGroup&&settings.owners.includes(userId)&&recordsAllowed('private:'+userId)&&approvalAnswer(approvalText)!=='unrelated'){
       const m=calendarMeta('',activePersona('private:'+userId).id),decisionMeta={accountId:settings.activeAccountId||'',personaId:m.personaId,ownerId:userId,chat:'private:'+userId},pending=operationPolicy?.snapshot(decisionMeta).pending||[],waiting=(lifeExecution?.snapshot(m).waiting||[]).filter(job=>job.question?.kind==='payment');
       if(pending.length===1)answerOperation(pending[0].id,decisionMeta,approvalText);
@@ -6293,7 +6296,7 @@ export function apply(ctx, rawConfig) {
     const content = [...(shared.images || [])];
     if (text) content.push({ type: 'text', text });
     const notes = []; let uncertain = false;
-    const userWords = payload._bridgeMediaUserText ?? segmentsOf(payload.message).filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('\n');
+    const userWords = payload._bridgeMediaUserText ?? qqHumanWords(segmentsOf(payload.message));
     const spokenWords = [];
     for (const [segmentIndex,segment] of segmentsOf(payload.message).entries()) {
       const referenceId=rememberQqMedia(chatKey,payload,segmentIndex,segment);
@@ -6316,6 +6319,7 @@ export function apply(ctx, rawConfig) {
     content.references = shared.references;
     content.allowSideEffects = (!shared.extracted.urls.length && !shared.extracted.cards.length && !shared.extracted.replies.length && !shared.extracted.forwards.length)
       || (settings.owners.includes(String(payload.user_id)) && payload.message_type!=='group' && directOwnerOperation(userWords));
+    if(payload._bridgePoke&&!String(userWords||'').trim())content.allowSideEffects=false;
     payload._bridgeMemoryUserText = [userWords,...spokenWords].filter(Boolean).join('\n');
     return content;
   }
@@ -6594,7 +6598,7 @@ export function apply(ctx, rawConfig) {
             saveState();
           }
         }
-        const audit = auditById(turn?.meta?.auditId); if (audit) { audit.answer = spoken.slice(0,auditAnswerCap(audit)); audit.status = reason.kind === 'completed' ? 'completed' : reason.kind; audit.endedAt = Date.now();if(!audit.deliveryState){audit.deliveryState=spoken?'generated':'silent';audit.deliveryReason=spoken?'已生成，等待转入QQ发送队列':'';}learningMemory?.recordOutcome(learningMeta(chat.key),{auditId:audit.id,status:audit.status==='completed'?'generated':'cancelled',reply:spoken});memeStudy?.recordOutcome(learningMeta(chat.key),{auditId:audit.id,status:audit.status==='completed'?'generated':'cancelled',reply:spoken});expressionLearning?.recordOutcome(learningMeta(chat.key),{auditId:audit.id,status:audit.status==='completed'?'generated':'cancelled'});saveFeatures(); }
+        const audit = auditById(turn?.meta?.auditId); if (audit) { audit.answer = spoken.slice(0,auditAnswerCap(audit)); audit.status = reason.kind === 'completed' ? 'completed' : reason.kind;if(reason.kind==='error'){const failure=reason.failure||reason.error||{};audit.error=calendarSafeText(String(failure.message||reason.message||'宿主模型回合异常，未提供详细原因')).replace(/https?:\/\/\S+/gi,'[服务地址]').slice(0,500);audit.failureCode=String(failure.code||reason.code||'').slice(0,80);log('model turn error: '+audit.error);reportBridgeIssue({id:'model-turn:'+audit.id,kind:'chat',message:audit.error},{...invocationScope(chat.key,audit.id),backend:'api'});} audit.endedAt = Date.now();if(!audit.deliveryState){audit.deliveryState=spoken?'generated':'silent';audit.deliveryReason=spoken?'已生成，等待转入QQ发送队列':'';}learningMemory?.recordOutcome(learningMeta(chat.key),{auditId:audit.id,status:audit.status==='completed'?'generated':'cancelled',reply:spoken});memeStudy?.recordOutcome(learningMeta(chat.key),{auditId:audit.id,status:audit.status==='completed'?'generated':'cancelled',reply:spoken});expressionLearning?.recordOutcome(learningMeta(chat.key),{auditId:audit.id,status:audit.status==='completed'?'generated':'cancelled'});saveFeatures(); }
         if(turn?.meta?.qzoneOnly){chat.proactivePending=false;if(audit){audit.deliveryState='withheld';audit.deliveryReason='空间创作轮次的末尾文字只留在DSH，不转发私聊；空间结果见工具调用记录';saveFeatures();}return;}
         if(outdated){if(audit){audit.status='superseded';saveFeatures();}void restoreEffort(session.id,chat.key);return;}
         if(reason.kind==='blocked'){
@@ -7553,6 +7557,7 @@ export function apply(ctx, rawConfig) {
   }
   function sleepingPayload(payload){const group=payload.message_type==='group',key=group?'group:'+payload.group_id:'private:'+payload.user_id,meta=calendarMeta('',activePersona(key).id);if(!lifeExecution?.asleep(meta))return false;const segments=segmentsOf(payload.message),own=!group&&settings.owners.includes(String(payload.user_id))&&recordsAllowed(key),direct=!segments.some(s=>['reply','forward','json','xml'].includes(s.type)),text=segments.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join(' '),decision=fallbackWakeDecision({owner:own,group,direct,text});if(decision.wake){lifeExecution.wake(meta,decision);return false;}return true;}
   function handlePayload(payload, attentionApproved = false) {
+    if(payload?.post_type==='notice'&&payload.notice_type==='notify'&&payload.sub_type==='poke'){if(stopped||accountPaused)return;payload=normalizeQqPoke(payload,{selfId:lastSelfId});if(!payload)return;}
     if (!payload || payload.post_type !== 'message') return void handlePayloadCore(payload);
     if(sleepingPayload(payload)){
       const segments=segmentsOf(payload.message),key='private:'+payload.user_id,own=payload.message_type!=='group'&&settings.owners.includes(String(payload.user_id))&&recordsAllowed(key),records=segments.filter(s=>s.type==='record');
@@ -11000,7 +11005,7 @@ export function apply(ctx, rawConfig) {
   deviceSync=createDeviceSync({
     dataDir:cfg.dataDir,sourceDir:dirname(fileURLToPath(import.meta.url)),
     roots:()=>({cache:cacheRoot,memory:dirname(memoryFile),persona:personaImageDir,humanism:join(cfg.dataDir,'humanism'),workspace:chatWorkspaceRoot}),
-    status:()=>({version:PLUGIN_VERSION,mediaModules:MEDIA_MODULE_STATUS,device:isDesktop?'desktop':'phone',apiOnly:!isDesktop,modelMode:settings.localChat?.enabled?'local':'api',uiEdition:'separate-device-shells',approvalPolicy:'payment-only',socialVoiceRevision:'20261105-contextual-v2',qzoneSessionRevision:'20261105-linked-login-v1',deliveryRevision:'20261106-background-readback-v2',qqCapabilitiesRevision:'20261106-merged-forward-vision-v2',mobileDialogueRevision:'20261105-contextual-v1',socialImageRevision:'20261106-persona-four-sources-v2',socialExpressionRevision:'20261106-public-opinions-v1',availabilityRevision:'20261106-natural-rest-v1',qzone:qzoneConnectionStatus(),memoryEnabled:settings.memory.enabled,lifeEnabled:settings.life.enabled,connectionAdapterSupported:serviceConnections?.adapterSupported?.()===true,paused:accountPaused,connected:socket?.ready===true,records:messages.length}),
+    status:()=>({version:PLUGIN_VERSION,mediaModules:MEDIA_MODULE_STATUS,device:isDesktop?'desktop':'phone',apiOnly:!isDesktop,modelMode:settings.localChat?.enabled?'local':'api',uiEdition:'separate-device-shells',approvalPolicy:'payment-only',socialVoiceRevision:'20261105-contextual-v2',qzoneSessionRevision:'20261105-linked-login-v1',deliveryRevision:'20261106-background-readback-v2',qqCapabilitiesRevision:'20261106-merged-forward-vision-v2',mobileDialogueRevision:'20261106-compact-equivalent-v2',pokeRevision:'20261106-notice-context-v1',socialImageRevision:'20261106-persona-four-sources-v2',socialExpressionRevision:'20261106-public-opinions-v1',availabilityRevision:'20261106-natural-rest-v1',qzone:qzoneConnectionStatus(),memoryEnabled:settings.memory.enabled,lifeEnabled:settings.life.enabled,connectionAdapterSupported:serviceConnections?.adapterSupported?.()===true,paused:accountPaused,connected:socket?.ready===true,records:messages.length}),
     flush:async()=>{flushGroupCalendar('',true);await flushGroupLearning(null,true);saveSettings();saveState();saveFeatures();writeAtomic(messagesFile,messages);},
     pause:async()=>{accountPaused=true;saveState();socket?.close();if(reconnectTimer)clearTimeout(reconnectTimer);reconnectTimer=null;cancelFeatureWork('切换运行设备，旧任务已停止');for(const chat of chats.values()){clearSilenceTimer(chat);clearAfterTimer(chat);try{await ctx.sessionController.cancel({sessionId:chat.sessionId});}catch{}}refreshInitiativeTimers();},
     resume:async({explicit=false}={})=>{repairLocalOneBotBinding();if(settings.autoStart||explicit){const live=await readLoginState(true);if(!live.webuiReachable)await localNapCat.start();}if(explicit)skipCatchUpOnce=true;accountPaused=false;state.manuallyLoggedOut=false;saveState();refreshInitiativeTimers();connectSocket();},

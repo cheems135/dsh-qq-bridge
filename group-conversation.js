@@ -45,7 +45,7 @@ export function mergeGroupWindow(batch,plan){
    else if(relevant||['text','face','mface'].includes(segment?.type))message.push(segment);
   }
  }
- const mediaWords=selected.map(p=>Array.isArray(p.message)?p.message.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('\n'):String(p.raw_message||p.message||'')).join('\n');
+ const mediaWords=selected.map(p=>Array.isArray(p.message)?p.message.filter(s=>s.type==='text'&&!s.data?._bridgeEvent).map(s=>String(s.data?.text||'')).join('\n'):String(p.raw_message||p.message||'')).join('\n');
  return{...primary,message,_bridgeMediaUserText:mediaWords,_groupAttentionApproved:true,_groupPlan:plan,_bridgeReceivedIds:ids,_bridgeGroupSpeakers:batch.map(p=>({id:String(p.user_id||''),name:String(p.sender?.card||p.sender?.nickname||'')}))};
 }
 
