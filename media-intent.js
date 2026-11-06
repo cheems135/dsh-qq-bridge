@@ -1,17 +1,23 @@
 import {operationText} from './operation-context.js';
 
 const parts=value=>String(value||'').slice(0,4000).split(/[。！？!?\n；;]/).map(s=>s.trim()).filter(Boolean);
+const unquotedMediaText=value=>String(value||'').replace(/```[\s\S]*?```|`[^`]*`|“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"/g,'');
 const meta=s=>/(?:触发词|提示词|接口|工作流|开关|设置|配置|功能|报错|原理|额度|限制|登录|模型|api(?:\s*key)?|失败|发不出来|无法发送|不会发|为什么不发|怎么不发)/i.test(s);
 export function declinesMedia(value='',kind){
   const form=kind==='voice'?'(?:语音|声音|听你说|听)':'(?:图片|照片|自拍|发图|看你|看)';
   return new RegExp('(?:不要|不用|不想|别|停止|不需要|不方便|先别|无需).{0,8}'+form+'|'+form+'.{0,4}(?:不要|不用|算了)').test(String(value));
 }
 export function requestsImage(value=''){
-  return parts(value).some(text=>{
+  return parts(unquotedMediaText(value)).some(text=>{
     if(meta(text)||declinesMedia(text,'image'))return false;
+    if(/(?:怎么|如何|怎样).{0,12}(?:拍|发)(?:一|张|照)|(?:会不会|支持|是否|会).{0,4}拍照.{0,4}(?:吗|么|[?？])/.test(text))return false;
     if(/(?:发|画|生成|拍)(?:给我)?的(?:图|图片|照片|自拍|画)/.test(text)&&!/(?:再|重新|另外|新的).{0,5}(?:画|生成|发|拍)/.test(text))return false;
     if(/(?:别|不要|不用|无需|不必|不需要|先别|暂时别|请勿|禁止)(?:再|给我|帮我|替我|继续|现在|马上|去|来|给)?(?:发|画|生成|拍|绘制|制作)/.test(text))return false;
     if(/(?:刚才|之前|已经|上次).{0,12}(?:发的|生成的|画的|拍的)|(?:这张|那张|图片|照片).{0,8}(?:里有什么|里面有什么|画了什么|写了什么|是什么|是什么意思|内容是什么|看见什么)/.test(text)&&!/(?:再|重新|另外|新的).{0,5}(?:画|生成|发|拍)|(?:给我|帮我|请).{0,5}(?:画|生成|绘制)/.test(text))return false;
+    // A photo request often omits the noun: “再拍一张给我看”. Keep this
+    // after cancellation/history guards, and do not treat “拍一下头” as a photo.
+    if(/拍(?:一|两|几|多)?张|拍(?:个)?照|拍(?:个)?自拍/.test(text))return true;
+    if(/(?:发(?:给我)?|给我发)(?:一|两|几|再)?张(?:给我看(?:看)?|让我看(?:看)?|看看|看|[吧嘛呀呗吗呢~～，,]|$)/.test(text))return true;
     if(/(?:请|帮我|给我|我想要|我要|我想看|想看).{0,5}(?:生成|绘制|画|拍|发|来).{0,30}(?:图|画|照片|自拍|张|幅)/.test(text))return true;
     if(/(?:生成|绘制)(?:一|个|张|幅|些|一下|点|给我|帮我|图|照片|自拍|$)|画(?:一|两|几)?(?:张|幅|个|点)/.test(text))return true;
     if(/(?:发(?:给我)?|来|拍)(?:一|两|几|再)?(?:张|幅|个).{0,30}(?:图|画|照片|自拍)|给我(?:一|两|几)?(?:张|幅).{0,20}(?:图|照片|自拍)/.test(text))return true;
@@ -41,6 +47,24 @@ export function requestsVoice(value=''){
     if(/(?:打开|关闭|启用|禁用).{0,6}(?:语音|声音)|(?:语音|声音).{0,6}(?:打开|关闭|关了|开启|关掉)/.test(text))return false;
     return /(?:语音|发.{0,6}声音|用.{0,5}(?:声音|语音)|说给我听|念给我听|读给我听|讲给我听|想听.{0,8}(?:你|声音)|听听你|亲口.{0,8}(?:说|讲)|用嘴.{0,4}(?:说|讲|读|念)|voice message|read aloud)/i.test(text);
   });
+}
+export function localImageRequest(value=''){
+ const raw=String(value).trim();
+ if(/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(raw))return false;
+ const text=unquotedMediaText(raw);
+ if(/(?:支持|有).{0,8}(?:生图|生成图片).{0,8}(?:吗|么)|(?:生成|画).{0,10}(?:提示词|教程|代码)|(?:不要|不用|别|无需).{0,8}(?:生成|绘制|画|生图)/.test(text))return false;
+ if(localVideoRequest(text)&&!/(?:图片|照片|自拍|拍照|生图|画(?:一|张|幅))/.test(text))return false;
+ return requestsImage(text)||requestsDrawing(text);
+}
+export function localVideoRequest(value=''){
+ const raw=String(value).trim();if(/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(raw))return false;
+ const text=unquotedMediaText(raw);
+ return parts(text).some(part=>{
+  if(meta(part)||/(?:不要|不用|别|停止|不需要|先别|无需).{0,8}(?:生成|制作|做|视频|短片|动画)/.test(part))return false;
+  if(/(?:怎么|如何|怎样).{0,12}(?:生成|制作|做)|(?:生成|制作|做).{0,16}(?:提示词|教程|代码|原理|示例)|(?:支持|可以|能).{0,4}(?:生成|制作)(?:视频|短片|动画片段).{0,4}(?:吗|么|[?？])/.test(part))return false;
+  if(/(?:刚才|之前|上次|已经|刚刚).{0,12}(?:生成|制作|做)|(?:生成|制作|做)(?:的|过|了).{0,10}(?:视频|短片)/.test(part)&&!/(?:再|重新|另外|新的).{0,6}(?:生成|制作|做|来)/.test(part))return false;
+  return /(?:生成|制作|做|来).{0,12}(?:视频|短片|动画片段)/.test(part);
+ });
 }
 export function directMediaIntent(value=''){
   const quoted=/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(String(value).trim());

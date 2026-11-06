@@ -9,7 +9,7 @@ export function executableOperation(name,args={}){
  return {...args,toolName:name};
 }
 export function operationEffect(args={},trusted={}){
- const d=describeOperation(args,trusted);if(d.kind)return d.kind;
+ const d=describeOperation(args,trusted);if(d.effect||d.kind)return d.effect||d.kind;
  if(args.toolName==='bridge_life_qq'&&args.action==='send'||args.toolName==='bridge_life_share'&&args.action==='send')return 'send';
  if(d.unknownCommand)return 'command';
  return OBSERVE.has(args.action)||/^(?:get|read|list|search|find|fetch|inspect|observe|screenshot)(?:[_./-]|$)/.test(args.toolName||'')?'read':args.action==='type'||args.action==='fill'?'input':args.action==='click'||args.action==='press'?'gesture':'local';
@@ -17,7 +17,7 @@ export function operationEffect(args={},trusted={}){
 /** Keeps real host executions/parents as identities. No model-supplied token,
  * tool description or callId is treated as authority. */
 export function createExecutionRuntime({policy,metaFor,trustedFor=()=>({}),journal=()=>{},getLife=()=>null,getDelivery=()=>null,now=()=>Date.now()}={}){
- const entries=new WeakMap(),observations=new Map();
+ const entries=new WeakMap(),observations=new Map(),screens=new Map();
  function trusted(args,context,extra={}){return {...trustedFor(args,context,observations.get(context.sessionId)),...extra};}
  function entry(exec,context,args,extra={}){
   const actual=args||executableOperation(exec.name,exec.arguments||{}),t=trusted(actual,context,extra),d=describeOperation(actual,t),old=entries.get(exec);
@@ -51,7 +51,7 @@ export function createExecutionRuntime({policy,metaFor,trustedFor=()=>({}),journ
   return begin(exec,context);
  }
  function observe(exec,context,result){
-  const value=result?.value??result;if(value&&typeof value==='object')observations.set(context.sessionId,{...value,observedAt:now(),toolName:exec.name});
+  const value=result?.value??result;if(value&&typeof value==='object'){const row={...value,observedAt:now(),toolName:exec.name};observations.set(context.sessionId,row);if(value.ui||value.data?.nodes)screens.set(context.sessionId,row);}
  }
  function finish(exec,context,result,{error}={}){
   observe(exec,context,result);const item=entries.get(exec);if(!item||item.delegate||!item.started||item.finished||item.inherited)return;
@@ -63,5 +63,5 @@ export function createExecutionRuntime({policy,metaFor,trustedFor=()=>({}),journ
   if(item.stepId){const life=getLife();try{const deliveryIds=value?.deliveryIds||[value?.deliveryId].filter(Boolean);life?.settleStep(context.meta.lifeJobId,{accountId:context.accountId,personaId:context.personaId},item.stepId,{status:failed||queued||unsafe&&!verified?'unknown':'confirmed',evidence:{operationId:item.id,verified:!failed&&(verified||!unsafe),deliveryId:value?.deliveryId||'',deliveryIds}});for(const id of deliveryIds){const delivery=getDelivery(id);if(delivery)life?.deliveryReceipt(id,delivery);}}catch{}}
  }
  function requested(context,name,args,question,extra={}){const actual=executableOperation(name,args),t=trusted(actual,context,extra);return policy.propose(metaFor(context),actual,t,question);}
- return {preview,begin,beginHost,finish,observe,requested,trusted,entryFor:exec=>entries.get(exec),observationFor:id=>observations.get(id)};
+ return {preview,begin,beginHost,finish,observe,requested,trusted,entryFor:exec=>entries.get(exec),observationFor:id=>observations.get(id),screenFor:id=>screens.get(id)};
 }

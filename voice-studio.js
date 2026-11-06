@@ -1,8 +1,5 @@
+export function normalizeVoiceEngine(engine){return ['none','minimax','breeze','localai','custom'].includes(engine)?engine:'none';}
 import {createHash} from 'node:crypto';
-export const SWEET_VOICES=[
- {id:'sweet-girl',name:'轻甜 · 晓伊',voice:'zh-CN-XiaoyiNeural',rate:-2,pitch:2,description:'轻快年轻女声，适合日常聊天',sample:'sweet-natural.mp3'},
- {id:'soft-girl',name:'温柔 · 晓晓',voice:'zh-CN-XiaoxiaoNeural',rate:-4,pitch:2,description:'温暖柔和女声，适合陪伴与安慰',sample:'soft-natural.mp3'},
-];
 export const VOICE_MOODS=[{id:'auto',name:'跟随内容'},{id:'natural',name:'自然'},{id:'happy',name:'开心'},{id:'gentle',name:'轻柔 / 安慰'},{id:'sad',name:'低落'},{id:'surprised',name:'惊喜'},{id:'serious',name:'认真'}];
 const bound=(n,defaultValue,min,max)=>Number.isFinite(Number(n))?Math.max(min,Math.min(max,Number(n))):defaultValue;
 const text=(v,max=200)=>String(v??'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max);
@@ -24,7 +21,7 @@ export function breezeExtras(input={}) {
 }
 export function voiceExtras(input={}) {
  const mini=input.minimax&&typeof input.minimax==='object'?input.minimax:{};
- return {sweetPreset:SWEET_VOICES.some(v=>v.id===input.sweetPreset)?input.sweetPreset:'sweet-girl',emotion:VOICE_MOODS.some(v=>v.id===input.emotion)?input.emotion:'auto',sweetSetupRevision:String(input.sweetSetupRevision||''),
+ return {emotion:VOICE_MOODS.some(v=>v.id===input.emotion)?input.emotion:'auto',
  minimax:{apiKey:text(mini.apiKey,600),model:['speech-2.8-hd','speech-2.8-turbo','speech-2.6-hd','speech-2.6-turbo'].includes(mini.model)?mini.model:'speech-2.8-hd',voiceId:text(mini.voiceId,120)||'female-tianmei',speed:bound(mini.speed,1,0.7,1.3)},
  breeze:breezeExtras(input)};
 }
@@ -83,17 +80,9 @@ export async function breezeBalance(config={},fetchImpl=globalThis.fetch){
  if(value.balance===null||value.balance===undefined||String(value.balance).trim()===''||!Number.isFinite(Number(value.balance)))throw Error('Breeze 未返回可验证的积分余额');
  return{status:'ok',entries:[{amount:String(value.balance),currency:'积分',kind:'quota'}]};
 }
-export function planSweetVoice(line,config={},options={}) {
- const extras=voiceExtras(config),preset=SWEET_VOICES.find(v=>v.id===(options.preset||extras.sweetPreset))||SWEET_VOICES[0];
- const mood=voiceMood(options.emotion||extras.emotion,line);
- const delta={natural:[0,0],happy:[4,3],gentle:[-5,-2],sad:[-7,-4],surprised:[3,4],serious:[-2,-1]}[mood];
- const signed=(n,unit)=>(n>=0?'+':'')+Math.round(n)+unit;
- const voice=/^zh-(?:CN|TW|HK)-[\w-]+Neural$/.test(options.voiceOverride||'')?options.voiceOverride:preset.voice;
- return {preset:preset.id,label:preset.name,voice,mood,rate:signed(preset.rate+delta[0],'%'),pitch:signed(preset.pitch+delta[1],'Hz'),volume:'+0%',engine:'sweet',capability:'prosody'};
-}
 export function voiceCacheKey(line,config,plan) {return createHash('sha256').update(JSON.stringify({line,engine:config.engine,plan,accountKey:voiceExtras(config).minimax.apiKey,breezeKey:voiceExtras(config).breeze.apiKey})).digest('hex').slice(0,32);}
 export async function miniMaxSpeech(line,config={},options={},fetchImpl=globalThis.fetch) {
- const mini=voiceExtras(config).minimax;if(!mini.apiKey)throw Error('情绪增强需要单独填写 MiniMax API Key；免费甜妹无需 Key');
+ const mini=voiceExtras(config).minimax;if(!mini.apiKey)throw Error('情绪增强需要单独填写 MiniMax API Key');
  const override=String(options.voiceOverride||'');const voiceId=override&&!/^zh-/.test(override)?text(override,120):mini.voiceId;
  const requested=options.emotion||config.emotion||'auto';const mood=voiceMood(requested,line);
  const emotion={natural:'calm',happy:'happy',gentle:'calm',sad:'sad',surprised:'surprised',serious:'calm'}[mood];

@@ -100,14 +100,14 @@ export function createLearningMemory({storage,now=()=>Date.now(),config,allowed,
     const usage=ledger(meta);
     running=true;const stamp=signature(meta),epoch=d.epoch,check=()=>checkpoint(meta,d,stamp,epoch);
     try{usage.value.passive++;storage.write(usage.file,usage.value);remember(d,{state:'running',mode:'passive',reason:'正在核对原文并提取可迁移的经验'});const result=await extract(meta,job.sources,check);check();if(!cfg().passive)throw Error('SUPERSEDED');const additions=result.items.filter(item=>!d.items.some(i=>i.id===item.id)&&!d.suppressed.includes(hash(item.summary))),added=additions.length;commit(d,{state:'completed',mode:'passive',added,rejected:result.rejected.length,reason:added?'已存入学习记忆，相关对话会检索使用':'没有发现新的可靠经验，未新增记忆'},next=>{next.items=[...next.items,...additions].slice(-500);next.queue=next.queue.filter(q=>q.id!==job.id);next.seen=[...new Set([...next.seen,...job.sources.map(s=>s.id)])].slice(-1500);});await notify(d);return {ok:true,added,reason:d.status.reason};}
-    catch(e){if(d.epoch===epoch){job.attempts++;job.nextRetryAt=now()+Math.min(360,15*job.attempts)*60000;remember(d,{state:e.message==='SUPERSEDED'?'cancelled':'failed',mode:'passive',reason:reason(e)});}return {ok:false,reason:reason(e)};}finally{running=false;}
+    catch(e){if(e.code==='LOCAL_ANALYSIS_DEFERRED'){usage.value.passive=Math.max(0,usage.value.passive-1);storage.write(usage.file,usage.value);if(d.epoch===epoch){job.nextRetryAt=now()+60000;remember(d,{state:'queued',mode:'passive',reason:'本地聊天优先，后台学习稍后继续'});}return {ok:false,skipped:'busy',reason:'本地聊天优先'};}if(d.epoch===epoch){job.attempts++;job.nextRetryAt=now()+Math.min(360,15*job.attempts)*60000;remember(d,{state:e.message==='SUPERSEDED'?'cancelled':'failed',mode:'passive',reason:reason(e)});}return {ok:false,reason:reason(e)};}finally{running=false;}
   }
   async function active(meta,{manual=false}={}){
     if(running)return {ok:false,skipped:'busy',reason:'已有学习任务正在运行'};
     if(!permitted(meta)||!cfg().enabled||!cfg().active)return {ok:false,skipped:'disabled',reason:'主动学习已关闭'};
     const d=get(meta),usage=ledger(meta);if(usage.value.active>=cfg().maxActivePerDay)return {ok:false,skipped:'daily-limit',reason:'已达到今天的主动学习次数'};
     if(!manual&&usage.value.lastActiveAt&&now()-usage.value.lastActiveAt<cfg().intervalMinutes*60000)return {ok:false,skipped:'interval',reason:'尚未到下一次主动学习时间'};
-    running=true;const stamp=signature(meta),epoch=d.epoch,check=()=>{checkpoint(meta,d,stamp,epoch);if(!cfg().active)throw Error('SUPERSEDED');};
+    const previousActiveAt=usage.value.lastActiveAt;running=true;const stamp=signature(meta),epoch=d.epoch,check=()=>{checkpoint(meta,d,stamp,epoch);if(!cfg().active)throw Error('SUPERSEDED');};
     try{
       usage.value.active++;usage.value.lastActiveAt=now();storage.write(usage.file,usage.value);remember(d,{state:'running',mode:'active',reason:'正在选择关于真实交流或网络语境的公开选题'});
       const role=roles().find(r=>name(r.meta)===name(meta));
@@ -120,7 +120,7 @@ export function createLearningMemory({storage,now=()=>Date.now(),config,allowed,
       const additions=result.items.filter(item=>!d.items.some(i=>i.id===item.id)&&!d.suppressed.includes(hash(item.summary))).map(item=>({...item,mode:'active',query}));added=additions.length;
       const updates=result.items.filter(item=>d.items.some(old=>old.id===item.id&&old.expiresAt<=now())&&!d.suppressed.includes(hash(item.summary)));
       commit(d,{state:'completed',mode:'active',query,added,updated:updates.length,reason:added?'已主动阅读并保存有来源的学习记忆':updates.length?'已重新核对来源并更新过期学习记忆':'已读到资料，但没有新的可靠经验'},next=>{next.items=[...next.items.map(old=>{const update=updates.find(i=>i.id===old.id);return update?{...update,mode:'active',query,used:old.used,lastUsedAt:old.lastUsedAt}:old;}),...additions].slice(-500);next.seen=[...new Set([...next.seen,...sources.map(s=>s.id)])].slice(-1500);});await notify(d);return {ok:true,added,updated:updates.length,query,reason:d.status.reason};
-    }catch(e){if(d.epoch===epoch)remember(d,{state:e.message==='SUPERSEDED'?'cancelled':'failed',mode:'active',reason:reason(e)});return {ok:false,reason:reason(e)};}finally{running=false;}
+    }catch(e){if(e.code==='LOCAL_ANALYSIS_DEFERRED'){usage.value.active=Math.max(0,usage.value.active-1);usage.value.lastActiveAt=previousActiveAt;storage.write(usage.file,usage.value);if(d.epoch===epoch)remember(d,{state:'queued',mode:'active',reason:'本地聊天优先，后台学习稍后继续'});return {ok:false,skipped:'busy',reason:'本地聊天优先'};}if(d.epoch===epoch)remember(d,{state:e.message==='SUPERSEDED'?'cancelled':'failed',mode:'active',reason:reason(e)});return {ok:false,reason:reason(e)};}finally{running=false;}
   }
   function recall(meta,query,{maxChars=1000,intent='',after=0,continuity=false,auditId=''}={}){
     if(!permitted(meta)||!cfg().enabled)return {text:'',ids:[],sources:[]};

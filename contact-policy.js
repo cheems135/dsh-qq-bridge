@@ -6,6 +6,7 @@ export function allowedPrivateUsers(settings={}) {
 export function privateInitiativeAllowed(key,settings={}) {
   const match=/^private:(\d{5,20})$/.exec(String(key||''));
   if(!match||!allowedPrivateUsers(settings).includes(match[1]))return false;
+  if(settings.permissionsMode==='open-nonpayment')return true;
   const override=settings.contactProfiles?.[key]?.proactive;
   return override===true||(override!==false&&ids(settings.owners).includes(match[1]));
 }

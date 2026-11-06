@@ -4,6 +4,12 @@ import qrcode from './vendor/qrcode-generator.cjs';
 // QR service, embedded as SVG markup, or copied to logs.
 qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 
+export function createQrDataUrl(value){
+  createQrSvg(value);
+  const qr=qrcode(0,'M');qr.addData(value,'Byte');qr.make();
+  return qr.createDataURL(5,20);
+}
+
 export function createQrSvg(value, { size = 280 } = {}) {
   if (typeof value !== 'string' || value.length > 2048) throw new Error('二维码链接格式无效。');
   let url;

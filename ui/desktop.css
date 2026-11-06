@@ -1,0 +1,19 @@
+/* The desktop shell keeps a permanent rail and uses the available screen width. */
+html[data-device-ui="desktop"] .app{display:grid;grid-template-columns:252px minmax(0,1fr)}
+html[data-device-ui="desktop"] .side{width:252px;border-right:1px solid var(--line);padding-top:26px}
+html[data-device-ui="desktop"] .maininner{max-width:1440px;padding:28px 40px 40px}
+html[data-device-ui="desktop"] .topbar{height:64px;padding:0 40px}
+html[data-device-ui="desktop"] .mobile-returnbar{display:none}
+html[data-device-ui="desktop"] .device-ui-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 40px 14px 292px;background:var(--panel);border-bottom:1px solid var(--line);min-height:70px}
+html[data-device-ui="desktop"] .device-ui-title{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+html[data-device-ui="desktop"] .device-ui-title b{font-size:17px;font-weight:650;letter-spacing:-.025em}
+html[data-device-ui="desktop"] .device-ui-title small{color:var(--ink2);font-size:12px}
+html[data-device-ui="desktop"] .device-ui-switch{display:flex;gap:3px;padding:3px;background:var(--soft);border:1px solid var(--line);border-radius:11px;flex-shrink:0}
+html[data-device-ui="desktop"] .device-ui-switch button{min-height:34px;padding:5px 14px;border:0;background:transparent;font-size:12px}
+html[data-device-ui="desktop"] .device-ui-switch button[aria-pressed="true"]{background:var(--panel);color:var(--accent-ink);box-shadow:0 1px 5px #213c4810}
+html[data-device-ui="desktop"] .device-preview{margin:14px 40px 0 292px;padding:12px 16px;background:var(--accent-weak);border-radius:12px;font-size:13px}
+html[data-device-ui="desktop"] .pagehead{margin-bottom:24px}
+html[data-device-ui="desktop"] .card{box-shadow:0 3px 18px #233b4b04}
+@media(min-width:1500px){html[data-device-ui="desktop"] .form-two{gap:18px}html[data-device-ui="desktop"] .card{padding:26px 28px}}
+@media(max-width:800px){html[data-device-ui="desktop"] .app{grid-template-columns:190px minmax(0,1fr)}html[data-device-ui="desktop"] .side{width:190px}html[data-device-ui="desktop"] .device-ui-bar{padding:12px 18px 12px 208px}html[data-device-ui="desktop"] .device-ui-title small{display:none}html[data-device-ui="desktop"] .device-preview{margin-left:208px}html[data-device-ui="desktop"] .maininner,html[data-device-ui="desktop"] .topbar{padding-left:20px;padding-right:20px}}
+@media(max-width:600px){html[data-device-ui="desktop"] .app{display:block}html[data-device-ui="desktop"] .side{position:static;width:100%;height:auto}html[data-device-ui="desktop"] .device-ui-bar{padding:12px 14px}html[data-device-ui="desktop"] .device-preview{margin:12px 14px}}

@@ -22,7 +22,7 @@ The bridge no longer imports or requires dsh-bili-humanism. Any previously insta
 
 - **imageio-ffmpeg 0.6.0** — BSD-2-Clause Python distribution.
   Upstream: https://github.com/imageio/imageio-ffmpeg
-  Installed from its official PyPI wheel under a separate local Python environment; it supplies a separately executed FFmpeg program. The wheel's own metadata and licenses remain with the installed distribution.
+  Installed from its official PyPI wheel under `E:/Codex/tools/qq-bridge-media`; it supplies a separately executed FFmpeg program. The wheel's own metadata and licenses remain with the installed distribution.
 - The supplied Windows **FFmpeg 7.1** executable reports GPL version 3 or later (`ffmpeg -L`). FFmpeg: https://ffmpeg.org/legal.html
   This plugin invokes it as a separate local executable. The executable is not embedded in the JavaScript package or the code backup. `tools/media-runtime.json` records its local location; another installation should provide its own media runtime path. Frame sampling does not use a third-party media parsing proxy.
 
@@ -74,10 +74,21 @@ Additional independently worded vocabulary summaries reference public factual en
 - **dsh-browser-playwright**: semantic snapshots and fresh element references informed the original bridge browser controller; no upstream implementation copied. https://github.com/ChenyuHeee/dsh-browser-playwright
 
 
-## Natural expression examples (1.26.0)
-100 small conversational examples selected from the LCCC toy sample in thu-coai/CDial-GPT, revision 81064865221d3503251d633f3d0b651004c938a6. Project license: MIT; attribution and full license are included in assets/expression-lccc.LICENSE.txt. Samples are local retrieval references, not a full dataset import or model-weight training. Source: https://github.com/thu-coai/CDial-GPT
+## Natural expression examples (1.26.0, extended 2026-11-02)
+220 small conversational examples selected from the LCCC toy sample in thu-coai/CDial-GPT, revision 81064865221d3503251d633f3d0b651004c938a6 (100 in the original batch, 120 more in a filtered second batch). Project license: MIT; attribution and full license are included in assets/expression-lccc.LICENSE.txt. Samples are local retrieval references, not a full dataset import or model-weight training. Political, promotional, VPN/credential and explicit entries were filtered out. Source: https://github.com/thu-coai/CDial-GPT
 
 MaiBot expression selection and jargon-learning modules were reviewed for design ideas at revision 2a9af62cec37035d29237acbe2cf3adceb700b27. No MaiBot source code is included; this plugin's implementation is independent. https://github.com/Mai-with-u/MaiBot (GPL-3.0). NaturalConv was reviewed but no data was included because of its separate noncommercial conditions.
+
+
+## Playback timing reference (2026-11-02)
+
+The live watch segment ramp and position-freshness rules in `watch-live.js` follow the public design of [dsh-watch-together](https://github.com/SAOS-3624/dsh-watch-together) (Apache-2.0). No source files were copied; the short-first/longer-later segment boundaries, lead-before-end delivery and paused/stale position distinction were reimplemented for this bridge. The video sampling window and cache are local changes in `tools/video_plus.py`.
+
+## Expanded expression corpus (2026-11-02)
+
+The local reference corpus adds 80 short dialogues written for this project (`source: project-original`, `license: original`), plus 15 short adult-humor/innuendo exchanges (rating `bawdy`, also project-original). They cover everyday emotions, common scenes, mild profanity/conflict, non-graphic adult humor and non-graphic adult intimacy; none are copied from external chat logs. They are retrieval references for tone and turn-taking, not model-weight training. Ratings: `general` in any chat; `edgy` for owner-private/free-expression contexts; `bawdy` in any chat as jokes only, without explicit description or targeting someone present; `adult` (intimate) restricted to owner-private chats with the adult mode enabled. A second LCCC batch (120 dialogues) was filtered for politics, promotions, VPN/credentials, explicit content and personal identifiers before inclusion.
+
+KdConv (Apache-2.0, https://github.com/thu-coai/KdConv): four short conversational runs (turns without knowledge annotations) extracted from the public film/music test split are included as local references (`source: KdConv test split`, `license: Apache-2.0`). The license copy is in assets/expression-kdconv.LICENSE.txt. The full KdConv corpus is not bundled; `tools/import-expression-corpus.mjs` can import a local download, and imported entries keep their stated source, URL and license. The person importing is responsible for the rights to use them.
 
 
 ## Music evidence update (1.28.0)
@@ -91,3 +102,14 @@ PyWORLD 0.3.5 (MIT), NumPy 2.5.4 and SoundFile 0.14 are installed separately in 
 ## MemeWiki vocabulary snapshot
 
 Original: https://github.com/in1t1a1/astrbot_plugin_memewiki (in1t1a1). Snapshot obtained from https://github.com/thawline/dsh-memewiki at 15c3c34149dfb0d5ea3a9b3a4b4f0d7f91318e91. Data: 6668 entries, compiled 2026-10-26, contents credited to cnmeme.wiki and original authors. Retained notices: assets/memewiki.NOTICE.txt and assets/memewiki.LICENSE.txt. This package adapts data for local retrieval, not a separate plugin dependency. Existing Chime vocabulary and attribution are retained.
+
+
+## Bilibili adapter 1.45.0
+
+- WBI mixin table and signing approach adapted from dsh-bili-humanism 1.7.1 (MIT), Copyright (c) 2026 InariNGT-Ofiicial. Only the signing algorithm is reused; the installed package is not required. Full notice: vendor/humanism-WBI.LICENSE.txt. https://github.com/InariNGT-Ofiicial/dsh-bili-humanism
+- Workflow architecture reference: c1overzz/dsh-bili-scroll (MIT). No source or credential files from that project are bundled. https://github.com/c1overzz/dsh-bili-scroll
+- Login/search/comment API behavior cross-checked with the upstream bilibili-mcp project. The adapter is original JavaScript and does not include or run the upstream Python service. https://github.com/adoresever/bilibili-mcp
+
+## LXGW WenKai Lite / 霞鹜文楷轻便版
+
+The private diary uses a locally bundled WOFF2 conversion of LXGWWenKaiLite-Regular.ttf (glyph outlines and font family unchanged), upstream Git blob b6a91870361ff0ddf5bb12d8327fda1948794074 from https://github.com/lxgw/LxgwWenKai-Lite. Original copyright and SIL Open Font License 1.1 terms are included verbatim in assets/fonts/OFL.txt. Font loading does not contact external font services.

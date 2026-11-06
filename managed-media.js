@@ -1,7 +1,7 @@
 import {existsSync,lstatSync,readdirSync,unlinkSync,statSync,mkdirSync,copyFileSync,readFileSync,writeFileSync,openSync,readSync,closeSync,rmdirSync,symlinkSync} from 'node:fs';
 import {join,resolve,relative,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
-export const MANAGED_MEDIA_DIRS=['voice','stickers','messages','photos','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','life-artifacts','drawings','singing-renders','singing-samples'];
+export const MANAGED_MEDIA_DIRS=['voice','stickers','messages','photos','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','life-artifacts','drawings','social-assets','singing-renders','singing-samples'];
 const temporary=['voice','messages','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','singing-renders','photos/requests','photos/gen'];
 const within=(root,p)=>{const r=relative(resolve(root),resolve(p));return r!==''&&!r.startsWith('..')&&!isAbsolute(r);};
 export function mediaRetention(v={}){const n=(x,d,min,max)=>Number.isFinite(Number(x))?Math.max(min,Math.min(max,Number(x))):d;return {enabled:v.enabled!==false,days:n(v.days,7,1,365),maxMB:n(v.maxMB,4096,256,1048576)};}

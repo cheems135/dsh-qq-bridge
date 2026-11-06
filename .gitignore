@@ -2,3 +2,14 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Runtime user data and local credentials
+/data/
+/cache/
+/outputs/
+/work/
+.env
+.env.*
+!.env.example
+*.pem
+*.key

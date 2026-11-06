@@ -1,11 +1,11 @@
 {
   "ffmpegPath": "",
-  "distribution": "",
-  "maxFrames": 8,
   "ffprobePath": "",
   "magickPath": "",
   "videoPlusPythonPath": "",
   "whisperModelPath": "",
   "adbPath": "",
-  "scoreSingingPythonPath": ""
+  "scoreSingingPythonPath": "",
+  "maxFrames": 8,
+  "distribution": "Configure executable paths in the bridge or install FFmpeg on PATH"
 }

@@ -530,13 +530,13 @@ html[data-theme="dark"]{--bg:#242537;--panel:#2d2d43;--panel-2:#333349;--ink:#e2
 @media(prefers-reduced-motion:reduce){.star-label{transition:none}}
 
 .diary-intro{margin:23px auto 23px}.notebook-cover{width:49px;height:56px;margin:0 auto 8px;color:#a28daa;transform:rotate(-7deg)}.notebook-cover svg{width:100%;height:100%}.diary-intro h2{font-size:27px;letter-spacing:.14em}.diary-intro p{letter-spacing:.04em}
-.diary-shelf{position:relative;gap:0;margin:25px 0 32px;padding:15px;border:1.5px solid #cbbac8;border-radius:15px 22px 22px 15px;background:#e6d8e3;box-shadow:0 12px 30px #7e687511,3px 4px 0 #f6f0ed,4px 5px 0 #cebfca;isolation:isolate}
+@font-face{font-family:'Diary Handwriting';src:url('/im-bridge/diary-font.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}.diary-title,.diary-preview{font-family:'Diary Handwriting','KaiTi','STKaiti',cursive}.diary-title{font-weight:400;font-size:21px;line-height:1.7;letter-spacing:.04em;margin:16px 0 0}.diary-shelf{position:relative;gap:0;margin:25px 0 32px;padding:15px;border:1.5px solid #cbbac8;border-radius:15px 22px 22px 15px;background:#e6d8e3;box-shadow:0 12px 30px #7e687511,3px 4px 0 #f6f0ed,4px 5px 0 #cebfca;isolation:isolate}
 .diary-shelf:before{content:'';position:absolute;top:20px;bottom:20px;left:50%;width:15px;transform:translateX(-50%);background:linear-gradient(90deg,transparent,#baa9b61c,transparent);z-index:3;pointer-events:none}
 .diary-shelf:has(>.diary-sheet:last-child:nth-child(odd)):after{content:'';background:repeating-linear-gradient(transparent 0,transparent 31px,#ded9d14d 31px,#ded9d14d 32px),#fffcf4;box-shadow:inset 5px 0 9px #d0c6bb20;border-left:1px solid #e3d9d1;border-radius:3px}
 .diary-sheet,.diary-sheet:nth-child(2n){--paper:#fffcf4;--rule:#ded9d14d;position:relative;margin:0;padding:33px 34px 20px 47px;border:0;border-radius:3px;box-shadow:inset -5px 0 9px #d0c6bb14;background:linear-gradient(90deg,transparent 31px,#ddb7bd60 31px,#ddb7bd60 32px,transparent 32px),repeating-linear-gradient(transparent 0,transparent 31px,var(--rule) 31px,var(--rule) 32px),var(--paper);min-height:320px;color:#736674}
 .diary-sheet:nth-child(2n){box-shadow:inset 5px 0 9px #d0c6bb20;border-left:1px solid #e3d9d1}.diary-sheet:before{content:'';position:absolute;top:18px;left:60%;width:65px;height:17px;transform:rotate(6deg);background:repeating-linear-gradient(90deg,#dccddd90 0,#dccddd90 5px,#f5edf780 5px,#f5edf780 10px);clip-path:polygon(0 0,100% 0,97% 20%,100% 40%,97% 60%,100% 80%,98% 100%,0 100%,3% 75%,0 50%,3% 25%);opacity:.8}
 .diary-sheet:nth-child(3n):before{background:repeating-linear-gradient(90deg,#c7dcd490 0,#c7dcd490 5px,#edf5ef90 5px,#edf5ef90 10px);transform:rotate(-5deg)}.diary-date{display:flex;align-items:baseline;gap:8px;font-size:12px;letter-spacing:.08em;color:#a78f9c;height:32px}.diary-date b{font:400 27px Georgia,serif;color:#998393}.diary-date span{font-size:10px;letter-spacing:.09em}.diary-date small{font-size:10px;margin-left:auto;letter-spacing:.02em;color:#b4a2ab}
-.diary-sheet>.diary-text{font-family:'KaiTi','STKaiti','Microsoft YaHei',sans-serif;line-height:32px;font-size:18px;color:#776775;margin:16px 0 7px;min-height:96px;max-width:none;overflow-wrap:anywhere}.diary-sheet .diary-actions{padding-top:12px;gap:9px;align-items:flex-start}.diary-sheet .diary-actions button.ghost{border:1px dashed #cdbec9;border-radius:12px 9px 13px 8px;background:#fffaf580;color:#9c879c;font-size:11px;padding:5px 10px;min-height:29px}.diary-sheet summary{color:#a694a2}.diary-sheet .diary-original{border-color:#dacecf;margin-top:13px;padding-top:9px}.diary-original .diary-text{font-size:12px;line-height:1.9}
+.diary-sheet>.diary-text{font-family:'Diary Handwriting','LXGW WenKai Lite','KaiTi','STKaiti',cursive;line-height:32px;font-size:18px;color:#776775;margin:16px 0 7px;min-height:96px;max-width:none;overflow-wrap:anywhere}.diary-sheet .diary-actions{padding-top:12px;gap:9px;align-items:flex-start}.diary-sheet .diary-actions button.ghost{border:1px dashed #cdbec9;border-radius:12px 9px 13px 8px;background:#fffaf580;color:#9c879c;font-size:11px;padding:5px 10px;min-height:29px}.diary-sheet summary{color:#a694a2}.diary-sheet .diary-original{border-color:#dacecf;margin-top:13px;padding-top:9px}.diary-original .diary-text{font-size:12px;line-height:1.9}
 .diary-doodle{min-height:59px;display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 3px 6px;color:#ab91a5}.diary-doodle svg{width:66px;height:58px;transform:rotate(-6deg);overflow:visible}.diary-kaomoji{font-family:'Segoe UI','Microsoft YaHei',sans-serif;font-size:15px;letter-spacing:.03em;transform:rotate(-4deg);color:#a58ca1}.diary-page-number{display:block;text-align:center;font:10px Georgia,serif;color:#baa9b0;letter-spacing:.14em;margin-top:12px}.diary-empty{grid-column:1/-1;min-height:280px;display:grid;place-content:center;text-align:center;background:#fffcf4;border-radius:5px;color:#a391a1;padding:30px;gap:15px}.diary-empty svg{width:68px;height:60px;margin:auto}.diary-empty p{margin:0;font-size:13px;letter-spacing:.07em}
 html[data-theme="dark"] .diary-shelf{background:#514052;border-color:#776079;box-shadow:0 12px 30px #0002,3px 4px 0 #443545,4px 5px 0 #776079}html[data-theme="dark"] .diary-sheet,html[data-theme="dark"] .diary-sheet:nth-child(2n){--paper:#38303d;--rule:#65566e40;background:linear-gradient(90deg,transparent 31px,#9c6b8360 31px,#9c6b8360 32px,transparent 32px),repeating-linear-gradient(transparent 0,transparent 31px,var(--rule) 31px,var(--rule) 32px),var(--paper);border-color:#635166}html[data-theme="dark"] .diary-sheet>.diary-text{color:#dfcfe0}html[data-theme="dark"] .diary-sheet .diary-actions button.ghost{background:#423348;color:#ccb5cf;border-color:#806689}html[data-theme="dark"] .diary-empty{background:#38303d;color:#c1a9c8}html[data-theme="dark"] .diary-date b{color:#c8abca}html[data-theme="dark"] .diary-doodle,html[data-theme="dark"] .diary-kaomoji{color:#c5a7cb}
 html[data-theme="dark"] .diary-shelf:has(>.diary-sheet:last-child:nth-child(odd)):after{background:repeating-linear-gradient(transparent 0,transparent 31px,#65566e40 31px,#65566e40 32px),#38303d;border-color:#635166}
@@ -562,7 +562,7 @@ html[data-theme="dark"] .diary-intro h2{color:#d0b6ce}html[data-theme="dark"] .d
 .diary-date{color:#3f7fd6!important;font-weight:700!important;letter-spacing:.5px}
 .diary-date b{font-size:26px!important;color:#2f6fd0!important}
 .diary-date span{color:#8fb4e2!important}
-.diary-text{color:#3b4657!important;font-size:15px!important;line-height:2!important}
+.diary-text{color:#3b4657!important;font-size:15px;line-height:2}
 .diary-doodle{color:#9ec4ef!important;opacity:.85}
 .diary-kaomoji{color:#5b93d8!important}
 .diary-pager{color:#8fb4e2!important}
@@ -582,14 +582,32 @@ html[data-theme="dark"] .diary-intro h2{color:#d0b6ce}html[data-theme="dark"] .d
 :root{--bg:#f4f9ff;--panel:#ffffff;--panel-2:#eef6ff;--ink:#2f3b52;--ink2:#5f7290;--ink3:#8ba0bd;--line:#dcebfb;--line2:#c9def5;--soft:#eff6ff;--soft2:#e6f1fe;--accent:#3f86d8;--accent-ink:#2f6cbb;--accent-weak:#e3f0ff;--hero:#eaf4ff;--hero-ink:#4a6f9e;--shadow:0 6px 28px #6f9acd14}
 body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),radial-gradient(ellipse at 18% 60%,#eaf5ff85,transparent 60%),var(--bg)!important}
 .sidebar,.nav,.card,.section,.tab,.pane{background-color:var(--panel)}
+
+/* 可切换皮肤：蓝（默认）/ 紫 */
+html[data-skin="purple"]{--bg:#f8f7fd;--panel:#fffefe;--panel-2:#f5f2fb;--ink:#393b56;--ink2:#74758d;--ink3:#8c8ba2;--line:#ede8f5;--line2:#ded8ed;--soft:#f4f0fc;--soft2:#eeebf8;--accent:#8470b9;--accent-ink:#6b589d;--accent-weak:#eee8fa;--hero:#eeefff;--hero-ink:#62608c;--shadow:0 6px 28px #78709909}
+html[data-skin="purple"] body{background:radial-gradient(ellipse at 85% 4%,#fcecf470,transparent 45%),radial-gradient(ellipse at 18% 60%,#f3edfc70,transparent 60%),var(--bg)!important}
+html[data-skin="purple"] .logo{background:linear-gradient(145deg,#a78acb,#8470b9)!important}
+html[data-skin="purple"] button.primary{background:linear-gradient(130deg,#9280c5,#8f71b1)!important}
+html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:var(--accent-ink)!important}
+#skinToggle{position:fixed;right:18px;bottom:18px;z-index:60;border:1px solid var(--line2);background:var(--panel);color:var(--ink2);border-radius:999px;padding:7px 14px;font-size:12px;cursor:pointer;box-shadow:0 6px 18px #00000012}
+#skinToggle:hover{color:var(--accent)}
 </style>
-</head>
+<style>
+.page-diary .diary-shelf{display:block;max-width:760px;margin-left:auto;margin-right:auto}
+.page-diary .diary-shelf::after{display:none!important}
+.page-diary .diary-sheet{width:100%;box-sizing:border-box}
+.page-diary .diary-sheet>.diary-text{font-family:'Diary Handwriting','LXGW WenKai Lite','KaiTi','STKaiti',cursive;font-size:20px;font-weight:400;line-height:32px;letter-spacing:.025em}
+.page-diary .diary-title{font-size:24px;font-weight:400}
+.page-diary .diary-date{display:flex;gap:10px;align-items:baseline}
+@media(max-width:600px){.page-diary .diary-sheet>.diary-text{font-size:19px;letter-spacing:.01em}.page-diary .diary-title{font-size:22px}}
+</style><script src="/im-bridge/ui/device-ui.js"></script></head>
 <body>
 <nav class="mobile-returnbar" aria-label="离开插件与返回首页">
   <a id="returnDsh" href="/" target="_top">← 返回 DSH</a>
   <button id="returnOverview" data-go="overview" type="button">插件首页</button>
   <details id="boxHomeHelp"><summary>回 DSHBox 首页？</summary><p>点屏幕上的“四格”悬浮按钮，再点展开菜单里的“首页”（小房子图标），即可回到有“DSH 就绪”卡片的 DSHBox 首页。“返回 DSH”会回到聊天主界面。修改设置后请先保存。</p></details>
 </nav>
+<section class="device-ui-bar" id="deviceUiBar" aria-label="设备界面"><div class="device-ui-title"><b data-device-label>QQ 桥接</b><small data-device-note>正在读取运行设备…</small></div><div class="device-ui-switch" aria-label="切换界面"><button type="button" data-ui-device="phone" aria-pressed="false">手机</button><button type="button" data-ui-device="desktop" aria-pressed="false">电脑</button></div></section><p class="device-preview" id="devicePreview" role="status" hidden></p>
 <div class="app">
   <aside class="side" aria-label="主导航">
     <a class="brand" href="#overview" aria-label="QQ 桥接工作台"><span class="logo"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-3l-5 4v-4H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="1.7"/><path d="M7 10h7M7 13h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="brandText"><b>QQ 桥接</b><span>一点点记录，一直在身边</span></span></a>
@@ -627,7 +645,25 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   window.onerror = function (message, source, line) { reportClient('JS 错误 ' + message + ' @' + line); };
   window.addEventListener('unhandledrejection', function (event) { reportClient('Promise 拒绝 ' + (event.reason && event.reason.message ? event.reason.message : event.reason)); });
   var data = null;
-  var deviceProfileData = null;
+  var uiDevice='',desktopNavSnapshot=null,desktopHeadsSnapshot=null;
+  function runtimeDevice(){return data&&data.status&&data.status.edition==='mobile'?'phone':'desktop';}
+  function mobileApiOnly(){return (uiDevice||runtimeDevice())==='phone';}
+  function deviceUiPreview(){return !!uiDevice&&uiDevice!==runtimeDevice();}
+  function mobileUiPolicy(){
+    if(!data)return;
+    if(!desktopNavSnapshot){desktopNavSnapshot=NAV_GROUPS.map(function(g){return Object.assign({},g,{pages:g.pages.slice()});});desktopHeadsSnapshot=Object.assign({},PAGE_HEADS);}
+    uiDevice=deviceProfileData?.editingDevice||runtimeDevice();
+    var adapter=window.QQBridgeDeviceUI;NAV_GROUPS=adapter?adapter.groups(uiDevice,desktopNavSnapshot):desktopNavSnapshot.map(function(g){return Object.assign({},g,{pages:g.pages.filter(function(p){return uiDevice!=='phone'||p!=='local';})});});
+    PAGE_HEADS=Object.assign({},desktopHeadsSnapshot);
+    if(mobileApiOnly()){PAGE_HEADS.services=['API 连接与搭配','聊天、图片与语音可分别连接不同提供商。','API 连接 模型 协议 搭配'];PAGE_HEADS.devices=['设备与同步','切换界面、管理手机连接与同步资料。','手机 电脑 设备 同步'];}
+    if(!NAV_GROUPS.some(function(g){return g.pages.indexOf(tab)>=0;})){tab='overview';history.replaceState(null,'','#overview');}
+    if(adapter)adapter.apply(uiDevice,runtimeDevice());
+  }
+  function applyPreviewControls(){if(deviceUiPreview()){document.querySelectorAll('#pane input,#pane textarea,#pane select,#pane button').forEach(function(el){if(el.hasAttribute('data-go')||/^profile|^device/.test(el.id))return;if(el.tagName==='BUTTON'&&el.id==='deviceRefresh')return;el.disabled=true;});}}
+  async function selectDeviceUi(device){
+    rememberDraft(renderedTab);
+    try{deviceProfileData=await api('POST','/im-bridge/device-profiles',{action:'select',device:device});mobileUiPolicy();initNavigation();renderPane();}catch(e){toast(e.message);}
+  }
   var login = null;
   var monitor = null;
   var models = null;
@@ -753,7 +789,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       presets = (r[4] && r[4].presets) || [];
       thoughts = r[5];
       storage = r[6];
-      featureData = r[7]; deviceProfileData = r[8];
+      featureData = r[7]; deviceProfileData = r[8]; mobileUiPolicy(); initNavigation();
       hubPreview=null;hubSearchResult='';if(hubSelection)try{hubPreview=(await api('POST','/im-bridge/features/memory-hub',{key:hubSelection,action:'snapshot'})).memoryHub;}catch{};
       lastSnapshotAt = Date.now();
       renderPill(); renderPane();
@@ -767,6 +803,12 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     });
   }
 
+  function applyOpenPermissionControls(){
+    if(data?.settings?.permissionsMode!=='open-nonpayment')return;
+    var ids=['agEnabled','agAutonomous','agBrowser','agDesktop','agPhone','agWorkspace','rlUnlimited','rlPhone','lifeBudget','autoWakeA','autoWakeB','autoIdle','autoMaster','localInitiativeEnabled'];
+    ids.forEach(function(id){var el=$(id);if(!el)return;el.disabled=true;var label=el.closest('label');if(label)label.hidden=true;else if(id==='autoMaster')el.textContent='自主活动已开放';});
+    if(['autonomy','daily','local','whitelist','devices'].includes(tab)){var note=document.createElement('p');note.className='muted';note.textContent='当前仅实际付款需要确认。白名单和B站评论手动选择保留；工具权限不限制主动次数；日程休息和群聊选择性参与仍有效，明确请求可唤醒。是否行动由她判断，紧急停止仍有效。';$('pane').querySelector('.page-content')?.prepend(note);}
+  }
   function renderPill() {
     var st = data.status;
     renderShellStatus();
@@ -802,12 +844,17 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
   var NAV_GROUPS = [
     { id: 'home', label: '她的小世界', note: '现在、日程与小日记', icon: 'home', pages: ['overview','daily','diary','star'] },
-    { id: 'messages', label: '消息中心', note: '查看、发送与管理对话', icon: 'chat', pages: ['monitor', 'send', 'sessions', 'delivery', 'activity'] },
+    { id: 'messages', label: '消息中心', note: '查看、发送与管理对话', icon: 'chat', pages: ['monitor', 'send', 'sessions', 'delivery', 'activity','invocations'] },
     { id: 'character', label: '认识她', note: '人设、关系与学习', icon: 'spark', pages: ['persona', 'profiles', 'autonomy', 'study', 'thoughts', 'memory'] },
+    { id: 'web', label: '上网与内容', note: '账号、浏览与视频资料', icon: 'search', pages: ['bilibili','qzone','websitemcp'] },
     { id: 'assets', label: '声音与照片', note: '说话、唱歌与生图', icon: 'image', pages: ['voice', 'songs', 'imagegen', 'photo', 'sticker', 'collect'] },
-    { id: 'system', label: '系统设置', note: '连接、权限与运行配置', icon: 'settings', pages: ['connection', 'devices', 'whitelist', 'model', 'storage', 'logs', 'backup'] }
+    { id: 'system', label: '系统设置', note: '连接、权限与运行配置', icon: 'settings', pages: ['connection', 'services', 'local', 'devices', 'whitelist', 'model', 'storage', 'logs', 'backup'] }
   ];
   var PAGE_HEADS = {
+    qzone:['QQ 空间','查看图文动态回执，读取并回复实际评论。','空间 动态 配图 评论 回复'],
+    services:['连接与搭配','检测 API 或本地服务，分别选择聊天、图片与语音的来源。','API 本地 自由 连接 自动识别 模型 类型 混合 串联 搭配'],
+    websitemcp:['网站工具 / MCP','输入网址，识别公开接口与搜索表单，测试后供本地和 API 使用。','网站 自动封装 MCP 接口 搜索 OpenAPI 工具 适配'],
+    invocations:['提示词与工具调用','本地与 API 共用的实际调用记录，可复制提示词用于调整。','生图 视频 提示词 prompt 工具 调用 记录 API 本地 补全'],
     daily:['今天的小日程','在线做小事，离线就安心睡觉。','生活 当前 等待 恢复 任务 权限'],
     diary:['私人手账','','日记 摘记 经历 回忆'],
     star:['记忆星图','从人物、场合、话题与真实经历查看关系。','星图 关系 人物 来源 图谱'],
@@ -829,9 +876,11 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     sticker: ['表情库', '上传、分组与挑选，整理她在对话中使用的表情。', '素材 表情包 批量 上传 分组 删除'],
     collect: ['素材采集', '从网页、关键词或参考图中，寻找新的表情素材。', '搜图 AI 收集 下载 批量 以图搜图 表情含义 识别'],
     photo: ['照片来源', '选择搜图或生成，设置她的外观与照片偏好。', '图库 外观 性别 宽度 照片'],
-    voice: ['语音表达', '选择声音、配置合成服务，听听她会怎么说。', '音色 TTS edge 自定义 试听 样本 引擎'],
+    voice: ['语音表达', '选择声音、配置合成服务，听听她会怎么说。', '音色 TTS 本地 API 自定义 试听 引擎'],
     imagegen: ['图像生成', '管理生图服务与参数，试着把一句描述变成画面。', '生图 RunningHub 硅基流动 API Key 工作流'],
     connection: ['账号与连接', '登录与手动登出 QQ，切换机器人账号，管理 NapCat 连接。', '登录 登出 退出 logout 二维码 token WebSocket 重启 测试 暂停 自启'],
+    bilibili: ['B站', '本地模型和 API 模型共用的账号、浏览与评论草稿。', 'B站 哔哩哔哩 Bilibili 二维码 扫码 登录 推荐 字幕 评论 API 本地'],
+    local: ['本地连接', 'ComfyUI 与本地语音：填地址、看状态、直接试一次。', '本地 ComfyUI 工作流 反推 看图 本地模型 语音 Breeze VoiceLab 8188 7870'],
     whitelist: ['联系人与权限', '管理号主、私聊联系人与可用的群。', '白名单 QQ 群 备注 广播 权限'],
     model: ['模型与搜索', '选择聊天模型、思考深度和联网搜索方式。', '智力 档位 provider SearXNG 搜索引擎'],
     storage: ['存储与缓存', '查看空间占用，迁移或清理运行时缓存。', '目录 路径 占用 清理 迁移'],
@@ -868,7 +917,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
   function renderSearch() {
     var q = $('navSearch').value.trim().toLowerCase();
-    var found = Object.keys(PAGE_HEADS).filter(function (key) { return !q || PAGE_HEADS[key].join(' ').toLowerCase().indexOf(q) !== -1 || groupFor(key).label.indexOf(q) !== -1; });
+    var found = Object.keys(PAGE_HEADS).filter(function (key) { if(!NAV_GROUPS.some(function(g){return g.pages.indexOf(key)>=0;}))return false;return !q || PAGE_HEADS[key].join(' ').toLowerCase().indexOf(q) !== -1 || groupFor(key).label.indexOf(q) !== -1; });
     $('searchResults').innerHTML = '<div class="search-heading">' + (q ? '搜索结果' : '全部功能') + '<span>' + found.length + ' 项</span></div>' + (found.length ? found.map(function (key) {
       return '<button class="search-result" data-go="' + key + '"><span>' + icon(groupFor(key).icon) + '</span><span><b>' + PAGE_HEADS[key][0] + '</b><small>' + groupFor(key).label + '</small></span>' + icon('arrow') + '</button>';
     }).join('') : '<div class="search-empty">没有找到，试试「语音」「勿扰」或「登录」。</div>');
@@ -890,12 +939,13 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       btn.onclick = function () { var g = NAV_GROUPS.filter(function (item) { return item.id === btn.getAttribute('data-group'); })[0]; navigate(groupLastPages[g.id] || g.pages[0]); };
     });
     var hash = location.hash.slice(1);
-    tab = PAGE_HEADS[hash] ? hash : 'overview';
+    tab = PAGE_HEADS[hash]&&NAV_GROUPS.some(function(g){return g.pages.indexOf(hash)>=0;}) ? hash : 'overview';
     groupLastPages[groupFor(tab).id] = tab;
     syncNavigation();
     $('refreshIcon').innerHTML = icon('refresh');
     $('refresh').onclick = async function () { var btn = this; btn.disabled = true; btn.classList.add('refreshing'); try { var loaded = await load(); if(loaded!==false&&['overview','daily','diary','star','study','songs'].includes(tab))await refreshCompanionPanel();if (loaded !== false) toast('数据已刷新'); } finally { btn.disabled = false; btn.classList.remove('refreshing'); } };
     $('themeToggle').onclick = function () { themeMode = { auto: 'light', light: 'dark', dark: 'auto' }[themeMode]; try { localStorage.setItem('qqb-ui-theme', themeMode); } catch (e) {} applyTheme(); renderThemeControl(); };
+    document.querySelectorAll('[data-ui-device]').forEach(function(button){button.onclick=function(){selectDeviceUi(button.dataset.uiDevice);};});
     renderThemeControl();
     $('navSearch').oninput = renderSearch;
     $('navSearch').onfocus = renderSearch;
@@ -922,11 +972,11 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   function viewDeviceProfiles(){
     var p=deviceProfileData;if(!p)return '<div class="card"><h2>手机版／电脑版配置</h2><p>重新加载插件后可在这里切换两套配置。</p></div>';
     var selected=p.editingDevice||p.runtimeDevice,c=p.profiles[selected],names={phone:'手机版',desktop:'电脑版'};
-    return '<div class="card"><h2>同一个插件，手机与电脑共用</h2><p>群聊自主参与、图片理解、语音和回执处理共用同一套规则，当前插件版本 '+esc(p.version)+'。下面两套运行配置可以离线切换和保存。</p><div class="btnrow"><button id="profilePhone"'+(selected==='phone'?' disabled':'')+'>手机版配置</button><button id="profileDesktop"'+(selected==='desktop'?' disabled':'')+'>电脑版配置</button></div><p class="muted">正在编辑'+names[selected]+'配置；当前实际运行环境是'+names[p.runtimeDevice]+'。</p><div class="form-two"><label class="field">QQ 连接地址<input id="profileWsUrl" value="'+esc(c.wsUrl)+'"></label><label class="field">连接令牌<input id="profileToken" type="password" autocomplete="new-password" placeholder="'+(c.hasAccessToken?'已保存，留空保留':'未设置')+'"></label></div><label class="check-field"><input id="profileClearToken" type="checkbox">清除这套配置保存的连接令牌</label><label class="field">NapCat 目录<input id="profileNapcatDir" value="'+esc(c.napcatDir)+'"></label>'+(selected==='desktop'?'<label class="field">启动器路径（留空自动选择）<input id="profileLauncher" value="'+esc(c.launcher)+'"></label>':'<p class="muted">手机版自动使用 DSHBox 本机 QQ 服务和手机媒体工具。</p>')+'<div class="btnrow"><button id="profileSave">保存'+names[selected]+'配置</button></div><p id="profileResult" role="status" aria-live="polite">保存另一种设备的配置不会改变当前聊天的运行设备。</p></div>';
+    return '<div class="card"><h2>运行设备与连接配置</h2><p>群聊自主参与、图片理解、语音和回执处理共用同一套规则，当前插件版本 '+esc(p.version)+'。切换下面的设备按钮会更换整套界面；连接配置可分别保存，聊天与记忆逻辑保持一致。</p><div class="btnrow"><button id="profilePhone"'+(selected==='phone'?' disabled':'')+'>手机版配置</button><button id="profileDesktop"'+(selected==='desktop'?' disabled':'')+'>电脑版配置</button></div><p class="muted">正在编辑'+names[selected]+'配置；当前实际运行环境是'+names[p.runtimeDevice]+'。</p><div class="form-two"><label class="field">QQ 连接地址<input id="profileWsUrl" value="'+esc(c.wsUrl)+'"></label><label class="field">连接令牌<input id="profileToken" type="password" autocomplete="new-password" placeholder="'+(c.hasAccessToken?'已保存，留空保留':'未设置')+'"></label></div><label class="check-field"><input id="profileClearToken" type="checkbox">清除这套配置保存的连接令牌</label><label class="field">NapCat 目录<input id="profileNapcatDir" value="'+esc(c.napcatDir)+'"></label>'+(selected==='desktop'?'<label class="field">启动器路径（留空自动选择）<input id="profileLauncher" value="'+esc(c.launcher)+'"></label>':'<p class="muted">手机版自动使用 DSHBox 本机 QQ 服务和手机媒体工具。</p>')+'<div class="btnrow"><button id="profileSave">保存'+names[selected]+'配置</button></div><p id="profileResult" role="status" aria-live="polite">保存另一种设备的配置不会改变当前聊天的运行设备。</p></div>';
   }
   function bindDeviceProfiles(){
     if(!deviceProfileData)return;
-    async function select(device){try{deviceProfileData=await api('POST','/im-bridge/device-profiles',{action:'select',device:device});renderPane();}catch(e){toast(e.message);}}
+    async function select(device){return selectDeviceUi(device);}
     if($('profilePhone'))$('profilePhone').onclick=()=>select('phone');
     if($('profileDesktop'))$('profileDesktop').onclick=()=>select('desktop');
     if($('profileSave'))$('profileSave').onclick=async function(){var button=this,device=deviceProfileData.editingDevice;button.disabled=true;try{deviceProfileData=await api('POST','/im-bridge/device-profiles',{action:'save',device:device,profile:{wsUrl:$('profileWsUrl').value,accessToken:$('profileToken').value,clearToken:$('profileClearToken').checked,napcatDir:$('profileNapcatDir').value,launcher:$('profileLauncher')?.value||''}});if($('profileToken'))$('profileToken').value='';if($('profileClearToken'))$('profileClearToken').checked=false;if($('profileResult'))$('profileResult').textContent=deviceProfileData.applied?'当前设备配置已保存并应用。':'配置已保存在本插件内，在相应设备运行时自动使用。';toast('设备配置已保存');}catch(e){if($('profileResult'))$('profileResult').textContent=e.message;toast(e.message);}finally{if(button.isConnected)button.disabled=false;}};
@@ -943,11 +993,13 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
 
   function renderPane() {
+    if(qzoneHealthTimer){clearInterval(qzoneHealthTimer);qzoneHealthTimer=null;}
+    if(tab!=='local')stopLocalRunWatch();if(invocationTimer){clearInterval(invocationTimer);invocationTimer=null;}
     constellationMount?.destroy();constellationMount=null;
     rememberDraft(renderedTab);
     stopQrWatch();
     var group = groupFor(tab);
-    var renderers = { daily:rebuiltDaily,diary:rebuiltDiary,star:rebuiltStar,study:viewStudy,songs:viewSongs,devices: viewDevices, delivery: viewDelivery, activity: viewActivity, profiles: viewProfiles, backup: viewBackup, overview: companionHome, monitor: viewMonitor, send: viewSend, sessions: viewSessions, persona: viewPersona, memory: viewMemory, autonomy: viewAutonomy, thoughts: viewThoughts, sticker: viewSticker, collect: viewCollect, photo: viewPhoto, voice: viewVoiceCard, imagegen: viewImagegen, connection: viewConnection, whitelist: viewWhitelist, model: viewModelSettings, storage: viewStorage, logs: viewLogs };
+    var renderers = { daily:rebuiltDaily,diary:rebuiltDiary,star:rebuiltStar,study:viewStudy,songs:viewSongs,devices: viewDevices, delivery: viewDelivery, activity: viewActivity, invocations:viewInvocations, qzone:viewQzone, profiles: viewProfiles, backup: viewBackup, overview: companionHome, monitor: viewMonitor, send: viewSend, sessions: viewSessions, persona: viewPersona, memory: viewMemory, autonomy: viewAutonomy, thoughts: viewThoughts, sticker: viewSticker, collect: viewCollect, photo: viewPhoto, voice: viewVoiceCard, imagegen: viewImagegen, connection: viewConnection, services: viewServiceConnections, bilibili: viewBilibili, websitemcp: viewWebsiteMcp, local: viewLocal, whitelist: viewWhitelist, model: viewModelSettings, storage: viewStorage, logs: viewLogs };
     var head = PAGE_HEADS[tab];
     var samePage = renderedTab === tab;
     var keepScroll = samePage ? window.scrollY : 0;
@@ -967,10 +1019,13 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     window.scrollTo(0, keepScroll);
     if (tab === 'model') renderModelPickers();
     startFormTracking();
-    bindEnhancements();
-    bindFeatureUI();
+    bindEnhancements();bindInvocations();
+    bindFeatureUI();bindQzone();
     bindCompanionPanel();
     bindRebuiltCompanion();
+    if(mobileApiOnly()){['agWorkspace','igDir','cacheInput','memDir'].forEach(function(id){var el=$(id);if(el&&id!=='cacheInput'&&id!=='memDir')el.closest('label')?.setAttribute('data-desktop-only','');});if($('cacheInput'))$('cacheInput').placeholder='手机内的目录，留空使用默认位置';if($('agDesktop')){$('agDesktop').checked=false;$('agDesktop').disabled=true;$('agDesktop').closest('label')?.setAttribute('hidden','');}if($('agWorkspace')){$('agWorkspace').value='internal';$('agWorkspace').querySelector('[value="desktop"]')?.remove();}}
+    applyOpenPermissionControls();
+    applyPreviewControls();
     if(tab==='devices')bindDevices();
     bindVoiceStudio();
     if (tab === 'logs') loadLog();
@@ -1105,11 +1160,553 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
 
 
+  function localJson(response) {
+    return response.text().then(function (text) {
+      var body = null;
+      try { body = text ? JSON.parse(text) : null; } catch (e) { body = null; }
+      if (!response.ok || !body) {
+        var error = body && body.error;
+        if (error && typeof error === 'object') error = error.message;
+        throw new Error(response.status === 404 ? '插件后端还没加载这个页面，重启 DeepSeek Harness 后再刷新' : (error || ('HTTP ' + response.status)));
+      }
+      return body;
+    });
+  }
+  function localPost(payload) {
+    return fetch('/im-bridge/local', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }).then(localJson);
+  }
+  var localGateway = null;
+  var localRunTimer=null,localRunBusy=false,localRunSnapshot=null,localTrialResult=null,localTrialBusy=false;
+  function localRunMarkup(){
+    return '<section class="card" id="localRunPanel" aria-live="polite"><div class="section-heading"><h2>本地运行状态</h2><span class="tag" id="localRunBadge">读取中…</span></div><p id="localRunCurrent" style="white-space:pre-wrap">正在连接网关…</p><p class="muted" id="localRunQueue"></p><p class="muted" id="localRunVersion"></p><div id="localRunLatest"></div><details><summary>最近任务（本次网关启动）</summary><div id="localRunHistory"></div></details><p class="muted">每 2 秒更新。生成完成和 QQ 送达分别显示；上下文整理保留人设与当前问题，历史记录不会删除。</p></section>';
+  }
+  function paintLocalRun(value){
+    localRunSnapshot=value;if(!$('localRunPanel'))return;
+    var execution=value.execution||{},active=execution.active||[],recent=execution.recent||[];
+    if(!active.length&&value.hostPreparation?.length)active=value.hostPreparation;
+    var labels={preparing:'准备 / 切换模型',transcription:'本机识别语音',waiting_gateway:'等待本地网关接收',waiting_gpu:'等待本地资源',waiting_comfy:'等待已有 ComfyUI 任务',model:'生成回复（含模型加载）',understanding:'理解前文、指代与口语',vision:'识别图片',image_prompt:'按人设和日程准备画面提示词',speech:'合成语音',tool:'执行工具',tool_done:'工具已返回',repair:'检测到复读，正在修正',repaired:'复读已修正',context:'调取资料 / 整理上下文',complete:'已结束'};
+    var origins={qq:'QQ 消息',preview:'窗口试聊',api:'兼容接口',speech:'语音请求',analysis:'后台分析'},states={succeeded:'成功',partial:'部分完成',failed:'失败',cancelled:'已取消等待'};
+    function featureText(row){var names={memory:'记忆',meme:'梗',learning:'学习经验',expression:'表达',mood:'情绪',intent:'相处方式',life:'生活与关系',pending:'待决定事项'};return Object.keys(names).filter(function(key){return row.features&&row.features[key]>0;}).map(function(key){return names[key];}).join('、');}
+    function contextText(context){if(!context)return '';var node=context.node||{};return (node.context_limit?'上下文 '+node.used_tokens+' / '+node.context_limit+' token（节点估算）':context.limit?'输入约 '+context.inputEstimate+' token，窗口 '+context.limit+' token':'')+(context.continuity?' · 保留 '+Number(context.retainedMessages||0)+' 条近期对话':'')+(context.reset?' · 已自动重置旧上下文':context.droppedMessages?' · 已整理 '+context.droppedMessages+' 条旧消息':'')+(context.promptCompacted?' · 已精简本轮提示词':'')+(context.personaCompacted?' · 人设使用关键句摘录，原文未修改':'');}
+    function mediaTaskText(row){var task=row.mediaTask;if(!task)return '';var names={image:'图片',speech:'语音',video:'视频'};return task.ambiguous?'媒体指代待确认（未开始生成）':task.requested&&task.requested.length?'本轮任务：'+task.requested.map(function(kind){return names[kind];}).join('、')+(task.source==='followup'?'（沿用最近人类请求）':task.source==='semantic'?'（本地模型判断）':''):'';}
+    function summary(row){if(row.error)return row.error;var r=row.result||{},parts=[];if(r.textChars)parts.push('文字 '+r.textChars+' 字');if(r.speech)parts.push('语音 '+r.speech+' 条');if(r.images)parts.push('图片 '+r.images+' 张');if(r.videos)parts.push('视频 '+r.videos+' 个');if(r.toolsOk||r.toolsFailed)parts.push('工具成功 '+r.toolsOk+'、失败 '+r.toolsFailed);return parts.join('，')||'没有可发送内容';}
+    function resultRow(row){return '<p><b>'+esc(states[row.status]||row.status)+' · '+esc(origins[row.origin]||row.origin)+'</b> · '+(Number(row.elapsedMs||0)/1000).toFixed(1)+' 秒 · '+esc(new Date(row.finishedAt||row.startedAt).toLocaleTimeString())+'<br>'+esc(summary(row))+(mediaTaskText(row)?'<br>'+esc(mediaTaskText(row)):'')+(row.repaired?' · 已修正复读':'')+(featureText(row)?'<br>本轮参考：'+esc(featureText(row)):'')+(row.context?'<br><span class="muted">'+esc(contextText(row.context))+'</span>':'')+'</p>';}
+    $('localRunBadge').textContent=active.length?'运行中 · '+active.length+' 项':'空闲 / 等待消息';
+    $('localRunBadge').className='tag'+(active.length?' accent-tag':'');
+    $('localRunCurrent').textContent=active.length?active.slice(0,4).map(function(row){return (origins[row.origin]||row.origin)+' · '+(row.phase==='repair'&&row.repairReason==='unverified-media'?'核对真实任务状态':labels[row.phase]||row.phase)+' · 已运行 '+(Number(row.elapsedMs||0)/1000).toFixed(1)+' 秒'+(row.priority==='quality'?' · 连贯对话优先':row.mode==='dialogue'?' · 普通闲聊加速':'')+(row.outputTokens?' · 输出上限 '+row.outputTokens+' token':'')+(row.tool?' · '+row.tool:'')+(mediaTaskText(row)?'\n'+mediaTaskText(row):'')+(row.context?'\n'+contextText(row.context):'')+(featureText(row)?'\n本轮参考：'+featureText(row):'');}).join('\n\n'):'网关在线，当前没有由本网关跟踪的任务。'+(recent.length?' 最近一次结果见下方。':' 本次启动尚无任务。');
+    var queue=value.comfyQueue,delivery=value.delivery,lines=[];
+    (value.groupActivation||[]).forEach(function(row){lines.push('群 '+row.groupId+' · 关注剩余 '+Math.ceil(Number(row.remainingMs||0)/1000)+' 秒'+(row.paused?'（生成期间暂停）':''));});
+    if(queue)lines.push(queue.reachable?'ComfyUI 队列（含手动任务）：运行 '+queue.running+'，等待 '+queue.pending:'ComfyUI 当前不可达');
+    if(!active.length&&queue&&(queue.running||queue.pending))lines.push('ComfyUI 中还有手动任务或先前取消等待的任务，保留运行');
+    if(delivery)lines.push('最近本地 QQ 消息：待发 '+delivery.queued+'，已送达 '+delivery.sent+'，失败 '+delivery.failed+'，待核对 '+delivery.unknown);
+    $('localRunQueue').textContent=lines.join(' · ');
+    if($('localInitiativeStatus')){var initiative=value.localInitiative||{};$('localInitiativeStatus').textContent='主动聊天：'+(initiative.reason||'等待空闲检查')+(initiative.at?' · '+new Date(initiative.at).toLocaleTimeString():'');}
+    var lastRoute=(value.modelRoutes||[]).slice(-1)[0];if(lastRoute)$('localRunCurrent').textContent+='\n最近处理：'+({local:'本地',unavailable:'本地暂不可用',api:'API'}[lastRoute.target]||lastRoute.target)+' · '+lastRoute.reason;
+    $('localRunVersion').textContent='网关 '+(value.version||value.serviceVersion||'未知')+(value.hostVersion?' · 宿主 '+value.hostVersion:'')+(value.hostVersion&&value.version&&value.hostVersion!==value.version?' · 版本不同，重开宿主后加载新版收发逻辑':'');
+    $('localRunLatest').innerHTML=recent.length?'<b>最后一次结果</b>'+resultRow(recent[0]):'';
+    $('localRunHistory').innerHTML=recent.slice(1).map(resultRow).join('')||'<p class="muted">暂无更多任务。</p>';
+  }
+  function refreshLocalRun(){
+    if(localRunBusy||!$('localRunPanel'))return Promise.resolve();localRunBusy=true;
+    return fetch('/im-bridge/local/status',{cache:'no-store'}).then(function(response){
+      if(response.status===404)return fetch('/im-bridge/local',{cache:'no-store'}).then(localJson).then(function(value){return {version:value.version,hostVersion:data?.status?.version,execution:value.execution,comfyQueue:value.queue};});
+      return localJson(response);
+    }).then(function(value){paintLocalRun(value);}).catch(function(error){if($('localRunBadge'))$('localRunBadge').textContent='离线 / 状态读取失败';if($('localRunCurrent'))$('localRunCurrent').textContent='未取得最新状态：'+error.message+'。下方保留的是上一次已读取结果。';}).finally(function(){localRunBusy=false;});
+  }
+  function stopLocalRunWatch(){if(localRunTimer)clearInterval(localRunTimer);localRunTimer=null;}
+  function startLocalRunWatch(){stopLocalRunWatch();if(localRunSnapshot)paintLocalRun(localRunSnapshot);void refreshLocalRun();localRunTimer=setInterval(refreshLocalRun,2000);}
+  function paintLocalTrial(){if(!localTrialResult||!$('localChatOut'))return;$('localChatOut').textContent=localTrialResult.text;if($('localReceipts'))$('localReceipts').textContent=localTrialResult.receipts||'';}
+  var localWorkflowDraft = [];
+  var localDefaultsDraft = { image: '', video: '' };
+  var biliPanelState=null,biliPanelBusy=false,biliPollTimer=null,biliLastMaterial=null,biliPanelScope='',biliQrState=null;
+  function biliScope(){return JSON.stringify([data?.settings?.activeAccountId,data?.settings?.contactProfiles?.['private:'+data?.settings?.owners?.[0]]?.personaId||data?.settings?.activePersonaId||data?.status?.persona?.id]);}
+  function viewBilibili(){return biliPanelMarkup();}
+  async function biliSelectedImages(){
+    var files=Array.from($('biliImages')?.files||[]);if(files.length>3)throw Error('一次评论最多3张图片');var images=[];for(var file of files){if(file.size>12*1024*1024)throw Error('每张配图请小于12MB');images.push({data:await new Promise(function(resolve,reject){var reader=new FileReader();reader.onload=function(){resolve(reader.result);};reader.onerror=function(){reject(Error('配图读取失败'));};reader.readAsDataURL(file);})});}return images;
+  }
+  function bindBiliReplyTargets(){document.querySelectorAll('[data-bili-reply]').forEach(function(button){button.onclick=function(){$('biliReplyId').value=button.dataset.biliReply;$('biliReplyTarget').textContent=button.dataset.biliTarget;$('biliDraft').focus();};});}
+  function biliPanelMarkup(){return '<section class="card" id="biliPanel"><div class="section-heading"><h2>B站账号与浏览</h2><span class="tag">当前 QQ 账号 · 当前角色</span></div><p class="muted">本地模型和 API 模型共用这份 B站登录、浏览记录与评论设置，无需启动本地网关。扫码登录后可找推荐、搜索、读取字幕与评论；评论先保存草稿，核对完整正文后再发布。</p><div class="btnrow"><button data-bili-action="login">扫码登录 / 换号</button><button data-bili-action="login-status">检查登录</button><button data-bili-action="status">刷新记录</button><button data-bili-action="logout">退出 B站账号</button></div><label class="check-field"><input id="biliPublishEnabled" type="checkbox">允许发布 B站评论</label><p class="muted">默认关闭，只浏览和保存草稿。开启后仍需核对正文并点击发布；开关按当前 QQ 账号和角色保存。</p><p id="biliStatus" class="muted" role="status">尚未读取状态</p><div id="biliQr"></div><label class="field">感兴趣的内容<input id="biliQuery" placeholder="留空刷推荐，也可输入搜索词"></label><div class="btnrow"><button data-bili-action="recommend">找推荐</button><button data-bili-action="search">搜索</button><button data-bili-action="browse">读两条新内容</button></div><div id="biliCandidates"></div><label class="field">视频 BV 号或链接<input id="biliVideo" placeholder="点击候选视频后自动填写"></label><div class="btnrow"><button data-bili-action="read">读取视频画面、字幕与评论</button></div><div id="biliMaterial"></div><label class="field">评论草稿<textarea id="biliDraft" rows="3" maxlength="1000" placeholder="按实际读到的内容写；保存草稿不会发布"></textarea></label><label class="field">回复目标（从已读评论选择）<input id="biliReplyId" placeholder="留空为新评论" readonly></label><p id="biliReplyTarget" class="muted"></p><button id="biliReplyClear" type="button">改为新评论</button><label class="field">评论配图（最多3张，保存草稿不上传）<input id="biliImages" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple></label><div id="biliImagePreview" class="btnrow"></div><button data-bili-action="draft">保存这条草稿</button><div id="biliDrafts"></div><details><summary>最近读取记录</summary><div id="biliHistory"></div></details></section>';}
+  function biliPaintState(state){
+    if(!$('biliPanel'))return;biliPanelState=state;
+    if($('biliPublishEnabled'))$('biliPublishEnabled').checked=state.settings?.commentPublishEnabled===true;
+    if($('biliStatus'))$('biliStatus').textContent=state.account?.loggedIn?'已保存登录：'+(state.account.name||'B站账号')+'（UID '+state.account.uid+'），可点击检查登录确认是否仍有效。':'尚未登录，公开热门视频仍可尝试读取。';
+    biliPaintQr(state.login || null);
+    if($('biliHistory'))$('biliHistory').innerHTML=(state.history||[]).map(function(item){return '<p><b>'+esc(item.title)+'</b><br><span class="muted">'+esc(item.coverage)+'</span> <button class="small" data-bili-read="'+esc(item.bvid)+'">再读这条</button></p>';}).join('')||'<p class="muted">还没有读取记录。</p>';
+    if($('biliDrafts'))$('biliDrafts').innerHTML=(state.drafts||[]).map(function(draft){return '<article class="card"><b>'+esc(draft.title||draft.bvid)+'</b><p style="white-space:pre-wrap">'+esc(draft.text)+'</p>'+(draft.replyTo?'<blockquote>回复 '+esc(draft.replyTo.author)+'：'+esc(draft.replyTo.text)+'</blockquote>':'')+(draft.images?.length?'<p>配图 '+draft.images.length+' 张</p><div class="btnrow">'+draft.images.map(function(image,i){return '<button data-bili-preview="'+esc(draft.id)+'" data-image="'+esc(image.id)+'">查看配图 '+(i+1)+'</button>';}).join('')+'</div>':'')+'<p class="muted">'+esc((draft.accountMismatch?'属于其他 B站账号，请切回账号或重新保存草稿':({draft:'草稿，尚未发布',sending:'正在提交',sent:'已取得评论 ID：'+draft.rpid,unknown:'提交结果待核对，不会自动重试',failed:'提交失败：'+(draft.error||'')}[draft.status]))||draft.status)+'</p>'+(draft.status==='draft'&&!draft.accountMismatch&&state.settings?.commentPublishEnabled===true?'<button class="primary" data-bili-publish="'+esc(draft.id)+'">发布上面这条完整评论</button>':'')+'</article>';}).join('');
+    biliBindRows();
+  }
+  function biliSchedulePoll(){
+    clearTimeout(biliPollTimer);
+    if(!$('biliPanel')||!biliQrState||!['waiting','scanned','verifying'].includes(biliQrState.status))return;
+    biliPollTimer=setTimeout(function(){
+      if(!$('biliPanel'))return;
+      if(biliPanelBusy)biliSchedulePoll();else void biliRequest('login-status');
+    },2500);
+  }
+  function biliPaintQr(value){
+    if(!$('biliQr'))return;
+    biliQrState=value ? Object.assign({},biliQrState||{},value) : null;
+    if(biliPanelState)biliPanelState.login=biliQrState;
+    if(!biliQrState){$('biliQr').innerHTML='';clearTimeout(biliPollTimer);return;}
+    var expired=biliQrState.status==='expired'||biliQrState.status!=='verifying'&&Number(biliQrState.expiresAt||0)<=Date.now();
+    if(expired||biliQrState.status==='failed'){
+      $('biliQr').innerHTML='';$('biliStatus').textContent=expired?'二维码已失效，请点击扫码登录重新申请。':'扫码登录未完成，请点击扫码登录重新申请。';
+      biliQrState.status=expired?'expired':'failed';clearTimeout(biliPollTimer);return;
+    }
+    if(biliQrState.qrImage&&/^data:image\/gif;base64,[A-Za-z0-9+/=]+$/.test(biliQrState.qrImage))$('biliQr').innerHTML='<p>用手机 B站扫码并确认登录，二维码约 3 分钟有效。</p><img style="width:260px;max-width:100%;image-rendering:pixelated;background:white;padding:8px" alt="B站登录二维码" src="'+esc(biliQrState.qrImage)+'">';
+    $('biliStatus').textContent=({waiting:'等待手机 B站扫码。',scanned:'已扫码，请在手机 B站确认登录。',verifying:'手机已确认，正在校验登录状态…'})[biliQrState.status]||'等待扫码。';
+    biliSchedulePoll();
+  }
+  function biliFramePreview(frames){
+    var valid=(frames||[]).slice(0,8).filter(function(f){return f.part&&['image/jpeg','image/png'].includes(f.part.mediaType)&&typeof f.part.data==='string'&&f.part.data.length<4*1024*1024&&/^[A-Za-z0-9+/=]+$/.test(f.part.data);});
+    if(!valid.length)return '';
+    return '<details open><summary>当前连续时间窗画面 '+valid.length+' 张</summary><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">'+valid.map(function(f){return '<figure style="margin:0"><img style="width:100%;border-radius:8px" loading="lazy" alt="视频抽样 '+esc(f.at)+' 秒" src="data:'+f.part.mediaType+';base64,'+f.part.data+'"><figcaption>'+esc(f.at)+' 秒</figcaption></figure>';}).join('')+'</div><p class="muted">画面按播放进度持续读取，每次展示最新窗口；后续继续读取，未观察的时间段不算已经看过。理解画面需要聊天API支持视觉。</p></details>';
+  }
+  function biliPaintMaterial(result){
+    if(!$('biliMaterial'))return;biliLastMaterial=result;
+    var materials=result.items&&result.items.some(function(item){return item.video||item.error;})?result.items:[result];
+    $('biliMaterial').innerHTML=materials.map(function(item){return '<article class="card"><h3>'+esc(item.video?.title||item.title||item.bvid||'读取结果')+'</h3><p class="muted">'+esc(item.coverage||item.error||'')+'</p>'+(item.errors?.length?'<p class="muted">部分资料未取得：'+esc(item.errors.join('；'))+'</p>':'')+biliFramePreview(item.frames||(result.frames||[]).filter(function(f){return f.bvid===item.bvid;}))+(item.segments?.length?'<details open><summary>实际字幕'+(item.partial?'（已截短）':'')+'</summary><p style="white-space:pre-wrap;max-height:260px;overflow:auto">'+esc(item.segments.map(function(s){return '['+Math.floor(s.start)+'秒] '+s.text;}).join('\n'))+'</p></details>':'')+(item.comments?.length?'<details><summary>实际评论 '+item.comments.length+' 条</summary>'+item.comments.map(function(c){return '<article><p><b>'+esc(c.author)+'</b>：'+esc(c.text)+'</p><button data-bili-reply="'+esc(c.id)+'" data-bili-target="'+esc(c.author+'：'+c.text)+'">回复这条评论</button>'+(c.replies||[]).map(function(r){return '<blockquote>'+esc(r.author||'群友')+'：'+esc(r.text)+' <button data-bili-reply="'+esc(r.id)+'" data-bili-target="'+esc((r.author||'')+'：'+r.text)+'">回复</button></blockquote>';}).join('')+'</article>';}).join('')+'</details>':'')+'</article>';}).join('');bindBiliReplyTargets();
+  }
+  async function biliRequest(action,extra){
+    if(biliPanelBusy)return;biliPanelBusy=true;var scope=biliScope();
+    if($('biliStatus'))$('biliStatus').textContent='正在处理…';
+    document.querySelectorAll('#biliPanel button,#biliPublishEnabled').forEach(function(b){b.disabled=true;});
+    if(action==='login')biliPaintQr(null);
+    try{
+      var result=await api('POST','/im-bridge/features/bilibili',Object.assign({action:action,query:$('biliQuery')?.value||'',bvid:$('biliVideo')?.value||'',text:$('biliDraft')?.value||'',replyId:$('biliReplyId')?.value||'',...(action==='draft'?{images:await biliSelectedImages()}: {})},extra||{}));
+      if(!$('biliPanel')||scope!==biliScope())return;
+      if(result.account)biliPaintState(result);
+      else if(['waiting','scanned','verifying','expired','failed'].includes(result.status))biliPaintQr(result);
+      else if(result.status==='logged-in'||result.status==='logged-out'||action==='logout')biliPaintQr(null);
+      else $('biliStatus').textContent=result.error||result.coverage||'操作已返回。';
+      if(result.items&&!result.items.some(function(item){return item.video||item.error;})){
+        $('biliCandidates').innerHTML='<p class="muted">'+esc(result.source==='popular-fallback'?'个性推荐暂不可用，显示公开热门':result.source==='popular'?'公开热门':'实际搜索或推荐结果')+'</p>'+result.items.map(function(item){return '<p><b>'+esc(item.title)+'</b> · '+esc(item.author)+' '+(item.read?'（已读过资料）':'')+' <button class="small" data-bili-read="'+esc(item.bvid)+'">读取内容</button></p>';}).join('');biliBindRows();
+      }else if(result.video||result.items)biliPaintMaterial(result);
+      if(result.draft){var snapshot=await api('POST','/im-bridge/features/bilibili',{action:'status'});if($('biliPanel')&&scope===biliScope())biliPaintState(snapshot);}
+      if(action==='read'&&result.video?.bvid&&$('biliVideo'))$('biliVideo').value=result.video.bvid;
+      if(action==='browse'&&result.items?.[0]?.bvid&&$('biliVideo'))$('biliVideo').value=result.items[0].bvid;
+    }catch(error){if($('biliPanel')&&scope===biliScope()){if(/重新扫码|凭据|票据/.test(error.message))biliPaintQr({status:'failed',expiresAt:0});if($('biliStatus'))$('biliStatus').textContent='没有完成：'+error.message;if($('biliPublishEnabled'))$('biliPublishEnabled').checked=biliPanelState?.settings?.commentPublishEnabled===true;}}
+    finally{biliPanelBusy=false;document.querySelectorAll('#biliPanel button,#biliPublishEnabled').forEach(function(b){b.disabled=false;});biliSchedulePoll();if($('biliPanel')&&scope!==biliScope())void biliRequest('status');}
+  }
+  function biliBindRows(){
+    document.querySelectorAll('[data-bili-read]').forEach(function(button){button.onclick=function(){if($('biliVideo'))$('biliVideo').value=button.dataset.biliRead;void biliRequest('read');};});
+    bindBiliReplyTargets();
+    if($('biliReplyClear'))$('biliReplyClear').onclick=function(){$('biliReplyId').value='';$('biliReplyTarget').textContent='';};
+    document.querySelectorAll('[data-bili-preview]').forEach(function(button){button.onclick=async function(){try{var r=await api('POST','/im-bridge/features/bilibili',{action:'preview-image',draftId:button.dataset.biliPreview,imageId:button.dataset.image});var image=document.createElement('img');image.src=r.image;image.alt='本草稿的实际配图';image.style.maxWidth='100%';button.parentNode.appendChild(image);}catch(e){toast(e.message);}};});
+    document.querySelectorAll('[data-bili-publish]').forEach(function(button){button.onclick=function(){void biliRequest('publish',{draftId:button.dataset.biliPublish,confirm:true});};});
+  }
+  function bindBiliPanel(){
+    if(!$('biliPanel')){clearTimeout(biliPollTimer);return;}
+    if(biliPanelScope!==biliScope()){biliPanelScope=biliScope();biliPanelState=null;biliLastMaterial=null;biliQrState=null;clearTimeout(biliPollTimer);}
+    if($('biliPublishEnabled'))$('biliPublishEnabled').onchange=function(){void biliRequest('set-publish-enabled',{enabled:this.checked});};
+    document.querySelectorAll('[data-bili-action]').forEach(function(button){button.onclick=function(){void biliRequest(button.dataset.biliAction,button.dataset.biliAction==='login'?{force:true}:{});};});
+    if(biliPanelState)biliPaintState(biliPanelState);if(biliQrState)biliPaintQr(biliQrState);if(biliLastMaterial)biliPaintMaterial(biliLastMaterial);
+    if(!biliPanelBusy)void biliRequest('status');
+  }
+
+  var localConfigDraft = null;
+  var localDraftEditing = false;
+  var localImportState = null;
+  var localModels = [];
+
+  function localChatOptions(selected) {
+    var entries = [{id:'chat-4b',name:'预设 4B'},{id:'chat-35b',name:'预设 35B-A3B'},{id:'chat-27b',name:'预设 27B'}]
+      .concat((localWorkflowDraft || []).filter(function(x){return x.kind==='chat';}));
+    if(selected && !entries.some(function(x){return x.id===selected;})) entries.push({id:selected,name:selected});
+    return entries.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===selected?' selected':'')+'>'+esc(x.name||x.id)+'</option>';}).join('');
+  }
+  function localCandidateSelect(key, mapping, candidates, attribute) {
+    var value = mapping && mapping.node ? JSON.stringify({node:String(mapping.node),field:mapping.field}) : '';
+    var choices = (candidates || []).slice();
+    if(value && !choices.some(function(x){return String(x.node)===String(mapping.node)&&x.field===mapping.field;})) choices.push({node:mapping.node,field:mapping.field,label:'当前选择'});
+    return '<select '+attribute+'><option value="">'+(key==='prompt'?'请选择提示词输入':'保持工作流原设置')+'</option>'+choices.map(function(x){
+      var candidate=JSON.stringify({node:String(x.node),field:x.field});
+      return '<option value="'+esc(candidate)+'"'+(candidate===value?' selected':'')+'>'+esc(x.label||x.field)+(x.reason?' · '+esc(x.reason):'')+'</option>';
+    }).join('')+'</select>';
+  }
+  function localImportMarkup() {
+    var s=localImportState;
+    var out='<div id="localWorkflowDrop" class="banner" style="margin:14px 0"><b>导入工作流，自动识别节点</b><p>选择或拖入 ComfyUI JSON 文件，普通工作流和 API 格式都可以。普通工作流需要连接 ComfyUI 读取节点定义。</p><input id="localWorkflowFile" type="file" accept=".json,application/json"></div>';
+    if(!s)return out;
+    out+='<div class="card" id="localImportPreview">';
+    if(s.busy)return out+'<p role="status">正在读取工作流并识别节点…</p></div>';
+    if(s.error)return out+'<p role="alert">'+esc(s.error)+'</p><button id="localImportCancel">关闭</button></div>';
+    var a=s.analysis;
+    out+='<h3>确认导入</h3><div class="form-two"><label class="field">名称<input id="localImportName" value="'+esc(s.name)+'"></label><label class="field">类型<select id="localImportKind">'+['image','video','chat'].filter(function(kind){return a.outputs.some(function(x){return x.kind===kind;});}).map(function(kind){return '<option value="'+kind+'"'+(s.kind===kind?' selected':'')+'>'+({image:'图片',video:'视频',chat:'聊天模型'})[kind]+'</option>';}).join('')+'</select></label></div>';
+    out+='<label class="field">用途（选填，帮助模型选择）<input id="localImportDescription" value="'+esc(s.description||'')+'" placeholder="例如：水彩插画、角色自拍、图生视频"></label>';
+    (a.errors||[]).forEach(function(x){out+='<p role="alert">'+esc(x)+'</p>';});
+    (a.warnings||[]).forEach(function(x){out+='<p class="muted">'+esc(x)+'</p>';});
+    var pairs=[['prompt',s.kind==='chat'?'用户输入':'提示词'],['negativePrompt','反向提示词'],['seed','随机种子'],['image','输入图片']];
+    if(s.kind==='chat')pairs=pairs.concat([['images','多模态图片列表'],['system','人设 / 系统提示词'],['history','对话历史'],['requestId','请求编号'],['temperature','生成温度'],['maxTokens','回复长度']]);
+    pairs.forEach(function(pair){var key=pair[0];if(key!=='prompt'&&!(a.candidates[key]||[]).length)return;
+      out+='<label class="field">'+pair[1]+localCandidateSelect(key,s.inputs[key],a.candidates[key],'data-import-input="'+key+'"')+'</label>';
+    });
+    var selected=s.output?JSON.stringify(s.output):'';
+    out+='<label class="field">返回哪个结果<select id="localImportOutput"><option value="">请选择输出结果</option>'+a.outputs.filter(function(x){return x.kind===s.kind;}).map(function(x){var v=JSON.stringify(x);return '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(x.label)+'</option>';}).join('')+'</select></label>';
+    out+='<div class="btnrow"><button class="primary" id="localImportConfirm"'+((a.errors||[]).length||!s.inputs.prompt?.node||!s.output?' disabled':'')+'>导入并保存</button><button id="localImportCancel">取消</button></div></div>';
+    return out;
+  }
+  function captureLocalImport() {
+    var s=localImportState;if(!s||!s.analysis)return;
+    if($('localImportName'))s.name=$('localImportName').value.trim();
+    if($('localImportDescription'))s.description=$('localImportDescription').value.trim();
+    document.querySelectorAll('[data-import-input]').forEach(function(el){s.inputs[el.dataset.importInput]=el.value?JSON.parse(el.value):{node:'',field:''};});
+    if($('localImportOutput'))s.output=$('localImportOutput').value?JSON.parse($('localImportOutput').value):null;
+  }
+  function analyzeLocalWorkflow(payload) {
+    captureLocalForm();localDraftEditing=true;
+    localImportState={busy:true};renderPane();
+    localPost(Object.assign({action:'inspect-workflow'},payload)).then(function(result){
+      var a=result.analysis,outputs=a.outputs.filter(function(x){return x.kind===a.kind;});
+      localImportState={token:result.token,analysis:a,name:a.name,kind:a.kind,inputs:a.inputs,output:outputs.length===1?outputs[0]:null,description:''};
+      renderPane();
+    }).catch(function(error){localImportState={error:error.message};renderPane();});
+  }
+  function readLocalWorkflow(file) {
+    if(!file)return;if(file.size>20*1024*1024){toast('工作流超过 20MB，请精简后再导入');return;}
+    file.text().then(function(raw){analyzeLocalWorkflow({workflow:raw,filename:file.name});}).catch(function(error){toast('读取文件失败：'+error.message);});
+  }
+
+  function localLibrary() {
+    if (localDraftEditing) return localWorkflowDraft;
+    return (localGateway && localGateway.config && Array.isArray(localGateway.config.workflowLibrary))
+      ? localGateway.config.workflowLibrary
+      : (localGateway && localGateway.capabilities && Array.isArray(localGateway.capabilities.workflowLibrary))
+        ? localGateway.capabilities.workflowLibrary
+        : localWorkflowDraft;
+  }
+
+  function localSetValue(id, value) {
+    var el = $(id);
+    if (!el || document.activeElement === el) return;
+    if (el.type === 'checkbox') el.checked = value === true;
+    else el.value = value == null ? '' : String(value);
+  }
+
+  function localRender(v) {
+    localGateway = v;
+    var badge = $('localBadge'), status = $('localStatus'), flows = $('localWorkflows');
+    if (!badge || !status) return;
+    var c = v.config || {};
+    var workflowsChanged = false;
+    if (!localDraftEditing && v && v.config) {
+      if (Array.isArray(c.workflowLibrary)) {
+        workflowsChanged = JSON.stringify(localWorkflowDraft) !== JSON.stringify(c.workflowLibrary);
+        localWorkflowDraft = JSON.parse(JSON.stringify(c.workflowLibrary));
+      }
+      localDefaultsDraft = {
+        image: String(c.defaultWorkflows && c.defaultWorkflows.image || ''),
+        video: String(c.defaultWorkflows && c.defaultWorkflows.video || ''),
+      };
+      localSetValue('localBackend', c.backend || 'comfyui');
+      localSetValue('localModelBaseUrl', c.modelBaseUrl || 'http://127.0.0.1:8000/v1');
+      localSetValue('localModelId', c.modelId || (c.backend === 'openai' ? 'local-model' : c.chatWorkflow || ''));
+      localSetValue('localChatWorkflow', c.chatWorkflow || 'chat-4b');
+      localSetValue('localTemperature', c.temperature == null ? 0.7 : c.temperature);
+      localSetValue('localMaxTokens', c.maxTokens || 512);
+      localSetValue('localHistoryChars', c.historyChars || 12000);
+      localSetValue('localVoiceEnabled', c.voiceEnabled !== false);
+      localSetValue('localVoicePreset', c.voicePreset || '');
+      localSetValue('localDialoguePriority',c.dialoguePriority||'quality');
+      localSetValue('localFastDialogue',c.fastDialogue!==false);localSetValue('localStreamDialogue',c.streamDialogue!==false);
+      localSetValue('localVisionMode', c.visionMode || 'auto');
+      localSetValue('localMemoryProfile', c.memoryProfile || '8gb');
+      localSetValue('localUrl', c.comfyUrl || c.baseUrl || 'http://127.0.0.1:8188');
+      localSetValue('localIdle', c.idleUnloadMinutes || 10);
+      localSetValue('localWarm', c.keepWarm !== false);
+    }
+    if (!localDraftEditing && v && v.localChat) {
+      localSetValue('localGatewayUrl', v.localChat.baseUrl || 'http://127.0.0.1:8777');
+
+    }
+    var s = v.status || {};
+    if (v.gateway && v.gateway.reachable && s.reachable) { badge.textContent = '网关与 ComfyUI 已连接'; badge.className = 'tag accent-tag'; }
+    else if (v.gateway && v.gateway.reachable) { badge.textContent = '网关已连接'; badge.className = 'tag'; }
+    else { badge.textContent = '连不上'; badge.className = 'tag'; }
+    var lines = [];
+    lines.push('ComfyUI：' + (c.comfyUrl || s.baseUrl || ''));
+    lines.push('聊天来源：' + (c.backend || 'comfyui') + ' · ' + (c.backend === 'openai' ? (c.modelId || '') : (c.chatWorkflow || '')));
+    lines.push('看图：' + ({auto:'自动选择',native:'聊天模型直接看图',caption:'独立视觉模型观察',off:'已关闭'}[c.visionMode || 'auto']) + ' · 显存：' + (c.memoryProfile === 'workflow' ? '按工作流原参数' : '8GB 省显存方案'));
+    var streaming=v.capabilities&&v.capabilities.streaming;if(streaming)lines.push('逐句输出：'+(!streaming.enabled?'已关闭':streaming.backend==='openai'?'使用模型服务流式能力':streaming.available?'ComfyUI 适配已就绪':'需重启 ComfyUI 加载流式适配，当前仍会完整返回文字'));
+    var gpuInfo=v.capabilities && v.capabilities.memory && v.capabilities.memory.gpu || [];
+    gpuInfo.forEach(function(gpu){lines.push('显卡：'+gpu.name+' · 总显存 '+gpu.totalMb+' MB · 可用 '+gpu.freeMb+' MB');});
+    lines.push('ComfyUI 版本：' + (s.version || '未知') + (s.reachable ? '' : '（' + (s.error || '无法连接') + '）'));
+    if (v.queue) lines.push('队列：运行 ' + v.queue.running + ' · 等待 ' + v.queue.pending);
+    var detection=v.capabilities&&v.capabilities.detection;
+    lines.push('使用模式：'+(v.localChat&&v.localChat.enabled?(v.localChat.apiComplement?'本地优先，已开启 API 补全':'本地独立运行，不自动调用 API'):'API；本地页试聊仍仅测试本机'));
+    if(detection){lines.push('能力检测：'+({pending:'待检测',ready:'已检测',unavailable:'服务未就绪'}[detection.status]||detection.status)+(detection.busy?' · 本机有任务，稍后再检测':''));var names={text:'文字',json:'结构化分析',tools:'工具协议',vision:'看图',image:'生图工作流',video:'视频工作流',speech:'语音服务',native:'原生终端任务',special:'特殊流程'};Object.keys(detection.features||{}).forEach(function(key){var item=detection.features[key];lines.push((names[key]||key)+'：'+(item.supported===true?'可用':item.supported===false?'未接入 / 未通过':'待检测')+' · '+item.reason);});lines.push('容量：上下文 '+detection.contextWindow+' token · 输出上限 '+detection.maxOutputTokens+' token');}
+    status.textContent = lines.join('\n');
+    if (flows) flows.textContent = '已登记媒体工作流：' + ((localLibrary() || []).map(function (item) { return item.name + '（' + item.kind + '）'; }).join('、') || '无');
+    var model = $('localModelBadge');
+    if (model) {
+      var label = c.backend === 'openai' ? ('OpenAI 兼容 · ' + (c.modelId || '未命名')) : (({ 'chat-4b': '4B', 'chat-35b': '35B-A3B', 'chat-27b': '27B' })[c.chatWorkflow] || c.chatWorkflow || '未配置');
+      model.textContent = label + ' · 空闲 ' + Number(c.idleUnloadMinutes || 30) + ' 分释放';
+    }
+    var vb = $('localVoiceBadge'), vi = $('localVoiceInfo');
+    if (vb && v.localVoice) {
+      vb.textContent = v.localVoice.running ? '正在运行' : (v.localVoice.exists ? '未启动' : '路径不存在');
+      vb.className = 'tag' + (v.localVoice.running ? ' accent-tag' : '');
+      vi.textContent = '目录：' + v.localVoice.dir + '\n端口：' + v.localVoice.port + (v.localVoice.exists ? '\n启动脚本：Start-VoiceLab.bat' : '\n没有在这个目录找到 VoiceLab');
+    }
+    if (workflowsChanged) renderPane();
+  }
+  function localRefresh() {
+    return fetch('/im-bridge/local', { cache: 'no-store' })
+      .then(localJson)
+      .then(localRender)
+      .catch(function (e) { var s = $('localStatus'); if (s) s.textContent = '读取失败：' + e.message; })
+      .then(function () { return localGateway; });
+  }
+
+  function localMapValue(item, key, part) {
+    return esc((((item || {}).inputs || {})[key] || {})[part] || '');
+  }
+  function localWorkflowMarkup() {
+    var defaults = localDefaultsDraft || {};
+    var draft = localWorkflowDraft || [];
+    var out = '<section class="card"><div class="section-heading"><h2>命名工作流库</h2><span class="tag">可增删</span></div>' +
+      '<p class="muted">导入后自动识别输入和输出。给它起个名字，就能在聊天里按名字或用途选择；聊天模型工作流也可以放在这里。</p>' + localImportMarkup() +
+      '<div class="form-two"><label class="field">默认图片工作流<select id="localDefaultImage"><option value="">无</option>' + draft.filter(function (x) { return x.kind === 'image'; }).map(function (x) { return '<option value="' + esc(x.id) + '"' + (defaults.image === x.id ? ' selected' : '') + '>' + esc(x.name || x.id) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="field">默认视频工作流<select id="localDefaultVideo"><option value="">无</option>' + draft.filter(function (x) { return x.kind === 'video'; }).map(function (x) { return '<option value="' + esc(x.id) + '"' + (defaults.video === x.id ? ' selected' : '') + '>' + esc(x.name || x.id) + '</option>'; }).join('') + '</select></label></div><div id="localWorkflowRows">';
+    if (!draft.length) out += '<p class="muted">还没有工作流。点击“新增工作流”后填写。</p>';
+    draft.forEach(function (item, index) {
+      out += '<div class="card" data-local-workflow="' + index + '" style="margin:12px 0;background:var(--bg)"><label class="field">名称<input data-wf="name" value="' + esc(item.name || '') + '" maxlength="100"></label>' +
+        '<p class="muted">'+({image:'图片工作流',video:'视频工作流',chat:'聊天模型工作流'})[item.kind]+' · '+(item.autoDetection?'已自动识别节点':'可点“重新识别”自动填写')+'</p>'+
+        '<div class="btnrow"><button data-local-workflow-inspect="'+index+'">重新识别</button></div>'+
+        '<details><summary>高级：节点映射、文件和等待时间</summary><label class="field">内部 ID<input data-wf="id" value="'+esc(item.id||'')+'"></label>'+
+        '<div class="form-two"><label class="field">类型<select data-wf="kind"><option value="image"' + (item.kind === 'image' ? ' selected' : '') + '>图片</option><option value="video"' + (item.kind === 'video' ? ' selected' : '') + '>视频</option><option value="chat"'+(item.kind==='chat'?' selected':'')+'>聊天模型</option></select></label><label class="field">已导入的文件<input data-wf="file" value="' + esc(item.file || '') + '" placeholder="assets/comfyui/...json"></label></div>' +
+        '<label class="field">用途 / 自动选择说明<textarea data-wf="description" maxlength="800" rows="2" placeholder="例如：日常角色自拍、柔和插画；不适合写实风景">' + esc(item.description || '') + '</textarea></label>' +
+        '<p class="muted">填写 API JSON 中需要替换的节点编号和字段名。提示词必填；反向提示词、随机种子和输入图片可以留空，表示这个工作流不使用对应输入。</p>';
+      [['prompt','提示词'],['negativePrompt','反向提示词'],['seed','随机种子'],['image','输入图片']].forEach(function (pair) {
+        var key = pair[0];
+        out += '<div class="form-two"><label class="field">' + pair[1] + '节点<input data-map="' + key + '.node" value="' + localMapValue(item, key, 'node') + '" placeholder="例如 6"></label><label class="field">' + pair[1] + '字段<input data-map="' + key + '.field" value="' + localMapValue(item, key, 'field') + '" placeholder="例如 text"></label></div>';
+      });
+      out += '<label class="field">等待上限（毫秒，5000–3600000）<input data-wf="timeoutMs" type="number" min="5000" max="3600000" step="1000" value="' + Number(item.timeoutMs || 600000) + '"></label></details>';
+      out += '<div class="btnrow"><button class="danger" data-local-workflow-delete="' + index + '">删除这条工作流</button></div></div>';
+    });
+    out += '</div><div class="btnrow"><button class="primary" id="localWorkflowSave">保存修改与默认项</button></div><details><summary>高级：手动添加</summary><button id="localWorkflowAdd">手动填写工作流</button></details><div class="muted" id="localWorkflowHint" role="status"></div></section>';
+    return out;
+  }
+
+  function captureLocalWorkflows() {
+    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-local-workflow]'));
+    return rows.map(function (row, index) {
+      var value = function (name) { var el = row.querySelector('[data-wf="' + name + '"]'); return el ? el.value.trim() : ''; };
+      var mapped = function (key) {
+        var node = row.querySelector('[data-map="' + key + '.node"]');
+        var field = row.querySelector('[data-map="' + key + '.field"]');
+        return { node: node ? node.value.trim() : '', field: field ? field.value.trim() : '' };
+      };
+      var previous = localWorkflowDraft[index] || {};
+      return {
+        id: value('id'), name: value('name'), kind: value('kind'), description: value('description'), file: value('file'),
+        inputs: Object.assign({},previous.inputs||{},{ prompt: mapped('prompt'), negativePrompt: mapped('negativePrompt'), seed: mapped('seed'), image: mapped('image') }),
+        autoDetection: previous.autoDetection,
+        output: previous.output || {kind: value('kind')},
+        timeoutMs: Number(value('timeoutMs') || previous.timeoutMs || 600000),
+      };
+    });
+  }
+
+  function captureLocalForm() {
+    if (!$('localBackend')) return localConfigDraft;
+    var library = captureLocalWorkflows();
+    localWorkflowDraft = library;
+    localDefaultsDraft = {
+      image: $('localDefaultImage') ? $('localDefaultImage').value : (localDefaultsDraft.image || ''),
+      video: $('localDefaultVideo') ? $('localDefaultVideo').value : (localDefaultsDraft.video || ''),
+    };
+    localConfigDraft = {
+      backend: $('localBackend').value,
+      modelBaseUrl: $('localModelBaseUrl').value.trim(),
+      modelId: $('localModelId').value.trim(),
+      comfyUrl: $('localUrl').value.trim(),
+      chatWorkflow: $('localChatWorkflow').value,
+      temperature: Number($('localTemperature').value),
+      maxTokens: Number($('localMaxTokens').value),
+      historyChars: Number($('localHistoryChars').value),
+      idleUnloadMinutes: Number($('localIdle').value),
+      voiceEnabled: $('localVoiceEnabled').checked,
+      voicePreset: $('localVoicePreset').value.trim(),
+      dialoguePriority:$('localDialoguePriority').value,fastDialogue:$('localFastDialogue').checked,streamDialogue:$('localStreamDialogue').checked,
+      visionMode: $('localVisionMode').value,
+      memoryProfile: $('localMemoryProfile').value,
+      keepWarm: $('localWarm').checked,
+      workflowLibrary: library,
+      defaultWorkflows: Object.assign({}, localDefaultsDraft),
+      baseUrl: $('localGatewayUrl').value.trim(),
+
+    };
+    return localConfigDraft;
+  }
+
+  function refreshLocalDefaultOptions() {
+    var draft = captureLocalWorkflows();
+    localWorkflowDraft = draft;
+    [['localDefaultImage', 'image'], ['localDefaultVideo', 'video']].forEach(function (pair) {
+      var select = $(pair[0]);
+      if (!select) return;
+      var selected = localDefaultsDraft[pair[1]] || '';
+      select.innerHTML = '<option value="">无</option>' + draft.filter(function (item) { return item.kind === pair[1] && item.id; }).map(function (item) {
+        return '<option value="' + esc(item.id) + '">' + esc(item.name || item.id) + '</option>';
+      }).join('');
+      if (selected && Array.prototype.some.call(select.options, function (option) { return option.value === selected; })) select.value = selected;
+      else { select.value = ''; localDefaultsDraft[pair[1]] = ''; }
+    });
+  }
+
+  var websiteMcpPreview=null,websiteMcpTools=[],websiteMcpAccount=null;
+  function viewWebsiteMcp(){
+    return '<div class="card"><h2>自动识别网站功能</h2><p class="muted">填写网站首页或公开 OpenAPI JSON 地址。识别不会消耗语言模型额度，也不会启动生图或语音服务。当前支持页面读取、GET 搜索表单和公开 GET 接口；登录、验证码、发布与删除需要专用适配。</p><label class="field">网站地址<input id="websiteMcpUrl" type="url" placeholder="https://example.com"></label><div class="btnrow"><button id="websiteMcpInspect" class="primary">识别网站</button><button id="websiteMcpRefresh">刷新已保存网站</button><button id="websiteMcpExport">导出 MCP 配置</button></div><p id="websiteMcpStatus" role="status" class="muted"></p><div id="websiteMcpPreview"></div></div><div class="card"><h2>已保存网站</h2><p class="muted">启用后，本地与 API 的号主工具会话可通过 bridge_website_mcp 自动发现并调用；仍遵循现有工具权限。重新识别并保存可更新网站结构。</p><div id="websiteMcpSites">正在读取…</div><label class="field">选择工具试用<select id="websiteMcpTool"></select></label><div id="websiteMcpFields"></div><button id="websiteMcpCall">执行所选工具</button><pre id="websiteMcpResult" style="white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto" aria-live="polite"></pre></div><div class="card"><h2>MCP 配置与外部调用记录</h2><p class="muted">复制配置到支持 MCP 的客户端；网站清单与启停开关共用。插件聊天中的调用也会进入“提示词与工具调用”。</p><pre id="websiteMcpConfig" style="white-space:pre-wrap;word-break:break-word"></pre><pre id="websiteMcpExternal" style="white-space:pre-wrap;max-height:300px;overflow:auto"></pre></div>';
+  }
+  function websiteMcpFields(schema,container){
+    var required=schema.required||[],properties=schema.properties||{};
+    container.innerHTML=Object.keys(properties).map(function(key){var p=properties[key],label=esc(key+(required.indexOf(key)>=0?'（必填）':'（可选）')),attr=' data-website-param="'+esc(key)+'" data-website-type="'+esc(p.type)+'"';var field;
+      if(p.enum)field='<select'+attr+'><option value="">请选择</option>'+p.enum.map(function(v){return '<option value="'+esc(String(v))+'">'+esc(String(v))+'</option>';}).join('')+'</select>';
+      else if(p.type==='boolean')field='<select'+attr+'><option value="">不填写</option><option value="true">是</option><option value="false">否</option></select>';
+      else field='<input'+attr+' type="'+(['number','integer'].indexOf(p.type)>=0?'number':'text')+'" maxlength="500" placeholder="'+esc(p.description||key)+'">';
+      return '<label class="field">'+label+field+'</label>';
+    }).join('')||'<p class="muted">此工具不需要参数。</p>';
+  }
+  function websiteMcpArguments(container){
+    var out=Object.create(null);container.querySelectorAll('[data-website-param]').forEach(function(el){if(el.value==='')return;var type=el.getAttribute('data-website-type');out[el.getAttribute('data-website-param')]=type==='boolean'?el.value==='true':['number','integer'].indexOf(type)>=0?Number(el.value):el.value;});return out;
+  }
+  function paintWebsiteMcpPreview(){
+    var container=$('websiteMcpPreview');if(!container)return;if(!websiteMcpPreview){container.innerHTML='';return;}
+    var site=websiteMcpPreview.site;
+    container.innerHTML='<h3>'+esc(site.title)+' · 识别到 '+site.tools.length+' 个工具</h3><p>'+esc(site.origin)+'</p><p class="muted">'+site.limitations.map(esc).join('<br>')+'</p><details><summary>查看识别依据与接口参数</summary><pre style="white-space:pre-wrap;word-break:break-word">'+esc(JSON.stringify(site.tools,null,2))+'</pre></details><label class="field">测试已识别功能<select id="websiteMcpPreviewTool">'+site.tools.map(function(t){return '<option value="'+esc(t.name)+'">'+esc(t.name+' · '+t.description)+'</option>';}).join('')+'</select></label><div id="websiteMcpPreviewFields"></div><div class="btnrow"><button id="websiteMcpPreviewTest">测试此功能</button><button id="websiteMcpSave" class="primary">保存并启用网站</button></div><pre id="websiteMcpPreviewResult" style="white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto"></pre>';
+    function selected(){return site.tools.find(function(t){return t.name===$('websiteMcpPreviewTool').value;});}
+    $('websiteMcpPreviewTool').onchange=function(){websiteMcpFields(selected().inputSchema,$('websiteMcpPreviewFields'));};$('websiteMcpPreviewTool').onchange();
+    $('websiteMcpPreviewTest').onclick=async function(){var button=this;button.disabled=true;$('websiteMcpPreviewResult').textContent='正在实际读取网站…';try{var r=await api('POST','/im-bridge/website-mcp',{action:'test',previewId:websiteMcpPreview.previewId,name:selected().name,arguments:websiteMcpArguments($('websiteMcpPreviewFields'))});if($('websiteMcpPreviewResult'))$('websiteMcpPreviewResult').textContent=JSON.stringify(r,null,2);}catch(e){if($('websiteMcpPreviewResult'))$('websiteMcpPreviewResult').textContent=e.message;}finally{button.disabled=false;}};
+    $('websiteMcpSave').onclick=async function(){this.disabled=true;try{await api('POST','/im-bridge/website-mcp',{action:'save',previewId:websiteMcpPreview.previewId});websiteMcpPreview=null;paintWebsiteMcpPreview();await refreshWebsiteMcp();toast('网站已启用，本地与 API 共用');}catch(e){toast(e.message);this.disabled=false;}};
+  }
+  async function refreshWebsiteMcp(){
+    try{var r=await api('GET','/im-bridge/website-mcp');if(!$('websiteMcpSites'))return;if(websiteMcpAccount!==null&&websiteMcpAccount!==r.accountId){websiteMcpPreview=null;paintWebsiteMcpPreview();}websiteMcpAccount=r.accountId;websiteMcpTools=r.tools||[];
+      $('websiteMcpSites').innerHTML=(r.sites||[]).map(function(s){return '<div class="card"><b>'+esc(s.title)+'</b><p>'+esc(s.url)+' · '+s.tools.length+' 个工具 · '+(s.enabled?'已启用':'已停用')+'</p><div class="btnrow"><button data-website-toggle="'+esc(s.id)+'" data-enabled="'+String(!s.enabled)+'">'+(s.enabled?'停用':'启用')+'</button><button data-website-remove="'+esc(s.id)+'">移除</button></div><details><summary>适配范围与限制</summary><p>'+s.limitations.map(esc).join('<br>')+'</p></details></div>';}).join('')||'<p class="muted">尚未添加网站。先在上方填写网址并识别。</p>';
+      $('websiteMcpTool').innerHTML=websiteMcpTools.map(function(t){return '<option value="'+esc(t.name)+'">'+esc(t.title||t.name)+'</option>';}).join('');
+      $('websiteMcpTool').onchange=function(){var tool=websiteMcpTools.find(function(t){return t.name===$('websiteMcpTool').value;});websiteMcpFields(tool?tool.inputSchema:{},$('websiteMcpFields'));$('websiteMcpCall').disabled=!tool;};$('websiteMcpTool').onchange();
+      $('websiteMcpExternal').textContent=JSON.stringify(r.externalRecords||[],null,2);
+      document.querySelectorAll('[data-website-toggle]').forEach(function(button){button.onclick=async function(){button.disabled=true;try{await api('POST','/im-bridge/website-mcp',{action:'toggle',id:button.getAttribute('data-website-toggle'),enabled:button.getAttribute('data-enabled')==='true'});await refreshWebsiteMcp();}catch(e){toast(e.message);}finally{button.disabled=false;}};});
+      document.querySelectorAll('[data-website-remove]').forEach(function(button){button.onclick=async function(){button.disabled=true;try{await api('POST','/im-bridge/website-mcp',{action:'remove',id:button.getAttribute('data-website-remove')});await refreshWebsiteMcp();}catch(e){toast(e.message);}finally{button.disabled=false;}};});
+    }catch(e){if($('websiteMcpStatus'))$('websiteMcpStatus').textContent='暂时无法读取网站工具：'+e.message+'。新安装后需要重载插件。';}
+  }
+  function bindWebsiteMcp(){
+    paintWebsiteMcpPreview();void refreshWebsiteMcp();
+    $('websiteMcpRefresh').onclick=refreshWebsiteMcp;
+    $('websiteMcpInspect').onclick=async function(){var button=this,url=$('websiteMcpUrl').value.trim();button.disabled=true;$('websiteMcpStatus').textContent='正在读取页面并识别真实功能…';try{var r=await api('POST','/im-bridge/website-mcp',{action:'inspect',url:url});websiteMcpPreview=r;if($('websiteMcpStatus')){$('websiteMcpStatus').textContent='识别完成。请检查功能范围，可先测试再保存。';paintWebsiteMcpPreview();}}catch(e){if($('websiteMcpStatus'))$('websiteMcpStatus').textContent='识别未完成：'+e.message;}finally{button.disabled=false;}};
+    $('websiteMcpCall').onclick=async function(){var button=this;button.disabled=true;$('websiteMcpResult').textContent='正在调用网站…';try{var result=await api('POST','/im-bridge/website-mcp',{action:'call',name:$('websiteMcpTool').value,arguments:websiteMcpArguments($('websiteMcpFields'))});if($('websiteMcpResult'))$('websiteMcpResult').textContent=JSON.stringify(result,null,2);}catch(e){if($('websiteMcpResult'))$('websiteMcpResult').textContent=e.message;}finally{button.disabled=false;}};
+    $('websiteMcpExport').onclick=async function(){try{var r=await api('POST','/im-bridge/website-mcp',{action:'export'});if($('websiteMcpConfig'))$('websiteMcpConfig').textContent=JSON.stringify(r.config,null,2);}catch(e){toast(e.message);}};
+  }
+
+  var connectionState=null,connectionDraft=null,connectionDetection=null;
+  function viewServiceConnections(){
+    var markup=serviceModeMarkup()+'<div class="card"><h2>添加 API 或本地连接</h2><p class="muted">先填地址和密钥，点击检测。检测只读取状态、协议线索和模型列表，不启动推理或生成，不消耗生成额度。一个连接可以分别填写聊天、图片和语音模型，模型名称不固定。聊天默认沿用 DeepSeek，也可以保存其他服务后点击“用于聊天”；图片、语音同样可独立选择其他 API。</p><div class="form-two"><label class="field">名称<input id="connectionName" placeholder="例如：我的 API、本机模型"></label><label class="field">服务地址<input id="connectionUrl" placeholder="https://example.com/v1 或 http://127.0.0.1:8188"></label></div><label class="field">API 密钥<input id="connectionKey" type="password" autocomplete="new-password" placeholder="本地通常无需填写；编辑时留空保留原密钥"></label><div class="btnrow"><button id="connectionDetect" class="primary">自动检测连接</button><button id="connectionNew">清空，新建连接</button></div><p id="connectionEvidence" class="muted" role="status"></p><label class="field">请求类型<select id="connectionType"><option value="auto">自动识别</option><option value="openai">通用 OpenAI 兼容协议（不限服务商）</option><option value="anthropic">Claude 原生 Messages：聊天</option><option value="responses">Responses：聊天</option><option value="comfyui">ComfyUI：需要导入工作流</option><option value="voicelab">VoiceLab：本地语音</option><option value="runninghub">RunningHub：沿用原工作流配置</option></select></label><datalist id="connectionModels"></datalist><div class="form-two"><label class="field">聊天模型<input id="connectionChat" list="connectionModels" placeholder="检测后可选，也可手动输入模型 ID"></label><label class="field">图片模型<input id="connectionImage" list="connectionModels" placeholder="按接口实际支持的图片模型填写"></label><label class="field">语音模型<input id="connectionSpeech" list="connectionModels" placeholder="按接口实际支持的语音模型填写"></label><label class="field">音色 ID<input id="connectionVoice" placeholder="由语音服务提供，不能仅凭模型列表确定"></label></div><label class="field">图片接口<select id="connectionImageMode"><option value="generations">文生图：POST /images/generations</option><option value="edits">参考图编辑：POST /images/edits</option></select></label><details><summary>自定义接口路径与语音格式（可选）</summary><p class="muted">留空使用所选协议的标准路径。可以填写同站点的完整接口地址或路径；更改路径不会改变请求和回执的数据格式。密钥只填在密钥栏。</p><label class="field">聊天接口<input id="connectionChatPath" placeholder="例如 /v1/chat/completions"></label><label class="field">图片接口<input id="connectionImagePath" placeholder="例如 /v1/images/edits"></label><label class="field">语音接口<input id="connectionSpeechPath" placeholder="例如 /v1/audio/speech"></label><label class="field">语音返回格式<select id="connectionAudioFormat"><option value="wav">WAV</option><option value="mp3">MP3</option></select></label></details><p class="muted">检测到模型列表不代表每个模型都能生图、说话或看图。无法识别时可手动选类型。保持人设图需要支持参考图的编辑接口；不会把人设图丢掉后悄悄改成文生图。ComfyUI 与 RunningHub 仍需要工作流，VoiceLab 使用本地页已配置的服务。</p><div class="btnrow"><button id="connectionSave" class="primary">保存连接</button><button data-go="local">本地服务与工作流</button><button data-go="imagegen">RunningHub 与原生图设置</button></div><div id="connectionProfiles"></div></div><div class="card"><h2>分别选择聊天、图片、语音的来源</h2><p class="muted">例如：现有 API 聊天 + 本地 ComfyUI 生图 + API 语音。也可以本地聊天 + API 生图 + 本地语音。开启后按这里指定的来源执行，失败不会偷偷切换；关闭后恢复原整体模式。更改搭配会取消旧会话中的未完成桥接任务，保留聊天记录。</p><label class="check-field"><input id="connectionRoutingEnabled" type="checkbox">启用按能力搭配</label><div class="form-two"><label class="field">聊天来源<select id="connectionRouteChat"></select></label><label class="field">图片来源<select id="connectionRouteImage"></select></label><label class="field">语音来源<select id="connectionRouteSpeech"></select></label></div><div class="btnrow"><button id="connectionRoutesSave" class="primary">应用搭配</button><button id="connectionRefresh">刷新连接</button></div><p id="connectionRouteStatus" class="muted" role="status"></p><p class="muted">“现有 API 聊天”沿用模型页选择；“原图片设置”沿用 RunningHub 等原来源；“原语音设置”沿用语音页引擎。本地选项使用本地页的 ComfyUI 工作流和语音服务。视频继续沿用已有工作流，不在这次检测中试运行。</p></div>';
+    if(mobileApiOnly())markup=markup.replace(/<option value="(?:comfyui|voicelab)">[^<]*<\/option>/g,'').replace(/<button data-go="local">[^<]*<\/button>/g,'').replaceAll('添加 API 或本地连接','添加 API 连接').replaceAll('例如：我的 API、本机模型','例如：我的聊天 API').replaceAll('https://example.com/v1 或 http://127.0.0.1:8188','https://example.com/v1').replaceAll('本地通常无需填写；编辑时留空保留原密钥','编辑时留空保留原密钥').replaceAll('ComfyUI 与 RunningHub 仍需要工作流，VoiceLab 使用本地页已配置的服务。','RunningHub 仍沿用工作流配置。').replaceAll('例如：现有 API 聊天 + 本地 ComfyUI 生图 + API 语音。也可以本地聊天 + API 生图 + 本地语音。','聊天、图片和语音可分别选择不同 API 提供商。').replaceAll('本地选项使用本地页的 ComfyUI 工作流和语音服务。','手机版仅支持 API 来源。');
+    return markup;
+  }
+  function serviceModeMarkup(){
+    if(mobileApiOnly())return '<div class="card"><h2>手机版 · API 模式</h2><p id="connectionModeStatus" role="status">正在读取当前来源…</p><div hidden><select id="connectionWholeMode" disabled><option value="api">API 模式</option></select><input id="connectionComplement" type="checkbox" disabled><button id="connectionModeSave" disabled>应用</button></div><p id="connectionModeNotice" class="muted">聊天、图片和语音可分别连接不同 API。手机版不启动本地模型或生成服务。</p><div class="btnrow"><button data-go="model">API 模型设置</button><button data-go="voice">语音参数</button><button data-go="invocations">提示词、结果与调用记录</button></div></div>';
+    return '<div class="card"><h2>运行方式与实际来源</h2><p id="connectionModeStatus" role="status">正在读取当前来源…</p><label class="field">整体模式<select id="connectionWholeMode" disabled><option value="api">API 模式</option><option value="local">本地模式</option></select></label><label class="check-field"><input type="checkbox" id="connectionComplement" disabled>本地能力不足时允许 API 补全</label><p class="muted">补全默认关闭。若要固定使用 API 聊天、本地图片等组合，请启用下方“按能力搭配”；搭配启用时由各项来源决定，不使用整体模式和自动补全。</p><button id="connectionModeSave" class="primary" disabled>应用整体模式</button><p id="connectionModeNotice" class="muted" role="status"></p><div class="btnrow"><button data-go="local">本地模型与工作流</button><button data-go="model">API 模型设置</button><button data-go="voice">语音参数</button><button data-go="invocations">提示词、结果与调用记录</button></div></div>';
+  }
+  function describeServiceSources(state,local,voice){
+    var routes=state.routes||{},mixed=routes.enabled===true;
+    function label(kind){var value=routes[kind];if(value==='local')return '本地';if(value&&value.indexOf('profile:')===0){var p=(state.profiles||[]).find(function(p){return 'profile:'+p.id===value;});return p?p.name:'连接已失效';}return kind==='chat'?'模型页所选 API':kind==='image'?'图片页配置':'语音页配置（'+(voice.engine||'none')+'）';}
+    if(mixed)return '按能力搭配 · 聊天：'+label('chat')+'；图片：'+label('image')+'；语音：'+label('speech')+'。视频沿用已有工作流。失败不会自动换来源。';
+    return local.enabled?'本地模式 · 聊天与图片、语音使用本地能力；API 补全'+(local.apiComplement?'已开启，仅在本轮能力不足时使用':'已关闭')+'。':'API 模式 · 聊天使用模型页选择，图片与语音使用各自页面配置。';
+  }
+  function connectionUseButtons(p){
+    var buttons='';
+    [['chat','聊天'],['image','图片'],['speech','语音']].forEach(function(pair){var kind=pair[0],supported=kind==='chat'?['openai','anthropic','responses'].indexOf(p.type)>=0&&p.chatModel:p.type==='openai'&&(kind==='image'?p.imageModel:p.speechModel&&p.voice);if(supported)buttons+='<button class="primary small" data-connection-use="'+esc(p.id)+'" data-kind="'+kind+'">用于'+pair[1]+'</button>';});
+    return buttons;
+  }
+  function captureConnection(){
+    if(!$('connectionUrl'))return connectionDraft||{};
+    connectionDraft=Object.assign({},connectionDraft||{},{name:$('connectionName').value.trim(),baseUrl:$('connectionUrl').value.trim(),apiKey:$('connectionKey').value.trim(),type:$('connectionType').value,chatModel:$('connectionChat').value.trim(),imageModel:$('connectionImage').value.trim(),speechModel:$('connectionSpeech').value.trim(),voice:$('connectionVoice').value.trim(),imageMode:$('connectionImageMode').value,paths:{chat:$('connectionChatPath').value.trim(),image:$('connectionImagePath').value.trim(),speech:$('connectionSpeechPath').value.trim()},audioFormat:$('connectionAudioFormat').value});return connectionDraft;
+  }
+  function paintConnectionDraft(){
+    if(!$('connectionUrl'))return;var p=connectionDraft||{};
+    [['connectionName','name'],['connectionUrl','baseUrl'],['connectionKey','apiKey'],['connectionChat','chatModel'],['connectionImage','imageModel'],['connectionSpeech','speechModel'],['connectionVoice','voice']].forEach(function(pair){$(pair[0]).value=p[pair[1]]||'';});$('connectionType').value=p.type||'auto';$('connectionImageMode').value=p.imageMode||'generations';[['connectionChatPath','chat'],['connectionImagePath','image'],['connectionSpeechPath','speech']].forEach(function(pair){$(pair[0]).value=p.paths?.[pair[1]]||'';});$('connectionAudioFormat').value=p.audioFormat||'wav';
+    $('connectionModels').innerHTML=(p.models||[]).map(function(m){return '<option value="'+esc(m)+'"></option>';}).join('');$('connectionEvidence').textContent=(p.evidence||[]).join('；')+(p.hasKey?'（已保存密钥，留空会保留）':'');
+  }
+  async function refreshConnections(){
+    try{var values=await Promise.all([api('GET','/im-bridge/service-connections'),api('GET','/im-bridge/settings')]),r=values[0],current=values[1];if(!$('connectionProfiles'))return;connectionState=r;data.localChat=current.localChat;data.settings=current.settings;var lc=current.localChat||{},mixed=r.routes?.enabled===true;$('connectionWholeMode').value=lc.enabled?'local':'api';$('connectionComplement').checked=lc.apiComplement===true;$('connectionWholeMode').disabled=mixed||mobileApiOnly();$('connectionComplement').disabled=mobileApiOnly()||mixed||!lc.enabled;$('connectionModeSave').disabled=mixed||mobileApiOnly();$('connectionModeStatus').textContent=describeServiceSources(r,lc,current.settings?.voice||{});$('connectionModeNotice').textContent=mixed?'当前按能力搭配；关闭搭配后才可修改整体模式。':'';
+      $('connectionProfiles').innerHTML='<h3>已保存连接</h3>'+(r.profiles||[]).map(function(p){return '<div class="card"><b>'+esc(p.name)+'</b><p>'+esc(p.type)+' · '+esc(p.baseUrl)+' · '+(p.hasKey?'已保存密钥':'未设置密钥')+'</p><div class="btnrow">'+connectionUseButtons(p)+'<button data-connection-edit="'+esc(p.id)+'">编辑</button><button data-connection-remove="'+esc(p.id)+'">移除</button></div></div>';}).join('');
+      var routes=r.routes||{};$('connectionRoutingEnabled').checked=routes.enabled===true;
+      [['chat','connectionRouteChat'],['image','connectionRouteImage'],['speech','connectionRouteSpeech']].forEach(function(pair){var kind=pair[0],select=$(pair[1]),initial=kind==='chat'?[['host','现有 API 聊天'],['local','本地聊天模型']]:kind==='image'?[['legacy','原图片设置（API / RunningHub 等）'],['local','本地 ComfyUI 工作流']]:[['legacy','原语音设置'],['local','本地语音服务']];
+        if(mobileApiOnly())initial=initial.filter(function(o){return o[0]!=='local';});var options=initial.concat((r.profiles||[]).filter(function(p){return kind==='chat'?['openai','anthropic','responses'].indexOf(p.type)>=0&&p.chatModel:p.type==='openai'&&(kind==='image'?p.imageModel:p.speechModel&&p.voice);}).map(function(p){return ['profile:'+p.id,p.name+' · '+p[kind==='chat'?'chatModel':kind==='image'?'imageModel':'speechModel']];}));select.innerHTML=options.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1])+'</option>';}).join('');select.value=routes[kind]||initial[0][0];
+      });$('connectionRouteStatus').textContent=r.adapterSupported===false?'当前宿主无法注册新聊天连接；原聊天模型仍可使用。':routes.enabled?'当前按上方三项分别执行。':'当前保持原有整体模式。';
+      document.querySelectorAll('[data-connection-use]').forEach(function(button){button.onclick=async function(){button.disabled=true;try{await api('POST','/im-bridge/service-connections',{action:'use',id:button.getAttribute('data-connection-use'),kind:button.getAttribute('data-kind')});await refreshConnections();toast('来源已切换；其他项目保持当前选择');}catch(e){toast('未切换：'+e.message);}finally{if(button.isConnected)button.disabled=false;}};});
+      document.querySelectorAll('[data-connection-edit]').forEach(function(button){button.onclick=function(){var p=r.profiles.find(function(x){return x.id===button.getAttribute('data-connection-edit');});connectionDraft=Object.assign({},p,{apiKey:''});paintConnectionDraft();};});
+      document.querySelectorAll('[data-connection-remove]').forEach(function(button){button.onclick=async function(){button.disabled=true;try{await api('POST','/im-bridge/service-connections',{action:'remove',id:button.getAttribute('data-connection-remove')});await refreshConnections();}catch(e){toast(e.message);}finally{button.disabled=false;}};});
+      applyPreviewControls();
+    }catch(e){if($('connectionModeNotice'))$('connectionModeNotice').textContent='当前来源未读取，请刷新后再操作。';if($('connectionRouteStatus'))$('connectionRouteStatus').textContent='连接配置暂未读取：'+e.message+'。安装更新后需要重载插件。';}
+  }
+  function bindServiceConnections(){
+    paintConnectionDraft();void refreshConnections();
+    $('connectionWholeMode').onchange=function(){var local=this.value==='local';$('connectionComplement').disabled=!local;if(!local)$('connectionComplement').checked=false;};
+    $('connectionModeSave').onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/settings',{localChat:{enabled:$('connectionWholeMode').value==='local',apiComplement:$('connectionWholeMode').value==='local'&&$('connectionComplement').checked}});await refreshConnections();toast('整体模式已应用');}catch(e){$('connectionModeNotice').textContent='未应用：'+e.message;}finally{if(button.isConnected)button.disabled=connectionState?.routes?.enabled===true;}};
+
+    ['connectionName','connectionUrl','connectionKey','connectionChat','connectionImage','connectionSpeech','connectionVoice','connectionType','connectionImageMode','connectionChatPath','connectionImagePath','connectionSpeechPath','connectionAudioFormat'].forEach(function(id){$(id).oninput=captureConnection;});
+    $('connectionRefresh').onclick=refreshConnections;
+    $('connectionNew').onclick=function(){connectionDraft=null;connectionDetection=null;paintConnectionDraft();};
+    $('connectionDetect').onclick=async function(){var button=this,draft=captureConnection();button.disabled=true;$('connectionEvidence').textContent='正在读取服务状态与模型列表，不会试生成…';try{var r=await api('POST','/im-bridge/service-connections',Object.assign({},draft,{action:'detect'}));connectionDetection=r.detection;connectionDraft=Object.assign({},draft,r.detection);if(r.detection.type==='unknown')connectionDraft.type='auto';if(!connectionDraft.name)try{connectionDraft.name=new URL(draft.baseUrl).hostname;}catch{}if(!connectionDraft.chatModel&&r.detection.capabilities?.chat==='listed')connectionDraft.chatModel=(r.detection.models||[]).find(function(id){return !/embedding|rerank|whisper|tts|flux|image/i.test(id);})||'';paintConnectionDraft();}catch(e){if($('connectionEvidence'))$('connectionEvidence').textContent=e.message;}finally{button.disabled=false;}};
+    $('connectionSave').onclick=async function(){var button=this,draft=captureConnection();button.disabled=true;try{var r=await api('POST','/im-bridge/service-connections',Object.assign({},draft,{action:'save'}));connectionDraft=Object.assign({},r.profile,{apiKey:''});paintConnectionDraft();await refreshConnections();toast('连接已保存，按需在下方选择用途');}catch(e){toast(e.message);}finally{button.disabled=false;}};
+    $('connectionRoutesSave').onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/service-connections',{action:'routes',routes:{enabled:$('connectionRoutingEnabled').checked,chat:$('connectionRouteChat').value,image:$('connectionRouteImage').value,speech:$('connectionRouteSpeech').value}});await refreshConnections();toast('搭配已应用；后续请求按各自来源执行');}catch(e){if($('connectionRouteStatus'))$('connectionRouteStatus').textContent='未应用：'+e.message;}finally{button.disabled=false;}};
+  }
+
+  function viewLocal() {
+    var c = (data && data.comfyui) || {};
+    var lc = (data && data.localChat) || {};
+    if (!localDraftEditing) {
+      var gatewayConfig = localGateway && localGateway.config || {};
+      localWorkflowDraft = Array.isArray(gatewayConfig.workflowLibrary) ? gatewayConfig.workflowLibrary : Array.isArray(lc.workflowLibrary) ? lc.workflowLibrary : (Array.isArray(c.workflowLibrary) ? c.workflowLibrary : []);
+      localDefaultsDraft = gatewayConfig.defaultWorkflows || lc.defaultWorkflows || c.defaultWorkflows || {image:'',video:''};
+    }
+    var form = localDraftEditing && localConfigDraft ? localConfigDraft : Object.assign({}, lc, c, {baseUrl: lc.baseUrl || '', enabled: lc.enabled === true});
+    var backend = form.backend || 'comfyui';
+    var out = '';
+    out += '<section class="card"><h2>提示词与工具调用</h2><p class="muted">生图、生视频的实际提交提示词和工具参数统一记录，API 补全会显示实际来源与原因。</p><button data-go="invocations">打开共用调用记录</button></section>';
+    out += localRunMarkup();
+    out += '<section class="card"><h2>本地主动聊天</h2><label class="check-field"><input id="localInitiativeEnabled" type="checkbox"'+(lc.initiativeEnabled!==false?' checked':'')+'>允许空闲时主动私聊号主</label><p class="muted">不设每天次数或固定间隔。日程休息时不主动打扰；空闲时由模型判断有没有想说的话，没有就安静。收到 QQ 消息立即让路。当前只主动发文字，不自动生图或合成语音。</p><button id="localInitiativeSave">保存主动聊天设置</button><p class="muted" id="localInitiativeStatus">等待状态更新…</p></section>';
+    out += '<section class="card"><div class="section-heading"><h2>本地模型网关</h2><span class="tag" id="localBadge">检查中…</span></div>';
+    out += '<p class="muted">让本地语言模型理解你的要求，选择工作流生成语音、图片或视频。这里试聊只生成本地文件，不发 QQ。</p>';
+    out += '<p class="muted">运行模式与 API 补全统一在“连接与搭配”管理。保存本页只更新本地模型与工作流参数。</p><button data-go="services">管理运行来源</button>';
+    out += '<div class="form-two"><label class="field">回复由谁生成<select id="localBackend"><option value="comfyui"' + (backend === 'comfyui' ? ' selected' : '') + '>本机 ComfyUI 聊天工作流</option><option value="openai"' + (backend === 'openai' ? ' selected' : '') + '>本机 OpenAI 兼容服务</option></select></label><label class="field">OpenAI 兼容服务地址<input id="localModelBaseUrl" value="' + esc(form.modelBaseUrl || 'http://127.0.0.1:8000/v1') + '" placeholder="http://127.0.0.1:8000/v1"></label></div>';
+    out += '<div class="form-two"><label class="field">服务中的模型（可任选或手填）<input id="localModelId" list="localModelList" value="' + esc(form.modelId || '') + '" placeholder="填写服务实际提供的模型名"><datalist id="localModelList">'+localModels.map(function(x){return '<option value="'+esc(x.id)+'">';}).join('')+'</datalist></label><label class="field">ComfyUI 聊天工作流<select id="localChatWorkflow">'+localChatOptions(form.chatWorkflow || 'chat-35b')+'</select></label></div><div class="btnrow"><button id="localModelsRefresh">读取本机服务的模型列表</button></div><p class="muted" id="localModelsHint">可连接任意本机 OpenAI 兼容服务；ComfyUI 聊天工作流也可以在下方导入，预设只是快捷选项。</p>';
+    out += '<div class="form-two"><label class="field">回答随机度（0 稳定，数值越高越发散）<input id="localTemperature" type="number" min="0" max="3" step="0.1" value="' + Number(form.temperature == null ? 0.7 : form.temperature) + '"></label><label class="field">单次回复上限（token）<input id="localMaxTokens" type="number" min="32" max="32768" step="1" value="' + Number(form.maxTokens || 512) + '"></label></div>';
+    out += '<div class="form-two"><label class="field">最多携带多少历史文字<input id="localHistoryChars" type="number" min="512" max="100000" step="128" value="' + Number(form.historyChars || 12000) + '"></label><label class="check-field"><input id="localVoiceEnabled" type="checkbox"' + (form.voiceEnabled !== false ? ' checked' : '') + '>允许本轮使用本地语音工具</label></div>';
+    out += '<label class="check-field"><input id="localFastDialogue" type="checkbox"'+(form.fastDialogue!==false?' checked':'')+'>普通闲聊加速：按需减少工具说明，控制冗长回复</label><label class="check-field"><input id="localStreamDialogue" type="checkbox"'+(form.streamDialogue!==false?' checked':'')+'>逐句回传普通文字（ComfyUI 需加载流式适配）</label>';
+    out += '<label class="field">对话策略<select id="localDialoguePriority"><option value="quality"'+(form.dialoguePriority!=='speed'?' selected':'')+'>质量优先（默认，保留连贯对话）</option><option value="speed"'+(form.dialoguePriority==='speed'?' selected':'')+'>速度优先</option></select></label><p class="muted">质量优先为近期连续对话预留容量，不再把闲聊历史提前压到 1800 字符；连续聊天会先在本机做一次简短语义理解，原话与权限依据保持原样；允许完整自然段、结合语境理解谐音和错字。尽量把日常回复控制在约 20 秒，加载模型、复杂任务和媒体生成不保证时限。8GB 容量保护仍启用，必要时整理较早资料。</p>';
+    out += '<div class="form-two"><label class="field">看图方式<select id="localVisionMode">'+[['auto','自动（按模型和显存选择）'],['native','聊天模型直接看图'],['caption','独立视觉模型逐张观察'],['off','关闭看图']].map(function(x){return '<option value="'+x[0]+'"'+((form.visionMode||'auto')===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></label><label class="field">显存方案<select id="localMemoryProfile"><option value="8gb"'+(form.memoryProfile!=='workflow'?' selected':'')+'>8GB 省显存（默认）</option><option value="workflow"'+(form.memoryProfile==='workflow'?' selected':'')+'>按工作流原参数</option></select></label></div><p class="muted">8GB 方案串行运行看图、聊天和语音，限制已识别 Qwen 节点的上下文与图片尺寸；大模型由 CPU 分担，速度取决于内存和 CPU。日常速度优先可选 4B。自动看图优先让小模型直接看，多图或大模型采用独立视觉观察。自定义生图、视频工作流及外部模型服务仍需使用适合显存的参数。</p>';
+    out += '<div class="form-two"><label class="field">ComfyUI 地址<input id="localUrl" value="' + esc(form.comfyUrl || c.baseUrl || 'http://127.0.0.1:8188') + '" placeholder="http://127.0.0.1:8188"></label><label class="field">本地网关地址<input id="localGatewayUrl" value="' + esc(form.baseUrl || 'http://127.0.0.1:8777') + '" placeholder="http://127.0.0.1:8777"></label></div>';
+    out += '<label class="check-field"><input id="localWarm" type="checkbox"' + (form.keepWarm !== false ? ' checked' : '') + '>连续使用时保持模型热态（更快，占显存）</label>';
+    out += '<label class="field" style="max-width:240px">闲置多少分钟后释放显存<input id="localIdle" type="number" min="1" max="720" value="' + Number(form.idleUnloadMinutes || 10) + '"></label>';
+    out += '<div class="btnrow"><button class="primary" id="localSave">保存配置</button><button id="localPing">刷新状态</button><button id="localProbe">检测当前模型能力</button><button id="localRelease">立即释放显存</button></div>';
+    out += '<div id="localStatus" class="muted" style="margin-top:10px;white-space:pre-wrap">正在读取状态…</div>';
+    out += '<div id="localWorkflows" class="muted" style="margin-top:6px"></div></section>';
+
+    out += '<section class="card"><div class="section-heading"><h2>当前实际模型</h2><span class="tag" id="localModelBadge">读取中</span></div><p class="muted">标签取自网关真实配置，直接显示 ComfyUI 聊天工作流或 OpenAI modelId。</p></section>';
+    out += '<section class="card"><h2>B站功能</h2><p class="muted">本地与 API 模型共用，账号和浏览设置已移到独立 B站页。</p><button data-go="bilibili">打开 B站账号与浏览</button></section>';
+    out += localWorkflowMarkup();
+
+    out += '<section class="card"><div class="section-heading"><h2>试聊</h2><span class="muted">只生成本地结果，不发 QQ</span></div>';
+    out += '<label class="field">可选源图片<input id="localImage" type="file" accept="image/png,image/jpeg,image/webp"></label><p class="muted">图片只随本次试聊上传到本地网关，不允许填写任意本机路径。</p>';
+    out += '<label class="field">聊天<textarea id="localText" rows="2" placeholder="问它一句话；需要媒体可直接说明"></textarea></label>';
+    out += '<div class="btnrow"><button id="localChat"'+(localTrialBusy?' disabled':'')+'>开始试聊</button></div>';
+    out += '<pre id="localChatOut" class="muted" style="white-space:pre-wrap;margin:6px 0 0"></pre><pre id="localReceipts" class="muted" style="white-space:pre-wrap;margin:6px 0 0"></pre></section>';
+
+    out += '<section class="card"><div class="section-heading"><h2>本地语音 BreezeTTS2</h2><span class="tag" id="localVoiceBadge">检查中…</span></div>';
+    out += '<p class="muted">本地 VoiceLab（TTS + 转写），默认端口 7870。路径来自插件设置，改了位置在这里能看到是否存在。</p>';
+    out += '<label class="field">本地音色<input id="localVoicePreset" list="localVoicePresets" value="' + esc(form.voicePreset || '') + '" placeholder="留空：自动使用已有默认音色"><datalist id="localVoicePresets"></datalist></label><button id="localLoadVoices">读取 VoiceLab 音色</button><p id="localVoicePresetHint" class="muted">可选择音色名称或 ID；不会使用 API / Windows 的音色设置。修改后保存配置。</p>';
+    out += '<div id="localVoiceInfo" class="muted" style="white-space:pre-wrap">正在读取…</div></section>';
+    return out;
+  }
+
   function viewConnection() {
     var st = data.status;
     var l = login || {};
     if (l.backendRevision !== '20261027-device-login-v2') return '<div class="card"><div class="banner"><b>需要重新打开 DeepSeek Harness 才能加载登录修复</b><p>当前页面已经更新，但宿主仍在运行旧版插件后端。请完全退出 DeepSeek Harness，再重新打开；仅刷新页面或停用后启用插件无法清除旧模块缓存。</p><p>重开后这里会恢复启动和扫码按钮。</p></div></div>';
-    var out = "";
+    var out = '<div class="card"><h2>空间登录状态</h2><p>QQ 桥接：'+(st.connected?'已连接':'未连接')+' · 空间：'+esc(qzoneStateLabel(st.qzone))+'</p><p class="muted">'+esc(st.qzone?.reason||'QQ 登录后会自动检查空间')+'</p><button data-go="qzone">查看与检查空间登录</button></div>';
     out += '<div class="card"><h2>登录 QQ</h2><p class="muted">启动 NapCat 后，QQ 有有效的本地历史登录记录时会尝试复用；凭据失效或需要验证时，请使用手机 QQ 扫码确认。启动请求不代表登录成功。</p>';
     if (l.qqLoggedIn === true) {
       out += '<div class="row"><span>账号 ' + esc(st.selfId || l.qq) + ' 已登录</span><span class="tag accent-tag">' + (l.connected?'桥接已连接':l.requiresDeviceSwitch?'桥接待机':'等待桥接连接') + '</span></div>';
@@ -1314,7 +1911,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       '<button class="primary" id="groupAdd">添加</button></div>' +
       '<p class="muted">停用某个群会停止接话、主动消息及尚未发出的回复，保留群号、设置和历史；重新启用后继续使用。</p><label class="check-field"><input id="groupRequireAt" type="checkbox"'+(data.settings.groupRequireAt!==false?' checked':'')+'>没有日程群时段时，仅被 @ 才参与</label>' +
       '<div class="btnrow"><button class="primary" id="groupSave">保存群聊规则</button></div>' +
-      '<p class="muted">日程里的群时段会写明参与哪些群、什么情况离开；到点自动开启和结束，不需要固定停用窗口或冷却。被 @ 时会开启 2 分钟关注窗口：这 2 分钟内的群消息先用最小额度判断“和她有没有关系 / 她是否感兴趣”，不启用聊天上下文和记忆；判断为是才进入正常回复，否则不回。模型可以选择 [skip] 不发言。</p></div>';
+      '<p class="muted">日程里的群时段会写明参与哪些群、什么情况离开；到点自动开启和结束，不需要固定停用窗口或冷却。本地模式被 @ 后会开启 2 分钟关注窗口；生成回复、语音或图片时暂停倒计时，再次 @ 重新计满 2 分钟。窗口内的群消息先用最小额度判断“和她有没有关系 / 她是否感兴趣”，不启用聊天上下文和记忆；判断为是才进入正常回复，否则不回。模型可以选择 [skip] 不发言。</p></div>';
     return out;
   }
 
@@ -1556,7 +2153,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
         '<br><span class="muted">' + esc(st.lastError.action || '') + ' · ' + esc(new Date(st.lastError.at).toLocaleString()) +
         '。空间接口的 cookie 会过期，重新登录 NapCat 通常能恢复。</span></div></div>';
     }
-    out += '<div class="card"><div class="row"><span><b>自主模式</b><br><span class="muted">让她自己决定要不要做点什么，每 5 分钟检查一次</span></span>' +
+    out += '<div class="card"><div class="row"><span><b>自主模式</b><br><span class="muted">让她自己决定要不要做点什么；API 每分钟在空闲时考虑，本地沿用原有节奏</span></span>' +
       '<button class="' + (on ? 'primary' : '') + '" id="autoMaster">' + (on ? '已开启' : '已关闭') + '</button></div>' +
       '<div class="btnrow" style="margin-top:8px"><button id="autoTick">现在想一次</button>' +
       '<button class="danger" id="autoStop">紧急停止</button></div>' +
@@ -1574,7 +2171,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     out += '<div class="card"><h2>主动聊天间隔</h2><details'+(data.settings.life?.enabled===false||data.settings.life?.sleep===false?' open':'')+'><summary>备用时段（只在日程作息关闭时生效）</summary><div class="form-two">' +
       '<label class="field">醒着从<input id="autoWakeA" type="number" min="0" max="23" value="' + (c.wakeStart ?? 9) + '"></label>' +
       '<label class="field">到<input id="autoWakeB" type="number" min="1" max="24" value="' + (c.wakeEnd || 23) + '"></label>' +
-      '</div></details><label class="field" style="margin-top:10px">闲多久可主动找人（分钟）<input id="autoIdle" type="number" min="5" max="1440" value="'+Number(c.chatIdleMinutes??30)+'"></label><p class="muted">每日额度和分享间隔统一由「拟真模式 → 不限制主动消息额度」控制；日程作息开启时，备用时段不参与判断。达到空闲时间后，在下一次自主调度中考虑开口，也可以选择不说。</p><button class="primary" id="autoSave" style="margin-top:10px">保存</button></div>';
+      '</div></details><label class="field" style="margin-top:10px">闲多久可主动找人（分钟）<input id="autoIdle" type="number" min="5" max="1440" value="'+Number(c.chatIdleMinutes??30)+'"></label><p class="muted">开放工具权限不等于一直在线。没有每日额度或固定间隔限制，但遵守自己选择的日程休息，也可以旁听或不说话。</p><label class="check-field"><input id="autoExplore" type="checkbox"'+(c.explore!==false?' checked':'')+'>允许按兴趣浏览、学习和创作，再判断是否分享</label><label class="check-field"><input id="autoQzoneImages" type="checkbox"'+(c.qzoneImages!==false?' checked':'')+'>空间动态可配图（她自己选搜图、截图、生成或画作）</label><label class="check-field"><input id="autoQzoneReplies" type="checkbox"'+(c.qzoneReplies===true?' checked':'')+'>允许回复空间评论（仅回复实际读到的评论）</label><p class="muted">API 每分钟在空闲时检查，各类活动分别计时，不用聊天挤占空间动态。没有新内容可以不做；图片来源由她按内容选择，生成图沿用当前生图设置与人设风格。B站评论另有独立发布开关。</p><button class="primary" id="autoSave" style="margin-top:10px">保存</button></div>';
 
     out += proactiveCards();
     out+='<div class="card"><h2>能力是否可用</h2>'+(featureData.capabilityHealth||[]).map(x=>'<div class="row"><span><b>'+esc(x.label)+'</b><small class="muted" style="display:block">'+esc(x.reason)+'</small></span><span class="tag">'+esc(({ready:'可用',setup:'待配置',disabled:'已关闭'})[x.state]||x.state)+'</span></div>').join('')+'</div>';
@@ -1908,7 +2505,8 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     }
     return text;
   }
-  function viewImagegen() {
+  function viewImagegen(){return '<section class="card"><h2>图片 API 与本地来源</h2><p class="muted">可接入其他 OpenAI 兼容图片 API，不限原有服务商；在连接与搭配保存图片模型并点击“用于图片”。RunningHub 保留工作流方式。</p><button data-go="services">添加或切换图片 API</button></section>'+'<section class="card"><h2>提示词与工具调用</h2><button data-go="invocations">查看本地 / API 共用记录</button></section>'+viewImagegenOriginal();}
+  function viewImagegenOriginal() {
     var g = imagegenDraft || (data.settings && data.settings.imagegen) || {};
     var rh = rhLibrary(g.runninghub);
     renderedRhWorkflow = rh.activeWorkflowId;
@@ -2030,6 +2628,20 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     return out+'</div>';
   }
 
+  var qzonePanel=null,qzoneHealthTimer=null;
+  function qzoneStateLabel(connection){return ({offline:'等待 QQ 连接',unverified:'等待验证',checking:'正在验证',ready:'只读验证通过',auth_required:'需要登录或验证',unavailable:'暂时无法确认',throttled:'稍后再检查',unsupported:'接口暂不可用'})[connection?.state]||'尚未检查';}
+  function qzoneConnectionCard(connection){return '<div class="card"><h2>QQ 与空间登录</h2><p class="muted">共用这台设备的 QQ 登录凭据。QQ 上线或重连后自动检查空间，空闲时维护；空间异常时 QQ 聊天仍可正常使用。</p><div class="row"><span>QQ 桥接</span><span id="qzoneQqState" class="tag">'+(connection?.qqConnected?'已连接':'未连接')+'</span></div><div class="row"><span>空间登录</span><span id="qzoneAuthState" class="tag">'+esc(qzoneStateLabel(connection))+'</span></div><p id="qzoneAuthNote" class="muted" role="status">'+esc(connection?.reason||'正在读取空间状态')+'</p><p id="qzoneAuthTime" class="muted"></p><button id="qzoneCheck">检查并更新登录</button><p class="muted">只读取自己的空间验证登录，不会发动态或评论。发布权限与结果以实际回执为准；平台要求扫码或验证码时仍需本人完成。</p></div>';}
+  function viewQzone(){return qzoneConnectionCard(data.status?.qzone)+'<div class="card"><h2>空间动态与评论</h2><p class="muted">这里只显示实际提交与回执。平台接收不代表已核实公开可见；结果未知时不会自动重发。她可自行选搜索图、截图、生成图或画作；生成图沿用角色风格与生图逻辑，来源和文件见调用记录。</p><button id="qzoneRefresh">刷新发布记录</button><div id="qzoneEntries"></div></div><div class="card"><h2>读取动态评论</h2><label class="field">动态作者 QQ<input id="qzoneOwner" inputmode="numeric"></label><label class="field">动态 ID<input id="qzoneTid"></label><button id="qzoneComments">读取实际评论</button><div id="qzoneCommentsList"></div><p id="qzoneReplyTarget" class="muted"></p><label class="field">完整回复<textarea id="qzoneReplyText" rows="3" maxlength="600"></textarea></label><button id="qzoneReply" class="primary" disabled>发布上面这条回复</button><p id="qzoneNotice" role="status"></p></div>';}
+  function bindQzone(){if(!$('qzoneRefresh'))return;var target=null,root=$('qzoneQqState'),checking=false;
+    function active(){return root?.isConnected;}
+    function paint(connection){if(!active()||!connection)return;$('qzoneQqState').textContent=connection.qqConnected?'已连接':'未连接';$('qzoneAuthState').textContent=qzoneStateLabel(connection);$('qzoneAuthState').dataset.state=connection.state||'unverified';$('qzoneAuthNote').textContent=connection.reason||'';$('qzoneAuthTime').textContent=(connection.checkedAt?'最近检查：'+new Date(connection.checkedAt).toLocaleString():'尚未完成只读检查')+(connection.nextCheckAt>Date.now()?' · 下次检查不早于 '+new Date(connection.nextCheckAt).toLocaleTimeString():'');}
+    async function run(action,extra){if(!active())return null;try{var value=await api('POST','/im-bridge/features/qzone',Object.assign({action:action,uin:$('qzoneOwner').value,tid:$('qzoneTid').value},extra||{}));if(active()){paint(value.connection);if(action!=='status')$('qzoneNotice').textContent=value.coverage||'已读取';}return value;}catch(e){if(active())$('qzoneNotice').textContent=e.message;throw e;}}
+    $('qzoneCheck').onclick=async function(){if(checking)return;checking=true;this.disabled=true;try{await run('check-session');}catch{}finally{checking=false;if(active())$('qzoneCheck').disabled=false;}};
+    $('qzoneRefresh').onclick=async function(){try{qzonePanel=await run('status');if(!active()||!qzonePanel)return;$('qzoneEntries').replaceChildren();(qzonePanel.entries||[]).forEach(function(row){var article=document.createElement('article'),p=document.createElement('p'),button=document.createElement('button');p.textContent=row.text+' · '+row.status+' · 配图 '+Number(row.imageCount||0)+' 张';article.append(p);if(row.itemId&&row.kind==='publish'){button.textContent='读取这条动态的评论';button.onclick=function(){$('qzoneOwner').value=row.owner||'';$('qzoneTid').value=row.itemId;$('qzoneComments').click();};article.append(button);}$('qzoneEntries').append(article);});}catch{}};
+    $('qzoneComments').onclick=async function(){target=null;$('qzoneReply').disabled=true;try{var result=await run('comments');if(!active()||!result)return;$('qzoneCommentsList').replaceChildren();(result.comments||[]).forEach(function(comment){var p=document.createElement('p'),button=document.createElement('button');p.textContent=(comment.name||comment.uin)+'：'+comment.text;button.textContent='回复';button.onclick=function(){target=comment;$('qzoneReplyTarget').textContent='回复 '+(comment.name||comment.uin)+'：'+comment.text;$('qzoneReply').disabled=false;};p.append(button);$('qzoneCommentsList').append(p);});}catch{}};
+    $('qzoneReply').onclick=async function(){if(!target)return;var button=this;button.disabled=true;try{await run('reply',{text:$('qzoneReplyText').value,uin:target.owner,tid:target.tid,commentId:target.id,commentUin:target.uin,confirm:true});target=null;}catch{}finally{if(active())button.disabled=!target;}};
+    void $('qzoneRefresh').onclick();qzoneHealthTimer=setInterval(function(){if(active()&&!document.hidden)void run('status').catch(function(){});},15000);
+  }
   function viewThoughts() {
     var t = thoughts || { timeline: [] };
     var items = t.timeline || [];
@@ -2082,9 +2694,11 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       '<div style="display:grid;gap:8px;margin-top:8px">' +
       '<select id="mProvider"></select><select id="mModel"></select>' +
       '<div class="btnrow"><button class="primary" id="mSave">保存模型</button><button id="mReset">恢复默认</button></div>' +
-      '<div class="muted">思考深度由上面的「智力档位」统一控制，这里只管用哪个模型。要加本地模型（Ollama 之类）或别的 API key：去 DSH「设置 → 模型」添加，加完这里自动出现。</div>' +
-      '<div class="muted" id="ibHint">输入预算：本轮系统 ' + Number((featureData?.inputBudget?.last||{}).systemChars||0) + ' 字 + 动态 ' + Number((featureData?.inputBudget?.last||{}).contentChars||0) + ' 字（去重前 ' + Number((featureData?.inputBudget?.last||{}).rawContentChars||0) + ' 字）；较长的临时提示只保留最近两轮。</div>' +
+      '<div class="muted">思考深度由上面的「智力档位」统一控制，这里只管用哪个模型。聊天默认沿用 DeepSeek；要接入其他服务，在“连接与搭配”填地址、密钥和模型，保存后点击“用于聊天”。也可继续使用 DSH 的模型设置。</div>' +
+      '<button data-go="services">添加或切换聊天 API</button><div class="muted" id="ibHint">输入预算：本轮系统 ' + Number((featureData?.inputBudget?.last||{}).systemChars||0) + ' 字 + 动态 ' + Number((featureData?.inputBudget?.last||{}).contentChars||0) + ' 字（去重前 ' + Number((featureData?.inputBudget?.last||{}).rawContentChars||0) + ' 字）；较长的临时提示只保留最近两轮。</div>' +
       '</div></div>';
+
+    out += '<div class="card"><h2>运行方式与来源</h2><p class="muted">私聊、群聊的聊天来源及图片、语音搭配统一在“连接与搭配”管理；这里保留模型选择与参数。</p><button data-go="services">打开连接与搭配</button></div>';
 
     out += viewSearchCard();
     return out;
@@ -2126,7 +2740,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     var c=data.settings.companion||{};
     var out='<div class="card"><h2>自然相处与表达</h2><p class="muted">人设决定她是谁，表达设置决定她有多放得开。可以接梗、互怼、撒娇、说自己的想法；不用统一成礼貌客服，也不固定模仿某一段聊天。</p>';
     if(featureData?.expressionRevision!=='20261025-expression-v1')out+='<div class="banner">新增表达设置需要完整退出并重新打开 DSH 后生效。</div>';
-    out+='<div class="form-two"><label class="field">表达自由度<select id="careExpression"><option value="relaxed"'+(c.expressionMode!=='reserved'?' selected':'')+'>自然放开</option><option value="reserved"'+(c.expressionMode==='reserved'?' selected':'')+'>温和克制</option><option value="free"'+(c.expressionMode==='free'?' selected':'')+'>自由（更少滤镜）</option></select></label><label class="field">群聊气泡数<select id="careBubbles">'+[[0,'自主决定（无固定数量）'],[1,'1 个'],[2,'2 个'],[3,'3 个'],[4,'4 个'],[5,'5 个'],[6,'6 个'],[8,'8 个']].map(function(v){return '<option value="'+v[0]+'"'+(Number(c.maxBubbles??0)===v[0]?' selected':'')+'>'+v[1]+'</option>';}).join('')+'</select></label><label class="field">拟真模式下单条最多字数（0=平台上限）<input id="careChars" type="number" min="0" max="8000" value="'+Number(c.maxReplyChars??0)+'"></label><label class="check-field"><input type="checkbox" id="careRepeat"'+(c.allowRepetition!==false?' checked':'')+'>允许重复口头禅，不做重复检测改写</label><label class="check-field"><input type="checkbox" id="careCasual"'+(c.casualInitiative!==false?' checked':'')+'>自主搭话允许随意闲聊，不必有新资讯</label><label class="check-field"><input type="checkbox" id="careEnabled"'+(c.enabled!==false?' checked':'')+'>启用情境回应</label><label class="check-field"><input type="checkbox" id="careContinuity"'+(c.continuity!==false?' checked':'')+'>短时情绪衔接</label><label class="check-field"><input type="checkbox" id="carePauses"'+(c.respectPauses!==false?' checked':'')+'>忙碌 / 晚安后不追发</label><label class="field">等你把话说完<select id="careWait">'+[['natural','自然'],['fast','快速'],['steady','多等一会'],['off','使用原合并间隔']].map(function(p){return '<option value="'+p[0]+'"'+((c.waitMode||'natural')===p[0]?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select></label></div><p class="muted">自然放开允许符合人设与聊天习惯的轻微粗口、玩笑和亲昵称呼，不强制每轮使用。群聊气泡数控制短句分段；私聊由她自己决定表达长短，换行保留在同一条中，只有确实想另发一条时才分条；单条字数与重复改写只在拟真模式开启时生效，长篇任务仍按平台长度拆分。</p><button class="primary" id="careSave">保存相处方式</button><p class="muted">主动行为的开关、时段、频率仍在「主动互动」设置。“我先忙 / 晚安 / 别再发”会暂停追聊，下一条用户消息恢复；不靠求救或充值压力维持互动。</p></div>';
+    out+='<div class="form-two"><label class="field">表达自由度<select id="careExpression"><option value="relaxed"'+(c.expressionMode!=='reserved'?' selected':'')+'>自然放开</option><option value="reserved"'+(c.expressionMode==='reserved'?' selected':'')+'>温和克制</option><option value="free"'+(c.expressionMode==='free'?' selected':'')+'>自由（更少滤镜）</option></select></label><label class="field">群聊气泡数<select id="careBubbles">'+[[0,'自主决定（无固定数量）'],[1,'1 个'],[2,'2 个'],[3,'3 个'],[4,'4 个'],[5,'5 个'],[6,'6 个'],[8,'8 个']].map(function(v){return '<option value="'+v[0]+'"'+(Number(c.maxBubbles??0)===v[0]?' selected':'')+'>'+v[1]+'</option>';}).join('')+'</select></label><label class="field">拟真模式下单条最多字数（0=平台上限）<input id="careChars" type="number" min="0" max="8000" value="'+Number(c.maxReplyChars??0)+'"></label><label class="check-field"><input type="checkbox" id="careRepeat"'+(c.allowRepetition!==false?' checked':'')+'>允许重复口头禅，不做重复检测改写</label><label class="check-field"><input type="checkbox" id="careCasual"'+(c.casualInitiative!==false?' checked':'')+'>自主搭话允许随意闲聊，不必有新资讯</label><label class="check-field"><input type="checkbox" id="careEnabled"'+(c.enabled!==false?' checked':'')+'>启用情境回应</label><label class="check-field"><input type="checkbox" id="careContinuity"'+(c.continuity!==false?' checked':'')+'>短时情绪衔接</label><label class="check-field"><input type="checkbox" id="carePauses"'+(c.respectPauses!==false?' checked':'')+'>忙碌 / 晚安后不追发</label><label class="field">等你把话说完<select id="careWait">'+[['natural','自然'],['fast','快速'],['steady','多等一会'],['off','使用原合并间隔']].map(function(p){return '<option value="'+p[0]+'"'+((c.waitMode||'natural')===p[0]?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select></label></div><p class="muted">自然放开允许符合人设与聊天习惯的轻微粗口、玩笑和亲昵称呼，不强制每轮使用。群聊气泡数控制短句分段；私聊由她自己决定表达长短；本地私聊按换行分别发送，代码和列表保持完整；单条字数与重复改写只在拟真模式开启时生效，长篇任务仍按平台长度拆分。</p><button class="primary" id="careSave">保存相处方式</button><p class="muted">主动行为的开关、时段、频率仍在「主动互动」设置。“我先忙 / 晚安 / 别再发”会暂停追聊，下一条用户消息恢复；不靠求救或充值压力维持互动。</p></div>';
     var r=data.settings.realism||{},rs=r.safety||{};
     out+='<div class="card"><h2>拟真模式</h2><p class="muted">放开会让她更像真人聊天：单条可以更长、气泡更多、允许重复口头禅，不再每轮加“核实/免责声明”式的收尾。安全相关项目单独列出，默认保持保护。</p>' +
       '<label class="check-field"><input id="rlEnabled" type="checkbox"'+(r.enabled!==false?' checked':'')+'>启用拟真模式（放开单条字数、重复检测、媒体免责声明和主动额度）</label>' +
@@ -2157,8 +2771,8 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     var cal=featureData.calendar,scopes=(cal.scopes||[]).filter(s=>s.meta.kind==='life');if(!scopes.some(s=>s.meta.personaId===lifePersona))lifePersona=scopes[0]?.meta.personaId||data.settings.activePersonaId||'whale';
     var scope=scopes.filter(s=>s.meta.personaId===lifePersona)[0],days=Object.entries(scope?.plans||{}).sort((a,b)=>b[0].localeCompare(a[0]));
     var c=data.settings.life||{},e=featureData.lifeExecution||{},statuses={planned:'计划中',queued:'等待执行',running:'正在执行',participating:'群参与中',ended:'群参与已结束',waiting_user:'等你决定',completed:'已完成',failed:'未能完成',unsupported:'已跳过实体活动',sleeping:'睡眠',resting:'醒着休息',expired:'时段已结束',budget:'今日任务额度已用完',interrupted:'已中断，不重放',incomplete:'未确认真实结果',cancelled:'已取消',paused:'进度已保存',needs_reconcile:'需要核对上次结果',user_request:'正在按你的请求安排'};
-    var out='<div class="card"><div class="section-heading"><h2>人生与实际行动</h2><span class="tag">上海时间</span></div><p class="muted">日程安排真实数字日常和离线休息。画画会生成作品；浏览须进入具体内容。她是没有实体的数字角色：吃饭、洗澡、出行等实体活动跳过；QQ交流、听歌、浏览、创作和其他数字目标由DSH选择工具完成。等待事项和已保存进度继续保留；恢复前先观察，未知发送结果不重放；分享由她选择，联系人仍受允许名单约束。</p><div class="form-two"><label class="check-field"><input type="checkbox" id="lifeEnabled"'+(c.enabled!==false?' checked':'')+'>启用人生安排</label><label class="check-field"><input type="checkbox" id="lifeExecute"'+(c.execute!==false?' checked':'')+'>执行可做的数字活动</label><label class="check-field"><input type="checkbox" id="lifeSleep"'+(c.sleep!==false?' checked':'')+'>日程休息时过滤普通消息，当前明确请求可唤醒</label><label class="field">每日实际任务上限（0 为不限）<input id="lifeBudget" type="number" min="0" max="99" value="'+Number(c.maxTasksPerDay??8)+'"></label></div><p class="muted">实际任务可能调用已有付费接口；上限只控制日程任务，不限制聊天句数。普通允许对象的QQ交流可自主决定；登录、支付、评论、公开发布、删除和权限改变会先问你。</p><div class="btnrow"><button class="primary" id="lifeSave">保存人生设置</button><button id="lifeRun">检查当前任务</button></div><label class="field">查看角色<select id="lifePersona">'+scopes.map(s=>'<option value="'+esc(s.meta.personaId)+'"'+(s.meta.personaId===lifePersona?' selected':'')+'>'+esc(personaLabel(s.meta.personaId))+'</option>').join('')+'</select></label><button class="small" id="lifePlan"'+(c.enabled===false?' disabled':'')+'>补齐当前时段</button><p class="muted">已有日程保持连续；后续时段根据真实可用能力安排。当前：'+esc(e.scene?.activity||'尚无当前日程')+' · '+esc(e.sleeping?'睡眠中':'醒着')+'</p>';
-    if(e.pending){out+='<div class="notice"><b>需要你决定</b><p>'+esc(e.pending.question.question)+'</p><details><summary>具体操作与目标</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(e.pending.question.details||{},null,2))+'</pre></details><label class="field">补充意见<input id="lifeAnswerText" maxlength="1000" placeholder="例如：用现有账号；或修改评论内容"></label><div class="btnrow"><button data-life-answer="同意" data-life-q="'+esc(e.pending.question.id)+'">同意这件事</button><button data-life-answer="拒绝" data-life-q="'+esc(e.pending.question.id)+'">拒绝</button></div><p class="muted">也可在本人 QQ 私聊中回复“同意”或“拒绝”。决定只适用于这个问题。</p></div>';}
+    var out='<div class="card"><div class="section-heading"><h2>人生与实际行动</h2><span class="tag">上海时间</span></div><p class="muted">日程安排真实数字日常和离线休息。画画会生成作品；浏览须进入具体内容。她是没有实体的数字角色：吃饭、洗澡、出行等实体活动跳过；QQ交流、听歌、浏览、创作和其他数字目标由DSH选择工具完成。等待事项和已保存进度继续保留；恢复前先观察，未知发送结果不重放；分享由她选择，联系人仍受允许名单约束。</p><div class="form-two"><label class="check-field"><input type="checkbox" id="lifeEnabled"'+(c.enabled!==false?' checked':'')+'>启用人生安排</label><label class="check-field"><input type="checkbox" id="lifeExecute"'+(c.execute!==false?' checked':'')+'>执行可做的数字活动</label><label class="check-field"><input type="checkbox" id="lifeSleep"'+(c.sleep!==false?' checked':'')+'>日程休息时过滤普通消息，当前明确请求可唤醒</label><label class="field">每日实际任务上限（0 为不限）<input id="lifeBudget" type="number" min="0" max="99" value="'+Number(c.maxTasksPerDay??8)+'"></label></div><p class="muted">实际任务可能调用已有付费接口；上限只控制日程任务，不限制聊天句数。普通允许对象的QQ交流可自主决定；仅实际付款需要逐次确认；B站评论遵守独立发布开关。</p><div class="btnrow"><button class="primary" id="lifeSave">保存人生设置</button><button id="lifeRun">检查当前任务</button></div><label class="field">查看角色<select id="lifePersona">'+scopes.map(s=>'<option value="'+esc(s.meta.personaId)+'"'+(s.meta.personaId===lifePersona?' selected':'')+'>'+esc(personaLabel(s.meta.personaId))+'</option>').join('')+'</select></label><button class="small" id="lifePlan"'+(c.enabled===false?' disabled':'')+'>补齐当前时段</button><p class="muted">已有日程保持连续；后续时段根据真实可用能力安排。当前：'+esc(e.scene?.activity||'尚无当前日程')+' · '+esc(e.sleeping?'睡眠中':'醒着')+'</p>';
+    if(e.pending){out+='<div class="notice"><b>需要你决定</b><p>'+esc(e.pending.question.question)+'</p><details><summary>具体操作与目标</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(e.pending.question.details||{},null,2))+'</pre></details><label class="field">补充意见<input id="lifeAnswerText" maxlength="1000" placeholder="例如：同意这笔付款；或先不要买"></label><div class="btnrow"><button data-life-answer="同意" data-life-q="'+esc(e.pending.question.id)+'">同意这件事</button><button data-life-answer="拒绝" data-life-q="'+esc(e.pending.question.id)+'">拒绝</button></div><p class="muted">也可在本人 QQ 私聊中回复“同意”或“拒绝”。决定只适用于这个问题。</p></div>';}
     out+='<details><summary>最近执行记录</summary>'+(e.jobs||[]).slice(0,12).map(j=>'<div class="msg"><b>'+esc(j.scene?.activity||j.kind)+'</b> · '+esc(statuses[j.status]||j.status)+'<p>'+esc(j.note||j.reason||'')+'</p>'+(j.evidence||[]).filter(x=>x.ok&&x.substantive).map(x=>'<div class="muted">'+esc(x.coverage||x.kind)+(x.file?' · 作品：'+esc(x.file):'')+(x.url?' · '+esc(x.url):'')+'</div>').join('')+'</div>').join('')+'</details>';
     if(scope?.status?.state==='failed')out+='<div class="notice">'+esc(scope.status.reason||'日程未生成，原有记录保留，可稍后重试。')+'</div>';
     if(!days.length)out+='<div class="empty">尚无当前日程。早间 06:00、午后 12:00、晚间 18:00 后的维护或下一轮聊天会补齐当前时段。</div>';
@@ -2272,10 +2886,6 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
 
   /** 只剩语音和素材相关的设置，挂到「素材」页。 */
-  var VOICE_PACK_PRESETS=[
- {id:'sweet-girl',name:'轻甜 · 晓伊',voice:'zh-CN-XiaoyiNeural',rate:-2,pitch:2,description:'轻快年轻女声，适合日常聊天',sample:'sweet-natural.mp3'},
- {id:'soft-girl',name:'温柔 · 晓晓',voice:'zh-CN-XiaoxiaoNeural',rate:-4,pitch:2,description:'温暖柔和女声，适合陪伴与安慰',sample:'soft-natural.mp3'},
-];
   var VOICE_PACK_MOODS=[{id:'auto',name:'跟随内容'},{id:'natural',name:'自然'},{id:'happy',name:'开心'},{id:'gentle',name:'轻柔 / 安慰'},{id:'sad',name:'低落'},{id:'surprised',name:'惊喜'},{id:'serious',name:'认真'}];
   /* MiniMax 可选音色。clonezh001 是用 1.mp3 快速复刻出来的私有音色（7 天内不用会被官方回收）。 */
   var MINI_VOICE_PRESETS=[['female-tianmei','甜美女性'],['Chinese (Mandarin)_Warm_Girl','温暖少女'],['Chinese (Mandarin)_Soft_Girl','柔和少女'],['clonezh001','复刻音色 · 1.mp3（我的）']];
@@ -2288,13 +2898,14 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   function bindMusicCard(){if($('musicAnalyze'))$('musicAnalyze').onclick=async function(){var button=this,result=$('musicResult');button.disabled=true;result.textContent='正在获取真实音频、生成图谱并分析…';try{var data=await api('POST','/im-bridge/features/music',{url:$('musicUrl').value,interpret:true}),r=data.result||{};result.innerHTML='<p>'+esc(r.title||'音频')+' · '+esc(r.author||'')+'</p><p>'+esc(r.coverage||'')+'</p><p>'+esc(data.interpretation||'')+'</p>'+(r.charts||[]).map(c=>'<details><summary>'+esc(c.kind==='waveform'?'真实波形图':'真实频谱图')+'</summary><img style="width:100%;height:auto" src="'+esc(c.url)+'" alt="'+esc(c.kind)+'"></details>').join('');}catch(e){result.textContent=e.message;}finally{button.disabled=false;}};}
   function viewVoiceCard() {
     var v=data.settings.voice||{},mini=v.minimax||{};
-    var presets=VOICE_PACK_PRESETS,moods=VOICE_PACK_MOODS;
-    return viewMusicCard()+(/breeze/.test(String(featureData?.voiceStudioRevision||''))?'':'<div class="card" role="status">新语音包需要完整退出并重新打开 DSH，才能载入合成接口。</div>')+'<div class="card"><h2>语音合成</h2><p class="muted">默认免费在线合成，无需填 Key。想要更细腻的情绪可选 MiniMax，或接入 Breeze TTS 2（官方 API / 自建 vLLM）。</p><div class="row"><span>允许她发语音</span><button class="small" id="vToggle">'+(v.enabled?'已开':'已关')+'</button></div><div class="form-two" style="margin-top:12px">'+presets.map(function(p){return '<div class="card" style="margin:0;background:var(--bg)"><h3>'+esc(p.name)+'</h3><p class="muted">'+esc(p.description)+'</p><audio controls preload="metadata" src="/im-bridge/voice/pack?name='+encodeURIComponent(p.sample)+'" style="width:100%"></audio><button class="primary small" data-usevoice="'+esc(p.id)+'">使用并保存</button></div>';}).join('')+'</div><details style="margin-top:12px"><summary>听听轻快与轻柔的韵律对比</summary><label class="field">轻快<audio controls preload="metadata" src="/im-bridge/voice/pack?name=sweet-happy.mp3"></audio></label><label class="field">轻柔安慰<audio controls preload="metadata" src="/im-bridge/voice/pack?name=sweet-gentle.mp3"></audio></label></details>'+ 
-      '<label class="field" style="margin-top:16px">合成方式<select id="vEngine"><option value="sweet"'+(v.engine==='sweet'?' selected':'')+'>内置甜妹 · 免费在线</option><option value="minimax"'+(v.engine==='minimax'?' selected':'')+'>MiniMax 情绪增强 · 按量计费</option><option value="breeze"'+(v.engine==='breeze'?' selected':'')+'>Breeze TTS 2 · 官方 API / 自建</option><option value="edge"'+(v.engine==='edge'?' selected':'')+'>原有 Edge 音色</option><option value="custom"'+(v.engine==='custom'?' selected':'')+'>自定义 HTTP TTS</option></select></label>'+
-      '<div id="vSweetSection"><label class="field">免费音色<select id="vSweetPreset">'+presets.map(function(p){return '<option value="'+p.id+'"'+((v.sweetPreset||'sweet-girl')===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('')+'</select></label></div><label class="field">语气 / 韵律<select id="vMood">'+moods.map(function(m){return '<option value="'+m.id+'"'+((v.emotion||'auto')===m.id?' selected':'')+'>'+esc(m.name)+'</option>';}).join('')+'</select></label><p class="muted">免费模式以语速、音高作轻量变化；增强模式支持情绪合成。“跟随内容”以本句和最新对话判断语气，旧心情和模型标签只作参考，明确选择语气时优先按你的选择。</p>'+
-      '<div id="vMiniSection"><h3>可选情绪增强</h3><p class="muted">使用 MiniMax 官方音色或自己复刻的音色；需独立 API Key，试听和生成均可能计费，免费模式不会调用此服务。</p><label class="field">MiniMax API Key<input type="password" autocomplete="off" id="vMiniKey" placeholder="'+(mini.hasKey?'已保存；留空保留':'仅启用增强时需要')+'"></label><label class="field">增强音色<select id="vMiniVoice">'+miniVoiceOptions(mini.voiceId)+'</select></label><label class="field">模型<select id="vMiniModel">'+['speech-2.8-hd','speech-2.8-turbo','speech-2.6-hd','speech-2.6-turbo'].map(function(m){return '<option value="'+m+'"'+((mini.model||'speech-2.8-hd')===m?' selected':'')+'>'+m+'</option>';}).join('')+'</select></label></div>'+
+    var moods=VOICE_PACK_MOODS;
+    return viewMusicCard()+'<div class="card"><h2>语音参数</h2><p class="muted">Edge 和依赖它的内置免费音色已移除。这里保留现有服务参数；通用语音 API 可在“连接与搭配”填写地址、密钥、任意模型与音色，并点击“用于语音”。</p><button data-go="services">管理语音来源</button><div class="row"><span>允许她发语音</span><button class="small" id="vToggle">'+(v.enabled?'已开':'已关')+'</button></div>'+
+      '<label class="field" style="margin-top:16px">语音服务<select id="vEngine">'+[['none','暂未选择'],['localai','本地语音服务'],['minimax','MiniMax 情绪增强'],['breeze','Breeze TTS 2'],['custom','自定义 HTTP TTS']].filter(function(e){return !mobileApiOnly()||e[0]!=='localai';}).map(function(e){return '<option value="'+e[0]+'"'+(v.engine===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></label>'+
+      '<p class="muted">本地服务地址和音色在本地模型与工作流页配置；通用 API 连接的模型、密钥与音色在连接与搭配页配置。</p>'+
+      '<label class="field">语气 / 韵律<select id="vMood">'+moods.map(function(m){return '<option value="'+m.id+'"'+((v.emotion||'auto')===m.id?' selected':'')+'>'+esc(m.name)+'</option>';}).join('')+'</select></label>'+
+      '<div id="vMiniSection"><h3>可选情绪增强</h3><p class="muted">使用 MiniMax 官方音色或自己复刻的音色；需独立 API Key，试听和生成均可能计费，仅选用此服务时调用。</p><label class="field">MiniMax API Key<input type="password" autocomplete="off" id="vMiniKey" placeholder="'+(mini.hasKey?'已保存；留空保留':'仅启用增强时需要')+'"></label><label class="field">增强音色<select id="vMiniVoice">'+miniVoiceOptions(mini.voiceId)+'</select></label><label class="field">模型<select id="vMiniModel">'+['speech-2.8-hd','speech-2.8-turbo','speech-2.6-hd','speech-2.6-turbo'].map(function(m){return '<option value="'+m+'"'+((mini.model||'speech-2.8-hd')===m?' selected':'')+'>'+m+'</option>';}).join('')+'</select></label></div>'+
       '<div id="vBreezeSection"><h3>Breeze TTS 2</h3><p class="muted">开源权重模型，官方 API 按字符计费；也可以指向自建的 vLLM-Omni（OpenAI 兼容 /v1/audio/speech）。音色 ID 在 breeze.blue 应用里设计或克隆后复制；自建时用 S0–S9 预置音色，或填自己训练/克隆的音色。</p><label class="field">接入方式<select id="vBreezeMode"><option value="official"'+((v.breeze?.mode||'official')==='official'?' selected':'')+'>Breeze 官方 API（api.breeze.blue）</option><option value="openai"'+(v.breeze?.mode==='openai'?' selected':'')+'>自建 vLLM-Omni（OpenAI 兼容）</option></select></label><label class="field">接口地址<input id="vBreezeBase" value="'+esc(v.breeze?.baseUrl||'')+'" placeholder="'+(v.breeze?.mode==='openai'?'http://127.0.0.1:8091':'https://api.breeze.blue')+'"></label><label class="field">API Key<input type="password" autocomplete="off" id="vBreezeKey" placeholder="'+((v.breeze&&v.breeze.hasKey)?'已保存；留空保留':'官方模式必填，自建可留空')+'"></label><label class="field">音色 ID<input id="vBreezeVoice" value="'+esc(v.breeze?.voiceId||'')+'" placeholder="voc_xxx（官方）/ S0（自建预置）"></label><label class="field">模型<input id="vBreezeModel" value="'+esc(v.breeze?.model||'')+'" placeholder="breeze-tts-2 / BreezeBlue/Breeze-TTS-2"></label><label class="field">语言代码<input id="vBreezeLang" value="'+esc(v.breeze?.language||'zh')+'" placeholder="zh"></label><label class="field">音色 / 常用演绎方向（逐句语气自动补充）<input id="vBreezeInstructions" value="'+esc(v.breeze?.instructions||'')+'" placeholder="例如：保持清亮自然的当前音色"></label></div>'+
-      '<details id="vLegacy"'+(['edge','custom','sapi'].includes(v.engine)?' open':'')+'><summary>原有音色和自定义服务</summary><label class="field">Edge 音色<input id="vEdgeVoice" value="'+esc(v.edgeVoice||'zh-CN-XiaoxiaoNeural')+'"></label><label class="field">自定义 TTS 地址（{text} / {voice}）<input id="vCustomUrl" value="'+esc(v.customUrl||'')+'"></label><label class="field">自定义音色名<input id="vCustomVoice" value="'+esc(v.customVoice||'')+'"></label><button id="vSamplesBtn">生成更多免费音色对比</button><div id="vSamples" style="margin-top:10px"></div></details>'+
+      '<details id="vLegacy"'+(v.engine==='custom'?' open':'')+'><summary>自定义服务</summary><label class="field">自定义 TTS 地址（{text} / {voice}）<input id="vCustomUrl" value="'+esc(v.customUrl||'')+'"></label><label class="field">自定义音色名<input id="vCustomVoice" value="'+esc(v.customVoice||'')+'"></label></details>'+
       operationContextMarkup('vContext')+'<button id="vSaveEngine" class="primary" style="margin-top:12px">保存语音设置</button><label class="field">试听方式<select id="vPerformance"><option value="speech">说话</option><option value="sing">Breeze 短段清唱（试验）</option></select><small class="muted">清唱沿用当前 Breeze 音色，适合原创或你提供的短段歌词；旋律自由生成，点歌原曲和长歌演唱尚不保证。</small></label><label class="field" style="margin-top:16px">试听文字<input id="vText" placeholder="例如：没关系呀，我在听，慢慢说就好。"></label><button id="vTest">试听当前设置</button><p class="muted">只在本页播放，不自动发给 QQ。选择情绪增强时将调用计费接口。</p><div id="vOut" role="status" style="margin-top:10px"></div>'+
       (v.lastError?'<div class="banner" style="margin-top:12px"><b>上次语音失败</b><p>'+esc(v.lastError)+'</p></div>':'')+'</div>';
   }
@@ -2303,10 +2914,10 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   function voiceStudioSetBusy(value){voiceStudioBusy=value;['vSaveEngine','vTest'].forEach(function(id){if($(id))$(id).disabled=value;});Array.prototype.forEach.call(document.querySelectorAll('[data-usevoice]'),function(button){button.disabled=value;});}
   function voiceStudioInput(preset){
     var mini=data.settings.voice?.minimax||{},breeze=data.settings.voice?.breeze||{};
-    return{engine:preset?'sweet':$('vEngine').value,sweetPreset:preset||$('vSweetPreset').value,emotion:$('vMood').value,edgeVoice:$('vEdgeVoice').value.trim(),customUrl:$('vCustomUrl').value.trim(),customVoice:$('vCustomVoice').value.trim(),minimax:{apiKey:$('vMiniKey').value.trim(),voiceId:$('vMiniVoice').value,model:$('vMiniModel').value,...(mini.speed?{speed:mini.speed}:{})},breeze:{mode:$('vBreezeMode').value,baseUrl:$('vBreezeBase').value.trim(),apiKey:$('vBreezeKey').value.trim(),voiceId:$('vBreezeVoice').value.trim(),model:$('vBreezeModel').value.trim(),language:$('vBreezeLang').value.trim()||'zh',instructions:$('vBreezeInstructions').value.trim(),...(breeze.guidance?{guidance:breeze.guidance}:{})},...(preset?{enabled:true}:{})};
+    return{engine:$('vEngine').value,emotion:$('vMood').value,customUrl:$('vCustomUrl').value.trim(),customVoice:$('vCustomVoice').value.trim(),minimax:{apiKey:$('vMiniKey').value.trim(),voiceId:$('vMiniVoice').value,model:$('vMiniModel').value,...(mini.speed?{speed:mini.speed}:{})},breeze:{mode:$('vBreezeMode').value,baseUrl:$('vBreezeBase').value.trim(),apiKey:$('vBreezeKey').value.trim(),voiceId:$('vBreezeVoice').value.trim(),model:$('vBreezeModel').value.trim(),language:$('vBreezeLang').value.trim()||'zh',instructions:$('vBreezeInstructions').value.trim(),...(breeze.guidance?{guidance:breeze.guidance}:{})},...(preset?{enabled:true}:{})};
   }
   function voiceStudioPaint(){if(!$('vEngine'))return;
-    if($('vContext'))$('vContext').onchange=function(){operationPanelChat=this.value;};var engine=$('vEngine').value;$('vSweetSection').hidden=engine!=='sweet';$('vMiniSection').hidden=engine!=='minimax';$('vBreezeSection').hidden=engine!=='breeze';$('vLegacy').open=['edge','custom','sapi'].includes(engine);
+    if($('vContext'))$('vContext').onchange=function(){operationPanelChat=this.value;};var engine=$('vEngine').value;$('vMiniSection').hidden=engine!=='minimax';$('vBreezeSection').hidden=engine!=='breeze';$('vLegacy').open=engine==='custom';
     if(engine==='breeze'){var selfhost=$('vBreezeMode').value==='openai';$('vBreezeBase').placeholder=selfhost?'http://127.0.0.1:8091':'https://api.breeze.blue';$('vBreezeModel').placeholder=selfhost?'BreezeBlue/Breeze-TTS-2':'breeze-tts-2';}
     $('vTest').textContent=engine==='minimax'?'试听情绪增强（计费）':engine==='breeze'?($('vBreezeMode').value==='openai'?'试听 Breeze（本地）':'试听 Breeze（计费）'):'试听当前设置';}
   async function saveVoiceStudio(preset){
@@ -2315,7 +2926,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     try{await api('POST','/im-bridge/settings',{voice:config});await load();
       var savedEngine=(data.settings&&data.settings.voice?data.settings.voice.engine:'')||'';
       if(savedEngine!==''&&savedEngine!==config.engine)toast('已提交，但运行中的桥接仍是 '+savedEngine+'；请到 设置 → 插件 重载 QQ / IM 桥接后再保存');
-      else toast(preset?'已启用免费甜妹音色':'语音设置已保存（'+config.engine+'）');
+      else toast('语音设置已保存（'+config.engine+'）');
     }
     catch(error){toast('保存失败：'+error.message);}
     finally{voiceStudioSetBusy(false);}
@@ -2515,8 +3126,158 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
 
   function bind() {
+    bindBiliPanel();
     bindRoutes();
     var el;
+    if((el=$('localWorkflowFile')))el.onchange=function(){readLocalWorkflow(this.files[0]);};
+    if((el=$('localWorkflowDrop'))){
+      el.ondragover=function(event){event.preventDefault();};
+      el.ondrop=function(event){event.preventDefault();readLocalWorkflow(event.dataTransfer.files[0]);};
+    }
+    if((el=$('localImportCancel')))el.onclick=function(){captureLocalForm();localImportState=null;renderPane();};
+    if((el=$('localImportKind')))el.onchange=function(){captureLocalImport();localImportState.kind=this.value;var outputs=localImportState.analysis.outputs.filter(function(x){return x.kind===localImportState.kind;});localImportState.output=outputs.length===1?outputs[0]:null;renderPane();};
+    document.querySelectorAll('[data-import-input],#localImportOutput').forEach(function(select){select.onchange=function(){captureLocalImport();renderPane();};});
+    if((el=$('localImportConfirm')))el.onclick=function(){
+      var button=this;captureLocalForm();captureLocalImport();var s=localImportState;button.disabled=true;
+      localPost({action:'import-workflow',token:s.token,name:s.name,description:s.description,kind:s.kind,inputs:s.inputs,output:s.output}).then(function(result){
+        localWorkflowDraft=localWorkflowDraft.filter(function(x){return x.id!==result.entry.id;}).concat(result.entry);
+        if(result.entry.kind!=='chat'&&!localDefaultsDraft[result.entry.kind])localDefaultsDraft[result.entry.kind]=result.entry.id;
+        localConfigDraft.workflowLibrary=localWorkflowDraft;
+        localImportState=null;localDraftEditing=true;
+        if(localGateway){localGateway.config=result.config;}
+        renderPane();toast('工作流已导入并保存'+(result.entry.kind==='chat'?'，可在上方选择用于聊天':''));
+      }).catch(function(error){button.disabled=false;toast('导入失败：'+error.message);});
+    };
+    document.querySelectorAll('[data-local-workflow-inspect]').forEach(function(button){button.onclick=function(){var item=localWorkflowDraft[Number(this.dataset.localWorkflowInspect)];if(item?.id)analyzeLocalWorkflow({workflowId:item.id});};});
+    if((el=$('localModelsRefresh')))el.onclick=function(){
+      var button=this;button.disabled=true;$('localModelsHint').textContent='正在读取模型列表…';
+      localPost({action:'list-models',baseUrl:$('localModelBaseUrl').value.trim()}).then(function(result){
+        localModels=result.models||[];$('localModelList').innerHTML=localModels.map(function(x){return '<option value="'+esc(x.id)+'">';}).join('');
+        $('localModelsHint').textContent='已找到 '+localModels.length+' 个模型，可从模型输入框选择，也可以直接手填。';
+      }).catch(function(error){$('localModelsHint').textContent=error.message;}).finally(function(){button.disabled=false;});
+    };
+    if ((el = $('localSave'))) el.onclick = function () {
+      saveLocalConfig(this);
+    };
+    if((el=$('localInitiativeSave')))el.onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/settings',{localChat:{initiativeEnabled:$('localInitiativeEnabled').checked}});data.localChat=data.localChat||{};data.localChat.initiativeEnabled=$('localInitiativeEnabled').checked;toast('本地主动聊天设置已保存');await refreshLocalRun();}catch(error){toast('保存失败：'+error.message);}finally{button.disabled=false;}};
+    function saveLocalConfig(button) {
+      button.disabled = true;
+      var config = captureLocalForm();
+      localPost({
+        action: 'save',
+        gatewayUrl: $('localGatewayUrl').value.trim(),
+
+        config: config,
+      })
+        .then(function () {
+          localDraftEditing = false;
+          localConfigDraft = null;
+          if ($('localWorkflowHint')) $('localWorkflowHint').textContent = '配置已保存；下一轮生效。';
+          toast('本地模型配置已保存');
+          return localRefresh();
+        })
+        .catch(function (e) {
+          if ($('localWorkflowHint')) $('localWorkflowHint').textContent = '保存失败：' + e.message;
+          toast('保存失败：' + e.message);
+        })
+        .finally(function () { button.disabled = false; });
+    }
+    if ((el = $('localWorkflowSave'))) el.onclick = function () { saveLocalConfig(this); };
+    if ((el = $('localWorkflowAdd'))) el.onclick = function () {
+      captureLocalForm();
+      localDraftEditing = true;
+      localWorkflowDraft.push({
+        id: 'image-' + Date.now().toString(36), name: '新工作流', kind: 'image', description: '', file: '',
+        inputs: { prompt: { node: '', field: '' }, negativePrompt: { node: '', field: '' }, seed: { node: '', field: '' }, image: { node: '', field: '' } },
+        timeoutMs: 600000,
+      });
+      renderPane();
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-local-workflow-delete]'), function (button) {
+      button.onclick = function () {
+        captureLocalForm();
+        localDraftEditing = true;
+        localWorkflowDraft.splice(Number(button.getAttribute('data-local-workflow-delete')), 1);
+        renderPane();
+      };
+    });
+    function rememberLocalEdit() {
+      localDraftEditing = true;
+      captureLocalForm();
+    }
+    ['localBackend','localModelBaseUrl','localModelId','localChatWorkflow','localTemperature','localMaxTokens','localHistoryChars','localVoiceEnabled','localVoicePreset','localFastDialogue','localDialoguePriority','localStreamDialogue','localVisionMode','localMemoryProfile','localUrl','localGatewayUrl','localWarm','localIdle','localDefaultImage','localDefaultVideo'].forEach(function (id) {
+      var field = $(id);
+      if (!field) return;
+      field.addEventListener('input', rememberLocalEdit);
+      field.addEventListener('change', function () {
+        rememberLocalEdit();
+        if (id === 'localDefaultImage' || id === 'localDefaultVideo') {
+          localDefaultsDraft[id === 'localDefaultImage' ? 'image' : 'video'] = field.value;
+          localConfigDraft.defaultWorkflows = Object.assign({}, localDefaultsDraft);
+        }
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-local-workflow]'), function (row) {
+      var index = Number(row.getAttribute('data-local-workflow'));
+      Array.prototype.forEach.call(row.querySelectorAll('[data-wf],[data-map]'), function (field) {
+        field.addEventListener('focus', function () {
+          if (field.getAttribute('data-wf') === 'id') field.dataset.localPreviousId = localWorkflowDraft[index] && localWorkflowDraft[index].id || '';
+        });
+        field.addEventListener('input', rememberLocalEdit);
+        field.addEventListener('change', function () {
+          var oldId = field.getAttribute('data-wf') === 'id' ? field.dataset.localPreviousId || '' : '';
+          rememberLocalEdit();
+          var current = localWorkflowDraft[index] || {};
+          if (field.getAttribute('data-wf') === 'id' && oldId && current.id !== oldId) {
+            if (localDefaultsDraft.image === oldId) localDefaultsDraft.image = current.id;
+            if (localDefaultsDraft.video === oldId) localDefaultsDraft.video = current.id;
+            field.dataset.localPreviousId = current.id;
+          }
+          localConfigDraft.defaultWorkflows = Object.assign({}, localDefaultsDraft);
+          if (['id','name','kind'].includes(field.getAttribute('data-wf'))) refreshLocalDefaultOptions();
+        });
+      });
+    });
+    if ((el = $('localLoadVoices'))) el.onclick = function () {
+      var button=this;button.disabled=true;
+      localPost({action:'list-voices'}).then(function(result){
+        $('localVoicePresets').innerHTML=(result.voices||[]).map(function(voice){return '<option value="'+esc(voice.id)+'">'+esc(voice.name)+'</option>';}).join('');
+        $('localVoicePresetHint').textContent=(result.voices||[]).length?'已读取 '+result.voices.length+' 个音色；在输入框选择后保存。':'没有可用音色，请先在 VoiceLab 创建参考音色。';
+      }).catch(function(error){$('localVoicePresetHint').textContent='读取音色失败：'+error.message;}).finally(function(){button.disabled=false;});
+    };
+    if ((el = $('localProbe'))) el.onclick=function(){var button=this;button.disabled=true;$('localStatus').textContent='正在使用短测试核验能力；不会发送 QQ，也不会调用云端模型。';api('POST','/im-bridge/local',{action:'probe-capabilities'}).then(function(){return localRefresh();}).catch(function(e){$('localStatus').textContent='本地能力检查暂未完成：'+e.message;}).finally(function(){button.disabled=false;});};
+    if ((el = $('localPing'))) el.onclick = function () { $('localStatus').textContent = '正在连接…'; localRefresh().then(function () { toast('已刷新'); }); };
+    if ((el = $('localRelease'))) el.onclick = function () {
+      var button = this; button.disabled = true;
+      localPost({ action: 'release' }).then(function (v) { toast(v.freed ? '已释放显存' : '释放失败：' + (v.error || '')); return localRefresh(); })
+        .catch(function (e) { toast('释放失败：' + e.message); }).finally(function () { button.disabled = false; });
+    };
+    if ((el = $('localChat'))) el.onclick = function () {
+      if(localTrialBusy)return;localTrialBusy=true;
+      var button = this, text = ($('localText').value || '').trim(), input = $('localImage');
+      if (!text) { localTrialBusy=false;toast('先写一句话'); return; }
+      button.disabled = true; $('localChatOut').textContent = '正在生成…';
+      localTrialResult={text:'正在生成…'};
+      var imageReady = input && input.files && input.files[0] ? new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result || '')); };
+        reader.onerror = function () { reject(new Error('无法读取所选图片')); };
+        reader.readAsDataURL(input.files[0]);
+      }) : Promise.resolve('');
+      imageReady.then(function (dataUrl) {
+        var content = [{ type: 'text', text: text }];
+        if (dataUrl) content.push({ type: 'image_url', image_url: { url: dataUrl } });
+        var messages = [{ role: 'system', content: String((data && data.settings && data.settings.basePersona) || '') }, { role: 'user', content: dataUrl ? content : text }];
+        return localPost({ action: 'test', messages: messages });
+      }).then(function (v) {
+        var files = (v.attachments || []).map(function (item) { return item.kind + ' · ' + item.file; });
+        localTrialResult={text:String(v.text || v.spokenText || '') + '\n' + (files.length ? files.join('\n') : '没有媒体附件') + '\n（' + (Number(v.elapsedMs || 0) / 1000).toFixed(1) + ' 秒；QQ 未发送）',receipts:'receipts\n'+JSON.stringify(v.receipts||[],null,2)};paintLocalTrial();void refreshLocalRun();
+      })
+        .catch(function (e) { localTrialResult={text:'失败：'+e.message};paintLocalTrial();void refreshLocalRun(); }).finally(function () { localTrialBusy=false;button.disabled=false;if($('localChat'))$('localChat').disabled=false; });
+    };
+    if (tab === 'services') bindServiceConnections();
+    if (tab === 'websitemcp') bindWebsiteMcp();
+    if (tab === 'local'&&!deviceUiPreview()) {localRefresh();startLocalRunWatch();paintLocalTrial();}
     Array.prototype.forEach.call(document.querySelectorAll('[data-toggle]'), function (btn) {
       btn.onclick = async function () {
         btn.disabled = true;
@@ -3243,7 +4004,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', {
         autonomy: {
-          chatIdleMinutes:Number($('autoIdle').value),
+          chatIdleMinutes:Number($('autoIdle').value),explore:$('autoExplore').checked,qzoneImages:$('autoQzoneImages').checked,qzoneReplies:$('autoQzoneReplies').checked,
           wakeStart: Number($('autoWakeA').value),
           wakeEnd: Number($('autoWakeB').value) || 23
         }
@@ -3349,7 +4110,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       api('POST', '/im-bridge/settings', {
         voice: {
           engine: $('vEngine').value,
-          edgeVoice: ($('vEdgeVoice').value || '').trim(),
+
           customUrl: ($('vCustomUrl').value || '').trim(),
           customVoice: ($('vCustomVoice').value || '').trim()
         }
@@ -3611,13 +4372,13 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     if ('proactiveCfg' in payload) add(['pcStart','pcEnd','pcMax']);
     if ('search' in payload) add(['seEngine','searxUrl','seCustomUrl']);
     if ('photo' in payload) add(['phSource','phGender','phLook','phMinWidth']);
-    if ('voice' in payload && Object.keys(payload.voice).some(function (k) { return k !== 'enabled'; })) add(['vEngine','vEdgeVoice','vCustomUrl','vCustomVoice','vSweetPreset','vMood','vMiniKey','vMiniVoice','vMiniModel']);
+    if ('voice' in payload && Object.keys(payload.voice).some(function (k) { return k !== 'enabled'; })) add(['vEngine','vCustomUrl','vCustomVoice','vMood','vMiniKey','vMiniVoice','vMiniModel']);
     if ('imagegen' in payload) { add(['igEnabled','igProvider','igDir','igKey','igModel','igSize','igSteps','igCfg','igSeed','rhKey']); add(Object.keys(readForm()).concat(Object.keys(pageDrafts.imagegen||{})).filter(function(key){return /^(?:rh(?:Name|Note|Mode|Id|Node|Field|Instance|Extra|Style|Reference|PromptModel|FixedMode|Triggers|Queue|Auto)@|studio:)/.test(key);})); }
     if ('agency' in payload) add(['agEnabled','agAutonomous','agBrowser','agDesktop','agPhone','agWorkspace']);
     if ('phone' in payload) add(['phEnabled','phAutonomous','phDevice','phPayMode','phPayMethod','phAmount','phDailyAmount']);
     if('personaGrowth' in payload) add(['grEnabled','grDaily','grDailyDays','grDailyMinUser']);
     if ('autonomy' in payload && 'shareMedia' in payload.autonomy) add(['shEnabled','shVoice','shImages','shDuring','shIdle','shSchedule']);
-    if ('autonomy' in payload) add(['autoWakeA','autoWakeB','autoIdle']);
+    if ('autonomy' in payload) add(['autoWakeA','autoWakeB','autoIdle','autoExplore','autoQzoneImages','autoQzoneReplies']);
     if ('userNotes' in payload) add(Object.keys(payload.userNotes).flatMap(function (k) { return ['note:'+k,'ownerAddress_'+k]; }));
     return keys;
   }
@@ -3634,6 +4395,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     if (renderedTab === origin) { rememberDraft(origin); renderDraftNotice(); }
   }
   function api(method, url, payload) {
+    if(method==='POST'&&deviceUiPreview()&&!window.QQBridgeDeviceUI?.previewWriteAllowed(url,payload))return Promise.reject(Error('当前为另一设备的界面预览，请在实际运行设备打开插件后操作。'));
     var writes = method === 'POST' && url !== '/im-bridge/clientlog';
     var origin = tab;
     var submitted = writes ? readForm() : {};
@@ -3649,6 +4411,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     }, function (error) { if (writes) mutationEpoch += 1; throw error; });
   }
   async function navigate(page, updateHash) {
+    if(!NAV_GROUPS.some(function(g){return g.pages.indexOf(page)>=0;}))page='overview';
     if (!PAGE_HEADS[page]) page = 'overview';
     if (navigationPending || (page === tab && renderedTab === tab)) return;
     var previous = tab;
@@ -3681,7 +4444,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
       var oldStatus = data.status;
       var oldQqLoggedIn = login && login.qqLoggedIn;
       if (snapshot[3]) login = snapshot[3];
-      data = snapshot[0];
+      data = snapshot[0]; mobileUiPolicy();
       if (snapshot[2]) featureData = snapshot[2];
       if (snapshot[1]) monitor = snapshot[1];
       lastSnapshotAt = Date.now();
@@ -3829,11 +4592,64 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
   }
   var DELIVERY_LABELS={queued:'等待发送',sending:'等待平台回执',sent:'已确认送达',unknown:'送达状态待确认',failed:'发送失败',cancelled:'已取消',withdrawn:'已撤回',admitted:'已提交',processing:'正在处理',uncertain:'提交状态待确认'};
   function viewDelivery() {
-    if(!featureData)return unavailableFeatures();var out='<div class="card"><h2>消息处理规则</h2><p class="muted">按平台消息 ID 去重。同一个人连续发来的消息会合并处理；链接、图片、命令和不同群成员的消息保持边界。发送超时可能已经送达，不会自动重复发送。</p><label class="field">回复前停顿（毫秒，0 关闭；有新消息会重新计时）<input id="dlDelay" type="number" min="0" max="15000" step="500" value="'+Number(featureData.reliability.replyDelayMs??3000)+'"></label><p class="muted">默认 3000 毫秒：最后一条消息到达后等 3 秒再提交模型，期间再来消息会重新等 3 秒，给对方留出连续打字的窗口。</p><button class="primary" id="dlSave">保存</button></div><div class="card"><div class="section-heading"><h2>发送队列与回执</h2><span class="muted">刷新数据可更新状态</span></div>';
+    if(!featureData)return unavailableFeatures();var out='<div class="card"><h2>消息处理规则</h2><p class="muted">按平台消息 ID 去重。同一个人连续发来的消息会合并处理；链接、图片、命令和不同群成员的消息保持边界。手机版的文字分句会先保存整组再发送；确定尚未提交的断线消息会有限续发。已提交但回执不明确的消息不会自动重发。</p><label class="field">回复前停顿（毫秒，0 关闭；有新消息会重新计时）<input id="dlDelay" type="number" min="0" max="15000" step="500" value="'+Number(featureData.reliability.replyDelayMs??3000)+'"></label><p class="muted">默认 3000 毫秒：最后一条消息到达后等 3 秒再提交模型，期间再来消息会重新等 3 秒，给对方留出连续打字的窗口。</p><button class="primary" id="dlSave">保存</button></div><div class="card"><div class="section-heading"><h2>发送队列与回执</h2><span class="muted">刷新数据可更新状态</span></div>';
     var jobs=(featureData.outbox||[]).slice().reverse();if(!jobs.length)out+='<div class="empty">还没有发送记录</div>';
     jobs.forEach(job=>{out+='<article class="delivery-item"><div class="section-heading"><b>'+esc(notesLabel(job.chat))+'</b><span class="tag '+(job.status==='sent'?'accent-tag':'')+'">'+esc(DELIVERY_LABELS[job.status]||job.status)+'</span></div><p>'+esc(job.preview)+'</p><div class="muted">'+esc(new Date(job.at).toLocaleString())+(job.messageId?' · 平台消息 ID '+esc(job.messageId):'')+'</div>'+(job.error?'<p class="delivery-error">'+esc(job.error)+'</p>':'')+(['failed','unknown','cancelled'].includes(job.status)?'<button class="small" data-delivery-retry="'+esc(job.id)+'">'+(job.status==='unknown'?'核实后重发':'重新发送')+'</button>':'')+'</article>';});
-    out+='</div><div class="card"><h2>接收处理记录</h2>';var inbox=(featureData.inbox||[]).slice(-50).reverse();if(!inbox.length)out+='<div class="empty">还没有接收记录</div>';inbox.forEach(job=>{out+='<div class="row"><span>'+esc(notesLabel(job.key))+'<br><span class="muted">'+esc(DELIVERY_LABELS[job.status]||job.status)+(job.error?' · '+esc(job.error):'')+'</span></span>'+(['failed','uncertain'].includes(job.status)?'<button class="small" data-inbox-retry="'+esc(job.id)+'">重新处理</button>':'')+'</div>';});return out+'</div>';
+    out+='</div>';
+    var withheld=(featureData.audits||[]).filter(a=>!a.outboxIds?.length&&a.deliveryReason&&['withheld','failed','generated'].includes(a.deliveryState)).slice(-10).reverse();
+    if(withheld.length)out+='<div class="card"><h2>已生成但尚未转发</h2><p class="muted">生成文字与 QQ 发送分开记录。这里显示未进入发送队列的原因；不会自动把内部任务、已取消的旧回复补发出去。</p>'+withheld.map(a=>'<article class="delivery-item"><b>'+esc(notesLabel(a.chat))+'</b><p>'+esc(a.deliveryReason)+'</p><span class="muted">'+esc(new Date(a.at).toLocaleString())+'</span></article>').join('')+'</div>';
+    out+='<div class="card"><h2>接收处理记录</h2>';var inbox=(featureData.inbox||[]).slice(-50).reverse();if(!inbox.length)out+='<div class="empty">还没有接收记录</div>';inbox.forEach(job=>{out+='<div class="row"><span>'+esc(notesLabel(job.key))+'<br><span class="muted">'+esc(DELIVERY_LABELS[job.status]||job.status)+(job.error?' · '+esc(job.error):'')+'</span></span>'+(['failed','uncertain'].includes(job.status)?'<button class="small" data-inbox-retry="'+esc(job.id)+'">重新处理</button>':'')+'</div>';});return out+'</div>';
   }
+  var invocationTimer=null,invocationBusy=false,invocationBackend='',invocationKindFilter='',invocationRows=[],invocationSignature='';
+  function viewInvocations(){return '<section class="card"><h2>提示词与工具调用</h2><p class="muted">显示实际提交的正向词、反向词、工作流节点参数、工具请求和回执。来源可区分本地与 API；记录不自动重放操作。保留最近 240 条，凭据与媒体原始数据已隐藏。</p><div class="form-two"><label class="field">来源<select id="ivBackend"><option value="">全部</option><option value="local"'+(invocationBackend==='local'?' selected':'')+'>本地</option><option value="api"'+(invocationBackend==='api'?' selected':'')+'>API</option></select></label><label class="field">类型<select id="ivKind"><option value="">全部</option>'+[['image','生图'],['video','生视频'],['speech','语音'],['tool','其他工具']].map(function(pair){return '<option value="'+pair[0]+'"'+(invocationKindFilter===pair[0]?' selected':'')+'>'+pair[1]+'</option>';}).join('')+'</select></label></div><button id="ivRefresh">刷新记录</button><p class="muted" id="ivHint" role="status">正在读取…</p><div id="ivRoutes"></div><div id="ivRecords"></div></section>';}
+  function invocationExtraDetails(row){
+    var args=row.submittedArguments||{},ref=row.reference||{},plan=row.imagePlan||{},out='';
+    if(row.kind==='image'||row.tool==='image'){
+      var refText=ref.verified===true?'已上传并连接到输出分支':ref.selected===true?'已选中，尚未确认上传绑定':ref.used===true?(args.referenceImage===true?'已传入工作流（旧记录）':'已选用，尚无工作流提交确认'):ref.used===false?'未使用':args.referenceImage===true?'已传入参考图（旧记录未区分来源）':args.referenceImage===false?'未使用':'旧记录未保存此信息';
+      var reasons={subject_needs_clarification:'拍摄主体不明确，已先确认，没有提交无参考图的生成任务',persona_reference_bound_to_submitted_workflow:'参考图已上传，文件名与最终工作流输入一致，且连到输出分支；这项校验不代表最终画面必然保持身份',not_selected_by_subject_check:'本轮画面判断未选择人设参考图',no_saved_reference:'当前人设没有已保存的参考图',reference_preparation_failed:'参考图读取或校验没有成功',no_image_plan:'本轮没有提供画面规划',no_persona_reference:'本轮没有提供人设参考图',model_selected_another_source:'模型选择了本轮其他图片',reference_prepared:'参考图已准备',persona_reference_selected:'已选择人设图作为输入'};
+      out+='<section class="card"><h3>人设参考图：'+esc(refText)+'</h3><p>'+esc(reasons[ref.reason]||ref.reason||'旧记录未保存选择原因，不能补推。')+'</p>'+(ref.configured!==undefined?'<p>已保存人设图：'+(ref.configured?'是':'否')+' · 已准备：'+(ref.prepared?'是':'否')+'</p>':'')+(ref.referenceFile||ref.sha256?'<p class="audit-text">参考图标识：'+esc(ref.referenceFile||ref.sha256)+'</p>':'')+(args.submittedNodes?.image?'<p>图片输入节点：'+esc(args.submittedNodes.image.node||'未映射')+' / '+esc(args.submittedNodes.image.field||'未映射')+' · 实际文件：'+esc(args.submittedNodes.image.value||'没有传入')+'</p>':'')+'</section>';
+      if(ref.uploadedImage)out+='<p class="audit-text">已上传参考图：'+esc(ref.uploadedImage)+' · 输出分支连通：'+(ref.onOutputPath?'是':'否')+'</p>';
+      if(ref.subjectResolution)out+='<p>拍摄主体依据：'+esc({current:'本轮明确要求','recent-human-photo':'沿用同一对话中最近的人类拍摄要求','needs-subject':'需要确认拍摄主体'}[ref.subjectResolution.source]||ref.subjectResolution.source||'未记录')+'</p>';
+    }
+    if(row.workflowSelection)out+='<p>实际选择工作流：'+esc(row.workflowSelection.name||row.workflowSelection.id)+'</p>';
+    if(row.promptId)out+='<p class="audit-text">ComfyUI 任务编号：'+esc(row.promptId)+'</p>';
+    if(row.imagePlan)out+='<details><summary>画面规划、人设与日程</summary><pre class="audit-text">'+esc(JSON.stringify(plan,null,2))+'</pre></details>';
+    if(row.promptPreparation)out+='<details><summary>本地提示词草稿、语言修正与核对过程</summary><pre class="audit-text">'+esc(JSON.stringify(row.promptPreparation,null,2))+'</pre></details>';
+    if(row.preparedPrompt||row.modelProfile)out+='<details><summary>提示词准备结果与模型配置</summary><pre class="audit-text">'+esc(JSON.stringify({prompt:row.preparedPrompt,modelProfile:row.modelProfile},null,2))+'</pre></details>';
+    if(row.workflowDetails)out+='<details><summary>最终工作流、模型、采样参数与节点连接</summary><p class="muted">这是提交副本的参数和连线；连线存在不等于生成结果一定保持身份。</p><pre class="audit-text">'+esc(JSON.stringify(row.workflowDetails,null,2))+'</pre></details>';
+    var outputs=row.outputs||[];
+    out+='<section class="card"><h3>输出结果</h3>';
+    if(!outputs.length)out+='<p class="muted">'+(['started','submitted'].indexOf(row.status)>=0?'结果尚未返回。':'本条记录没有可预览的媒体文件；文字或原始工具结果见下方。')+'</p>';
+    outputs.forEach(function(item){
+      var url=typeof item.url==='string'&&item.url.indexOf('/im-bridge/invocation-output?')===0?item.url:'',delivery=item.delivery||{},label={sent:'QQ 已送达',queued:'等待发送 QQ',sending:'正在发送 QQ',failed:'QQ 发送失败',unknown:'QQ 送达状态不明',cancelled:'发送已取消',unrecorded:'没有对应的 QQ 发送记录'}[delivery.status]||'没有对应的 QQ 发送记录';
+      out+='<div data-invocation-output="'+esc(item.index)+'"><p>'+esc(item.name||'媒体结果')+(item.bytes?' · '+esc((item.bytes/1024).toFixed(1))+' KB':'')+'</p>';
+      if(item.available&&url){
+        if(item.kind==='image')out+='<a href="'+esc(url)+'" target="_blank" rel="noopener"><img src="'+esc(url)+'" alt="生成结果预览" loading="lazy" style="display:block;max-width:100%;max-height:480px;object-fit:contain"></a>';
+        else if(item.kind==='video')out+='<video controls preload="none" src="'+esc(url)+'" style="max-width:100%;max-height:480px"></video>';
+        else if(item.kind==='speech')out+='<audio controls preload="none" src="'+esc(url)+'" style="max-width:100%"></audio>';
+        out+='<p><a href="'+esc(url)+'" download="'+esc(item.name||'result')+'">保存结果文件</a></p>';
+      }else out+='<p class="muted">'+esc(item.reason||'结果文件暂时不可用')+'</p>';
+      out+='<p>'+esc(label)+(delivery.messageIds?.length?' · 消息编号：'+esc(delivery.messageIds.join('、')):'')+'</p></div>';
+    });
+    return out+'</section>';
+  }
+  function paintInvocations(value){
+    if(!$('ivRecords'))return;invocationRows=value.records||[];
+    $('ivHint').textContent='已读取 '+invocationRows.length+' 条，每 2 秒更新；工具返回与 QQ 送达各自记录。';
+    var routes=(value.routes||[]).slice(-5).reverse();$('ivRoutes').innerHTML=routes.length?'<details><summary>最近的模型选择原因</summary>'+routes.map(function(row){return '<p>'+esc(new Date(row.at).toLocaleTimeString())+' · '+esc({local:'本地',api:'API 补全',unavailable:'本地暂不可用'}[row.target]||row.target)+' · '+esc(row.reason)+'</p>';}).join('')+'</details>':'';
+    var signature=JSON.stringify(invocationRows.map(function(row){return [row.id,row.updatedAt,row.status,row.outputs];}));if(signature===invocationSignature)return;invocationSignature=signature;
+    var expanded=Array.prototype.map.call(document.querySelectorAll('[data-invocation][open]'),function(el){return el.dataset.invocation;});
+    $('ivRecords').innerHTML=invocationRows.length?invocationRows.map(function(row,index){
+      var args=row.submittedArguments||row.arguments||{},prompt=args.prompt||args.nodeInfoList?.filter(function(node){return /text|prompt/i.test(node.fieldName);}).map(function(node){return node.fieldValue;}).join('\n')||'',negative=args.negativePrompt||args.negative_prompt||'';
+      var status={started:'开始调用',submitted:'已提交参数',returned:'工具已返回',failed:'失败',cancelled:'已取消',rejected:'参数被拒绝'}[row.status]||row.status;
+      return '<details class="delivery-item" data-invocation="'+esc(row.id)+'"'+(expanded.indexOf(row.id)>=0||index===0?' open':'')+'><summary>'+esc(new Date(row.at).toLocaleTimeString())+' · '+(row.backend==='local'?'本地':'API')+' · '+esc(row.tool||row.kind||'工具')+' · '+esc(status)+'</summary><button data-invocation-record-copy="'+index+'">复制完整记录</button>'+invocationExtraDetails(row)+(row.workflow?'<p>工作流：'+esc(row.workflow)+'</p>':'')+(row.chat?'<p class="muted">对话：'+esc(notesLabel(row.chat))+'</p>':'')+(prompt?'<h3>'+esc(row.submittedArguments?'实际提交提示词':'记录中的提示词（未保存独立提交快照）')+'</h3><textarea readonly data-invocation-prompt="'+index+'" style="min-height:140px">'+esc(prompt)+'</textarea><button data-invocation-copy="'+index+'">复制提示词</button>':'')+(negative?'<h3>反向提示词</h3><pre class="audit-text">'+esc(negative)+'</pre>':'')+'<details><summary>完整参数与实际节点值</summary><pre class="audit-text">'+esc(JSON.stringify(args,null,2))+'</pre>'+(row.submittedArguments&&row.arguments?'<p>模型原始工具参数</p><pre class="audit-text">'+esc(JSON.stringify(row.arguments,null,2))+'</pre>':'')+'</details>'+(row.result?'<details><summary>工具返回结果</summary><pre class="audit-text">'+esc(JSON.stringify(row.result,null,2))+'</pre></details>':'')+(row.error?'<p>'+esc(row.error)+'</p>':'')+'</details>';
+    }).join(''):'<p class="muted">暂无符合筛选的调用。更新后的新任务会出现在这里。</p>';
+    document.querySelectorAll('[data-invocation-record-copy]').forEach(function(button){button.onclick=async function(){try{await navigator.clipboard.writeText(JSON.stringify(invocationRows[Number(button.dataset.invocationRecordCopy)],null,2));toast('完整记录已复制');}catch{toast('复制失败，可展开参数后手动复制');}};});
+    document.querySelectorAll('[data-invocation-copy]').forEach(function(button){button.onclick=async function(){var field=document.querySelector('[data-invocation-prompt="'+button.dataset.invocationCopy+'"]');if(!field)return;try{await navigator.clipboard.writeText(field.value);toast('提示词已复制，可粘贴后调整');}catch{field.focus();field.select();toast('已选中提示词，按 Ctrl+C 复制');}};});
+  }
+  function refreshInvocations(){if(invocationBusy||!$('ivRecords'))return;invocationBusy=true;api('GET','/im-bridge/invocations?backend='+encodeURIComponent(invocationBackend)+'&kind='+encodeURIComponent(invocationKindFilter)).then(paintInvocations).catch(function(error){if($('ivHint'))$('ivHint').textContent='读取暂未完成：'+error.message;}).finally(function(){invocationBusy=false;});}
+  function bindInvocations(){if(!$('ivRecords'))return;invocationSignature='';$('ivBackend').onchange=function(){invocationBackend=this.value;invocationSignature='';refreshInvocations();};$('ivKind').onchange=function(){invocationKindFilter=this.value;invocationSignature='';refreshInvocations();};$('ivRefresh').onclick=refreshInvocations;refreshInvocations();invocationTimer=setInterval(refreshInvocations,2000);}
+
   function viewActivity() {
     if(!featureData)return unavailableFeatures();var audits=(featureData.audits||[]).slice().reverse();if(!audits.length)return '<div class="card"><div class="empty">新产生的模型回复会记录人设、记忆、链接读取结果与发送回执。</div></div>';
     var audit=audits.filter(a=>a.id===auditId)[0]||audits[0];auditId=audit.id;
@@ -3953,7 +4769,7 @@ body{background:radial-gradient(ellipse at 85% 4%,#e3f1ff85,transparent 45%),rad
     document.querySelectorAll('[data-cp-life-q]').forEach(b=>b.onclick=()=>life({action:'answer',id:b.dataset.cpLifeQ,answer:b.dataset.cpAnswer}));
     document.querySelectorAll('[data-cp-decision]').forEach(b=>b.onclick=async()=>{try{await api('POST','/im-bridge/operations',{action:'answer',id:b.dataset.cpDecision,answer:b.dataset.cpAnswer});await refreshCompanionPanel();}catch(e){toast(e.message);}});
     document.querySelectorAll('[data-cp-resume]').forEach(b=>b.onclick=()=>life({action:'resume',id:b.dataset.cpResume,observed:false}));
-    if($('cpJournal'))$('cpJournal').onclick=async function(){this.disabled=true;try{await api('POST','/im-bridge/features/companion',{key:companionPanelKey(),action:'journal'});await refreshCompanionPanel();}catch(e){toast(e.message);}finally{if(this.isConnected)this.disabled=false;}};
+    if($('cpJournal'))$('cpJournal').onclick=async function(){this.disabled=true;try{const written=await api('POST','/im-bridge/features/companion',{key:companionPanelKey(),action:'journal'});if(written.result?.reason)toast(written.result.reason);await refreshCompanionPanel();}catch(e){toast(e.message);}finally{if(this.isConnected)this.disabled=false;}};
     document.querySelectorAll('[data-cp-evidence]').forEach(b=>b.onclick=()=>openCompanionEvidence(b.dataset.cpEvidence));
     if($('cpGraphSearch'))$('cpGraphSearch').oninput=function(){companionPanel.search=this.value;drawRebuiltGraph();};if($('cpGraphEvents'))$('cpGraphEvents').onchange=function(){companionPanel.showEvents=this.checked;drawRebuiltGraph();};if($('cpGraph'))drawRebuiltGraph();
     document.querySelectorAll('[data-cp-feedback]').forEach(b=>b.onclick=async()=>{try{await api('POST','/im-bridge/features/companion',{key:companionPanelKey(),action:'feedback',id:b.dataset.cpFeedback,rating:Number(b.dataset.cpRating)});await refreshCompanionPanel();}catch(e){toast(e.message);}});
@@ -4041,7 +4857,7 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
   function compactTimeline(limit){var c=currentCompanion(),today=c.v.today||{},slots=today.slots||[],filtered=limit?slots.filter(s=>s.end>today.minute).slice(0,limit):slots;if(!filtered.length)return '<div class="empty-soft">'+(c.online?'正在准备接下来的安排，稍后自动更新。':'离线睡眠中，连接后只安排接下来的时间。')+'</div>';return '<ol class="life-timeline">'+filtered.map(function(s){var job=slotJob(c,s),cap=slotCapability(s,job),groupNote=(s.taskKind||job?.kind)==='group'?slotGroupNote(s):'',state=({current:'原定此时',upcoming:'打算接着',past:'先前计划',offline:'离线睡眠'}[s.state]||'计划');return '<li class="life-slot '+(s.state==='current'?'life-now':'')+' '+(s.offline?'life-offline':'')+'"><time>'+esc(s.startClock)+'<small>'+esc(s.endClock)+'</small></time><span class="timeline-dot"></span><div><span class="slot-state">'+state+'</span>'+(cap?' <span class="tag">'+esc(cap)+'</span>':'')+'<h3>'+esc(s.activity)+'</h3>'+(s.goal&&!s.offline?'<p>'+esc(s.goal)+'</p>':'')+(groupNote?'<p class="muted">'+esc(groupNote)+'</p>':'')+'<p class="slot-real">真实状态：'+esc(slotRealState(c,s))+'</p></div></li>';}).join('')+'</ol>';}
   function companionHome(){var c=currentCompanion(),days=c.v.diary?.days||[],last=days.at(-1),waiting=(c.v.decisions?.pending||[]).length+(c.life.waiting||[]).filter(j=>!j.question?.details?.operationDecisionId).length;companionPanelToolbar();var tiles=[['daily','clock','今天的安排','看看她正在做什么'],['diary','book','翻开小日记','一天，记住一两件事'],['star','spark','记忆星空','人物与共同话题'],['study','bulb','她学到了什么','看实际使用与反馈'],['songs','audio','听她唱歌','试听、教唱与修订'],['connection','link','账号与设备','连接、登录、桌面操作']];return companionHero()+(waiting?'<button class="waiting-banner" data-go="daily">有 '+waiting+' 件事等你决定 <span>去看看 →</span></button>':'')+'<div class="companion-grid">'+tiles.map(t=>'<button class="quick-tile" data-go="'+t[0]+'"><span class="tile-icon">'+icon(t[1])+'</span><b>'+t[2]+'</b><small>'+t[3]+'</small><span class="tile-arrow">↗</span></button>').join('')+'</div><div class="companion-columns"><section class="card"><div class="section-heading"><h2>接下来的小事</h2><button class="ghost small" data-go="daily">完整日程 →</button></div>'+compactTimeline(3)+'</section><section class="card diary-peek"><span class="life-eyebrow">最近的一页</span><h2>'+esc(last?.day||'还没有日记')+'</h2><p class="diary-preview">'+esc(last?.text||'等生活里有了值得记下的小事，就写在这里。')+'</p><button class="ghost" data-go="diary">翻开日记 →</button></section></div><details class="card advanced-home"><summary>连接状态与高级管理</summary>'+viewOverview()+'</details>';}
   function companionMediaHistory(v){var names={pending:'准备中',waiting_service:'服务忙，稍后再试',generated:'已生成',queued:'等QQ确认',sent:'已送达',failed:'未完成',unknown:'需要核对',confirmed:'已确认'};return '<div class="media-history">'+(v.mediaTasks||[]).slice(-8).reverse().map(t=>'<p>'+esc(t.kind==='image'?'图片':'语音')+' · '+esc(names[t.status]||t.status)+'</p>').join('')+(v.actions||[]).slice(-8).reverse().map(a=>'<p>'+esc(a.action||a.tool||'设备操作')+' · '+esc(names[a.status]||a.status||'待核对')+'</p>').join('')+(!(v.mediaTasks||[]).length&&!(v.actions||[]).length?'<p class="muted">暂无新的操作记录。</p>':'')+'</div>';}
-  function rebuiltDaily(){var c=currentCompanion(),v=c.v,decisions=v.decisions?.pending||[],waiting=c.life.waiting||[],recoverable=c.life.recoverable||[];var out=companionHero()+companionPanelToolbar()+'<section class="card"><div class="section-heading"><div><h2>今天的安排</h2><p class="muted">这里是她自己写的打算，可以随时调整；正在做的事单独记录，到点不强制切换。你的请求优先。</p></div><button id="cpSchedule">刷新日程</button></div>'+compactTimeline()+'<div class="btnrow"><button id="cpRest">让她休息</button></div></section>';if(decisions.length||waiting.length){out+='<section class="card decision-card"><h2>想听听你的意见</h2>';decisions.forEach(d=>out+='<article class="decision-item"><p>'+esc(d.question||'这件事需要你确认')+'</p><details><summary>具体操作和内容</summary><pre>'+esc(JSON.stringify(d.operation,null,2))+'</pre></details><div class="btnrow"><button class="primary" data-cp-decision="'+esc(d.id)+'" data-cp-answer="同意">允许这一次</button><button data-cp-decision="'+esc(d.id)+'" data-cp-answer="拒绝">先不要</button></div></article>');waiting.filter(j=>!j.question?.details?.operationDecisionId).forEach(j=>out+='<article class="decision-item"><p>'+esc(j.question?.question||'待决定事项')+'</p><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="同意">同意</button><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="拒绝">暂不</button></article>');out+='</section>';}if(recoverable.length)out+='<section class="card"><h2>还留着的进度</h2>'+recoverable.map(j=>'<article class="decision-item"><b>'+esc(j.activity||'未完的小事')+'</b><p>'+esc(j.checkpoint?.summary||j.reason||'恢复前先核对当前状态')+'</p><button data-cp-resume="'+esc(j.id)+'">继续这件事</button></article>').join('')+'</section>';return out+'<details class="card"><summary>图片、语音与操作记录</summary>'+companionMediaHistory(v)+'</details>';}
+  function rebuiltDaily(){var c=currentCompanion(),v=c.v,decisions=v.decisions?.pending||[],waiting=c.life.waiting||[],recoverable=c.life.recoverable||[];var out=companionHero()+companionPanelToolbar()+'<section class="card"><div class="section-heading"><div><h2>今天的安排</h2><p class="muted">这里是她自己写的打算，可以随时调整；正在做的事单独记录，到点不强制切换。你的请求优先。</p></div><button id="cpSchedule">刷新日程</button></div>'+compactTimeline()+'<div class="btnrow"><button id="cpRest">让她休息</button></div></section>';if(decisions.length||waiting.length){out+='<section class="card decision-card"><h2>这笔付款想听你的意见</h2>';decisions.forEach(d=>out+='<article class="decision-item"><p>'+esc(d.question||'这件事需要你确认')+'</p><details><summary>具体操作和内容</summary><pre>'+esc(JSON.stringify(d.operation,null,2))+'</pre></details><div class="btnrow"><button class="primary" data-cp-decision="'+esc(d.id)+'" data-cp-answer="同意">允许这一次</button><button data-cp-decision="'+esc(d.id)+'" data-cp-answer="拒绝">先不要</button></div></article>');waiting.filter(j=>!j.question?.details?.operationDecisionId).forEach(j=>out+='<article class="decision-item"><p>'+esc(j.question?.question||'待决定事项')+'</p><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="同意">同意</button><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="拒绝">暂不</button></article>');out+='</section>';}if(recoverable.length)out+='<section class="card"><h2>还留着的进度</h2>'+recoverable.map(j=>'<article class="decision-item"><b>'+esc(j.activity||'未完的小事')+'</b><p>'+esc(j.checkpoint?.summary||j.reason||'恢复前先核对当前状态')+'</p><button data-cp-resume="'+esc(j.id)+'">继续这件事</button></article>').join('')+'</section>';return out+'<details class="card"><summary>图片、语音与操作记录</summary>'+companionMediaHistory(v)+'</details>';}
   function diaryLineDoodle(kind){
     const paths={
       whale:'<path d="M15 31c-4-16 8-25 26-22 15 2 19 14 16 25 9 2 15-2 19-11 4 15-4 25-20 23-20 7-36 0-41-15Z"/><path d="m31 9-3-5m10 4 2-5M25 30q3-3 6 0m10 0q3-3 6 0m-15 6q5 5 9-1"/><path d="m19 34 4 1m24 0 4-1" opacity=".6"/>',
@@ -4054,13 +4870,13 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
     return paths[kind]?'<svg viewBox="0 0 82 62" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths[kind]+'</svg>':'';
   }
   function diaryDate(day,index){const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(day);if(!match)return '<time class="diary-date">'+esc(day)+'</time>';return '<time class="diary-date" datetime="'+esc(day)+'"><b>'+match[3]+'</b><span>'+match[1]+'.'+match[2]+'</span><small>第 '+String(index+1).padStart(2,'0')+' 页</small></time>';}
-  var diaryPage=0;
+  var diaryPage=-1;
   function rebuiltDiary(){
-    const allDays=(companionPanel.value?.diary?.days||[]).slice().sort((a,b)=>String(a.day).localeCompare(String(b.day)));if(diaryPage>allDays.length-1)diaryPage=Math.max(0,allDays.length-1);const days=allDays.length?[allDays[diaryPage]]:[],name=currentCompanion().name;const pager=allDays.length>1?'<div class="diary-pager"><button id="diaryPrev"'+(diaryPage<=0?' disabled':'')+'>上一页</button><span>'+(diaryPage+1)+' / '+allDays.length+' 页</span><button id="diaryNext"'+(diaryPage>=allDays.length-1?' disabled':'')+'>下一页</button></div>':'';
+    const allDays=(companionPanel.value?.diary?.days||[]).slice().sort((a,b)=>String(a.day).localeCompare(String(b.day)));if(diaryPage<0||diaryPage>allDays.length-1)diaryPage=Math.max(0,allDays.length-1);const days=allDays.length?[allDays[diaryPage]]:[],name=currentCompanion().name;const pager=allDays.length>1?'<div class="diary-pager"><button id="diaryPrev"'+(diaryPage<=0?' disabled':'')+'>上一页</button><span>'+(diaryPage+1)+' / '+allDays.length+' 页</span><button id="diaryNext"'+(diaryPage>=allDays.length-1?' disabled':'')+'>下一页</button></div>':'';
     return companionPanelToolbar()+pager+'<div class="diary-shelf" aria-label="私人日记本">'+days.map((d,i)=>{
-      const face=typeof d.kaomoji==='string'?d.kaomoji.slice(0,24):'',chosen=diaryLineDoodle(d.doodle),doodle=face?'':chosen||diaryLineDoodle(i%2?'star':'whale'),paper=!chosen&&!face;
-      return '<article class="diary-sheet" aria-label="'+esc(d.day)+'的日记">'+diaryDate(d.day,i)+'<p class="diary-text">'+esc(d.text)+'</p><div class="diary-doodle'+(paper?' paper-doodle':'')+'" aria-label="'+(paper?'纸页小涂鸦':'日记表情')+'">'+(face?'<span class="diary-kaomoji">'+esc(face)+'</span>':'')+doodle+'</div><div class="diary-actions"><button class="ghost small" data-cp-compact="'+esc(d.day)+'">再精炼一点</button><details><summary>'+d.sourceIds.length+' 条真实依据</summary><div class="btnrow">'+d.sourceIds.slice(0,30).map(id=>'<button class="small" data-cp-evidence="'+esc(id)+'">查看原文</button>').join('')+'</div></details></div><details class="diary-original"><summary>展开原始摘记</summary><p class="diary-text">'+esc(d.fullText||d.parts?.map(p=>p.text).join('\n\n')||d.text)+'</p></details><span class="diary-page-number" aria-hidden="true">— '+String(i+1).padStart(2,'0')+' —</span></article>';
-    }).join('')+(!days.length?'<div class="diary-empty">'+diaryLineDoodle('whale')+'<p>这一页还空着，等一点值得记住的小事。</p></div>':'')+'</div><details class="card"><summary>整理尚未写入的真实经历</summary><p class="muted">'+Number(companionPanel.value?.diary?.pending||0)+' 段来源待整理，后台会逐批处理。</p><button id="cpJournal">整理一批</button></details>'+companionEvidenceMarkup();
+      const face=typeof d.kaomoji==='string'?d.kaomoji.slice(0,24):'',chosen=diaryLineDoodle(d.doodle),doodle=face?'':chosen,paper=false;
+      return '<article class="diary-sheet" aria-label="'+esc(d.day)+'的日记">'+diaryDate(d.day,diaryPage)+(d.title?'<h2 class="diary-title">'+esc(d.title)+'</h2>':'')+'<p class="diary-text">'+esc(d.text)+'</p><div class="diary-doodle'+(paper?' paper-doodle':'')+'" aria-label="'+(paper?'纸页小涂鸦':'日记表情')+'">'+(face?'<span class="diary-kaomoji">'+esc(face)+'</span>':'')+doodle+'</div><div class="diary-actions"><span class="muted">一天一篇 · '+(d.finalized?'已写好':'往日摘记')+'</span><details><summary>'+d.sourceIds.length+' 条真实依据</summary><div class="btnrow">'+d.sourceIds.slice(0,30).map(id=>'<button class="small" data-cp-evidence="'+esc(id)+'">查看原文</button>').join('')+'</div></details></div><span class="diary-page-number" aria-hidden="true">— '+String(diaryPage+1).padStart(2,'0')+' —</span></article>';
+    }).join('')+(!days.length?'<div class="diary-empty">'+diaryLineDoodle('whale')+'<p>这一页还空着，等一点值得记住的小事。</p></div>':'')+'</div><section class="card"><p class="muted">今天先好好过。过了零点，再给刚刚过去的一天写一篇；程序没开时，下次运行补写。同一天不会反复改写，聊天记忆仍会正常整理。</p><p class="muted">'+Number(companionPanel.value?.diary?.pendingDays||0)+' 天经历待写入日记。</p><button id="cpJournal"'+(Number(companionPanel.value?.diary?.pendingDays||0)?'':' disabled')+'>补写一篇尚未完成的日记</button></section>'+companionEvidenceMarkup();
   }
 
   var constellationMount=null;
@@ -4088,5 +4904,69 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
 
 
 </script>
+
+<script>
+(function(){
+  try{
+    var saved=localStorage.getItem('qqbridge-skin');
+    if(saved==='purple')document.documentElement.setAttribute('data-skin','purple');
+  }catch(e){}
+  function boot(){
+    if(document.getElementById('skinToggle'))return;
+    var b=document.createElement('button');
+    b.id='skinToggle';
+    var paint=function(){var purple=document.documentElement.getAttribute('data-skin')==='purple';b.textContent=purple?'配色：紫':'配色：蓝';};
+    paint();
+    b.onclick=function(){
+      var purple=document.documentElement.getAttribute('data-skin')==='purple';
+      if(purple)document.documentElement.removeAttribute('data-skin');else document.documentElement.setAttribute('data-skin','purple');
+      try{localStorage.setItem('qqbridge-skin',purple?'blue':'purple');}catch(e){}
+      paint();
+    };
+    document.body.appendChild(b);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+<style>
+#bridgeIssueButton{position:fixed;bottom:14px;left:16px;z-index:1100;box-shadow:0 2px 12px #0003}#bridgeIssueButton[data-alert="true"]{background:#a93232;color:white}#bridgeIssuePanel{width:min(720px,92vw);max-height:78vh;padding:22px;border:1px solid #8886;border-radius:14px;background:var(--bg,#fff);color:var(--text,#222);box-shadow:0 12px 60px #0005}#bridgeIssuePanel::backdrop{background:#0005}#bridgeIssuePanel .issue-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}#bridgeIssueList{list-style:none;padding:0;max-height:48vh;overflow:auto}#bridgeIssueList li{border-top:1px solid #8884;padding:12px 0}#bridgeIssueList pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:6px 0}#bridgeIssueState{font-size:13px;opacity:.8;margin:10px 0}
+</style>
+<button id="bridgeIssueButton" type="button">运行提醒 · 0</button>
+<dialog id="bridgeIssuePanel" aria-label="QQ桥接运行提醒">
+ <div class="issue-toolbar"><b>QQ桥接运行提醒</b><button id="bridgeIssueSound" type="button">启用错误提示音</button><button id="bridgeIssueAck" type="button">标记全部已读</button><button id="bridgeIssueClose" type="button">关闭</button></div>
+ <p id="bridgeIssueState">正在连接提醒记录…</p><p style="font-size:13px">失败详情保留在桥接面板；QQ 中不发送技术报错。提示音需要此页面保持打开。</p><ol id="bridgeIssueList"></ol>
+</dialog>
+<script>
+(function(){
+ 'use strict';
+ var button=document.getElementById('bridgeIssueButton'),panel=document.getElementById('bridgeIssuePanel'),list=document.getElementById('bridgeIssueList'),state=document.getElementById('bridgeIssueState'),soundButton=document.getElementById('bridgeIssueSound');
+ var account=null,rows=[],seen=new Set(),audio=null,enabled=false,polling=false;
+ try{enabled=localStorage.getItem('qqBridge.issueSound')==='true';}catch(e){}
+ function soundLabel(){soundButton.textContent=enabled&&audio&&audio.state==='running'?'关闭错误提示音':enabled?'提示音待启用（点击允许）':'启用错误提示音';}
+ function tone(){if(!enabled||!audio||audio.state!=='running')return false;try{var oscillator=audio.createOscillator(),gain=audio.createGain(),t=audio.currentTime;oscillator.type='sine';oscillator.frequency.setValueAtTime(720,t);oscillator.frequency.setValueAtTime(540,t+.14);gain.gain.setValueAtTime(.0001,t);gain.gain.exponentialRampToValueAtTime(.12,t+.02);gain.gain.exponentialRampToValueAtTime(.0001,t+.34);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(t);oscillator.stop(t+.36);return true;}catch(e){state.textContent='提示音暂不可播放，请重新点击启用。';return false;}}
+ async function unlock(){var Constructor=window.AudioContext||window.webkitAudioContext;if(!Constructor){state.textContent='此浏览器不支持提示音，仍会显示提醒记录。';return false;}try{if(!audio)audio=new Constructor();await audio.resume();soundLabel();if(audio.state==='running'&&account!==null)state.textContent='已连接 · 提示音已启用';return audio.state==='running';}catch(e){state.textContent='浏览器尚未允许声音，请点击启用错误提示音。';return false;}}
+ soundButton.onclick=async function(){if(enabled&&audio&&audio.state==='running'){enabled=false;}else{enabled=true;await unlock();tone();}try{localStorage.setItem('qqBridge.issueSound',String(enabled));}catch(e){}soundLabel();};
+ document.addEventListener('pointerdown',function(){if(enabled&&(!audio||audio.state!=='running'))void unlock();},{passive:true});
+ button.onclick=function(){if(!panel.open)panel.showModal();};document.getElementById('bridgeIssueClose').onclick=function(){panel.close();};
+ function render(){var unread=rows.filter(function(r){return !r.acknowledged;}).length;button.textContent='运行提醒 · '+unread;button.dataset.alert=String(unread>0);list.replaceChildren();rows.forEach(function(row){var item=document.createElement('li'),meta=document.createElement('small'),text=document.createElement('pre');meta.textContent=new Date(row.at).toLocaleString()+' · '+(row.backend==='api'?'API':'本地')+' · '+row.kind+(row.acknowledged?' · 已读':'');text.textContent=row.message;item.append(meta,text);list.append(item);});if(!rows.length){var empty=document.createElement('li');empty.textContent='暂时没有运行报错。';list.append(empty);}}
+ async function poll(){if(polling)return;polling=true;try{var response=await fetch('/im-bridge/issues',{cache:'no-store',signal:AbortSignal.timeout(6000)});if(!response.ok)throw Error('HTTP '+response.status);var data=await response.json();if(!Array.isArray(data.issues))throw Error('提醒接口尚未就绪，请重新打开宿主加载新版插件');var changed=account!==String(data.accountId||'');if(changed){account=String(data.accountId||'');seen=new Set();try{seen=new Set(JSON.parse(sessionStorage.getItem('qqBridge.issueSeen:'+account)||'[]'));}catch(e){}}
+ var fresh=data.issues.filter(function(row){return !row.acknowledged&&!seen.has(row.id);});rows=data.issues;rows.forEach(function(row){seen.add(row.id);});seen=new Set(Array.from(seen).slice(-240));try{sessionStorage.setItem('qqBridge.issueSeen:'+account,JSON.stringify(Array.from(seen)));}catch(e){}
+ state.textContent='已连接 · '+(enabled&&audio&&audio.state==='running'?'提示音已启用':enabled?'提示音待浏览器允许':'提示音未启用');render();if(!changed&&fresh.length){if(!tone()&&enabled)state.textContent='有新报错；浏览器尚未允许声音，请点击启用错误提示音。';}
+ }catch(e){state.textContent='提醒记录暂未连接：'+e.message;}finally{polling=false;}}
+ document.getElementById('bridgeIssueAck').onclick=async function(){var ids=rows.filter(function(r){return !r.acknowledged;}).map(function(r){return r.id;});try{var response=await fetch('/im-bridge/issues',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'acknowledge',ids:ids})});if(!response.ok)throw Error('HTTP '+response.status);await poll();}catch(e){state.textContent='标记已读失败：'+e.message;}};
+ soundLabel();void poll();setInterval(poll,2500);
+})();
+</script>
+
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+

@@ -1,3 +1,4 @@
+import {apiOnlySettings,apiOnlyConnections} from './mobile-api-policy.js';
 import {buildUnionPlan} from './sync-union.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,7 +11,7 @@ const digest=b=>createHash('sha256').update(b).digest('hex');
 const readJSON=(file,fallback={})=>{try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch{return fallback;}};
 const atomic=(file,bytes)=>{fs.mkdirSync(path.dirname(file),{recursive:true});const temp=file+'.'+randomUUID()+'.tmp';fs.writeFileSync(temp,bytes,{mode:0o600});fs.renameSync(temp,file);};
 const jsonBytes=v=>Buffer.from(JSON.stringify(v));
-const DATA=new Set(['settings.json','state.json','features.json','usage.json','sticker-notes.json','memories.json','phone-mobile-secrets.json','phone-mobile-secrets.key','phone-payment-ledger.json','website-reading.json','life-execution.json','expression-learning.json']);
+const DATA=new Set(['settings.json','state.json','features.json','usage.json','sticker-notes.json','memories.json','phone-mobile-secrets.json','phone-mobile-secrets.key','phone-payment-ledger.json','website-reading.json','life-execution.json','expression-learning.json','service-connections.json','website-mcp.json','qzone-social.json']);
 export function validKey(key){return typeof key==='string'&&key.length<1200&&!/[\\\x00-\x1f:]/.test(key)&&key.split('/').every(x=>x&&x!=='.'&&x!=='..')&&/^(?:data|cache|memory|persona|humanism|workspace|source|profiles|secrets)\//.test(key);}
 export function planSync(left,right,base={},prefer='phone'){
  const work=[],conflicts=[];
@@ -27,7 +28,7 @@ export function planSync(left,right,base={},prefer='phone'){
 export function createDeviceSync(options){
  const own=options.device||(process.platform==='win32'?'desktop':'phone'),dir=path.join(options.dataDir,'device-sync'),pairFile=path.join(dir,'pairing.json');
  fs.mkdirSync(dir,{recursive:true});let server=null,closed=false,busy=false,lastError='',forwardOrigin='',codeChanged=false,sending=null,usbTimer=null;
- const statusFile=path.join(dir,'last-sync.json');
+ const statusFile=path.join(dir,'last-sync.json');let runtimeIsolation=false;
  const pairing=()=>readJSON(pairFile);
  const localSettings=()=>readJSON(path.join(options.dataDir,'settings.json'));
  function rootMap(){return{data:options.dataDir,...options.roots(),source:options.sourceDir,profiles:path.join(dir,'profiles')};}
@@ -52,15 +53,27 @@ export function createDeviceSync(options){
   value=replacePaths(value,toPortable);
   if(key==='source/package.json')value.name=toPortable?'dsh-im-bridge-unified':own==='phone'?'dsh-im-bridge-mobile':'dsh-im-bridge';
   if(key==='data/settings.json'){
-   const local=localSettings();value.cacheDir=toPortable?'@bridge/cache':options.roots().cache;value.memoryDir=toPortable?'@bridge/memory':options.roots().memory;
+   const local=localSettings();
+   const runtime=['localChat','comfyui'];
+   for(const field of runtime){if(toPortable&&runtimeIsolation)value[field]='@device/runtime/'+field;else if(!toPortable&&value[field]==='@device/runtime/'+field)value[field]=local[field]||{};}
+   if(value.agency){for(const field of ['desktop','workspace']){if(toPortable&&runtimeIsolation)value.agency[field]='@device/agency/'+field;else if(!toPortable&&value.agency[field]==='@device/agency/'+field)value.agency[field]=local.agency?.[field]??(field==='desktop'?false:'internal');}}
+   if(value.voice){for(const field of ['engine','enabled']){if(toPortable&&runtimeIsolation)value.voice[field]='@device/voice/'+field;else if(!toPortable&&value.voice[field]==='@device/voice/'+field)value.voice[field]=local.voice?.[field]??(field==='engine'?'none':false);}}
+   if(!toPortable&&own==='phone')value=apiOnlySettings(value);
+   value.cacheDir=toPortable?'@bridge/cache':options.roots().cache;value.memoryDir=toPortable?'@bridge/memory':options.roots().memory;
    if(value.voice){value.voice.pythonPath=toPortable?'@device/voice/pythonPath':local.voice?.pythonPath||'';value.voice.pythonLib=toPortable?'@device/voice/pythonLib':local.voice?.pythonLib||'';}
    for(const account of value.accounts||[]){const ownAccount=(local.accounts||[]).find(a=>a.id===account.id)||(local.accounts||[]).find(a=>a.qq===account.qq);account.wsUrl=toPortable?'@device/onebot/url':ownAccount?.wsUrl||'ws://127.0.0.1:3001';account.token=toPortable?'@device/onebot/token':ownAccount?.token||'';}
+  }
+  if(key==='data/service-connections.json'){
+   const local=readJSON(path.join(options.dataDir,'service-connections.json'));
+   if(toPortable&&runtimeIsolation){value.routes='@device/service/routes';value.legacyLocalEnabled='@device/service/local';value.legacyApiComplement='@device/service/complement';}
+   else if(!toPortable){if(value.routes==='@device/service/routes')value.routes=local.routes||{enabled:false,chat:'host',image:'legacy',speech:'legacy'};if(value.legacyLocalEnabled==='@device/service/local')value.legacyLocalEnabled=local.legacyLocalEnabled===true;if(value.legacyApiComplement==='@device/service/complement')value.legacyApiComplement=local.legacyApiComplement===true;if(own==='phone')value=apiOnlyConnections(value);}
   }
   if(key==='data/state.json'){value.chats={};value.accountPaused=true;value.manuallyLoggedOut=false;}
   if(key==='data/features.json')value.generation=0;
   return jsonBytes(value);
  }
- async function capture({flush=true}={}){
+ async function capture({flush=true,runtimeIsolation:isolate=false}={}){
+  runtimeIsolation=isolate===true;
   if(flush)await options.flush();atomic(path.join(dir,'profiles',own+'.json'),jsonBytes(deviceProfile()));
   const manifest={};
   const add=(key,file)=>{if(!validKey(key))return;const stat=fs.lstatSync(file);if(stat.isSymbolicLink()||!stat.isFile())return;const bytes=canonical(key,fs.readFileSync(file));manifest[key]={hash:digest(bytes),size:bytes.length,modifiedAt:stat.mtimeMs};};
@@ -81,11 +94,11 @@ export function createDeviceSync(options){
  }
  async function peerCall(route,body){let origin=own==='desktop'?forwardOrigin:'http://127.0.0.1:'+PORT_PC;if(!origin)origin=await connect();try{return await rpc(origin,route,body);}catch(error){if(own==='desktop'){forwardOrigin='';throw error;}throw error;}}
  const local={
-  async status(){return{...options.status(),protocolVersion:2,paired:!!pairing().token,busy,lastSync:readJSON(statusFile,null),codeReloadRequired:codeChanged};},
+  async status(){return{...options.status(),protocolVersion:2,runtimeIsolationVersion:1,paired:!!pairing().token,busy,lastSync:readJSON(statusFile,null),codeReloadRequired:codeChanged};},
   async pause(){await options.pause();await options.flush();return{paused:true};},
   async select(body){if(!['desktop','phone'].includes(body.device))throw Error('运行设备无效');atomic(path.join(dir,'active-device.json'),jsonBytes({device:body.device,at:Date.now()}));return{selected:body.device};},
   async resume(){if(!allowRun())throw Error('当前设备处于待机，请从设备与同步页切换运行设备');await options.resume();return{paused:false};},
-  async manifest(body={}){return capture({flush:body.flush!==false});},
+  async manifest(body={}){return capture({flush:body.flush!==false,runtimeIsolation:body.runtimeIsolation===true});},
   async chunk(body){if(!Number.isSafeInteger(body.offset)||body.offset<0)throw Error('同步偏移无效');if(!sending||sending.key!==body.key||sending.hash!==body.hash){const bytes=await read(body.key);if(digest(bytes)!==body.hash)throw Error('数据在读取期间发生变化，请重新同步');sending={key:body.key,hash:body.hash,bytes};}const bytes=sending.bytes,data=bytes.subarray(body.offset,body.offset+CHUNK).toString('base64');if(body.offset+CHUNK>=bytes.length)sending=null;return{data};},
   async stage(body){if(!/^[a-f0-9-]{36}$/.test(body.id)||!validKey(body.key)||!Number.isSafeInteger(body.offset)||body.offset<0||body.offset>2**40)throw Error('同步分块参数无效');resolveKey(body.key==='secrets/deepseek.json'?'data/settings.json':body.key);const file=path.join(dir,'stage',body.id,digest(body.key));fs.mkdirSync(path.dirname(file),{recursive:true});const bytes=Buffer.from(body.data||'','base64');if(bytes.length>CHUNK)throw Error('分块过大');const size=fs.existsSync(file)?fs.statSync(file).size:0;if(size!==body.offset)throw Error('同步分块顺序无效');fs.appendFileSync(file,bytes,{mode:0o600});return{size:size+bytes.length};},
   async commit(body){
@@ -106,17 +119,18 @@ export function createDeviceSync(options){
   try{
    await connect();const before={desktop:await local.status(),phone:await peerCall('/status')};
    await local.pause();await peerCall('/pause',{});
-   const [a,b]=await Promise.all([local.manifest(),peerCall('/manifest',{})]);
+   const isolated=before.desktop.runtimeIsolationVersion===1&&before.phone.runtimeIsolationVersion===1;
+   const [a,b]=await Promise.all([local.manifest({runtimeIsolation:isolated}),peerCall('/manifest',{runtimeIsolation:isolated})]);
    const readFrom=async(side,key,meta)=>{const chunks=[];for(let offset=0;offset<meta.size||offset===0;offset+=CHUNK){const part=await invoke(side,'chunk',{key,hash:meta.hash,offset});chunks.push(Buffer.from(part.data,'base64'));}const bytes=Buffer.concat(chunks);if(bytes.length!==meta.size||digest(bytes)!==meta.hash)throw Error('同步读取校验失败');return bytes;};
    const plan=await buildUnionPlan(a,b,{read:readFrom}),id=randomUUID();
-   const legacyPeer=before.phone.protocolVersion!==2;
+   const legacyPeer=before.phone.protocolVersion!==2||!isolated;
    const work=legacyPeer?plan.work.filter(x=>x.key.startsWith('source/')):plan.work;
    if(legacyPeer&&!work.length)throw Error('另一端仍在运行旧版同步，请先重载另一端插件，再使用一键合并同步');
    const codeReloadRequired=work.some(x=>x.key.startsWith('source/'));
    for(const item of work){if(item.remove)continue;for(let offset=0;offset<item.size||offset===0;offset+=CHUNK){const data=item.bytes?item.bytes.subarray(offset,offset+CHUNK).toString('base64'):(await invoke(item.from,'chunk',{key:item.sourceKey||item.key,hash:item.hash,offset})).data;await invoke(item.to,'stage',{id,key:item.key,offset,data});}}
    // Both sides are fully staged before any local file is replaced.
    for(const side of ['desktop','phone']){const items=work.filter(x=>x.to===side).map(({bytes,from,sourceKey,...item})=>item);if(items.length)await invoke(side,'commit',{id,items,deferReload:codeReloadRequired});}
-   const [afterA,afterB]=await Promise.all([local.manifest({flush:!codeReloadRequired}),peerCall('/manifest',{flush:!codeReloadRequired})]);const agreed={};for(const [key,value]of Object.entries(afterA.files))if(value.hash===afterB.files[key]?.hash)agreed[key]=value.hash;
+   const [afterA,afterB]=await Promise.all([local.manifest({flush:!codeReloadRequired,runtimeIsolation:isolated}),peerCall('/manifest',{flush:!codeReloadRequired,runtimeIsolation:isolated})]);const agreed={};for(const [key,value]of Object.entries(afterA.files))if(value.hash===afterB.files[key]?.hash)agreed[key]=value.hash;
    for(const item of work){const after=item.to==='desktop'?afterA:afterB;if(item.remove?!!after.files[item.key]:after.files[item.key]?.hash!==item.hash)throw Error('同步后校验未通过，保留两端暂停与恢复副本：'+item.key);}
    atomic(path.join(dir,'base.json'),jsonBytes({pairId:pairing().pairId,files:agreed}));
    const target=activate||(!before.phone.paused?'phone':!before.desktop.paused?'desktop':null);

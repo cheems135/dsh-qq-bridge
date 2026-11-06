@@ -1,0 +1,91 @@
+{
+ "1": {
+  "inputs": {
+   "用户消息": "",
+   "对话历史JSON": "[]",
+   "请求ID": "1793716588024-tt4pc83fk6c",
+   "当前图片JSON": "[]",
+   "流程状态JSON": "{\"skill\":\"\",\"skill_name\":\"\",\"inline_file_id\":\"\",\"stage\":\"未开始\",\"loaded_references\":[],\"final_result\":\"\"}",
+   "选项JSON": "[]",
+   "qwen模型": [
+    "5",
+    0
+   ],
+   "增强设置": [
+    "2",
+    0
+   ],
+   "skill加载器": [
+    "3",
+    0
+   ]
+  },
+  "class_type": "QwenTE_MultiTurnChat",
+  "_meta": {
+   "title": "Qwen llama TE 多轮对话聊天",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ },
+ "2": {
+  "inputs": {
+   "系统提示词": "",
+   "最大历史轮数": 100,
+   "最大生成token": 4096,
+   "温度": 0.7,
+   "top_p": 0.9,
+   "top_k": 20,
+   "重复惩罚": 1,
+   "频率惩罚": 0,
+   "存在惩罚": 0,
+   "seed": 326429966956794,
+   "输出think块": false,
+   "最大边长": 1024
+  },
+  "class_type": "QwenTE_ChatSettings",
+  "_meta": {
+   "title": "Qwen llama TE 对话增强设置",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ },
+ "3": {
+  "inputs": {
+   "skill": "极简产品广告生成器 [minimalist-product-ad-generator]",
+   "加载文件名": "",
+   "加载文件内容": ""
+  },
+  "class_type": "QwenTE_SkillLoader",
+  "_meta": {
+   "title": "Qwen llama TE Skill加载器",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ },
+ "5": {
+  "inputs": {
+   "模型系列": "Qwen3.8-VL",
+   "主模型": "Qwen3.8-U-HauhauCS\\Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-IQ2_M.gguf",
+   "视觉投影mmproj": "Qwen3.8-U-HauhauCS\\mmproj-Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-BF16.gguf",
+   "启用思考": false,
+   "保留历史think": false,
+   "上下文长度": 29952,
+   "GPU层数": -1,
+   "KV缓存K类型": "q8_0",
+   "KV缓存V类型": "q8_0",
+   "MoE专家上CPU": false,
+   "前N层专家上CPU": 0,
+   "Qwen3.8推理强度": "xhigh",
+   "MTP推测解码": "关闭",
+   "MTP草稿token数": 2,
+   "Flash Attention": "不开启",
+   "MTP草稿模型": "无"
+  },
+  "class_type": "QwenTE_ModelLoader",
+  "_meta": {
+   "title": "Qwen llama TE 模型加载器",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ }
+}

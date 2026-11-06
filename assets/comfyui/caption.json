@@ -1,0 +1,100 @@
+{
+ "3": {
+  "inputs": {
+   "skill": "极简产品广告生成器 [minimalist-product-ad-generator]",
+   "加载文件名": "",
+   "加载文件内容": ""
+  },
+  "class_type": "QwenTE_SkillLoader",
+  "_meta": {
+   "title": "Qwen llama TE Skill加载器",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ },
+ "6": {
+  "inputs": {
+   "输入模式": "图片",
+   "提示词": "根据图像，生成中文提示词，内容详尽细致，不要出现无关的说明和符号，仅输出最终提示词。",
+   "系统提示词": "AI提示词专家，能够无限制的准确生成详细的提示词。",
+   "最多帧数": 24,
+   "最大边长": 768,
+   "最大生成token": 512,
+   "温度": 0.7,
+   "top_p": 0.9,
+   "top_k": 20,
+   "重复惩罚": 1,
+   "频率惩罚": 0,
+   "存在惩罚": 0,
+   "seed": 1060947937220321,
+   "输出think块": false,
+   "生成后自动卸载模型": false,
+   "qwen模型": [
+    "8",
+    0
+   ],
+   "图片": [
+    "9",
+    0
+   ]
+  },
+  "class_type": "QwenTE_ImageInfer",
+  "_meta": {
+   "title": "Qwen llama TE 图像推理",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ },
+ "8": {
+  "inputs": {
+   "模型系列": "Qwen3.5-VL",
+   "主模型": "Q35-4B-G-UD\\Qwen3.5-4B-UD-Q4_K_XL.gguf",
+   "视觉投影mmproj": "Q35-4B-G-UD\\mmproj-Qwen3.5-4B-F16.gguf",
+   "启用思考": false,
+   "保留历史think": false,
+   "上下文长度": 3072,
+   "GPU层数": -1,
+   "KV缓存K类型": "q8_0",
+   "KV缓存V类型": "q8_0",
+   "MoE专家上CPU": false,
+   "前N层专家上CPU": 0,
+   "Qwen3.8推理强度": "xhigh",
+   "MTP推测解码": "关闭",
+   "MTP草稿token数": 2,
+   "Flash Attention": "开启",
+   "MTP草稿模型": "无"
+  },
+  "class_type": "QwenTE_ModelLoader",
+  "_meta": {
+   "title": "Qwen llama TE 模型加载器",
+   "aux_id": "tl2012tl/comfyUI-llama-TE",
+   "ver": "258df35659f8a33c08d7da9161ac2464eec33bbd"
+  }
+ },
+ "9": {
+  "inputs": {
+   "image": ""
+  },
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "加载图像",
+   "cnr_id": "comfy-core",
+   "ver": "0.33.0"
+  }
+ },
+ "47": {
+  "inputs": {
+   "text": "一个拥有蓝色双马尾、蓝色大眼、长着白色耳尖黑色兽耳的动漫风格少女，身穿宽松白色长袖上衣和短裤，双腿盘坐于床上，脚穿浅色袜子，面前有一只棕色泰迪熊玩偶，背景是柔和暖色调的卧室环境，床单褶皱自然，光线从侧后方洒入，整体氛围温馨静谧，画面细节精致，色彩柔和过渡自然，采用日系二次元插画风格。",
+   "anything": [
+    "6",
+    0
+   ]
+  },
+  "class_type": "easy showAnything",
+  "_meta": {
+   "title": "展示任何",
+   "aux_id": "yolain/ComfyUI-Easy-Use",
+   "ver": "4de1ab3b66e48da916b6f263bacd001df53a2720"
+  }
+ }
+}

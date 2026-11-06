@@ -1,27 +1,10 @@
-# dsh-im-bridge bundle patch
-#
-# Inserts ONE Host row: the QQ ⇄ DeepSeek Harness bridge.
-# The config below is only the initial value; once the panel saved settings,
-# the profile's settings.json wins.
 - insert:
     - id: im-bridge
       name: 'dsh-im-bridge'
       config:
-        # NapCat 的「WebSocket 服务端」地址（不是 HTTP 端口）
         wsUrl: 'ws://127.0.0.1:3001'
-        # NapCat 里设置的 token；没有就留空
         accessToken: ''
-        # 允许私聊的 QQ 号。留空 = 谁都不理
         allowUsers: []
-        # 允许的 QQ 群号。留空 = 不响应任何群
         allowGroups: []
-        # 群里必须 @ 才回应
         groupRequireAt: true
-        # 工作目录；留空 = 用 DSH 当前工作目录
-        # cwd: 'C:/path/to/workspace'
-        agentPreset: whale
-        presetRev: '1'
-        model:
-          provider: deepseek-account
-          model: deepseek-flash
-        maxReplyChars: 1500
+        selfTest: false

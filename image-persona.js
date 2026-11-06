@@ -1,3 +1,5 @@
+export const HEADWEAR_RULE_ZH='换装时把可摘戴头饰一起搭配：发箍、发带、帽子、头巾、发夹和蝴蝶结等应按新服装及当前场景更换，或合理摘除，不默认保留参考图或旧穿搭的头饰；用户本轮明确指定保留的优先。特殊耳形、角等身体特征属于身份，不能当头饰摘除或更换。';
+export const HEADWEAR_RULE_EN='When the outfit changes, coordinate removable headwear with the new outfit and scene: change or remove the old headband, hat, hair ribbon, veil or hair clips instead of automatically copying them from the reference or previous outfit. Explicit current requests to retain or select a headpiece take priority. Anatomical ears, horns and other species features are identity, not removable headwear.';
 // Pure routing and camera rules. No chat history, credentials or image bytes here.
 export const IMAGE_STYLES = ['auto','anime','realistic','illustration','watercolor','oil','pixel','ink','chibi'];
 const rules = [
@@ -173,7 +175,7 @@ export function routePersonaWorkflow(config,{selector='',styles=[],hasReference=
   return candidates[0]?.w.id||'';
 }
 
-const changeableAppearance=/(?:穿|换装|衣服|衣着|穿搭|上衣|外套|裙|裤|睡衣|泳装|制服|发型|头发|长发|短发|马尾|丸子头|辫|披发|扎发|刘海|戴|摘|outfit|wear|dress|shirt|skirt|hairstyle|ponytail|braid|bun\b|hair)/i;
+const changeableAppearance=/(?:穿|换装|衣服|衣着|穿搭|上衣|外套|裙|裤|睡衣|泳装|制服|发型|头发|长发|短发|马尾|丸子头|辫|披发|扎发|刘海|头饰|发饰|发箍|发带|发卡|发夹|帽子|头巾|蝴蝶结|戴|摘|headwear|headband|headpiece|outfit|wear|dress|shirt|skirt|hairstyle|ponytail|braid|bun\b|hair)/i;
 export function appearanceConversation(audits,{key='',accountId='',personaId='',now=Date.now(),floor=0}={}) {
   if(!key)return [];
   const snippets=(value,user)=>String(value||'').replace(/\[(?:图|图片|语音|设置|表情包):[^\]]*\]/g,'').split(/[\r\n。！？!?；;]+/).map(s=>s.trim()).filter(s=>{
@@ -190,3 +192,13 @@ export function appearanceConversation(audits,{key='',accountId='',personaId='',
     ...snippets(a.answer,false).map(text=>({source:'character-dialogue',text})),
   ]).slice(-8);
 }
+
+export function referencePromptPrefix(language='zh', look='', reuse=false, name='当前角色') {
+    const characterName=String(name||'当前角色').replace(/[\r\n，,。；;：:]/g,' ').trim().slice(0,80);
+    // A few stable visible traits identify her; never repeat the full design sheet.
+    const parts=String(look||'').split(/[，,。；;\n]+/).map(s=>s.trim()).filter(s=>s&&!/(?:尾|穿|衣|裙|裤|鞋|袜|背景|站|全身|头饰|发饰|发箍|发带|发卡|发夹|帽子|头巾|蝴蝶结|王冠|皇冠|tail|outfit|dress|shirt|skirt|trousers|background|standing|full.body|headband|headwear|headdress|headpiece|hair[ -]?(?:clip|ribbon|bow)|hat\b|bonnet|veil|crown)/i.test(s));
+    let subject='';for(const part of parts){if((subject+part).length>(language==='zh'?90:200))continue;subject+=(subject?(language==='zh'?'，':', '):'')+part;if(subject.length>(language==='zh'?45:110))break;}
+    if(language==='zh')return '参考图为人设图，她的名字叫'+characterName+'，'+(subject?subject+'。':'')+'仅保留取景内可见的脸、发色和特殊耳形；重新绘制下面的服装、头饰、动作和背景。'+HEADWEAR_RULE_ZH;
+    if(/[\u4e00-\u9fff]/.test(subject))subject='';
+    return 'The reference image is the character design sheet; her name is '+characterName+'. '+(subject?subject+'. ':'')+'Keep her face, hair color and distinctive ear shape within the crop; redraw the outfit, headwear, pose and setting below. '+HEADWEAR_RULE_EN;
+  }

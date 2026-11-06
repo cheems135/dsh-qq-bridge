@@ -4,7 +4,7 @@ const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const clean=(v,n=100)=>String(v??'').replace(/[\u0000-\u001f<>]/g,' ').trim().slice(0,n);
 const parse=v=>typeof v==='object'?v:JSON.parse(String(v).trim().replace(/^```(?:json)?\s*|\s*```$/g,''));
 const sourceContains=(source,quote)=>{if(source.text.includes(quote))return true;try{const value=JSON.parse(source.text);return [value.meaning,value.usage].some(s=>typeof s==='string'&&s.includes(quote));}catch{return false;}};
-export function createMemeStudy({storage,library,ask,allowed=()=>true,now=()=>Date.now(),batchSize=32,workers=3}={}){
+export function createMemeStudy({storage,library,ask,allowed=()=>true,now=()=>Date.now(),batchSize=32,workers=3,limits=()=>({})}={}){
  const corpus=library.allSources(),byId=new Map(corpus.map(s=>[s.id,s])),revision=hash(corpus.map(s=>[s.id,s.text])),cache=new Map(),jobs=new Map();let closed=false;
  const scope=m=>hash([m.accountId||'',m.personaId]),file=m=>'meme-study-'+scope(m)+'.json';
  const permitted=m=>!closed&&allowed(m);
@@ -16,7 +16,7 @@ export function createMemeStudy({storage,library,ask,allowed=()=>true,now=()=>Da
  }
  function save(value){const previous=value.saved;if(previous)storage.write(file(value.state.meta)+'.previous',previous);storage.write(file(value.state.meta),value.state);value.saved=structuredClone(value.state);}
  function snapshot(meta){const {state:s,lessons,working}=load(meta);return {engineVersion:"1.36.1-quote-sources",status:s.status,total:corpus.length,completed:lessons.size,remaining:corpus.length-lessons.size,working:working.size,failed:Object.entries(s.errors).filter(([id,e])=>!lessons.has(id)&&e.attempts>=3).length,lastError:s.lastError||'',startedAt:s.startedAt||0,updatedAt:s.at||0,nextRetryAt:s.nextRetryAt||0,active:jobs.has(scope(meta)),modelReviewed:true,notebook:[...lessons.values()].slice(-20).reverse().map(l=>({...l,subject:'网络梗'})),applications:s.applications.filter(a=>!meta.key||a.key===meta.key).slice(-40).reverse(),revision};}
- function reserve(value){const {state:s,lessons,working}=value;return corpus.filter(r=>!lessons.has(r.id)&&!working.has(r.id)&&(s.errors[r.id]?.attempts||0)<3).slice(0,Math.max(1,Math.min(64,corpus.length-lessons.size<128?4:batchSize)));}
+ function reserve(value){const {state:s,lessons,working}=value;return corpus.filter(r=>!lessons.has(r.id)&&!working.has(r.id)&&(s.errors[r.id]?.attempts||0)<3).slice(0,Math.max(1,Math.min(64,Number(limits(s.meta).batchSize)||64,corpus.length-lessons.size<128?4:batchSize)));}
  async function process(meta){if(jobs.has(scope(meta)))return jobs.get(scope(meta));if(!permitted(meta))return snapshot(meta);const value=load(meta),s=value.state;if(s.status==='paused'||s.status==='completed')return snapshot(meta);
   s.status='running';s.startedAt||=now();s.at=now();save(value);
   const work=async()=>{while(permitted(meta)&&s.status==='running'){
@@ -28,10 +28,10 @@ export function createMemeStudy({storage,library,ask,allowed=()=>true,now=()=>Da
     if(!valid.length){storage.write('meme-rejected-'+scope(meta)+'.json',{sources,raw});throw Error('本批没有返回可核对的学习结果');}
     storage.write('meme-lessons-'+scope(meta)+'-'+hash(valid.map(x=>x.id)).slice(0,20)+'.json',{revision,meta:s.meta,lessons:valid});for(const item of valid){value.lessons.set(item.id,item);delete s.errors[item.id];}for(const source of batch)if(!value.lessons.has(source.id))s.errors[source.id]={attempts:(s.errors[source.id]?.attempts||0)+1,reason:'本条未返回有效原文依据'};
     s.done=[...value.lessons.keys()];s.lastError='';s.at=now();save(value);
-   }catch(error){if(!permitted(meta)||!['running','waiting_service'].includes(s.status))break;const reason=clean(error.message,180);if(/429|rate.?limit|capacity|timeout|timed out|超时|繁忙|quota|502|503/i.test(reason)){s.status='waiting_service';s.serviceRetries=(s.serviceRetries||0)+1;s.nextRetryAt=now()+Math.min(300,30*s.serviceRetries)*1000;}else for(const r of batch)if(!value.lessons.has(r.id))s.errors[r.id]={attempts:(s.errors[r.id]?.attempts||0)+1,reason};s.lastError=reason;s.at=now();save(value);
+   }catch(error){if(!permitted(meta)||!['running','waiting_service'].includes(s.status))break;const reason=clean(error.message,180);if(error.code==='LOCAL_ANALYSIS_DEFERRED'||/429|rate.?limit|capacity|timeout|timed out|超时|繁忙|quota|502|503/i.test(reason)){s.status='waiting_service';s.serviceRetries=(s.serviceRetries||0)+1;s.nextRetryAt=now()+Math.min(300,30*s.serviceRetries)*1000;}else for(const r of batch)if(!value.lessons.has(r.id))s.errors[r.id]={attempts:(s.errors[r.id]?.attempts||0)+1,reason};s.lastError=reason;s.at=now();save(value);
    }finally{for(const r of batch)value.working.delete(r.id);}
   }};
-  const promise=Promise.all(Array.from({length:Math.max(1,Math.min(4,workers))},work)).finally(()=>{jobs.delete(scope(meta));if(!closed){if(s.status==='running')s.status=value.lessons.size===corpus.length?'completed':permitted(meta)?'needs_retry':'paused';s.at=now();save(value);}}).then(()=>snapshot(meta));jobs.set(scope(meta),promise);return promise;
+  const promise=Promise.all(Array.from({length:Math.max(1,Math.min(4,workers,Number(limits(meta).workers)||4))},work)).finally(()=>{jobs.delete(scope(meta));if(!closed){if(s.status==='running')s.status=value.lessons.size===corpus.length?'completed':permitted(meta)?'needs_retry':'paused';s.at=now();save(value);}}).then(()=>snapshot(meta));jobs.set(scope(meta),promise);return promise;
  }
  function start(meta,{retry=false}={}){if(!permitted(meta))throw Error('当前账号或人设的学习不可用');const v=load(meta);if(retry)for(const id of Object.keys(v.state.errors))if(!v.lessons.has(id))delete v.state.errors[id];v.state.status=v.lessons.size===corpus.length?'completed':'running';v.state.at=now();save(v);void process(meta);return snapshot(meta);}
  function pause(meta){const v=load(meta);v.state.status='paused';v.state.at=now();save(v);return snapshot(meta);}

@@ -27,7 +27,7 @@ export function reserveShare(config,ledger,{kind,key,personaId,topic='',scene=nu
   if(config.limits!==false&&scene&&scheduleShareSeen(ledger,key,personaId,scene))return null;
   const scope=hash([key,personaId]),fingerprint=hash([kind,String(topic).trim().toLowerCase().replace(/\s+/g,' ')]);
   const recent=(ledger.contexts[scope]||[]).filter(e=>now-e.at<24*60*60_000);
-  if(!direct&&recent.some(e=>e.hash===fingerprint))return null;
+  if(config.limits!==false&&!direct&&recent.some(e=>e.hash===fingerprint))return null;
   const sceneId=scheduleShareId(key,personaId,scene),item={id:randomUUID(),at:now,key,personaId,kind,status:'generating',...(sceneId?{sceneId}:{})};
   if(sceneId){ledger.scenes=ledger.scenes||{};ledger.scenes[sceneId]=now;}
   ledger.counts[kind]++;ledger.lastAt=now;ledger.contexts[scope]=[...recent,{at:now,hash:fingerprint}].slice(-8);

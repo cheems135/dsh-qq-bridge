@@ -20,6 +20,7 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
   if(sessions.size>=3){const oldest=[...sessions.entries()].sort((a,b)=>a[1].used-b[1].used)[0];await oldest[1].context.close();sessions.delete(oldest[0]);}
   const dir=join(getDataDir(),'browser-profiles',createHash('sha256').update(key).digest('hex').slice(0,24));mkdirSync(dir,{recursive:true});
   const runtime=join(getCacheDir(),'browser','runtime');mkdirSync(runtime,{recursive:true});const browser=engine(),launch={headless:hidden(context),viewport:{width:1280,height:900},acceptDownloads:false,env:{...process.env,TEMP:runtime,TMP:runtime},artifactsDir:runtime,args:['--disable-background-networking','--autoplay-policy=no-user-gesture-required','--disk-cache-dir='+join(runtime,'disk-cache')]};
+  if(process.platform!=='win32'){launch.args.push('--disable-dev-shm-usage');if(process.getuid?.()===0)launch.args.push('--no-sandbox');}
   let ctx,error;
   const paths=[executablePath,process.env.QQ_BRIDGE_BROWSER_PATH,process.platform==='win32'?'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe':'/usr/bin/chromium',process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'/usr/bin/chromium-browser'].filter(p=>p&&existsSync(p));
   for(const options of [...paths.map(p=>({...launch,executablePath:p})),launch])try{ctx=await browser.launchPersistentContext(dir,options);break;}catch(e){error=e;}

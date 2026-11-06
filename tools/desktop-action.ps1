@@ -50,9 +50,29 @@ public static class BridgeDesktop {
 
 [void][BridgeDesktop]::SetProcessDPIAware()
 
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class BridgeWake {
+  [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, int e);
+}
+'@
+
+function Invoke-BridgeWake {
+  [BridgeWake]::SetThreadExecutionState([uint32]'0x80000003') | Out-Null
+  [BridgeWake]::mouse_event(1, 0, 0, 0, 0)
+  Start-Sleep -Milliseconds 250
+  [BridgeWake]::SetThreadExecutionState([uint32]'0x80000000') | Out-Null
+  return [bool](Get-Process -Name LogonUI -ErrorAction SilentlyContinue)
+}
+
+
 $window=[BridgeDesktop]::GetForegroundWindow()
 
-if($request.windowId -and $request.action -notin @('observe','windows','focus') -and [string]$window.ToInt64() -ne [string]$request.windowId){throw '前台窗口已经改变，请重新观察后操作'}
+if($request.windowId -and $request.action -notin @('wake','observe','windows','focus') -and [string]$window.ToInt64() -ne [string]$request.windowId){throw '前台窗口已经改变，请重新观察后操作'}
+
+if($request.action -in @('click','type','press') -and (Get-Process -Name LogonUI -ErrorAction SilentlyContinue)){throw 'Windows 安全锁屏，需要本人解锁；自动化不能绕过密码或 PIN'}
 
 if($request.action -eq 'windows'){
 
@@ -114,7 +134,23 @@ switch($request.action){
 
  }
 
- 'observe' {}
+ 'wake' {
+
+  $locked=Invoke-BridgeWake
+
+  $note=if($locked){'显示器已唤醒，但当前是 Windows 安全锁屏，需要本人解锁；自动化不能绕过密码或 PIN。'}else{'显示器已唤醒，可以继续观察和操作。'}
+
+  @{ok=$true;environment='user-desktop';action='wake';display='woken';locked=$locked;note=$note}|ConvertTo-Json -Depth 4 -Compress;exit
+
+ }
+
+ 'observe' {
+
+  $locked=Invoke-BridgeWake
+
+  if($locked){@{ok=$true;environment='user-desktop';locked=$true;display='woken';file=$null;note='显示器已唤醒，但仍是 Windows 安全锁屏；请本人解锁后再操作，自动化不能绕过密码或 PIN。'}|ConvertTo-Json -Depth 4 -Compress;exit}
+
+ }
 
  'launch' {
 

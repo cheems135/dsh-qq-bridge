@@ -77,7 +77,7 @@ export function createMusicInput({getCacheDir,request=publicGet,now=()=>Date.now
    const dir=join(getCacheDir(),'music-input');mkdirSync(dir,{recursive:true});const file=join(dir,createHash('sha256').update(bytes).digest('hex')+'.audio');if(!existsSync(file))writeFileSync(file,bytes,{flag:'wx'});
    const result={file,url:redactUrl(actual.url),provider:actual.provider,songId:actual.id||'',...metadata,lyrics:songLyrics,acquisition:'public-playable-audio',coverage:'只取得平台当前公开提供的音频，是否完整以解码时长与歌曲标注时长核对；歌词另有来源，未使用第三方解锁或复制账号Cookie'};cache.set(cacheKey,{at:now(),result});return result;
   }catch(e){failure=e;}
-  const error=Error('没有取得这首歌可分析的音频：'+String(failure?.message||'暂不可播放')+'。可让DSH打开原站尝试播放；若需登录或会员请询问本人，也可提供本地音频。');error.reason='audio-unavailable';error.lyrics=songLyrics;error.music={...metadata,provider:actual.provider,songId:actual.id||'',url:redactUrl(actual.url)};throw error;
+  const error=Error('没有取得这首歌可分析的音频：'+String(failure?.message||'暂不可播放')+'。可让DSH打开原站尝试播放；可继续原站登录；需要本人扫码时再说明，需要购买会员时先确认付款，也可提供本地音频。');error.reason='audio-unavailable';error.lyrics=songLyrics;error.music={...metadata,provider:actual.provider,songId:actual.id||'',url:redactUrl(actual.url)};throw error;
  }
  return {resolve,lyrics};
 }

@@ -2,15 +2,16 @@ import {createHash,randomUUID} from 'node:crypto';
 import {calendarNow} from './life-memory.js';
 import {digitalActivityKind,DIGITAL_PERSON_RULES} from './digital-life.js';
 import {approvalAnswer} from './operation-policy.js';
+import {paymentQuestionText} from './social-voice.js';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const text=(v,n=500)=>String(v??'').trim().slice(0,n);
 const ACTIVE=new Set(['queued','running','waiting_user','planned','paused','needs_reconcile','participating']);
 const EFFECTS=new Set(['send','publish','comment','payment','delete','security','credentials']);
 const groupIds=scene=>(Array.isArray(scene?.groupIds)?scene.groupIds.map(String).filter(id=>/^\d{5,20}$/.test(id)).slice(0,20):[]);
-export function lifeQuestionText(q={}){const d=q.details||{},parts=[text(q.question,240)];if(d.target)parts.push('这次是给 '+text(d.target,180)+'。');if(d.url)parts.push('我看的页面是 '+text(d.url,400));if(d.amount!==undefined)parts.push('要用 '+text(d.amount,40)+' '+text(d.currency||'元',12)+(d.merchant?'，收款方是 '+text(d.merchant,120):'')+'。');else if(d.merchant)parts.push('收款方是 '+text(d.merchant,120)+'。');if(d.text)parts.push('想发的是：\n'+text(d.text,400));if(d.operation&&!d.target&&!d.text&&!d.amount)parts.push('我想做的是 '+text(d.operation,160)+'。');return parts.filter(Boolean).join('\n');}
+export function lifeQuestionText(q={}){return q.kind==='payment'?paymentQuestionText(q):text(q.question,600);}
 export function lifeExecutionConfig(raw={}){return {enabled:raw.enabled!==false,execute:raw.execute!==false,sleep:raw.sleep!==false,maxTasksPerDay:Number(raw.maxTasksPerDay)===0?0:Math.max(1,Math.min(99,Number(raw.maxTasksPerDay)||8))};}
 export function activityKind(scene={}){return digitalActivityKind(scene);}
-export const LIFE_EXECUTION_RULES=DIGITAL_PERSON_RULES+'\n【日程实际行动】日程是你自己写的计划，不是时钟命令。先结合兴趣和真实进度决定继续、开始、改期、换件事或休息；用bridge_life_adjust mode=start记录已选择开始的活动，mode=plan改计划，mode=finish结束当前活动。不必等用户要求才可更改。时段结束不强行打断，正在做的事可以做完；不能把计划直接说成正在做。当前明确请求优先。只把工具成功返回的作品、页面、画面或音频算作结果，不能把计划写成经历。先观察真实能力和设备状态，再决定行动；首页、标题不能证明看过内容。画画优先用bridge_drawing真实画布逐笔创作、观察修改、导出作品，而不是生成一张假装画画的照片。本人明确要AI生图时才用bridge_art；听歌必须用bridge_audio取得实际音频波形图和频谱图并结合图像分析反馈，不只看歌词或歌名；想玩游戏先bridge_game request取得本人同意，再play并真实操作、bridge_life_qq读取允许对象的真实对话并选择是否发送，不群发。其他数字活动优先直接使用DSH原生工具实际操作，不按固定bridge步骤；作品用bridge_life_artifact登记。需要账号、支付、评论、公开发布、隐私或严重后果时，说明准确目标和完整内容，通过bridge_life_request提出一个具体问题并等待真实回答。问过的事跨日程保留；本人正常闲聊不是审批。任务切换前用bridge_life_checkpoint保存进度、待验证结果和下一步；发送、发布、支付等操作结果未知时先核对，不重放。当前请求结束后可继续先前任务；重新观察当前页面而非复用旧坐标。日程任务的最终文字只留在Harness，不会自动当成QQ消息。想聊天须实际调用bridge_life_qq发送并查询status；想分享作品或链接须用bridge_life_share取得送达状态，不能只写一段给对方的正文就当已经发出。已经用这些工具发过的，回合末尾只回 [skip]，不另写回执、送达确认或本轮总结。有想说的、想分享的或想邀请的，可以主动开口；不想开口才保持安静。结束调用bridge_life_finish，没有真实结果不能声明完成。';
+export const LIFE_EXECUTION_RULES=DIGITAL_PERSON_RULES+'\n【日程实际行动】日程是你自己写的计划，不是时钟命令。先结合兴趣和真实进度决定继续、开始、改期、换件事或休息；用bridge_life_adjust mode=start记录已选择开始的活动，mode=plan改计划，mode=finish结束当前活动。不必等用户要求才可更改。时段结束不强行打断，正在做的事可以做完；不能把计划直接说成正在做。当前明确请求优先。只把工具成功返回的作品、页面、画面或音频算作结果，不能把计划写成经历。先观察真实能力和设备状态，再决定行动；首页、标题不能证明看过内容。画画优先用bridge_drawing真实画布逐笔创作、观察修改、导出作品，而不是生成一张假装画画的照片。本人明确要AI生图时才用bridge_art；听歌必须用bridge_audio取得实际音频波形图和频谱图并结合图像分析反馈，不只看歌词或歌名；想玩游戏可直接bridge_game play并真实操作、bridge_life_qq读取允许对象的真实对话并选择是否发送，不群发。其他数字活动优先直接使用DSH原生工具实际操作，不按固定bridge步骤；作品用bridge_life_artifact登记。仅实际付款需要先核对准确收款方、金额与币种，通过bridge_life_request或bridge_operation_request自然询问并等本人同意；本人闲聊不算付款同意。登录、分享和普通操作不用申请，评论仍按独立开关与手动选择。缺少资料时可以自然问清，不输出申请清单。任务切换前用bridge_life_checkpoint保存进度、待验证结果和下一步；发送、发布、支付等操作结果未知时先核对，不重放。当前请求结束后可继续先前任务；重新观察当前页面而非复用旧坐标。日程任务的最终文字只留在Harness，不会自动当成QQ消息。想聊天须实际调用bridge_life_qq发送并查询status；想分享作品或链接须用bridge_life_share取得送达状态，不能只写一段给对方的正文就当已经发出。已经用这些工具发过的，回合末尾只回 [skip]，不另写回执、送达确认或本轮总结。有想说的、想分享的或想邀请的，可以主动开口；不想开口才保持安静。结束调用bridge_life_finish，没有真实结果不能声明完成。';
 
 export function createLifeExecution({storage,config,roles,sceneFor,activityFor=sceneFor,onFinish=()=>{},allowed,dispatch,groups=null,stop=()=>{},notify=async()=>{},now=()=>Date.now()}={}){
  let state;try{state=storage.read();}catch(e){if(e.code!=='ENOENT')throw e;}
@@ -19,6 +20,11 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  const groupWindow=typeof groups==='function'?groups:null;
  const cfg=()=>lifeExecutionConfig(config()),scope=m=>hash([m.accountId||'',m.personaId]);
  const save=()=>{const pending=state.jobs.filter(j=>ACTIVE.has(j.status));const historical=state.jobs.filter(j=>!ACTIVE.has(j.status)).slice(-300);state.jobs=[...historical,...pending].sort((a,b)=>a.at-b.at);storage.write(state);};
+ function retireOrdinaryQuestions(){for(const j of state.jobs)if(j.status==='waiting_user'&&j.question?.kind!=='payment'){
+  j.retiredQuestions=[...(j.retiredQuestions||[]),{...j.question,status:'retired',retiredAt:now()}].slice(-10);delete j.question;
+  const unresolved=(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status));j.status=unresolved?'needs_reconcile':'paused';j.resume=!unresolved;j.resumeOnIdle=!unresolved;j.reason=unresolved?'先核对上次操作的实际结果':'普通操作无需再次许可，保留进度后继续';
+ }}
+ retireOrdinaryQuestions();
  // No blind replay after restart. Only a persisted read-only continuation is
  // eligible to resume automatically; unknown side effects require observation.
  for(const j of state.jobs)if(['queued','running'].includes(j.status)){
@@ -86,6 +92,8 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  async function request(id,meta,{kind,question,details={}}){
   const j=job(id,meta);if(!ACTIVE.has(j.status))throw Error('日程任务已结束');
   if(!['login','payment','comment','publish','choice','permission','delete','security','privacy'].includes(kind))throw Error('请选择需要本人决定的问题类型');
+  if(kind!=='payment')return {ok:true,ordinary:true,waiting:false,requiresDecision:false,coverage:'这件事无需申请付款许可，继续执行原操作；尚未执行原操作。评论仍按独立发布开关和手动选择'};
+  if(!details.merchant||!details.amount||!details.currency)throw Error('先核对收款方、金额和币种，再问本人是否付款');
   if(!String(question||'').trim())throw Error('请先写清楚要问的一件事');
   if(j.question&&!j.question.answer)return {ok:true,waiting:true,id:j.question.id};
   j.question={id:randomUUID(),kind,question:text(question,240),details,at:now()};j.status='waiting_user';save();await notify(j);return {ok:true,waiting:true,id:j.question.id};
@@ -153,5 +161,5 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  function interruptForRequest(meta){for(const j of jobs(meta))if(['queued','running','planned'].includes(j.status))pause(j,'用户当前请求优先，暂停默认日程');save();}
  function ended(id,meta,reason){const j=state.jobs.find(j=>j.id===id&&scope(j.meta)===scope(meta));if(!j||!['running','queued'].includes(j.status))return;if(j.finalReply?.status==='awaiting_decision')j.finalReply.status='not_sent';const unknown=(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status));j.status=unknown?'needs_reconcile':reason==='completed'?'incomplete':'paused';j.reason=unknown?'存在结果未知的步骤，先核对，不重放':reason==='completed'?'本轮没有确认真实结果，未标记完成':'执行已暂停，保留进度';j.pausedAt=now();j.resumeOnIdle=reason!=='completed'&&!!j.checkpoint?.safeToResume;save();}
  function snapshot(meta){return {config:cfg(),sleeping:asleep(meta),scene:activityFor(liveRole(meta)||{meta}),plan:current(meta),jobs:jobs(meta).slice(-25).reverse(),pending:question(meta),waiting:jobs(meta).filter(j=>j.status==='waiting_user'),recoverable:jobs(meta).filter(j=>['paused','needs_reconcile','interrupted','incomplete'].includes(j.status)).map(j=>({id:j.id,status:j.status,activity:j.scene?.activity,checkpoint:j.checkpoint,reason:j.reason}))};}
- return {tick,syncState,reserveFinalReply,asleep,wake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};}catch{}}};
+ return {tick,syncState,reserveFinalReply,asleep,wake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};retireOrdinaryQuestions();save();}catch{}}};
 }

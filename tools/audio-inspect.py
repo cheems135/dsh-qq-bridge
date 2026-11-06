@@ -44,7 +44,7 @@ def main(req):
                 from faster_whisper import WhisperModel
                 model=WhisperModel(runtime['whisperModelPath'],device='cpu',compute_type='int8',cpu_threads=int(runtime.get('whisperThreads') or 2),local_files_only=True)
                 segments,_=model.transcribe(str(wav),language=req.get('language') or 'zh',beam_size=3,vad_filter=True,condition_on_previous_text=False)
-                helper=load('bridge_video_validation',root/'tools/video_plus.py');rows,suspect=helper.verified_segments(segments,end-start)
+                helper=load('bridge_video_validation',root/'tools/video_plus.py');rows,suspect=helper.verified_segments(segments,end-start,voice_input=req.get('voiceInput') is True)
                 result['transcription']={'status':'candidate' if rows else 'no-verified-speech','segments':rows,'rejectedSegments':suspect,'note':'机器听写候选，可能有错字；音乐不能当作完整准确歌词'}
             except Exception:result['transcription']={'status':'unavailable','segments':[],'note':'本地听写组件或模型尚不可用；不代表无人说话'}
         return result

@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "license": "MIT",
+  "version": 2,
+  "license": "MIT (LCCC sample) + Apache-2.0 (KdConv sample) + project-original",
   "referenceOnly": true,
   "sourceRevision": "81064865221d3503251d633f3d0b651004c938a6",
   "dialogues": [
@@ -20,7 +20,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-2",
@@ -33,7 +35,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-3",
@@ -46,7 +50,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-4",
@@ -64,7 +70,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-5",
@@ -78,7 +86,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-6",
@@ -96,7 +106,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-7",
@@ -111,7 +123,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-8",
@@ -124,7 +138,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-9",
@@ -138,7 +154,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-10",
@@ -151,7 +169,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-11",
@@ -164,7 +184,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-12",
@@ -179,7 +201,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-13",
@@ -195,7 +219,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-14",
@@ -208,7 +234,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-15",
@@ -221,7 +249,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-16",
@@ -234,7 +264,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-17",
@@ -248,7 +280,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-18",
@@ -261,7 +295,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-19",
@@ -275,7 +311,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-20",
@@ -291,7 +329,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-21",
@@ -306,7 +346,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-22",
@@ -323,7 +365,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-23",
@@ -340,7 +384,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-24",
@@ -354,7 +400,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-25",
@@ -370,7 +418,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-26",
@@ -383,7 +433,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-27",
@@ -397,7 +449,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-28",
@@ -411,7 +465,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-29",
@@ -427,7 +483,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-30",
@@ -441,7 +499,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-31",
@@ -454,7 +514,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-32",
@@ -468,7 +530,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-33",
@@ -481,7 +545,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-34",
@@ -499,7 +565,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-35",
@@ -514,7 +582,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-36",
@@ -528,7 +598,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-37",
@@ -543,7 +615,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-38",
@@ -556,7 +630,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-39",
@@ -570,7 +646,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-40",
@@ -585,7 +663,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-41",
@@ -600,7 +680,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-42",
@@ -615,7 +697,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-43",
@@ -629,7 +713,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-44",
@@ -644,7 +730,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-45",
@@ -662,7 +750,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-46",
@@ -679,7 +769,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-47",
@@ -697,7 +789,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-48",
@@ -710,7 +804,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-49",
@@ -725,7 +821,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-50",
@@ -738,7 +836,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-51",
@@ -752,7 +852,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-52",
@@ -766,7 +868,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-53",
@@ -779,7 +883,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-54",
@@ -794,7 +900,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-55",
@@ -810,7 +918,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-56",
@@ -826,7 +936,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-57",
@@ -839,7 +951,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-58",
@@ -853,7 +967,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-59",
@@ -867,7 +983,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-60",
@@ -881,7 +999,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-61",
@@ -894,7 +1014,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-62",
@@ -908,7 +1030,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-63",
@@ -921,7 +1045,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-64",
@@ -934,7 +1060,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-65",
@@ -947,7 +1075,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-66",
@@ -962,7 +1092,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-67",
@@ -975,7 +1107,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-68",
@@ -988,7 +1122,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-69",
@@ -1001,7 +1137,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-70",
@@ -1014,7 +1152,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-71",
@@ -1029,7 +1169,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-72",
@@ -1042,7 +1184,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-73",
@@ -1057,7 +1201,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-74",
@@ -1070,7 +1216,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-75",
@@ -1084,7 +1232,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-76",
@@ -1097,7 +1247,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-77",
@@ -1115,7 +1267,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-78",
@@ -1130,7 +1284,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-79",
@@ -1146,7 +1302,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-80",
@@ -1164,7 +1322,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-81",
@@ -1177,7 +1337,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-82",
@@ -1190,7 +1352,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-83",
@@ -1203,7 +1367,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-84",
@@ -1217,7 +1383,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-85",
@@ -1231,7 +1399,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-86",
@@ -1244,7 +1414,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-87",
@@ -1259,7 +1431,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-88",
@@ -1274,7 +1448,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-89",
@@ -1288,7 +1464,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-90",
@@ -1304,7 +1482,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-91",
@@ -1318,7 +1498,9 @@
         "情绪"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-92",
@@ -1334,7 +1516,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-93",
@@ -1352,7 +1536,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-94",
@@ -1365,7 +1551,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-95",
@@ -1378,7 +1566,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-96",
@@ -1392,7 +1582,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-97",
@@ -1407,7 +1599,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-98",
@@ -1424,7 +1618,9 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-99",
@@ -1437,7 +1633,9 @@
         "日常"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
     },
     {
       "id": "lccc-100",
@@ -1450,7 +1648,4073 @@
         "打趣"
       ],
       "source": "LCCC toy_data",
-      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6"
+      "url": "https://github.com/thu-coai/CDial-GPT/tree/81064865221d3503251d633f3d0b651004c938a6",
+      "license": "MIT",
+      "rating": "general"
+    },
+    {
+      "id": "orig-001",
+      "turns": [
+        "我升职了！！",
+        "卧槽真的假的",
+        "真的，刚通知",
+        "可以啊，这下得请客了",
+        "必须的，想吃什么"
+      ],
+      "tags": [
+        "情绪",
+        "开心",
+        "分享",
+        "工作"
+      ],
+      "emotion": "开心",
+      "scene": "分享好消息",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-002",
+      "turns": [
+        "今天下班路上买到最后一个蛋挞",
+        "就这你也高兴成这样",
+        "你不懂，热的，刚出炉",
+        "行吧，快乐很简单",
+        "便宜我了"
+      ],
+      "tags": [
+        "情绪",
+        "开心",
+        "小确幸",
+        "日常"
+      ],
+      "emotion": "开心",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-003",
+      "turns": [
+        "今天有点丧",
+        "怎么了",
+        "也没啥，就是什么都提不起劲",
+        "那先别硬撑，想说话我在这儿",
+        "嗯，陪我待会儿就行"
+      ],
+      "tags": [
+        "情绪",
+        "低落",
+        "陪伴"
+      ],
+      "emotion": "低落",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-004",
+      "turns": [
+        "面试没过",
+        "差多少",
+        "二面被刷了，说经验不够",
+        "那是他们没眼光，你准备得挺认真的",
+        "道理我都懂，就是有点难受",
+        "难受就先难受一会儿"
+      ],
+      "tags": [
+        "情绪",
+        "失落",
+        "工作"
+      ],
+      "emotion": "失落",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-005",
+      "turns": [
+        "烦死了，改到第五版又说要第一版",
+        "你们领导是真会折腾人",
+        "我真的想骂人",
+        "骂，我听着",
+        "算了，骂完还得改"
+      ],
+      "tags": [
+        "情绪",
+        "烦躁",
+        "工作",
+        "吐槽"
+      ],
+      "emotion": "烦躁",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-006",
+      "turns": [
+        "刚有人直接插队，我提醒了还瞪我",
+        "这么横",
+        "真想跟他吵一架",
+        "该说就说，别自己憋着"
+      ],
+      "tags": [
+        "情绪",
+        "生气",
+        "冲突"
+      ],
+      "emotion": "生气",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-007",
+      "turns": [
+        "我明明按她说的做了，最后还怪我",
+        "你跟她解释了吗",
+        "解释了，她说我顶嘴",
+        "这确实委屈，不是你做错"
+      ],
+      "tags": [
+        "情绪",
+        "委屈",
+        "工作"
+      ],
+      "emotion": "委屈",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-008",
+      "turns": [
+        "明天要上台讲方案",
+        "准备得怎么样",
+        "稿子背了，但一想到下面坐一排人就慌",
+        "慌正常，先把开头两句练顺",
+        "行，我再顺一遍"
+      ],
+      "tags": [
+        "情绪",
+        "焦虑",
+        "工作"
+      ],
+      "emotion": "焦虑",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-009",
+      "turns": [
+        "今天累成狗",
+        "几点下的班",
+        "十一点，饭都没吃",
+        "先去弄点吃的，别硬扛",
+        "嗯，泡面行吗",
+        "行，加个蛋"
+      ],
+      "tags": [
+        "情绪",
+        "累",
+        "加班"
+      ],
+      "emotion": "累",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-010",
+      "turns": [
+        "突然觉得屋里好安静",
+        "一个人待着容易想多",
+        "也不是想多，就是没人说话",
+        "那现在有人了，聊点什么都行"
+      ],
+      "tags": [
+        "情绪",
+        "孤独",
+        "陪伴"
+      ],
+      "emotion": "孤独",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-011",
+      "turns": [
+        "刚在电梯里认错人了，还拍人家肩膀",
+        "哈哈哈哈然后呢",
+        "对方一脸问号，我假装看手机",
+        "脚趾抠出三室一厅了吧",
+        "别说了，想原地消失"
+      ],
+      "tags": [
+        "情绪",
+        "尴尬",
+        "社死"
+      ],
+      "emotion": "尴尬",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-012",
+      "turns": [
+        "你今天怎么老看我",
+        "有吗",
+        "有，看得我都不好意思了",
+        "那我不看了",
+        "……也没说不让看"
+      ],
+      "tags": [
+        "情绪",
+        "害羞",
+        "暧昧"
+      ],
+      "emotion": "害羞",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-013",
+      "turns": [
+        "你昨天跟谁打游戏到那么晚",
+        "就阿哲他们",
+        "哦",
+        "怎么这个哦",
+        "没什么，你玩你的"
+      ],
+      "tags": [
+        "情绪",
+        "吃醋",
+        "恋爱"
+      ],
+      "emotion": "吃醋",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-014",
+      "turns": [
+        "说好周末去看展的",
+        "临时加班，真没办法",
+        "每次都是这样",
+        "这次确实是我不好，下周我补上",
+        "再说吧"
+      ],
+      "tags": [
+        "情绪",
+        "失望",
+        "约定"
+      ],
+      "emotion": "失望",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-015",
+      "turns": [
+        "刚看恐怖片，现在不敢关灯",
+        "谁让你大晚上看",
+        "我以为我不怕",
+        "要不语音陪你一会儿",
+        "要"
+      ],
+      "tags": [
+        "情绪",
+        "害怕",
+        "陪伴"
+      ],
+      "emotion": "害怕",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-016",
+      "turns": [
+        "好无聊啊",
+        "找点事做",
+        "不想动",
+        "那躺着，我给你讲个烂笑话",
+        "讲，不好笑你就完了"
+      ],
+      "tags": [
+        "情绪",
+        "无聊",
+        "打趣"
+      ],
+      "emotion": "无聊",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-017",
+      "turns": [
+        "你还记得我随口说过喜欢这个",
+        "你说过的话我记着呢",
+        "突然有点想哭",
+        "别哭，一哭我不知道怎么办",
+        "那你抱一下"
+      ],
+      "tags": [
+        "情绪",
+        "感动",
+        "亲密"
+      ],
+      "emotion": "感动",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-018",
+      "turns": [
+        "我今天一个人把柜子装好了",
+        "可以啊师傅",
+        "说明书都没看",
+        "那确实值得吹一天",
+        "晚上我请你喝奶茶"
+      ],
+      "tags": [
+        "情绪",
+        "得意",
+        "日常"
+      ],
+      "emotion": "得意",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-019",
+      "turns": [
+        "我妈今天体检，结果还没出",
+        "几点说的",
+        "说下午，我一直看手机",
+        "先别自己吓自己，有结果告诉我",
+        "嗯"
+      ],
+      "tags": [
+        "情绪",
+        "担心",
+        "家人"
+      ],
+      "emotion": "担心",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-020",
+      "turns": [
+        "想通了，那份工作不适合我",
+        "真放下了？",
+        "还有点不甘心，但不想再耗了",
+        "能这么想就挺好"
+      ],
+      "tags": [
+        "情绪",
+        "释然",
+        "工作"
+      ],
+      "emotion": "释然",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-021",
+      "turns": [
+        "你猜我在抽屉里翻到什么",
+        "什么",
+        "去年丢的那只耳钉",
+        "这都能找回来",
+        "绝了，我还以为进垃圾桶了"
+      ],
+      "tags": [
+        "情绪",
+        "惊喜",
+        "日常"
+      ],
+      "emotion": "惊喜",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-022",
+      "turns": [
+        "我今天是不是说错话了",
+        "哪句",
+        "就吃饭的时候那句玩笑",
+        "她没生气，后来还笑了",
+        "真的？那我放心了"
+      ],
+      "tags": [
+        "情绪",
+        "心虚",
+        "社交"
+      ],
+      "emotion": "心虚",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-023",
+      "turns": [
+        "昨天冲你发火，对不起",
+        "知道你不是冲我",
+        "那也不行，话说重了",
+        "过去了，下次提前告诉我你状态不好"
+      ],
+      "tags": [
+        "情绪",
+        "愧疚",
+        "道歉"
+      ],
+      "emotion": "愧疚",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-024",
+      "turns": [
+        "周末在家躺了一天，什么也没干",
+        "不焦虑？",
+        "一开始有点，后来想开了",
+        "偶尔摆烂也挺好"
+      ],
+      "tags": [
+        "情绪",
+        "满足",
+        "休息"
+      ],
+      "emotion": "满足",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-025",
+      "turns": [
+        "抢到演唱会票了！！",
+        "哪个位置",
+        "内场！我手都在抖",
+        "运气可以啊",
+        "我现在已经开始想穿什么了"
+      ],
+      "tags": [
+        "情绪",
+        "兴奋",
+        "音乐"
+      ],
+      "emotion": "兴奋",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-026",
+      "turns": [
+        "看它爪子都磨破了还在摇尾巴",
+        "狗子是真傻",
+        "回来的路上一直想它",
+        "要不明天再去看看"
+      ],
+      "tags": [
+        "情绪",
+        "心疼",
+        "宠物"
+      ],
+      "emotion": "心疼",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-027",
+      "turns": [
+        "他又在群里发六十秒语音",
+        "哈哈哈哈哈",
+        "我一个字都不想听",
+        "转文字吧，别折磨自己"
+      ],
+      "tags": [
+        "情绪",
+        "不耐烦",
+        "群聊"
+      ],
+      "emotion": "不耐烦",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-028",
+      "turns": [
+        "今天没什么特别的",
+        "那也挺好",
+        "嗯，煮了碗面，看了会儿书",
+        "这种日子舒服"
+      ],
+      "tags": [
+        "情绪",
+        "平静",
+        "日常"
+      ],
+      "emotion": "平静",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-029",
+      "turns": [
+        "突然想起以前校门口那家炸串",
+        "还在吗",
+        "早拆了",
+        "那味道真找不回来了"
+      ],
+      "tags": [
+        "情绪",
+        "怀念",
+        "回忆"
+      ],
+      "emotion": "怀念",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-030",
+      "turns": [
+        "谢谢你昨天听我唠叨",
+        "多大点事",
+        "对我来说挺大的",
+        "那以后想唠叨就来找我"
+      ],
+      "tags": [
+        "情绪",
+        "感激",
+        "陪伴"
+      ],
+      "emotion": "感激",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-031",
+      "turns": [
+        "今天又得加班",
+        "加到几点",
+        "不知道，看领导走不走",
+        "先点个饭，别空腹熬",
+        "点了，放前台了"
+      ],
+      "tags": [
+        "场景",
+        "工作",
+        "加班"
+      ],
+      "scene": "加班",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-032",
+      "turns": [
+        "开会两小时，结论是下次再议",
+        "经典",
+        "我都不知道我坐那儿干嘛",
+        "至少空调免费"
+      ],
+      "tags": [
+        "场景",
+        "工作",
+        "会议"
+      ],
+      "scene": "开会",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-033",
+      "turns": [
+        "明天考高数，我要死了",
+        "复习到哪了",
+        "第三章，后面完全没看",
+        "先抓大题，别从头啃"
+      ],
+      "tags": [
+        "场景",
+        "学校",
+        "考试"
+      ],
+      "scene": "备考",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-034",
+      "turns": [
+        "导师让我再改一版",
+        "第几版了",
+        "不记得了，文件名都带final了",
+        "final_final_v3"
+      ],
+      "tags": [
+        "场景",
+        "学校",
+        "论文"
+      ],
+      "scene": "改论文",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-035",
+      "turns": [
+        "外卖一个小时了还没到",
+        "催了吗",
+        "催了，骑手说在路上了",
+        "再等等，别给差评太早"
+      ],
+      "tags": [
+        "场景",
+        "吃饭",
+        "外卖"
+      ],
+      "scene": "等外卖",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-036",
+      "turns": [
+        "今天照着视频做了个红烧肉",
+        "成功了吗",
+        "颜色有点黑，但味道还行",
+        "那算成功"
+      ],
+      "tags": [
+        "场景",
+        "吃饭",
+        "做饭"
+      ],
+      "scene": "做饭",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-037",
+      "turns": [
+        "又睡不着",
+        "想什么呢",
+        "什么都没想，就是脑子很清醒",
+        "放下手机试试",
+        "试了，越放越精神"
+      ],
+      "tags": [
+        "场景",
+        "睡觉",
+        "失眠"
+      ],
+      "scene": "失眠",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-038",
+      "turns": [
+        "闹钟响了三遍我才起",
+        "迟到没",
+        "踩点到的，早饭没吃",
+        "中午补一顿"
+      ],
+      "tags": [
+        "场景",
+        "起床",
+        "早晨"
+      ],
+      "scene": "起床",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-039",
+      "turns": [
+        "这把能赢，信我",
+        "你上把也这么说的",
+        "这把不一样",
+        "行，我保你"
+      ],
+      "tags": [
+        "场景",
+        "游戏",
+        "开黑"
+      ],
+      "scene": "打游戏",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-040",
+      "turns": [
+        "连跪五把",
+        "今天别排了",
+        "我不信邪",
+        "那第六把记得叫我观战"
+      ],
+      "tags": [
+        "场景",
+        "游戏",
+        "掉分"
+      ],
+      "scene": "游戏连败",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-041",
+      "turns": [
+        "这首歌前奏一出来我就起鸡皮疙瘩",
+        "哪首",
+        "就你上次分享那个",
+        "有品"
+      ],
+      "tags": [
+        "场景",
+        "音乐",
+        "分享"
+      ],
+      "scene": "听歌",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-042",
+      "turns": [
+        "这剧结局太烂了",
+        "烂尾了？",
+        "强行圆满，我宁愿BE",
+        "现在的编剧都不敢让人难过了"
+      ],
+      "tags": [
+        "场景",
+        "影视",
+        "吐槽"
+      ],
+      "scene": "追剧",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-043",
+      "turns": [
+        "购物车放了一个月，今天终于降价了",
+        "买了没",
+        "还没，怕明天更便宜",
+        "再等就没了"
+      ],
+      "tags": [
+        "场景",
+        "购物",
+        "省钱"
+      ],
+      "scene": "网购",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-044",
+      "turns": [
+        "下个月想去海边",
+        "几天",
+        "三四天吧，就想躺着听海",
+        "记得避开周末"
+      ],
+      "tags": [
+        "场景",
+        "旅行",
+        "计划"
+      ],
+      "scene": "旅行计划",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-045",
+      "turns": [
+        "我家猫今天踩我脸上叫我起床",
+        "几点了",
+        "六点半，粮碗明明满的",
+        "它就是想看你"
+      ],
+      "tags": [
+        "场景",
+        "宠物",
+        "猫"
+      ],
+      "scene": "养猫",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-046",
+      "turns": [
+        "今天这风能把人吹跑",
+        "降温了",
+        "我穿少了，现在在办公室抖",
+        "下次看天气预报"
+      ],
+      "tags": [
+        "场景",
+        "天气",
+        "降温"
+      ],
+      "scene": "天气",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-047",
+      "turns": [
+        "嗓子疼，可能感冒了",
+        "吃药没",
+        "吃了，想睡",
+        "那早点睡，别熬夜了"
+      ],
+      "tags": [
+        "场景",
+        "生病",
+        "关心"
+      ],
+      "scene": "感冒",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-048",
+      "turns": [
+        "这个月账单又超了",
+        "花哪了",
+        "不知道，点开一看全是三十五十",
+        "积少成多最可怕"
+      ],
+      "tags": [
+        "场景",
+        "钱",
+        "账单"
+      ],
+      "scene": "对账",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-049",
+      "turns": [
+        "周六老地方，来不来",
+        "都有谁",
+        "还是那几个，阿哲带对象",
+        "行，我晚点到"
+      ],
+      "tags": [
+        "场景",
+        "朋友",
+        "聚会"
+      ],
+      "scene": "约聚会",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-050",
+      "turns": [
+        "快递显示签收，但我没收到",
+        "问驿站",
+        "问了，说可能放门口了",
+        "先找找，别急着投诉"
+      ],
+      "tags": [
+        "场景",
+        "网购",
+        "快递"
+      ],
+      "scene": "丢快递",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-051",
+      "turns": [
+        "群里又吵起来了",
+        "吵什么",
+        "一个说香菜好吃一个说香菜是毒",
+        "这也能吵"
+      ],
+      "tags": [
+        "场景",
+        "群聊",
+        "社交"
+      ],
+      "scene": "群聊争论",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-052",
+      "turns": [
+        "我妈又给我介绍对象",
+        "第几个了",
+        "这个月第三个",
+        "你就说你有喜欢的人了"
+      ],
+      "tags": [
+        "场景",
+        "家庭",
+        "催婚"
+      ],
+      "scene": "家人催婚",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-053",
+      "turns": [
+        "地铁挤得我脚都没地方放",
+        "早高峰",
+        "有人背包直接怼我脸上",
+        "忍着，快到了"
+      ],
+      "tags": [
+        "场景",
+        "通勤",
+        "地铁"
+      ],
+      "scene": "早高峰",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-054",
+      "turns": [
+        "今天练腿，现在下不了楼",
+        "明天更疼",
+        "别说了，我已经后悔了"
+      ],
+      "tags": [
+        "场景",
+        "健身",
+        "运动"
+      ],
+      "scene": "健身",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-055",
+      "turns": [
+        "第三杯咖啡了，心跳有点快",
+        "别喝了",
+        "不喝就困，喝了就慌",
+        "那去走两圈"
+      ],
+      "tags": [
+        "场景",
+        "咖啡",
+        "提神"
+      ],
+      "scene": "咖啡因",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-056",
+      "turns": [
+        "手机只剩百分之三",
+        "充电宝呢",
+        "忘家里了",
+        "那你少说两句，省点电"
+      ],
+      "tags": [
+        "场景",
+        "手机",
+        "日常"
+      ],
+      "scene": "手机没电",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-057",
+      "turns": [
+        "晚上有空吗",
+        "怎么",
+        "朋友给了两张电影票",
+        "几点，什么片"
+      ],
+      "tags": [
+        "场景",
+        "约会",
+        "电影"
+      ],
+      "scene": "约看电影",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-058",
+      "turns": [
+        "家里网又断了",
+        "重启路由器",
+        "重启三次了",
+        "那可能是运营商"
+      ],
+      "tags": [
+        "场景",
+        "网络",
+        "日常"
+      ],
+      "scene": "断网",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-059",
+      "turns": [
+        "我养的多肉终于活了",
+        "多久了",
+        "半年，之前差点被我浇死",
+        "少浇水就对了"
+      ],
+      "tags": [
+        "场景",
+        "花草",
+        "生活"
+      ],
+      "scene": "养植物",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-060",
+      "turns": [
+        "昨晚那球你看了吗",
+        "看了，最后那个绝杀",
+        "我直接跳起来了",
+        "隔壁以为你疯了"
+      ],
+      "tags": [
+        "场景",
+        "球赛",
+        "运动"
+      ],
+      "scene": "看球",
+      "rating": "general",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-061",
+      "turns": [
+        "这破路堵了四十分钟",
+        "前面怎么了",
+        "不知道，一动不动",
+        "骂也没用，听会儿歌吧",
+        "我他妈快迟到了"
+      ],
+      "tags": [
+        "粗口",
+        "烦躁",
+        "通勤"
+      ],
+      "emotion": "烦躁",
+      "scene": "堵车",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-062",
+      "turns": [
+        "这队友是人机吧",
+        "又送？",
+        "送完还打字教我玩",
+        "直接屏蔽",
+        "服了，真服了"
+      ],
+      "tags": [
+        "粗口",
+        "游戏",
+        "吐槽"
+      ],
+      "emotion": "无语",
+      "scene": "游戏队友",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-063",
+      "turns": [
+        "改需求的是不是不用睡觉",
+        "又改了？",
+        "半夜十一点发消息，说明早要",
+        "这领导真离谱",
+        "我真想骂人"
+      ],
+      "tags": [
+        "粗口",
+        "工作",
+        "加班"
+      ],
+      "emotion": "愤怒",
+      "scene": "临时改需求",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-064",
+      "turns": [
+        "说好六点，现在七点半",
+        "联系上了吗",
+        "说堵车，让我再等等",
+        "你脾气真好",
+        "再好也快没了"
+      ],
+      "tags": [
+        "粗口",
+        "生气",
+        "约定"
+      ],
+      "emotion": "生气",
+      "scene": "被放鸽子",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-065",
+      "turns": [
+        "你今天穿得像个移动睡袋",
+        "你懂什么，这叫松弛感",
+        "松得有点过头了",
+        "滚，你才像睡袋"
+      ],
+      "tags": [
+        "粗口",
+        "打趣",
+        "朋友"
+      ],
+      "emotion": "好笑",
+      "scene": "朋友互怼",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-066",
+      "turns": [
+        "我就说了一句这电影一般，被人追着骂",
+        "网上什么人都有",
+        "他连我主页都没看就开始输出",
+        "拉黑，别对线"
+      ],
+      "tags": [
+        "粗口",
+        "网络",
+        "冲突"
+      ],
+      "emotion": "窝火",
+      "scene": "网络杠精",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-067",
+      "turns": [
+        "等了五十分钟，汤都洒了",
+        "退款吧",
+        "商家说骑手问题，骑手说商家出餐慢",
+        "踢皮球呢"
+      ],
+      "tags": [
+        "粗口",
+        "外卖",
+        "投诉"
+      ],
+      "emotion": "恼火",
+      "scene": "外卖翻车",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-068",
+      "turns": [
+        "写了两小时的文档没保存",
+        "电脑崩了？",
+        "蓝屏，我人也是蓝的",
+        "先深呼吸，看看自动恢复",
+        "我他妈……"
+      ],
+      "tags": [
+        "粗口",
+        "崩溃",
+        "电脑"
+      ],
+      "emotion": "崩溃",
+      "scene": "电脑死机",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-069",
+      "turns": [
+        "领导说好好干年底不会亏待我",
+        "去年也这么说",
+        "前年也是",
+        "饼都馊了"
+      ],
+      "tags": [
+        "粗口",
+        "工作",
+        "讽刺"
+      ],
+      "emotion": "讽刺",
+      "scene": "领导画饼",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-070",
+      "turns": [
+        "你能不能别每次都这样",
+        "我哪样了",
+        "说一半就不说了，让我猜",
+        "我只是不想吵",
+        "可我在等你说清楚"
+      ],
+      "tags": [
+        "冲突",
+        "恋爱",
+        "沟通"
+      ],
+      "emotion": "生气",
+      "scene": "吵架",
+      "rating": "edgy",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-071",
+      "turns": [
+        "这么晚还不睡",
+        "在等你先睡",
+        "嘴这么甜",
+        "只对你这样",
+        "那我可记住了"
+      ],
+      "tags": [
+        "成人向",
+        "暧昧",
+        "私聊"
+      ],
+      "emotion": "心动",
+      "scene": "深夜",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-072",
+      "turns": [
+        "今天有点想你",
+        "只是有点？",
+        "好吧，挺想的",
+        "想我什么",
+        "想你现在在旁边"
+      ],
+      "tags": [
+        "成人向",
+        "想念",
+        "亲密"
+      ],
+      "emotion": "想念",
+      "scene": "异地",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-073",
+      "turns": [
+        "你今天跟别人聊得挺开心",
+        "吃醋了？",
+        "才没有",
+        "那我不聊了",
+        "……你爱聊不聊"
+      ],
+      "tags": [
+        "成人向",
+        "吃醋",
+        "撒娇"
+      ],
+      "emotion": "吃醋",
+      "scene": "吃醋",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-074",
+      "turns": [
+        "电影好看吗",
+        "没怎么看进去",
+        "为什么",
+        "你靠过来以后我就走神了"
+      ],
+      "tags": [
+        "成人向",
+        "暧昧",
+        "约会"
+      ],
+      "emotion": "心动",
+      "scene": "电影院",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-075",
+      "turns": [
+        "出门前是不是忘了什么",
+        "忘了什么",
+        "这里",
+        "……你低一点"
+      ],
+      "tags": [
+        "成人向",
+        "亲密",
+        "吻"
+      ],
+      "emotion": "害羞",
+      "scene": "出门前",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-076",
+      "turns": [
+        "刚洗完澡，头发还湿着",
+        "别着凉",
+        "你过来帮我吹",
+        "行，等着"
+      ],
+      "tags": [
+        "成人向",
+        "亲密",
+        "日常"
+      ],
+      "emotion": "放松",
+      "scene": "洗澡后",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-077",
+      "turns": [
+        "你上次落这儿的衬衫我穿了",
+        "合身吗",
+        "有点大，但挺舒服",
+        "那送你了",
+        "上面还有你的味道"
+      ],
+      "tags": [
+        "成人向",
+        "暧昧",
+        "占有"
+      ],
+      "emotion": "眷恋",
+      "scene": "穿衬衫",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-078",
+      "turns": [
+        "酒店好安静",
+        "几天回来",
+        "还有三天",
+        "回来那天我去接你",
+        "那你别迟到"
+      ],
+      "tags": [
+        "成人向",
+        "想念",
+        "出差"
+      ],
+      "emotion": "想念",
+      "scene": "出差",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-079",
+      "turns": [
+        "关灯了，聊会儿",
+        "聊什么",
+        "随便，听你说话",
+        "那我讲个没头没尾的事",
+        "嗯，我听着"
+      ],
+      "tags": [
+        "成人向",
+        "亲密",
+        "夜聊"
+      ],
+      "emotion": "安心",
+      "scene": "睡前",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "orig-080",
+      "turns": [
+        "别动，再抱一会儿",
+        "好",
+        "刚才是不是有点急",
+        "没有，刚好",
+        "那就好"
+      ],
+      "tags": [
+        "成人向",
+        "亲密",
+        "事后"
+      ],
+      "emotion": "温柔",
+      "scene": "拥抱",
+      "rating": "adult",
+      "source": "project-original",
+      "license": "original",
+      "url": ""
+    },
+    {
+      "id": "kdconv-001",
+      "turns": [
+        "嗯，看来挺了解我的嘛，你对她感兴趣啊，那就跟你聊聊。",
+        "好啊，好啊，我是最近才关注她的，原来人家也是很有能力的呢。",
+        "怎么说呢？"
+      ],
+      "tags": [
+        "音乐",
+        "日常",
+        "导入"
+      ],
+      "rating": "general",
+      "source": "KdConv test split",
+      "license": "Apache-2.0",
+      "url": "https://github.com/thu-coai/KdConv",
+      "importedAt": 1793617291594
+    },
+    {
+      "id": "kdconv-002",
+      "turns": [
+        "那这首歌的销量怎么样啊？",
+        "这可问住我了，哈哈！",
+        "好的，和你聊天很愉快！"
+      ],
+      "tags": [
+        "音乐",
+        "日常",
+        "导入"
+      ],
+      "rating": "general",
+      "source": "KdConv test split",
+      "license": "Apache-2.0",
+      "url": "https://github.com/thu-coai/KdConv",
+      "importedAt": 1793617291594
+    },
+    {
+      "id": "kdconv-003",
+      "turns": [
+        "看这样你对她了解的很多呀？",
+        "是的，因为比较喜欢她的歌，就对她个人多关注了些。",
+        "那她是哪年出生的呀？"
+      ],
+      "tags": [
+        "音乐",
+        "日常",
+        "导入"
+      ],
+      "rating": "general",
+      "source": "KdConv test split",
+      "license": "Apache-2.0",
+      "url": "https://github.com/thu-coai/KdConv",
+      "importedAt": 1793617291594
+    },
+    {
+      "id": "kdconv-004",
+      "turns": [
+        "那关于她的歌曲除了我们说过的，你还知道别的吗？",
+        "除了说过的，别的我还真是不知道了。",
+        "哦，那她具体是出生在哪里知道吗？"
+      ],
+      "tags": [
+        "音乐",
+        "日常",
+        "导入"
+      ],
+      "rating": "general",
+      "source": "KdConv test split",
+      "license": "Apache-2.0",
+      "url": "https://github.com/thu-coai/KdConv",
+      "importedAt": 1793617291594
+    },
+    {
+      "id": "lccc2-001",
+      "turns": [
+        "你去那儿竟然不喊我生气了，快点给我道歉",
+        "道歉！！再有时间找你去",
+        "领个搓衣板去吧"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "烦躁"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662389
+    },
+    {
+      "id": "lccc2-002",
+      "turns": [
+        "咬咬牙这回要全入了！",
+        "干完这一票我的会员等级就要升了！",
+        "升了继续"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662390
+    },
+    {
+      "id": "lccc2-003",
+      "turns": [
+        "记得还…我们普通人要搬三天砖才赚来的20元",
+        "代表了哪里的普通人？",
+        "我瞎说的"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662390
+    },
+    {
+      "id": "lccc2-004",
+      "turns": [
+        "早点好起来啊。生日快乐",
+        "好得差不多啦",
+        "那很好啊"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662390
+    },
+    {
+      "id": "lccc2-005",
+      "turns": [
+        "那么早！！我的考试周还没有开始呢！",
+        "是啊，今年好快啊",
+        "不止今年，我发现你每次都好早",
+        "小心乌鸦嘴，下一次就最晚了"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "学校"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662390
+    },
+    {
+      "id": "lccc2-006",
+      "turns": [
+        "今天不知道能下么，不过天又冷了",
+        "希望能…",
+        "第一场雪不是雪花的样子，注意防小冰雹哦",
+        "嗯，你也是哈…"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662390
+    },
+    {
+      "id": "lccc2-007",
+      "turns": [
+        "小哥哥教教我",
+        "怎么教",
+        "言传身教"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662390
+    },
+    {
+      "id": "lccc2-008",
+      "turns": [
+        "头发是不是长很长了",
+        "我觉得长得好慢",
+        "我头发长的超级快"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-009",
+      "turns": [
+        "保持愉悦心情",
+        "哦啦～三亚玩得happy不？",
+        "还不错，下次一起来！",
+        "木问题，多吃海鲜，水果～"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-010",
+      "turns": [
+        "长了痘痘了",
+        "我也长痘痘痘痘最可恶了",
+        "一般我不长痘的",
+        "看你拍的照片皮肤都蛮好的，我一般都长痘",
+        "我一般不长的！可能前段时间喝酒了！所以大姨妈来了一下子排出来了",
+        "哦哦，那不要紧的，过几天会消掉的",
+        "嗯嗯嗯，还好我不容易留疤，不然好郁闷",
+        "哦，好皮肤羡慕"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-011",
+      "turns": [
+        "小沫我又要看书去了命苦啊，好吧，晚点再来看大家",
+        "认真点~别漏了知识点…",
+        "哎，越看越困",
+        "怎么高中生患的都是同一种病？…",
+        "对的，渴睡症，哈哈",
+        "好吧！我以前读书的时候看书也是爱睡觉的……",
+        "哇，看书爱睡觉的娃儿出来握个手",
+        "不过我看小说可有劲儿了、哈哈！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-012",
+      "turns": [
+        "开封清明上河园，住在里面还不错，玩上空气很好，也没人，清净的很！",
+        "。。。这是我老家。。。回去太多次咯。。。",
+        "关公面前耍大刀了！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-013",
+      "turns": [
+        "我的心好痛你们已经打情骂俏到这个程度了",
+        "说了你没机会了的嘛你以为我骗你",
+        "不！我还是相信她爱我，我也可以很污我要开着保时捷驾着七彩祥云去荆州迎娶她过门",
+        "现场污一个撒可是你有我可爱吗",
+        "我现场发挥比较污，谢谢，大家都叫我萌萌，按着么说，我应该比你可爱"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-014",
+      "turns": [
+        "所以大妈想把你变成儿媳妇吗",
+        "有幸见到了大妈全家，大妈儿子是魁梧的大叔〜",
+        "岔辈儿了。天天晚上十二点在卧室踢翻啤酒瓶报复大周末扰清梦的人，反正马上要搬走了",
+        "这年头六七十的也得叫阿姨，不敢叫奶奶"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "害怕"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-015",
+      "turns": [
+        "中午回去给你弄冰棍要不要啊",
+        "你自己会做？",
+        "没有冰箱要怎么做！！！！你不是要冰棍，，棍嘛",
+        "我以为你要给我做",
+        "有冰箱就给你做啦",
+        "好了咯"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-016",
+      "turns": [
+        "你才是豪",
+        "别装了学长",
+        "我装啥了"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-017",
+      "turns": [
+        "约赚钱？",
+        "带你做高分子水珠泡泡",
+        "那个是什么水？？？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-018",
+      "turns": [
+        "我在家。来玩……无聊啊",
+        "姐没空，要上课",
+        "晚上去你家喝",
+        "要蹭锅吗？今晚我们聚餐",
+        "求邀请",
+        "昨晚怎么不邀请我"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "学校"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-019",
+      "turns": [
+        "咱家这人事局，临时的，工资少",
+        "是办进去哒？还是就是暂时做一段时间…",
+        "暂时的",
+        "那就先做着，长经验呗。宝贝加油…",
+        "哦了，呵呵。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-020",
+      "turns": [
+        "云画的月光看了吗？",
+        "没有啊，好看吗？",
+        "超好看",
+        "这真的是要我入坑啊。我真的一直在平复我爱他的心情，妄图压下这种情感啊！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-021",
+      "turns": [
+        "浪费粮食，真的好吗",
+        "等来年春天来了，再拿出来煮",
+        "肯定不能吃了吧",
+        "要不你去试试？",
+        "微波炉反复加热肯定不能吃了",
+        "会不会变爆米花？",
+        "红豆变爆米花，你脑洞好大啊",
+        "第一个是放大米啊。还是我看错了。？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-022",
+      "turns": [
+        "你们肿么这么早去学校？",
+        "在家无聊没人玩呗！！！！",
+        "那你去学校有人玩？",
+        "有啊，很多人额！！！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "学校"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-023",
+      "turns": [
+        "你地两个有钱婆，有钱就身痒，。。。",
+        "好穷吖",
+        "有钱都比你使穷啦。。。甘买也。。。",
+        "人生在世"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "购物"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-024",
+      "turns": [
+        "南方姑娘谁说不会包饺子",
+        "你会？",
+        "那必须！",
+        "你什么时候还成了微女郎了",
+        "能证明自己是女子的机会我怎么可能放过",
+        "看来没门槛啊我也试试"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-025",
+      "turns": [
+        "十一失恋，痛哭到低烧。我也许不会再相信爱情了",
+        "看来我们是一样的",
+        "都要努力放下"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-026",
+      "turns": [
+        "满天都是小星星诶眼影好看",
+        "收到钥匙圈说一声哟果然欣赏我的眼影",
+        "收到返图给你~早安呀"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-027",
+      "turns": [
+        "还不让我帮你征友",
+        "我发现不论八字紫微还是掌纹，算出来我都是个晚婚者，窘",
+        "你别老自我暗示啊，争取30岁之前吧",
+        "这个啊…我尽量吧"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-028",
+      "turns": [
+        "阿门...愿主保佑你...",
+        "一加一等于几",
+        "等于二"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-029",
+      "turns": [
+        "想看他帅，31号《闺蜜》",
+        "电影吗？",
+        "对呀"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "影视"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-030",
+      "turns": [
+        "二姐闭眼照相的功力越发精进了",
+        "是睁眼",
+        "睁眼？眼呢？",
+        "就这么大",
+        "风沙应该被挡得严严实实"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-031",
+      "turns": [
+        "作业做完了啊。",
+        "做好回来了--",
+        "我还没去…"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "学校"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-032",
+      "turns": [
+        "好久没跟你聊天了嘛",
+        "好久不见",
+        "我天天来"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-033",
+      "turns": [
+        "加油加油，我家萨摩犬瘟治疗两个月出院，在家调养了一个月，现在棒棒的了，陪着它很重要",
+        "嗯嗯谢谢他状态也可以一个半月了",
+        "之前医生跟我说熬过两个月就基本上没大问题了棒棒棒"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-034",
+      "turns": [
+        "没刘海就换，有刘海p9就再战一年",
+        "好像都不喜欢刘海",
+        "大部分花粉应该都不希望有刘海",
+        "对啊，结果还是有刘海"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-035",
+      "turns": [
+        "你有没有吹乱了头发",
+        "在风中任性的飞舞",
+        "让它潇洒的飞吧"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-036",
+      "turns": [
+        "我觉得辉月和水晶也挺好的加上吧，虽然我投了咖啡豆，不过最后这句话莫名很暖了",
+        "我宁可叫防御塔都不要叫咖啡豆",
+        "越来越觉得咖啡豆好傻……"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-037",
+      "turns": [
+        "惠州哪个度假村好玩？",
+        "度假村？惠州木有度假村。",
+        "木有么？不是有那个什么湾来着",
+        "双月湾？大亚湾？双月湾要在高处才能看到双月弧型，大亚湾n年没去，不知现在是怎么样。惠州跟珠海差不多，现在没有珠海干净，住着舒服，但是没有什么可以游玩的"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-038",
+      "turns": [
+        "你好，这是怎么受伤的啊？好好休息，祝你早些好起来哦～",
+        "楼梯上摔下来的，等消肿了要做手术，谢谢关心",
+        "不要客气，我是医生，可以和你相互关注一下吗",
+        "不用了我现在天天在医院谢谢"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-039",
+      "turns": [
+        "你玩狼人杀都不叫我，我现在变了，我拿狼人经常焊条",
+        "你变了，我就昨天下午玩了几把",
+        "玩叫我啊！",
+        "厚啊"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-040",
+      "turns": [
+        "只有我关心报的什么课外班吗？",
+        "游泳班",
+        "游泳潇洒夫妇自己教不是更好吗？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-041",
+      "turns": [
+        "遭淋安逸了？",
+        "是哈，你没遭撒？",
+        "晚班",
+        "那起来这么早，这天气多适合睡觉",
+        "睡不着了"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-042",
+      "turns": [
+        "生快",
+        "姐也要快哈",
+        "恩恩昨晚玩的开心吗？",
+        "挺嗨的哦"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-043",
+      "turns": [
+        "真的瘦了....上次看那个咖妃....发现瘦了好多..",
+        "我就是发现这姑娘怎么变得不认识了，声音还那么熟悉，结果知道她名字真是她",
+        "好励志...我也得加油减",
+        "其实我觉得胖嘟嘟的她更有喜感声音也很特别，但是为了健康瘦下来是好事",
+        "就是。之前确实胖.."
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-044",
+      "turns": [
+        "从前和以后一夜间拥有难道这不算相恋到白头",
+        "千金一笑潇洒依旧对对错错千般恩怨你喜欢哥哥的歌",
+        "对！",
+        "你就这么回复我的一个字",
+        "好的吧，我也不知道说啥现在说晚安～",
+        "不够意思明天聊"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "音乐"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-045",
+      "turns": [
+        "我结婚没要钱，白送的媳妇，哈哈",
+        "如果一开始说21万，真的没什么好生气的，主要后面加了两次钱，",
+        "我觉得21万也好多"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心",
+        "烦躁"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-046",
+      "turns": [
+        "还不睡，细什么心呀",
+        "我还站在就起了，好伟大",
+        "哈哈，你咋那么自恋呢",
+        "我说真的啊，晚睡早起多么伟大的事儿",
+        "那我比你伟大"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-047",
+      "turns": [
+        "那个小人像太像你了",
+        "啊哈哈就是我呀！！",
+        "怎么弄的？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-048",
+      "turns": [
+        "大学老师还改作业？",
+        "对啊",
+        "可怕"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "学校"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-049",
+      "turns": [
+        "受伤的腿了解下",
+        "哈哈哈哈一把年纪了太受伤了",
+        "以后机会还多的呢"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-050",
+      "turns": [
+        "我很伤心，请不要赞",
+        "不要跟家人较真，想开点就好了",
+        "好的，现在已经好了，"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "低落"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662391
+    },
+    {
+      "id": "lccc2-051",
+      "turns": [
+        "我是下大雨去的",
+        "来晒感受一下中雨的不同情节",
+        "等我哟"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-052",
+      "turns": [
+        "七夕我知道有流星还是去睡了没情调啊没情调",
+        "另，最近稍迷甄嬛，以至于。。。比较喜欢带着腔调说话。。",
+        "难怪我觉得有点像那个调调"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-053",
+      "turns": [
+        "老板不在就偷懒",
+        "没啊我离职了啊",
+        "我说百度网盘",
+        "有道理，老板没盯着就偷懒"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-054",
+      "turns": [
+        "哥你能看到我吗我今天做针刀刮骨疼的快哭出来好几天没见你甚是想念想到雅安我眼里同哥哥一般雅安坚强",
+        "低调的",
+        "我没哭只是风沙太大迷了眼"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-055",
+      "turns": [
+        "今早起来我默默的顺了一遍乘法口诀",
+        "哈哈哈，别整这没用的",
+        "马上就不怕你的提问了，",
+        "睡吧睡吧",
+        "晚安，晚安"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-056",
+      "turns": [
+        "再喝那么多就直接将你打到进医院！",
+        "哈啊我知错了。喵",
+        "知错就争气快D好翻啦...",
+        "我已经好啦刚吃完中午饭"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-057",
+      "turns": [
+        "我已被世残害中",
+        "假如没有手机会发生什么",
+        "会经常见面",
+        "巴不得现在把你们全约上"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-058",
+      "turns": [
+        "你真的现在去带新生啊？我是想睡啊睡不着没办法",
+        "真的啊这周我执勤周8点就来恭候了三点就起来等他们了还不知道有没有加志愿者服务实数，不过挺有意思的",
+        "不错啊这就对了啊",
+        "有本事说熬夜说不错还不如去你楼下接学弟摆脱寂寞",
+        "你是怎样一定要我去接新生就对了而且我们系没有学弟",
+        "你心中宽广点好不好。我是师院人，哈哈"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-059",
+      "turns": [
+        "老铁，我想问问过年那几天最晚一班地铁是什么时候呀",
+        "暂时没收到延迟通知，收班时间不变哦",
+        "好的，谢谢"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-060",
+      "turns": [
+        "你也只能看懂新闻联播等内地媒体的片面之词",
+        "你也只能在手机上打打字抓住一个不存在的机会寻找你可怜的优越感",
+        "怼的真酷",
+        "我的愿望是：世界和平！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-061",
+      "turns": [
+        "推荐自己",
+        "求口红色号",
+        "ysl7号唇釉"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-062",
+      "turns": [
+        "漠要不和狼抱团，她的文那么弱智谁看",
+        "没看过她的文",
+        "高中的时候看过她的船直，后来没怎么看到她写文，后来复出以后再写，越来越弱智，作话里卖萌的字数比正文都多，先是无语她的文笔，再是讨厌她的人品。炫富炫一切，要是她把"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "烦躁"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-063",
+      "turns": [
+        "所以学姐给我推荐啥色号好呀？",
+        "学弟有对象了嘛",
+        "先推荐",
+        "先找对象"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-064",
+      "turns": [
+        "咋了，有人暗恋你表白了？",
+        "不是啊，，，这都什么年代了还暗恋啊",
+        "那是什么情况，这么晚还不睡觉，？要当神仙么么",
+        "你还不是这么迟睡呀",
+        "那是因为我想你"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-065",
+      "turns": [
+        "可以问下大大这个本子是什么牌子的呀",
+        "就是百元店买的",
+        "谢谢大大"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "购物"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-066",
+      "turns": [
+        "突然想到高三上课太困了边睡边记笔记然后醒来时候发现写的是火星文",
+        "自己都不认识哦",
+        "对地球人都不认识哈哈"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-067",
+      "turns": [
+        "翰哥，照顾好自己的同时也帮忙照顾一下我们花花哦，花花是个起床困难户，生活难自理，时不时思绪就飘了，爱吃肉的小孩，你们好好的。",
+        "亲，问一下他们去哪里？干什么啊？",
+        "芒果台的一个真人秀节目，带着姐姐去旅游，引进的韩国节目"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-068",
+      "turns": [
+        "期末过去你要变成沙雕回来了",
+        "为啥？",
+        "大西北呀",
+        "不是吧"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-069",
+      "turns": [
+        "在你的记忆中有一双滑板鞋？",
+        "不是人字拖？",
+        "滑板鞋才时尚时尚最时尚人字拖是什么鬼"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-070",
+      "turns": [
+        "几乎没有善良",
+        "男主角不就善良么",
+        "那是真像大白之后，我觉着他很可怜，也仅仅是最后的最后，只能说他们都是非常不幸地人，被命运扭曲了，如果非得说善良，我觉得是那个警察，或者故事中其他行走在阳光下的人"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-071",
+      "turns": [
+        "你学校是哪的？",
+        "南昌工学院",
+        "太远了。要不然过去找你了",
+        "，。。。啊。。我都不认识你啊。。",
+        "谁规定了。只有认识才能找的。难道你所有的好朋友一出生就有的吗？",
+        "厉害",
+        "嘿嘿。玩笑感觉开大了"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "学校"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-072",
+      "turns": [
+        "我七封印偷书各种手残，最后还是我当时的男票给我找人偷的23333",
+        "手残+1，跑一晚上跑到崩溃也没过，而且最开始时候人多还要比谁手快点进……",
+        "当时想跑完就结束了！直到现在做美人图，我才知道终究是跑不过"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-073",
+      "turns": [
+        "披萨我不介意明天给我送过来",
+        "我今天就吃",
+        "醒的可是够早的",
+        "睡得早"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-074",
+      "turns": [
+        "分手了？",
+        "你知道的是哪个？分了好久了天下大事合久必分",
+        "我哪个都不知道～"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-075",
+      "turns": [
+        "经历沧桑的男人啊",
+        "说我吗？",
+        "不是你还有谁阿。。。",
+        "我没有历尽沧桑"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-076",
+      "turns": [
+        "非大热门的话，试试涠洲岛呗",
+        "对哦早该问问你",
+        "订好啦？去哪里",
+        "没有呢还在纠结"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-077",
+      "turns": [
+        "今天郑州六级大风，我，，，，的发型凌乱啦",
+        "大风给你重新吹吹，换一发型换一种心情～",
+        "今天，风停啦"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-078",
+      "turns": [
+        "猪腰煮红糖姜，你肚子痛啊？",
+        "吃货啊，就突然想吃这个就叫他弄",
+        "晒幸福可耻啊",
+        "其实重点是这是他第一次下厨",
+        "我们家的都没下过呢"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-079",
+      "turns": [
+        "是你甜还是樱花甜樱花甜了你你甜了整个世界",
+        "你怎么这么会说话",
+        "哈哈喜欢你就会说话"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-080",
+      "turns": [
+        "试问，这个人如果是精神不正常的人呢？设施健全人能进去，这次是个正常人，下次你能保证精神不正常的人不进去。是动物园的防御设施不健全，保护机制不完善，人固然有错，难",
+        "你脑子里的水倒出来可以让全球海平面升高一米了",
+        "就服你"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-081",
+      "turns": [
+        "10个聊天时让人最不爽的词语，你常说哪个？",
+        "这样说话就没法继续聊天了！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-082",
+      "turns": [
+        "放假了，就放下一切！好好享受慢生活",
+        "真羡慕啊，可惜我没有"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-083",
+      "turns": [
+        "今天收了三件重量级的礼物！哈哈。开心咧：））",
+        "谁送的？什么礼物？分享下呗！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-084",
+      "turns": [
+        "我从不觉得善良是件好事因为你给了别人伤害你的资本",
+        "人，不会永远吃亏的！别计较"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "吃饭"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-085",
+      "turns": [
+        "终于知道自己为什么失眠了。",
+        "终于找到我熬夜的理论依据了。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-086",
+      "turns": [
+        "#浏览器变型记#欧朋：见证奇迹的时刻到了。",
+        "很有创意哈，确实很棒，不错推荐给大家哦！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-087",
+      "turns": [
+        "有人半场要接电话了",
+        "湖人就是现在没有季后赛的压力不那么认真了……"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-088",
+      "turns": [
+        "在这世上珍贵的东西总是罕有，所以这世上只有一个你。",
+        "嘻嘻。每个人在自己的世界里都是最珍贵的存在。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-089",
+      "turns": [
+        "那些年，我们一起许下的愿望，碉堡了有木有？alink",
+        "这才是我等老百姓最关注的话题"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-090",
+      "turns": [
+        "姐妹们在这么艰苦的情况下给你们加油！你们要争气吖",
+        "哈哈、不知道看快女的多还是看男篮的多呢。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-091",
+      "turns": [
+        "我们从南唱到北，从早唱到黑！",
+        "宝贝儿辛苦了。爱你。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-092",
+      "turns": [
+        "每天嘻嘻哈哈的笑着，只有自己才知道活的有多累。",
+        "就算再累也要给自己笑一个"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-093",
+      "turns": [
+        "你放手机的时候，习惯屏幕朝上还是背面朝上？",
+        "你厕所嘘嘘的时候，你是往前嘘啊，还是对着脚尿啊？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-094",
+      "turns": [
+        "我们手里的金钱是保持自由的一种工具。（卢梭）晚安！",
+        "我的自由被金钱挟持了。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-095",
+      "turns": [
+        "二个月时给她'Sophie'时还皱眉头，现在啃的很过瘾",
+        "我姐姐家也有这个小鹿"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-096",
+      "turns": [
+        "70岁的教练，102岁的学生。你还有什么借口？",
+        "报告长官没有任何借口这是西点军校的铁律"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-097",
+      "turns": [
+        "这居然是北京不是哈尔滨。",
+        "这是在秀索尼拍照效果吗？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-098",
+      "turns": [
+        "每天嘻嘻哈哈的笑着，只有自己才知道活的有多累。",
+        "我们很累，怎样解脱？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-099",
+      "turns": [
+        "不以结婚为目地的谈恋爱，都是在替别人养老婆。",
+        "不以结婚为目的的谈恋爱，都是替别人管老公"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-100",
+      "turns": [
+        "歪脖子系列一些情侣头像。「via小矛」",
+        "原来后面才是亮点啊。捂脸跑。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-101",
+      "turns": [
+        "这次会议期间要读的两本书。",
+        "任叔读书怎么那么快？"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-102",
+      "turns": [
+        "“主人，我没有偷喝牛奶，尊的没有！你为毛就不相信呢！”",
+        "AUV，这无辜的小眼神啊。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-103",
+      "turns": [
+        "郭德纲都要上春晚了，我还有什么理由不和豆腐脑甜党和解呢？",
+        "艹，都是屁事！撸一管睡吧！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-104",
+      "turns": [
+        "相爱吧，即便满心伤痛。(转)",
+        "不就是高帅富和备胎的故事吗"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-105",
+      "turns": [
+        "凤凰古城，千年一醉，太美了。",
+        "一塌糊涂，去罢后悔，太乡下了。只是宣传广告做得好！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-106",
+      "turns": [
+        "面对摄像机，李铁根回忆了他的大学生活。",
+        "哇原来根苏四清华大学僧！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-107",
+      "turns": [
+        "今天这个发型我比较喜欢",
+        "很好，你怎么打扮都漂亮。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-108",
+      "turns": [
+        "《北京爱情故事》插曲《嘀嗒》独家首发alink",
+        "这首歌更适合丽江。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "音乐"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-109",
+      "turns": [
+        "#量子晚报#第205期：【如何留住用户】",
+        "总结起来就是：告诉需要，找到所要，提供需求！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-110",
+      "turns": [
+        "面对摄像机，李铁根回忆了他的大学生活。",
+        "长得真他娘的正人君子！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-111",
+      "turns": [
+        "凤凰古城，千年一醉，太美了。",
+        "早就没有这么绿的水了。"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-112",
+      "turns": [
+        "#樱花时节#今日武大现场图四",
+        "樱花今日未来，就让我们漫步武大校园吧！"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-113",
+      "turns": [
+        "人类已经不能阻止猫咪们了……",
+        "不得不说要比我的智商高那么一点点"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "宠物"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-114",
+      "turns": [
+        "我们从南唱到北，从早唱到黑！",
+        "隐约读出苦中作乐的感觉"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-115",
+      "turns": [
+        "分享一些全球超酷的办公室设计。最后一张是寡人的公司。",
+        "你还真是youtube干活的啊"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-116",
+      "turns": [
+        "教您用打火机改装迷你摩托车。很有趣噢！",
+        "强人，乐趣创意无处不在"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-117",
+      "turns": [
+        "小时候觉得蝌蚪很可爱？原来它的真实面貌是这样的",
+        "OMG！学习了！怎么长的和海怪似的"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-118",
+      "turns": [
+        "终于知道自己为什么失眠了。",
+        "怪不得，我八点就要呼呼啦"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "睡觉"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-119",
+      "turns": [
+        "10个聊天时让人最不爽的词语，你常说哪个？",
+        "10个我占了6个哦、呵呵、额、。、嗯嗯和第七个"
+      ],
+      "tags": [
+        "日常",
+        "LCCC",
+        "开心"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "lccc2-120",
+      "turns": [
+        "凡是曾经脆弱过的东西，永远不可能绝对坚强。",
+        "曾经坚持过得东西，如果碎过，也不容易坚强了吧"
+      ],
+      "tags": [
+        "日常",
+        "LCCC"
+      ],
+      "rating": "general",
+      "source": "LCCC toy_data",
+      "license": "MIT",
+      "url": "https://github.com/thu-coai/CDial-GPT",
+      "importedAt": 1793617662392
+    },
+    {
+      "id": "bawdy-001",
+      "turns": [
+        "我最近在练深蹲",
+        "练这个干嘛",
+        "听说对腰好",
+        "你最好只是听说"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "双关",
+        "健身",
+        "日常"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-002",
+      "turns": [
+        "昨晚梦到你了",
+        "梦到什么",
+        "梦到你请我吃饭",
+        "就这？",
+        "不然呢，你还想梦到什么"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "双关"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-003",
+      "turns": [
+        "冰箱里有两根冰棍",
+        "然后呢",
+        "一根给你，一根我留着",
+        "就这？",
+        "你还想怎样"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "双关",
+        "日常"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-004",
+      "turns": [
+        "你会修水管吗",
+        "会一点",
+        "那通下水道呢",
+        "……你最好说的是真的下水道"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "双关",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-005",
+      "turns": [
+        "今天风好大",
+        "把我吹到你怀里了",
+        "这风挺会"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-006",
+      "turns": [
+        "我昨天去按摩了",
+        "正经的吗",
+        "你说呢",
+        "我拒绝回答"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "双关",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-007",
+      "turns": [
+        "你晚上有空吗",
+        "干嘛",
+        "想找你借点东西",
+        "借什么",
+        "借个肩膀"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "日常"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-008",
+      "turns": [
+        "听说接吻能减肥",
+        "谁说的",
+        "不知道，反正我想试试"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-009",
+      "turns": [
+        "我买了条新裙子",
+        "多短",
+        "你管得着吗",
+        "那我看看再评价"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-010",
+      "turns": [
+        "你觉得我是什么类型",
+        "我的类型",
+        "土味情话扣分"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-011",
+      "turns": [
+        "今晚月亮真圆",
+        "想说什么",
+        "想说你也是",
+        "……这也能绕回来"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "土味"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-012",
+      "turns": [
+        "你睡觉打呼吗",
+        "不打",
+        "那我可以放心睡你旁边了",
+        "喂"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-013",
+      "turns": [
+        "我手冷",
+        "给我",
+        "给你捂",
+        "这还差不多"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "日常"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-014",
+      "turns": [
+        "我们玩个游戏",
+        "什么游戏",
+        "谁先脸红谁输",
+        "你赢了"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "暧昧",
+        "打趣"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
+    },
+    {
+      "id": "bawdy-015",
+      "turns": [
+        "男人最喜欢听女人说什么",
+        "什么",
+        "再来一次",
+        "……你赢了"
+      ],
+      "tags": [
+        "黄色玩笑",
+        "双关",
+        "段子"
+      ],
+      "rating": "bawdy",
+      "source": "project-original",
+      "license": "original",
+      "url": "",
+      "importedAt": 1793617857200
     }
-  ]
+  ],
+  "notes": "LCCC toy sample under MIT (two filtered batches); 4 short conversational runs from the KdConv public test split under Apache-2.0; original entries are project-authored. Ratings: general (any chat), edgy (owner private or free expression), bawdy (adult humor, any chat, no explicit description), adult (owner private + adult mode only). Reference retrieval, not model-weight training."
 }
