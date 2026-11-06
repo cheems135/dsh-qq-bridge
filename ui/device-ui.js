@@ -4,7 +4,7 @@
   {id:'home',label:'日常',note:'近况、日程和日记',icon:'home',pages:['overview','daily','diary','star']},
   {id:'messages',label:'消息',note:'聊天与送达',icon:'chat',pages:['monitor','send','sessions','delivery','activity']},
   {id:'character',label:'认识她',note:'人设与记忆',icon:'spark',pages:['persona','profiles','autonomy','study','thoughts','memory']},
-  {id:'assets',label:'内容',note:'声音、图片和上网',icon:'image',pages:['voice','songs','imagegen','sticker','collect','bilibili','qzone','websitemcp','invocations']},
+  {id:'assets',label:'内容',note:'声音、图片和上网',icon:'image',pages:['voice','songs','imagegen','videogen','sticker','collect','bilibili','qzone','websitemcp','invocations']},
   {id:'system',label:'设置',note:'API 与设备',icon:'settings',pages:['connection','services','devices','whitelist','model','storage','logs','backup']}
  ];
  function groups(device,desktop){return (device==='phone'?mobileGroups:desktop).map(function(g){return Object.assign({},g,{pages:g.pages.slice()});});}

@@ -23,8 +23,8 @@ export function checkedWebsiteUrl(value, origin) {
 /** Resolve once, reject private addresses, then pin the connection to that result.
  * No cookies, bearer headers, shell commands or browser scripts are accepted.
  */
-export async function requestWebsite(url, {signal, origin, maxBytes=2*1024*1024, resolve=lookup, request, binary=false}={}) {
-  const deadline = AbortSignal.any([AbortSignal.timeout(15000), ...(signal?[signal]:[])]);
+export async function requestWebsite(url, {signal, origin, maxBytes=2*1024*1024, resolve=lookup, request, binary=false, timeoutMs=15000}={}) {
+  const deadline = AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal?[signal]:[])]);
   let current = checkedWebsiteUrl(url, origin);
   for (let hop=0; hop<5; hop++) {
     deadline.throwIfAborted();

@@ -296,7 +296,7 @@ test('registered bridge_qq_read renderer turns saved attachments into image bloc
   };
   const registerQqReadTool = functionFromIndex('registerQqReadTool', {
     ctx,
-    qqReadToolRegistered: false,registerContextTool:()=>true,
+    qqReadToolRegistered: false,registerContextTool:()=>true,registerVideoTool:()=>true,
   });
 
   assert.equal(registerQqReadTool(), true);

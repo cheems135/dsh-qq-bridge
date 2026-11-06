@@ -4,17 +4,17 @@ export const CONNECTION_TYPES=['openai','anthropic','responses','comfyui','voice
 export function connectionUrl(value){
   const url=new URL(String(value||'').trim());
   if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)throw Error('连接地址需要是不含账号、密钥和查询参数的 HTTP/HTTPS 地址');
-  url.pathname=url.pathname.replace(/\/(?:chat\/completions|images\/(?:generations|edits)|audio\/speech|responses|messages)\/?$/,'').replace(/\/+$/,'');return url.href.replace(/\/$/,'');
+  url.pathname=url.pathname.replace(/\/(?:chat\/completions|images\/(?:generations|edits)|audio\/speech|videos|responses|messages)\/?$/,'').replace(/\/+$/,'');return url.href.replace(/\/$/,'');
 }
 export function connectionEndpoint(base,path){return base.replace(/\/+$/,'')+'/'+path.replace(/^\//,'');}
 export function normalizeConnectionPaths(input={},base){
   const origin=new URL(base).origin,paths={};
-  for(const kind of ['chat','image','speech']){
+  for(const kind of ['chat','image','speech',...['video','videoStatus','videoContent'].filter(k=>Object.hasOwn(input||{},k))]){
     const value=String(input?.[kind]||'').trim();if(!value){paths[kind]='';continue;}
     if(value.length>1000||/[\u0000-\u0020\\]/.test(value))throw Error('自定义接口路径无效');
     const url=new URL(value,base.replace(/\/+$/,'')+'/');
     if(url.origin!==origin||url.username||url.password||url.search||url.hash)throw Error('自定义接口必须属于当前服务站点，且不含密钥、查询参数或片段');
-    paths[kind]=url.pathname;
+    paths[kind]=['videoStatus','videoContent'].includes(kind)?url.pathname.replace(/%7Bid%7D/gi,'{id}'):url.pathname;
   }
   return paths;
 }
@@ -45,13 +45,13 @@ export async function detectConnection(input,{fetchImpl=fetch,signal,apiOnly=fal
     try{const r=await fetchImpl(candidate+'/models',{method:'GET',headers:connectionHeaders({type,apiKey:key}),redirect:'error',signal:controller});if(r.ok)listing=JSON.parse(await readConnectionText(r,2*1024*1024));else {evidence.push(new URL(candidate).pathname+'/models：HTTP '+r.status);await r.body?.cancel?.();}}catch{if(controller.aborted)throw Error('连接检测超时或已取消');}
     if(Array.isArray(listing?.data)){
       const models=[...new Set(listing.data.map(x=>String(x?.id||'').trim()).filter(x=>x&&x.length<=200))].slice(0,300);
-      if(models.length)return {type:hinted,baseUrl:candidate,models,evidence:['已验证模型列表 GET '+new URL(candidate).pathname+'/models','模型列表不证明图片、语音、视觉或工具能力；生成接口仅按所选协议配置，尚未执行付费调用'],capabilities:{chat:'listed',image:'unverified',speech:'unverified'},checkedAt:Date.now()};
+      if(models.length)return {type:hinted,baseUrl:candidate,models,evidence:['已验证模型列表 GET '+new URL(candidate).pathname+'/models','模型列表不证明图片、语音、视觉或工具能力；生成接口仅按所选协议配置，尚未执行付费调用'],capabilities:{chat:'listed',image:'unverified',speech:'unverified',video:'unverified'},checkedAt:Date.now()};
     }
   }
   if(!apiOnly&&!/\/v\d+$/.test(url.pathname)){
-    const tags=await get('api/tags');if(Array.isArray(tags?.models)&&tags.models.length)return {type:'openai',baseUrl:base+'/v1',models:tags.models.map(x=>x.name||x.model).filter(Boolean).slice(0,300),evidence:['已取得 Ollama 模型列表；使用它的 OpenAI 兼容入口','未执行模型推理，具体多模态能力仍待验证'],capabilities:{chat:'listed',image:'unverified',speech:'unverified'},checkedAt:Date.now()};
+    const tags=await get('api/tags');if(Array.isArray(tags?.models)&&tags.models.length)return {type:'openai',baseUrl:base+'/v1',models:tags.models.map(x=>x.name||x.model).filter(Boolean).slice(0,300),evidence:['已取得 Ollama 模型列表；使用它的 OpenAI 兼容入口','未执行模型推理，具体多模态能力仍待验证'],capabilities:{chat:'listed',image:'unverified',speech:'unverified',video:'unverified'},checkedAt:Date.now()};
   }
-  return {type:input.type&&input.type!=='auto'?input.type:'unknown',baseUrl:base,models:[],evidence:[...evidence.slice(-6),'无法仅凭地址与密钥确认协议；可手动选择类型、填写模型，或补充接口文档。没有发送试生成请求。'],capabilities:{chat:'unknown',image:'unknown',speech:'unknown'},checkedAt:Date.now()};
+  return {type:input.type&&input.type!=='auto'?input.type:'unknown',baseUrl:base,models:[],evidence:[...evidence.slice(-6),'无法仅凭地址与密钥确认协议；可手动选择类型、填写模型，或补充接口文档。没有发送试生成请求。'],capabilities:{chat:'unknown',image:'unknown',speech:'unknown',video:'unknown'},checkedAt:Date.now()};
 }
 export async function readConnectionText(response,limit=4*1024*1024){
   if(!response.body){const text=await response.text();if(Buffer.byteLength(text)>limit)throw Error('接口响应过大');return text;}
@@ -71,6 +71,8 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
     if(old?.apiKey&&!input.apiKey&&!input.clearKey&&new URL(connectionUrl(input.baseUrl)).origin!==new URL(old.baseUrl).origin)throw Error('服务所属站点已改变，请重新填写该站点的密钥，旧密钥不会自动发送过去');
     const p={id,name:String(input.name||'未命名连接').trim().slice(0,80),type:input.type,baseUrl:connectionUrl(input.baseUrl),apiKey:input.clearKey?'':String(input.apiKey||old?.apiKey||'').trim().slice(0,4000),chatModel:String(input.chatModel||'').trim().slice(0,200),imageModel:String(input.imageModel||'').trim().slice(0,200),speechModel:String(input.speechModel||'').trim().slice(0,200),voice:String(input.voice||'').trim().slice(0,120),imageMode:input.imageMode==='edits'?'edits':'generations',models:Array.isArray(input.models)?input.models.filter(x=>typeof x==='string'&&x.length<=200).slice(0,300):[],evidence:Array.isArray(input.evidence)?input.evidence.map(x=>String(x).slice(0,200)).slice(0,8):[]};
     p.paths=normalizeConnectionPaths(input.paths===undefined?old?.paths:input.paths,p.baseUrl);
+    p.videoModel=String(input.videoModel??old?.videoModel??'').trim().slice(0,200);
+    p.videoMode=(input.videoMode||old?.videoMode)==='json'?'json':'multipart';
     p.audioFormat=(input.audioFormat||old?.audioFormat)==='mp3'?'mp3':'wav';
     state.profiles=state.profiles.filter(x=>x.id!==id).concat(p);commit(state);return publicConnection(p);
   }
