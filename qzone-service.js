@@ -121,7 +121,7 @@ export function qzoneUploadResult(value){
  if(!album||!lloc||!sloc||!bo||!Number.isInteger(height)||!Number.isInteger(width)||height<1||width<1||/[\t\r\n,]/.test(album+lloc+sloc+type))throw Error('空间图片上传回执不完整，未发布纯文字代替');
  return {richval:`,${album},${lloc},${sloc},${type},${height},${width},,${height},${width}`,picBo:bo,width,height};
 }
-export function createQzoneService({storage,getAuth,loadImage,fetchImpl=fetch,authorize=()=>true,onRecord=()=>{},onAuthFailure=()=>{},allowTarget=()=>true,now=Date.now}={}){
+export function createQzoneService({storage,getAuth,loadImage,fetchImpl=fetch,authorize=()=>true,onRecord=()=>{},onAuthFailure=()=>{},beforeWrite=()=>{},allowTarget=()=>true,now=Date.now}={}){
  let state;try{state=storage.read();}catch(e){if(e.code!=='ENOENT')throw e;}state||={version:1,entries:[],comments:[]};state.entries||=[];state.comments||=[];state.posts||=[];
  for(const row of state.entries)if(['uploading','sending'].includes(row.status))row.status='unknown';
  const save=()=>storage.write(state),scope=c=>JSON.stringify([c.accountId||'',c.personaId]),check=c=>{if(!authorize(c))throw Error('账号、人设或任务已变化，空间操作停止');c.signal?.throwIfAborted();};
@@ -154,7 +154,7 @@ export function createQzoneService({storage,getAuth,loadImage,fetchImpl=fetch,au
    const auth=await getAuth(c);check(c);if(!auth.cookie||!auth.gtk||!/^\d{5,20}$/.test(String(auth.uin)))throw Error('空间登录状态不可用');
    const uploaded=[];for(const image of prepared){uploaded.push(await upload(image,auth,c));row.uploaded=uploaded.map(({hash,width,height,file})=>({hash,width,height,file}));save();onRecord({...safe(row),stage:'image-upload'},c);}
    check(c);const fresh=await getAuth(c);check(c);if(fresh.uin!==auth.uin||fresh.cookie!==auth.cookie||fresh.gtk!==auth.gtk)throw Error('空间登录状态已变化，请重新核对后发布');const params=isThread?{topicId:`${replyPost.uin}_${replyPost.tid}__1`,hostUin:replyPost.uin,uin:auth.uin,content:text,paramstr:isReply?2:1,t1_uin:replyPost.uin,t1_tid:replyPost.tid,...(isReply?{commentId:actualCommentId,commentUin:actualCommentUin,t2_uin:actualCommentUin,t2_tid:actualCommentId}:{}),format:'json',qzreferrer:user+'/'+replyPost.uin}:{syn_tweet_verson:1,paramstr:1,who:1,con:text,feedversion:1,ver:1,ugc_right:1,to_sign:0,hostuin:auth.uin,code_version:1,format:'json',qzreferrer:user+'/'+auth.uin,...(uploaded.length?{richtype:1,subrichtype:1,richval:uploaded.map(i=>i.richval).join('\t'),pic_bo:uploaded.map(i=>i.picBo).join(','),pic_template:''}:{})};
-   row.status='sending';save();writeStarted=true;
+   await beforeWrite(row,c);check(c);row.status='sending';save();writeStarted=true;
    const raw=await transport((isThread?'https://h5.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin/':api)+(isThread?'emotion_cgi_re_feeds':'emotion_cgi_publish_v6'),params,auth,c);
    const value=parsed(raw,c),receipt=isThread?{ok:true,status:'accepted',verified:false,itemId:String(value.data?.commentid||value.commentid||''),coverage:'平台已接收评论；尚未读回核对'}:parseQzoneResponse(raw);
    const verification={state:'pending',recipient:'unknown',read:'unknown'};

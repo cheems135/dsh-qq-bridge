@@ -48,10 +48,10 @@ test('permissions, busy service, lack of history, hourly gap and daily cap do no
  }
 });
 
-test('unrestricted context bypasses only daily count, reply wait, gap, idle and prior-attempt gates',async()=>{
+test('unrestricted permissions still wait for a real reply, but do not impose the old daily count cap',async()=>{
  const h=setup();h.ctx={...h.ctx,unrestricted:true,lastIncoming:h.clock-40*60000};h.states['scope-a']={day:h.ctx.day,count:3,lastSent:h.clock-30*60000,lastAttempt:h.clock-5*60000};
- assert.equal((await h.engine.tick()).status,'queued');assert.equal(h.calls.length,1);assert.equal(h.deliveries.length,1);
- assert.equal(h.states['scope-a'].count,4);
+ assert.equal((await h.engine.tick()).status,'waiting');assert.equal(h.calls.length,0);h.ctx={...h.ctx,lastIncoming:h.clock-5*60000};
+ assert.equal((await h.engine.tick()).status,'queued');assert.equal(h.calls.length,1);assert.equal(h.deliveries.length,1);assert.equal(h.states['scope-a'].count,4);
 });
 
 test('unrestricted context still requires a first contact, honors GPU busy and suppresses repeats',async()=>{

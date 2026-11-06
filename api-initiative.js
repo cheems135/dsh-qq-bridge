@@ -7,7 +7,7 @@ export function initiativePolicy(saved={},unlimited=false){
 export function selectInitiative(candidates,state,config,{now=Date.now(),manual=false}={}){
  const actions=state.actions||{},log=state.log||[];
  const eligible=candidates.filter(c=>{
-  const prior=actions[c.action]||{},kind=bucket(c.action);if(!manual&&!config.unrestricted&&(state.counts?.[kind]||0)>=(config.maxPerDay?.[kind]??0))return false;
+  const prior=actions[c.action]||{},kind=bucket(c.action);if(!manual&&c.action==='signature'&&(state.counts?.signature||0)>=1)return false;if(!manual&&!config.unrestricted&&(state.counts?.[kind]||0)>=(config.maxPerDay?.[kind]??0))return false;
   if(!manual&&!config.unrestricted&&prior.lastAt&&now-prior.lastAt<config.minGapMinutes*60000)return false;
   // A declined thought is not a sent message. Back off only this action.
   if(!manual&&!config.unrestricted&&prior.consideredAt&&now-prior.consideredAt<Math.max(3,Math.min(10,config.minGapMinutes))*60000)return false;

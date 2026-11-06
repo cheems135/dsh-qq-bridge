@@ -19,9 +19,9 @@ export function createLocalInitiative({context,probe,infer,deliver,readContext,l
   if(scene&&!state.sceneSeen){state.sceneSeen=scene;save(c.id,state);}
   const event=scene&&state.sceneSeen!==scene,unrestricted=c.unrestricted===true;
   if(!c.lastIncoming)return update('waiting','需要先有一次与你的真实私聊');
-  if(!unrestricted&&state.lastSent&&c.lastIncoming<=state.lastSent)return update('waiting','等你回复，先不连续打扰');
+  if(state.lastSent&&c.lastIncoming<=state.lastSent)return update('waiting','等你回复，先不连续打扰');
   if(!unrestricted&&state.count>=3)return update('waiting','今天主动开口已达到 3 次');
-  if(!unrestricted&&state.lastSent&&stamp-state.lastSent<60*minute)return update('waiting','两次主动开口至少间隔一小时');
+  if(state.lastSent&&stamp-state.lastSent<(unrestricted?30:60)*minute)return update('waiting','两次主动开口至少间隔'+(unrestricted?'30分钟':'一小时'));
   if(!unrestricted&&stamp-c.lastIncoming<(event?20:60)*minute)return update('waiting',event?'日程有变化，等你空闲再决定':'等私聊空闲一小时再考虑开口');
   if(!unrestricted&&state.lastAttempt&&stamp-state.lastAttempt<30*minute)return update('waiting','上次已考虑过，稍后再看看');
   const controller=new AbortController(),run={controller,id:c.id};active=run;

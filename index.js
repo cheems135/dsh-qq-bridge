@@ -1,3 +1,4 @@
+import {signatureAvailable,claimSignature,claimSpaceComment,proactiveDenial,reserveProactive} from './social-pacing.js';
 import {qzoneEnabled,dailySpaceOffer,claimSpaceOffer,spaceAccessAllowed,QZONE_DAILY_CUE} from './qzone-policy.js';
 import {connectionVideo} from './video-api.js';
 import {buildVideoPrompt,videoConfig} from './video-prompt.js';
@@ -1043,7 +1044,7 @@ export function apply(ctx, rawConfig) {
   }
   function outgoingActivityChat(context,target){
     const [kind,id]=target.split(':'),reply=context.meta?.kind==='user'&&target===context.key;
-    return {kind,key:target,chatId:id,userId:id,isOwner:kind==='private'&&settings.owners.includes(id),turnKind:reply?'user':'proactive',auditId:reply?context.meta.auditId||'':'',manualInitiative:false,sendChain:Promise.resolve()};
+    return {kind,key:target,chatId:id,userId:id,isOwner:kind==='private'&&settings.owners.includes(id),turnKind:reply?'user':'proactive',contactEpisode:context.meta?.contactEpisode||context.meta?.auditId||context.meta?.lifeJobId||context.exec?.callId||'',auditId:reply?context.meta.auditId||'':'',manualInitiative:context.meta?.kind==='user',sendChain:Promise.resolve()};
   }
   function preflightShareSendRecipient(chat,exec){
     const toolName=String(exec?.name||'');
@@ -4486,6 +4487,8 @@ export function apply(ctx, rawConfig) {
 
   /** 改签名（NapCat 的 longnick 接口）。 */
   async function setSignature(text,operation={}) {
+    const automatic=operation.automatic===true||operation.context?.meta?.kind==='proactive'||!operation.context&&operation.manual!==true;
+    if(automatic){if((autonomyState().counts.signature||0)>=1)throw Error('今天已经自动修改过签名，明天再考虑');claimSignature(featureState.signatureAttempts||=([]),settings.activeAccountId||'');if(!saveFeatures())throw Error('自动签名记录未保存，没有提交修改');}
     const execution=await socialOperation('qq.signature',text,operation);
     const evidence=beginQqAction('signature',{user_id:String(lastSelfId)},{contentHash:textHash(text)});
     try {
@@ -4559,6 +4562,7 @@ export function apply(ctx, rawConfig) {
     storage:{read:()=>JSON.parse(readFileSync(join(cfg.dataDir,'qzone-social.json'),'utf8')),write:data=>writeAtomic(join(cfg.dataDir,'qzone-social.json'),data)},
     authorize:c=>spaceAllowed(c)&&!stopped&&!accountPaused&&socket?.ready===true&&c.connectionRevision===qzoneConnectionRevision&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&(c.generation===undefined||c.generation===(featureState.generation||0))&&recordsAllowed(c.key)&&settings.owners.includes(String(c.key).replace(/^private:/,''))&&(!c.scope||agencyAuthorized(c)),
     getAuth:()=>qzoneSession().getAuth(),
+    beforeWrite:(row,c)=>{if(claimSpaceComment(featureState.qzoneDailyOffers||[],c,row)&&!saveFeatures())throw Error('空间评论记录未保存，本次没有提交');},
     allowTarget:uin=>String(uin)===String(lastSelfId)||effectiveUsers().includes(String(uin)),
     onAuthFailure:()=>{qzoneSession().invalidate('auth-required');void maintainQzoneSession().catch(()=>{});},
     loadImage:socialImage,
@@ -4817,11 +4821,12 @@ export function apply(ctx, rawConfig) {
         .sort((a, b) => b.minutes - a.minutes)[0];
       if (idle !== undefined) candidates.push({ action: 'chat', target: idle.user, minutes: idle.minutes });
     }
-    if (config.signature === true && (config.unrestricted||(countsView.signature ?? 0) < (config.maxPerDay.signature ?? 0))) {
+    if (config.signature === true && signatureAvailable(featureState.signatureAttempts||[],settings.activeAccountId||'') && (config.unrestricted||(countsView.signature ?? 0) < (config.maxPerDay.signature ?? 0))) {
       candidates.push({ action: 'signature' });
     }
     if(config.explore&&settings.agency.enabled&&settings.agency.autonomous&&(browserController?.status()?.available||settings.phone.enabled&&phoneLastStatus.connected)){const target=initiativeUsers.find(id=>settings.owners.includes(id)&&!pausedConversation('private:'+id));if(target)candidates.push({action:'explore',target});}
 
+    for(let i=candidates.length-1;i>=0;i--){const c=candidates[i],key=c.key||(c.target?'private:'+c.target:'');if(key&&['chat','share','webshare','group'].includes(c.action)&&proactiveCheck({initiative:true,manualInitiative:manual,accountId:settings.activeAccountId||'',chat:key}))candidates.splice(i,1);}
     if (candidates.length === 0) {
       saveState();
       return { action: 'none', reason: '没有触发条件' };
@@ -4911,7 +4916,7 @@ export function apply(ctx, rawConfig) {
     if(!manual&&!selectInitiative([pick],auto,config))return {action,skipped:'budget-or-window'};
     noteInitiative(auto,action,{reason});saveState();
     try {
-      if (action === 'signature') await setSignature(text);
+      if (action === 'signature') await setSignature(text,{manual,automatic:!manual});
       else if(action==='qzoneReply')await replyQzone({text,tid:pick.comment.tid,uin:pick.comment.owner,commentId:pick.comment.id,commentUin:pick.comment.uin},socialContext({key:contextKey,accountId,personaId:selectedPersona.id,panel:true,generation}));
       else if(action==='group'){
         if(!pick.chat||!effectiveGroups().includes(String(pick.groupId))||!groupOpen(pick.groupId,calendarMeta('',activePersona(pick.key).id)))return {action,rejected:'group-not-allowed'};
@@ -6650,7 +6655,7 @@ export function apply(ctx, rawConfig) {
           if(chat.kind==='group'&&chat.groupAttentionApproved){
             const fallback=/在不在|在吗|在么/.test(String(turn?.meta?.text||chat.lastText||''))?'在的，刚才没接上，你再说一遍？':'嗯？刚才卡了一下，你再说一遍？';
             if(audit){audit.status='blocked';audit.answer=fallback;saveFeatures();}
-            sendText({...chat,auditId:turn?.meta?.auditId,allowSideEffects:turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion},fallback);
+            sendText({...chat,auditId:turn?.meta?.auditId,allowSideEffects:turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion},fallback);
           }
         }
         // 回合结束把档位恢复，别一直高配烧钱。
@@ -6700,18 +6705,18 @@ export function apply(ctx, rawConfig) {
             publishCompanionReaction(chat,expression);
             return;
           }
-          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',mediaIntent:turn.meta.mediaIntent,sharingPlan:turn.meta.sharingPlan,manualInitiative:turn.meta.manualInitiative,inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, spoken);
+          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',mediaIntent:turn.meta.mediaIntent,sharingPlan:turn.meta.sharingPlan,manualInitiative:turn.meta.manualInitiative,inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, spoken);
           publishCompanionReaction(chat,expression);
           return;
         }
         if (reason.kind === 'error') {
           const message = reason.error?.message ? `（出错了：${reason.error.message}）` : cfg.errorReply;
-          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, message);
+          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, message);
           return;
         }
         if (reason.kind === 'aborted' || reason.kind === 'interrupted') {
           if(chat.kind==='group')return;
-          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, '好，先停在这里。');
+          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, '好，先停在这里。');
           return;
         }
         let answer = spoken;
@@ -6747,7 +6752,7 @@ export function apply(ctx, rawConfig) {
         if (directTextSent) log('turn text withheld, already sent via bridge_life_qq to ' + chat.key);
         if (answer === '' && !directTextSent) {
           const fallback = chat.kind === 'group' ? '' : cfg.emptyReply;
-          if (fallback) { if (audit) { audit.answer = fallback; saveFeatures(); } sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, fallback); }
+          if (fallback) { if (audit) { audit.answer = fallback; saveFeatures(); } sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, fallback); }
           return;
         }
         // 看不懂就直接去查，查完用她自己的话答——查这件事本身不告诉对方。
@@ -6756,9 +6761,9 @@ export function apply(ctx, rawConfig) {
         if (wantsLookup && !turn?.meta?.mediaVerification && typeof turn?.meta?.text === 'string' && turn.meta.text.trim() !== '') {
           chat.lookupDone = true;
           if (audit) { audit.usedSearch = true; saveFeatures(); }
-          void replyAfterLookup({ ...chat, lastText: turn?.meta?.text || chat.lastText, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, answer);
+          void replyAfterLookup({ ...chat, lastText: turn?.meta?.text || chat.lastText, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, answer);
         } else if (!directTextSent) {
-          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, answer);
+          sendText({ ...chat, auditId: turn?.meta?.auditId, allowSideEffects: turn?.meta?.allowSideEffects,contactEpisode:turn?.meta?.contactEpisode,turnKind:turn?.meta?.kind||'user',inboundVersion:turn?.meta?.inboundVersion??chat.inboundVersion }, answer);
         }
         // 回复发完再慢慢复盘她当时的想法，不拖慢回复。
         const lastInbound = messages
@@ -6860,6 +6865,7 @@ export function apply(ctx, rawConfig) {
   /** Ask the model to say something on its own; `[skip]` means it stayed quiet. */
   async function nudge(chat, cue, kind,options={}) {
     if(chat.backendRetired)return false;
+    if(!options.lifeJob&&kind!=='qzone-interest'&&proactiveCheck({initiative:true,manualInitiative:options.manual===true,accountId:settings.activeAccountId||'',chat:chat.key}))return false;
     if(settings.localChat?.enabled){recordModelRoute({target:'unavailable',reason:'本地自主任务尚未接入，保持安静，不调用 API'},'proactive');return false;}
     if(!recordsAllowed(chat.key)||!options.lifeJob&&!autonomyAllowed('chats',options.manual===true))return false;
     if(chat.kind==='private'&&!privateInitiativeAllowed(chat.key,settings))return false;
@@ -6871,7 +6877,7 @@ export function apply(ctx, rawConfig) {
     chat.proactivePending = true;
     chat.pendingTurns = chat.pendingTurns || [];
     const sharingPlan=options.sharingPlan||null,mediaIntent=sharingPlan?{kinds:[sharingPlan.kind],source:'schedule',request:[sharingPlan.request,sharingPlan.scene?.activity||'',sharingPlan.scene?.mood||''].filter(Boolean).join('；')}:null;
-    chat.pendingTurns.push({ kind: 'proactive', text: cue,lifeJobId:options.lifeJob?.id||'',finalDeliveryReview:options.finalDeliveryReview===true, mediaIntent,sharingPlan,allowSideEffects: false,inboundVersion:chat.inboundVersion||0,manualInitiative:options.manual===true,qzoneOnly:options.qzoneOnly===true,qzoneVisitToken:options.qzoneVisitToken||'',initiativeAccountId:settings.activeAccountId||'',initiativePersonaId:activePersona(chat.key).id });
+    chat.pendingTurns.push({ kind: 'proactive', text: cue,lifeJobId:options.lifeJob?.id||'',finalDeliveryReview:options.finalDeliveryReview===true, mediaIntent,sharingPlan,allowSideEffects: false,inboundVersion:chat.inboundVersion||0,manualInitiative:options.manual===true,qzoneOnly:options.qzoneOnly===true,qzoneVisitToken:options.qzoneVisitToken||'',contactEpisode:randomUUID(),initiativeAccountId:settings.activeAccountId||'',initiativePersonaId:activePersona(chat.key).id });
     try {
       await pinApprovalPolicy(chat.sessionId);const native=installAgentContext(chat.sessionId);
       const hint=settings.realism?.enabled?'':replyTurnHint(recentDialogueReplies(chat.key),{includeRules:false});
@@ -7357,6 +7363,8 @@ export function apply(ctx, rawConfig) {
     if(job.status==='sent')websiteReader?.markShared(learningMeta(job.chat),text);
     if(job.status==='sent')recordCalendarRow({...existing,time:job.at,dir:'out',chat:job.chat,text,localId:job.id,personaId:job.personaId||auditById(job.auditId)?.persona||activePersona(job.chat).id,...entry});
   }
+  function proactiveIncoming(key){return Number(messages.filter(m=>m.chat===key&&m.dir==='in'&&(m.accountId||'')===(settings.activeAccountId||'')).at(-1)?.time)||0;}
+  function proactiveCheck(job){if(job.initiative&&!job.proactiveEpisode)job.proactiveEpisode=job.auditId||job.bubbleBatchId||String(job.deliveryKey||'').replace(/:part:\d+$/,'')||job.id||'';return proactiveDenial(job,featureState.proactiveContacts||[],proactiveIncoming(job.chat));}
   function queueOutgoing(chat, segments, previousId = '', {defer=false}={}) {
     if(lifeExecution?.asleep(calendarMeta('',activePersona(chat.key).id)))return null;
     if(!deliveryScopeCurrent({accountId:chat.expectedAccountId,personaVersion:chat.expectedPersonaVersion},{accountId:settings.activeAccountId||'',personaVersion:personaContextIdentity(chat.key)}))return null;
@@ -7369,8 +7377,10 @@ export function apply(ctx, rawConfig) {
     const key = chat.key || `${chat.kind}:${chat.chatId}`;
     if(recipientDenial({...chat,key},settings)||!recordsAllowed(key)||wrongOwnerAddress(segments.filter(s=>s.type==='text').map(s=>s.data?.text||'').join('\n'),key,settings))return null;
     if(chat.turnKind==='proactive'&&chat.kind==='private'&&!privateInitiativeAllowed(key,settings))return null;
-    const job = { id: randomUUID(), localTranscript:String(chat.localTranscript||'').slice(0,2000), accountId: settings.activeAccountId || '',personaId:origin?.persona||activePersona(key).id,chat: key, kind: chat.kind, chatId: String(chat.chatId), segments,fingerprint:deliveryFingerprint(segments),deliveryKey:chat.deliveryKey||'',mediaTaskId:chat.mediaTaskId||'',afterImageId:chat.afterImageId||'', initiative:chat.turnKind==='proactive',manualInitiative:chat.manualInitiative===true, at: Date.now(), status: stopped || accountPaused ? 'cancelled' : 'queued', attempts: 0, auditId: chat.auditId || '', previousId,notBefore:Number.isFinite(chat.notBefore)?chat.notBefore:0,bubbleBatchId:chat.bubbleBatchId||'',bubbleIndex:chat.bubbleIndex??null };
+    const activeMeta=[...(chat.turns?.values?.()||[])].at(-1)?.meta;
+    const job = { id: randomUUID(),proactiveEpisode:chat.contactEpisode||activeMeta?.contactEpisode||chat.auditId||chat.bubbleBatchId||String(chat.deliveryKey||'').replace(/:part:\d+$/,'')||randomUUID(), localTranscript:String(chat.localTranscript||'').slice(0,2000), accountId: settings.activeAccountId || '',personaId:origin?.persona||activePersona(key).id,chat: key, kind: chat.kind, chatId: String(chat.chatId), segments,fingerprint:deliveryFingerprint(segments),deliveryKey:chat.deliveryKey||'',mediaTaskId:chat.mediaTaskId||'',afterImageId:chat.afterImageId||'', initiative:chat.turnKind==='proactive'||!chat.turnKind&&activeMeta?.kind==='proactive',manualInitiative:chat.manualInitiative===true, at: Date.now(), status: stopped || accountPaused ? 'cancelled' : 'queued', attempts: 0, auditId: chat.auditId || '', previousId,notBefore:Number.isFinite(chat.notBefore)?chat.notBefore:0,bubbleBatchId:chat.bubbleBatchId||'',bubbleIndex:chat.bubbleIndex??null };
     if(!previousId){const existing=existingDelivery(featureState.outbox,job);if(existing)return existing.id;}
+    if(job.initiative&&!job.manualInitiative){const reason=proactiveCheck(job);if(reason){log('主动消息暂缓：'+reason);return null;}reserveProactive(job,featureState.proactiveContacts||=([]),proactiveIncoming(key));const parts=featureState.outbox.filter(r=>r.accountId===job.accountId&&r.chat===key&&r.proactiveEpisode===job.proactiveEpisode&&['queued','sending','sent','unknown'].includes(r.status));job.notBefore=Math.max(job.notBefore||0,Date.now(),...parts.map(r=>(r.notBefore||r.at)+3000));}
     featureState.outbox.push(job);
     const audit = auditById(job.auditId); if (audit) audit.outboxIds.push(job.id);
     if(defer)return job.id;
@@ -7402,6 +7412,7 @@ export function apply(ctx, rawConfig) {
     for(const job of rows)logDelivery(job);void flushOutbox();
   }
   function outgoingJobDenial(job){
+    if(job.initiative){const pacing=proactiveCheck(job);if(pacing)return pacing;}
     if(String(job.deliveryKey||'').startsWith('local:initiative:')&&(!settings.localChat?.enabled||(!nonpaymentOpen(settings)&&settings.localChat.initiativeEnabled===false)||!autonomyConfig().initiate||inDnd(new Date())||!initiativeWindow(autonomyConfig(),Date.now())))return '本地主动聊天已关闭或进入免打扰时段';
     const recipient=recipientDenial({kind:job.kind,chatId:job.chatId,key:job.chat},settings);if(recipient)return recipient;
     if(job.initiative&&job.kind==='private'&&!privateInitiativeAllowed(job.chat,settings))return '该联系人未单独允许主动联系';
@@ -7440,6 +7451,7 @@ export function apply(ctx, rawConfig) {
           // Prepare and validate local media before persisting an ambiguous send.
           const wireSegments=outgoingImageSegments(job.segments);
           const params=job.kind==='group'?{message_type:'group',group_id:Number(job.chatId)||job.chatId,message:wireSegments}:{message_type:'private',user_id:Number(job.chatId)||job.chatId,message:wireSegments};
+          if(job.initiative&&!job.manualInitiative)reserveProactive(job,featureState.proactiveContacts||=([]),proactiveIncoming(job.chat));
           job.status='sending';job.attempts+=1;
           if(!saveFeatures()){job.status='failed';job.error='发送状态无法写入存储，本条没有提交QQ';noteDeliveryIssue(job,job.error);logDelivery(job);continue;}
           logDelivery(job);guardState.lastSendAt=Date.now();guardState.windowCount+=1;
