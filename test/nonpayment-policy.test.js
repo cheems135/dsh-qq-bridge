@@ -58,7 +58,7 @@ test('default policy normalizes nonpayment capabilities without mutating preserv
   assert.equal(next.dnd.enabled,false);
   assert.deepEqual({startHour:next.dnd.startHour,endHour:next.dnd.endHour},{startHour:22,endHour:8});
   assert.deepEqual(next.autonomy,{
-    enabled:true,initiate:true,explore:true,qzone:true,qzoneImages:true,qzoneReplies:true,
+    enabled:true,initiate:true,explore:true,qzone:false,qzoneImages:true,qzoneReplies:false,
     chatIdleMinutes:0,maxPerDay:{chats:1},minGapMinutes:45,
     shareMedia:{enabled:true,limits:false,voice:true,images:true,minGapMinutes:60,duringChat:true,idle:true},
   });

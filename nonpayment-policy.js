@@ -61,9 +61,7 @@ export function applyNonpaymentPolicy(settings={}, {mobile=false}={}){
     enabled:true,
     initiate:true,
     explore:true,
-    qzone:true,
     qzoneImages:true,
-    qzoneReplies:true,
     chatIdleMinutes:0,
   });
   Object.assign(section(autonomy,'shareMedia'),{enabled:true,limits:false,voice:true,images:true,duringChat:true,idle:true});
