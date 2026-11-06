@@ -1,3 +1,4 @@
+import {CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor} from '../context-demand.js';
 import {applyNonpaymentPolicy,nonpaymentOpen} from '../nonpayment-policy.js';
 import {applyLocalPortraitPlan,resolveLocalPhotoSubject} from '../local-portrait-plan.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -40,7 +41,7 @@ assert.ok(localSource.length>1000&&inboundSource.length>1000);
 
 function setup(){
   const queued=[],logged=[],calls=[],issues=[];
-  const sandbox={nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
+  const sandbox={CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
     splitBursts:(value,limit,options)=>naturalBubbleParts(value,options),replyCharLimit:()=>2000,
     settings:{activeAccountId:'a',presetPrompts:{p:'角色设定'},basePersona:'完整系统提示词',memory:{enabled:false},localChat:{enabled:true,baseUrl:'http://127.0.0.1:8777'},owners:['12345'],reliability:{}},
     persona:{id:'p'},version:'v1',featureState:{floors:{},inbox:[],outbox:[],audits:[]},memories:{},messages:[],memoryHub:null,localTurns:new Map(),stopped:false,accountPaused:false,
@@ -317,11 +318,12 @@ test('automatic local context resets preserve records and resume from the curren
 
 test('real shared API enrichment, recall and mood feedback run through the local bridge with one gateway request',async()=>{
  const h=setup(),s=h.sandbox,usage=[],outcomes=[],observed=[];let recalls=0,cloudCalls=0;
- h.chat.isOwner=true;Object.assign(s.settings,{memory:{enabled:true,maxChars:500},companion:{enabled:true},websites:{learning:true},mood:{enabled:true},realism:{enabled:false}});
+ h.chat.isOwner=true;s.settings.learning={enabled:true};Object.assign(s.settings,{memory:{enabled:true,maxChars:500},companion:{enabled:true},websites:{learning:true},mood:{enabled:true},realism:{enabled:false}});
  Object.assign(s,{conversationStep,conversationHint,consumeMoodHint,memeKnowledgeHint,
   chats:new Map(),recordsAllowed:()=>true,conversationStates:()=>s.featureState.conversation||=( {} ),conversationScope:()=>JSON.stringify([s.settings.activeAccountId,s.persona.id]),
   companionSettings:()=>({expressionMode:'relaxed'}),operationContext:()=>[],operationText:(text,limit)=>String(text).slice(0,limit),personaMood:(_core,_meta,value)=>value,
   hubMeta:key=>({key,accountId:s.settings.activeAccountId,personaId:s.persona.id}),calendarMeta:()=>({accountId:'a',personaId:'p'}),calendarRole:()=>({meta:{}}),insightHint:()=>'',sensationBlock:()=>'',
+  qqReadScope:key=>({key,accountId:s.settings.activeAccountId,personaId:s.persona.id,personaVersion:s.version}),groupStopped:()=>false,
   lifeExecution:{snapshot:()=>({jobs:[]}),question:()=>null},lifeMemory:null,featureProfile:()=>({notes:'熟悉的朋友'}),effectiveModel:()=> 'api-model',memoryFor:()=>({items:[]}),segmentsOf:value=>value||[],
   memoryHub:{recall:async(_meta,_text,options)=>{recalls++;assert.equal(options.expand,false);return {text:'来源1：喜欢画猫。',ids:['memory-1']};},desktop:()=> '【当前角色的常驻生活摘要，同一人设跨场合连续，私人细节不外传】'+JSON.stringify({relationship:'熟悉的朋友',unfinished:null,coreContinuity:[]})},
   learningMemory:{recall:()=>({text:'画猫先检查构图。',ids:['learn-1'],sources:[{id:'learn-1'}]}),recordUsage:(_meta,value)=>usage.push(['learning',value]),recordOutcome:(_meta,value)=>outcomes.push(['learning',value]),observe:(_meta,value)=>{observed.push(value);return {queued:true};},process:()=>{throw Error('no foreground learning inference');}},
@@ -334,12 +336,14 @@ test('real shared API enrichment, recall and mood feedback run through the local
  const calendar=source.slice(source.indexOf('  async function prepareCalendarContext('),source.indexOf('\n  function calendarSnapshot('));
  const audit=source.slice(source.indexOf('  function auditForTurn('),source.indexOf('\n  function auditAnswerCap('));
  const reflect=source.slice(source.indexOf('  async function reflectOnTurn('),source.indexOf('\n  // Optional self-chosen expression marker'));
- vm.runInContext(enrich+'\n'+calendar+'\n'+audit+'\n'+reflect,s);
+ const reader=source.slice(source.indexOf('  function conversationContextStamp('),source.indexOf('  let contextToolRegistered='));
+ Object.assign(s,{CONTEXT_TOPICS:(await import('../context-demand.js')).CONTEXT_TOPICS});
+ vm.runInContext(reader+'\n'+enrich+'\n'+calendar+'\n'+audit+'\n'+reflect,s);
  s.fetch=async(url,options)=>{h.calls.push({body:JSON.parse(options.body)});return Response.json({text:'先看猫在画面的位置和留白，画累了就歇一会儿。',attachments:[],mood:{confidence:85,evidenceQuote:'谢谢你',reason:'对方表达感谢',moodDelta:2,dims:{happy:3}}});};
- await h.handleLocalChatTurn(h.chat,'谢谢你，去码头整点薯条这个梗是什么？',false,{user_id:'12345',message_id:101,message:[]});
+ await h.handleLocalChatTurn(h.chat,'谢谢你，还记得上次画猫吗？你学到了什么，这个梗是什么，怎么表达，今天日程如何？',false,{user_id:'12345',message_id:101,message:[]});
  assert.equal(recalls,1);assert.equal(cloudCalls,0);assert.equal(h.calls.length,1);const body=h.calls[0].body;
  for(const kind of ['memory','meme','learning','expression','mood','life'])assert.equal(body.turnContext.features[kind],1,kind);
- assert.match(JSON.stringify(body.messages),/喜欢画猫/);assert.equal(body.messages.filter(row=>row.content==='谢谢你，去码头整点薯条这个梗是什么？').length,1);
+ assert.match(JSON.stringify(body.messages),/喜欢画猫/);assert.equal(body.messages.filter(row=>row.content==='谢谢你，还记得上次画猫吗？你学到了什么，这个梗是什么，怎么表达，今天日程如何？').length,1);
  assert.equal(h.queued.length,1);const receipt=s.featureState.audits[0];assert.equal(h.queued[0].chat.auditId,receipt.id);assert.equal(receipt.local,true);assert.equal(receipt.status,'completed');assert.equal(usage.length,3);assert.equal(outcomes.length,3);assert.equal(observed.length,1);assert.equal(s.soul.lastAnalysis.moodAccepted,true);assert.ok(s.soul.mood.dims.happy>=3);assert.equal(s.state.turns[h.chat.key],1);
 });
 

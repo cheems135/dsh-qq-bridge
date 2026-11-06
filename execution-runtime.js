@@ -3,7 +3,7 @@ import {describeOperation} from './operation-policy.js';
 import {nativeDesktopDelegation} from './native-desktop.js';
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const OBSERVE=new Set(['observe','windows','snapshot','screenshot','scroll','wait','tabs','switch','back','focus','navigate','launch','capabilities','status','get','list','read','recent','targets','schema']);
-const ADMIN=new Set(['bridge_capabilities','bridge_operation_request','bridge_life_request','bridge_life_checkpoint','bridge_task','bridge_life_finish','bridge_life_adjust','bridge_qq_read','bridge_qq_api','bridge_screen_share','bridge_workspace','bridge_recharge','bridge_game','bridge_storage','bridge_drawing']);
+const ADMIN=new Set(['bridge_capabilities','bridge_operation_request','bridge_life_request','bridge_life_checkpoint','bridge_task','bridge_life_finish','bridge_life_adjust','bridge_qq_read','bridge_qq_api','bridge_context','bridge_screen_share','bridge_workspace','bridge_recharge','bridge_game','bridge_storage','bridge_drawing']);
 export function executableOperation(name,args={}){
  if(name==='bridge_native')return {...args.arguments,toolName:args.name,decisionId:args.decisionId||args.arguments?.decisionId};
  return {...args,toolName:name};

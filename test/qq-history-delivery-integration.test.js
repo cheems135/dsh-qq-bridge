@@ -1,3 +1,4 @@
+import {CONTEXT_RULES,CONTEXT_PARAMETERS} from '../context-demand.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -295,7 +296,7 @@ test('registered bridge_qq_read renderer turns saved attachments into image bloc
   };
   const registerQqReadTool = functionFromIndex('registerQqReadTool', {
     ctx,
-    qqReadToolRegistered: false,
+    qqReadToolRegistered: false,registerContextTool:()=>true,
   });
 
   assert.equal(registerQqReadTool(), true);
@@ -517,11 +518,11 @@ test('real host tool middleware admits group QQ reads without invoking owner-onl
  const chat={sessionId:'group-session',key:'group:77777777',turns:new Map()};dependencies.chats.set(chat.sessionId,chat);
  let factory;for(let end=indexSource.indexOf('}',start);end>=0;end=indexSource.indexOf('}',end+1))try{factory=Function(...Object.keys(dependencies),'return ('+indexSource.slice(start,end+1)+');');break;}catch(error){if(!(error instanceof SyntaxError))throw error;}
  const middleware=factory(...Object.values(dependencies));
- for(const name of ['bridge_qq_read','bridge_qq_api']){let calls=0;const result=await middleware({name,agent:{id:chat.sessionId},arguments:{action:'history'}},async()=>{calls++;return {ok:true};});assert.equal(calls,1);assert.equal(result.ok,true);}
+ for(const name of ['bridge_qq_read','bridge_qq_api','bridge_context']){let calls=0;const result=await middleware({name,agent:{id:chat.sessionId},arguments:{action:'history'}},async()=>{calls++;return {ok:true};});assert.equal(calls,1);assert.equal(result.ok,true);}
 });
 
 test('local QQ pack returns actual history image observations and has an explicit native capability tool',async()=>{
  const chat={key:'group:77777777',kind:'group',chatId:'77777777'},active={controller:new AbortController()},localTurns=new Map([[chat.key,active]]),scope={key:chat.key,accountId:'account-a',personaId:'persona-a',personaVersion:'v1'};
- const create=functionFromIndex('localQqTools',{qqReadScope:()=>scope,stopped:false,accountPaused:false,localTurns,recordsAllowed:()=>true,groupStopped:()=>false,randomUUID:()=> 'invocation',recordInvocation:()=>{},qqNativeParameters:{type:'object'},executeNativeQq:async()=>({ok:true}),readQqHistory:async()=>({ok:true,parts:[{type:'image',mediaType:'image/png',data:PNG_BASE64[0]}],records:[]})});
+ const create=functionFromIndex('localQqTools',{CONTEXT_RULES,CONTEXT_PARAMETERS,qqReadScope:()=>scope,stopped:false,accountPaused:false,localTurns,recordsAllowed:()=>true,groupStopped:()=>false,randomUUID:()=> 'invocation',recordInvocation:()=>{},qqNativeParameters:{type:'object'},executeNativeQq:async()=>({ok:true}),readQqHistory:async()=>({ok:true,parts:[{type:'image',mediaType:'image/png',data:PNG_BASE64[0]}],records:[]})});
  const tools=create(chat,active);assert.ok(tools.bridge_qq_api);const result=await tools.bridge_qq_read.execute({action:'history'});assert.equal(result.localObservations[0].url,'data:image/png;base64,'+PNG_BASE64[0]);assert.equal(result.parts,undefined);active.controller.abort();await assert.rejects(tools.bridge_qq_read.execute({action:'history'}),/会话已变化/);
 });

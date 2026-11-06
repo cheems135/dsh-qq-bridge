@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLocalInitiative} from '../local-initiative.js';
 
+test('spontaneous clothing mention requests real context before producing a final initiative',async()=>{
+ const h=setup();let reads=0,attempt=0;
+ h.respond(async({messages})=>{if(++attempt===1)return JSON.stringify({speak:false,contextTopics:['outfit'],contextQuery:'现在穿着什么'});assert.match(JSON.stringify(messages),/黑色外套/);return JSON.stringify({speak:true,text:'刚套上那件黑外套，突然觉得还挺适合拍逆光的。'});});
+ const engine=createLocalInitiative({...h.options,readContext:async(topics,query,c)=>{reads++;assert.deepEqual(topics,['outfit']);assert.equal(c.key,h.ctx.key);return {topics:{outfit:{outfit:'黑色外套'}}};}});
+ assert.equal((await engine.tick()).status,'queued');assert.equal(reads,1);assert.equal(h.calls.length,2);assert.equal(h.deliveries.length,1);
+});
+
+test('incoming QQ activity during requested context prevents a second inference or stale initiative',async()=>{
+ const h=setup();let resume,entered;const started=new Promise(r=>entered=r);
+ h.respond(async()=>JSON.stringify({speak:false,contextTopics:['memory'],contextQuery:'上次摄影'}));
+ const engine=createLocalInitiative({...h.options,readContext:async()=>{entered();return new Promise(r=>resume=r);}});
+ const pending=engine.tick();await started;h.ctx={...h.ctx,signature:'new-incoming'};resume({text:'旧资料'});assert.equal((await pending).status,'cancelled');assert.equal(h.calls.length,1);assert.equal(h.deliveries.length,0);
+});
+
 function setup(){
  let clock=Date.parse('2026-11-05T10:00:00+08:00'),ctx={allowed:true,id:'scope-a',signature:'account-persona-a',day:'2026-11-05',key:'private:12345',accountId:'a',personaId:'p',clock:'10:00',lastIncoming:clock-2*3600000,persona:'说话自然，有自己的想法。',memory:'对方喜欢摄影。',history:[{role:'user',content:'我在调整逆光照片，晚点再聊。'},{role:'assistant',content:'好，你先弄。'}],recent:['好，你先弄。'],scene:{date:'2026-11-05',start:'09:00',activity:'整理角色画布',outfit:'白色衬衫'}};
  const states={},calls=[],deliveries=[],records=[];
