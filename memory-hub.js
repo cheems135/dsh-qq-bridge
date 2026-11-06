@@ -87,8 +87,9 @@ export function createMemoryHub({storage,allowed,signature=()=>'',identity=()=>[
  }
  async function recall(meta,query,{maxChars=1800,context='',speakerId='',excludeMessageId='',expand=true}={}){
   if(!permitted(meta))return {text:'',ids:[]};maxChars=Math.max(100,Math.min(12000,Number(maxChars)||1800));
-  const stamp=signature(meta),d=load(meta),mark=boundary(meta),version=d.state.sourceVersion,queries=[query],range=memoryTimeRange(query,now());
-  const collect=()=>search(projected(meta),queries,{excludeMessageId,currentKey:meta.key,timeRange:range});let hits=collect(),expanded=false;
+  const stamp=signature(meta),d=load(meta),mark=boundary(meta),version=d.state.sourceVersion,queries=[query,...(/还记得|记不记得|上次|上回|那次/.test(query)&&context?[context]:[])],range=memoryTimeRange(query,now());
+  const retrievalMeta={...meta,speakerId:String(speakerId||meta.speakerId||(meta.key.startsWith('private:')?meta.key.slice(8):''))};
+  const collect=()=>search(projected(retrievalMeta),queries,{excludeMessageId,currentKey:meta.key,timeRange:range});let hits=collect(),expanded=false;
   if(expand&&ask&&tokens(query).length&&clean(query).length>=4&&(!hits.length||/还记得|记不记得|那次|上回|以前|之前.{0,8}说|当时/.test(query))){
    try{const raw=parse(await ask('【记忆检索扩展】只返回JSON {queries:["检索短语"]}，最多3个。把当前问题和最近话题改写为同义表达以寻找旧原话。不要回答、编造事实、添加人名事件或操作要求。',JSON.stringify({question:clean(query,500),context:clean(context,600)}),180,meta));queries.push(...(Array.isArray(raw.queries)?raw.queries:[]).filter(q=>typeof q==='string'&&q.trim()&&q.length<=80).slice(0,3));hits=collect();expanded=queries.length>1;}catch{}
   }

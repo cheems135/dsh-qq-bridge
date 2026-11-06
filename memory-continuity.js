@@ -35,6 +35,17 @@ export function disclosureProjection(row,sourceMeta,targetMeta,{privateNames=[]}
   // own private chat; another person's private statements never follow them out.
   if(sourceMeta.key.startsWith('group:')&&targetMeta.key==='private:'+row.speakerId&&row.role==='user'&&!sensitive.test(row.text))
     return {...row,originKey:sourceMeta.key,disclosure:'same-person-public-statement'};
+  // Same QQ identity can connect public statements across groups. Private
+  // preferences may follow their own speaker only, never another user's query.
+  const samePerson=/^\d{5,20}$/.test(String(targetMeta.speakerId||''))&&String(row.speakerId)===String(targetMeta.speakerId);
+  if(samePerson&&row.role==='user'&&sourceMeta.key.startsWith('group:')&&!sensitive.test(row.text)&&!unsafeOperation.test(row.text))
+    return {...row,originKey:sourceMeta.key,disclosure:'same-person-public-statement'};
+  if(samePerson&&row.role==='user'&&sourceMeta.key==='private:'+targetMeta.speakerId&&targetMeta.key.startsWith('group:')){
+    // Only ordinary self preferences are suitable for public continuity. Never
+    // project relationship, secrets, locations, health, money or third parties.
+    const text=String(row.text||'').split(/[。！？!?\n]/).map(s=>s.trim()).filter(s=>/^我(?:喜欢|不喜欢|爱好|习惯|擅长|想学)/.test(s)&&s.length<=180&&!sensitive.test(s)&&!privateRelation.test(s)&&!unsafeOperation.test(s)).join('。');
+    if(text)return {...row,text,originKey:sourceMeta.key,disclosure:'same-person-preference'};
+  }
   if(sourceMeta.key.startsWith('group:')&&row.role==='user'){
     const text=safePublicText(row.text,row);if(text&&!namesLeak(text))return {...row,text,originKey:sourceMeta.key,disclosure:'public-topic'};
   }

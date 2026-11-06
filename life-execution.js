@@ -37,8 +37,15 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  const liveRole=meta=>meta?roles().find(r=>scope(r.meta)===scope(meta)):undefined;
  const sceneStamp=(meta,sc)=>hash([meta.accountId||'',meta.personaId,sc?.date,sc?.start,sc?.activity]);
  function current(meta){return sceneFor(liveRole(meta)||{meta});}
- function asleep(meta){if(closed||!cfg().enabled||!cfg().sleep)return false;const scene=activityFor(liveRole(meta)||{meta});if(!scene||scene.planned===true||activityKind(scene)!=='sleep')return false;const override=state.wake[scope(meta)];return !override||override.sceneId!==hash([scene.date,scene.start,scene.activity])||!!(override.until&&override.until<=now());}
- function wake(meta,{minutes,reason='本轮明确请求'}={}){const scene=activityFor(liveRole(meta)||{meta});if(scene)state.wake[scope(meta)]={sceneId:hash([scene.date,scene.start,scene.activity]),at:now(),until:minutes?now()+Math.max(1,Math.min(30,Number(minutes)||20))*60_000:0,reason:text(reason,160)};save();return {ok:true,awake:true};}
+ function sleepScene(meta){
+  const role=liveRole(meta)||{meta},actual=activityFor(role),planned=sceneFor(role);
+  // A planned sleep slot is a real behavioural rest window, even when the
+  // previous digital activity has not been marked finished by a model.
+  if(actual&&actual.planned!==true&&activityKind(actual)==='sleep')return actual;
+  return planned&&activityKind(planned)==='sleep'?planned:null;
+ }
+ function asleep(meta){if(closed||!cfg().enabled||!cfg().sleep)return false;const scene=sleepScene(meta);if(!scene)return false;const override=state.wake[scope(meta)];return !override||override.sceneId!==hash([scene.date,scene.start,scene.activity])||!!(override.until&&override.until<=now());}
+ function wake(meta,{minutes=20,reason='本轮明确请求'}={}){const scene=sleepScene(meta);if(scene)state.wake[scope(meta)]={sceneId:hash([scene.date,scene.start,scene.activity]),at:now(),until:now()+Math.max(1,Math.min(30,Number(minutes)||20))*60_000,reason:text(reason,160)};save();return {ok:true,awake:true};}
  function rest(meta){delete state.wake[scope(meta)];save();return {ok:true,sleeping:asleep(meta)};}
  // taskKind==='group' is a participation window, not a model task: at the slot
  // start the listed groups accept her without @; the window closes when the
@@ -160,6 +167,6 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  }
  function interruptForRequest(meta){for(const j of jobs(meta))if(['queued','running','planned'].includes(j.status))pause(j,'用户当前请求优先，暂停默认日程');save();}
  function ended(id,meta,reason){const j=state.jobs.find(j=>j.id===id&&scope(j.meta)===scope(meta));if(!j||!['running','queued'].includes(j.status))return;if(j.finalReply?.status==='awaiting_decision')j.finalReply.status='not_sent';const unknown=(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status));j.status=unknown?'needs_reconcile':reason==='completed'?'incomplete':'paused';j.reason=unknown?'存在结果未知的步骤，先核对，不重放':reason==='completed'?'本轮没有确认真实结果，未标记完成':'执行已暂停，保留进度';j.pausedAt=now();j.resumeOnIdle=reason!=='completed'&&!!j.checkpoint?.safeToResume;save();}
- function snapshot(meta){return {config:cfg(),sleeping:asleep(meta),scene:activityFor(liveRole(meta)||{meta}),plan:current(meta),jobs:jobs(meta).slice(-25).reverse(),pending:question(meta),waiting:jobs(meta).filter(j=>j.status==='waiting_user'),recoverable:jobs(meta).filter(j=>['paused','needs_reconcile','interrupted','incomplete'].includes(j.status)).map(j=>({id:j.id,status:j.status,activity:j.scene?.activity,checkpoint:j.checkpoint,reason:j.reason}))};}
+ function snapshot(meta){return {config:cfg(),sleeping:asleep(meta),scene:asleep(meta)?sleepScene(meta):activityFor(liveRole(meta)||{meta}),plan:current(meta),jobs:jobs(meta).slice(-25).reverse(),pending:question(meta),waiting:jobs(meta).filter(j=>j.status==='waiting_user'),recoverable:jobs(meta).filter(j=>['paused','needs_reconcile','interrupted','incomplete'].includes(j.status)).map(j=>({id:j.id,status:j.status,activity:j.scene?.activity,checkpoint:j.checkpoint,reason:j.reason}))};}
  return {tick,syncState,reserveFinalReply,asleep,wake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};retireOrdinaryQuestions();save();}catch{}}};
 }
