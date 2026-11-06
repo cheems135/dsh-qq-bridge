@@ -9,7 +9,8 @@ const text=html=>decode(String(html).replace(/<script\b[^]*?<\/script\s*>|<style
 export function feedsComments(value,{tid,uin}){
  const entries=value.data?.data||value.data?.feeds||[];const rows=[],seen=new Set();let matched=false;
  for(const entry of Array.isArray(entries)?entries:[]){
-  const html=String(entry.html||'');if(html.length>2*1024*1024)continue;
+  if(!entry||typeof entry!=='object'||Array.isArray(entry)||typeof entry.html!=='string')continue;
+  const html=entry.html;if(html.length>2*1024*1024)continue;
   const markers=[...html.matchAll(/<[^>]+\bname\s*=\s*["']feed_data["'][^>]*>/gi)].map(m=>attrs(m[0]));
   // Ambiguous multi-post fragments are deliberately excluded.
   if(markers.length!==1||markers[0]['data-uin']!==String(uin)||markers[0]['data-tid']!==String(tid))continue;matched=true;

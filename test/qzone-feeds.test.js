@@ -17,3 +17,12 @@ test('feeds3 retains text rather than HTML executable instructions and does not 
  const r=feedsComments({data:{data:[{html:marker+root.replace('好看','<script>secret()</script>好看')+root.replace('data-tid="1"','data-tid="invalid"')}]}},post);
  assert.equal(r.rows.length,1);assert.doesNotMatch(r.rows[0].text,/secret|script/);
 });
+test('feeds3 skips real-shaped malformed entries without dropping the valid exact-post comment',()=>{
+ const r=feedsComments({data:{data:[null,{html:marker+root},null,{},'junk',17]}},post);
+ assert.equal(r.matched,true);assert.equal(r.rows.length,1);
+ assert.deepEqual(r.rows[0],{id:'1',uin:'87654321',name:'小明',text:'好看 & 喜欢[笑]',at:0,source:'feeds3-preview'});
+});
+test('feeds3 ignores array entries and non-string html',()=>{
+ const r=feedsComments({data:{data:[[marker+root],{html:[marker+root]},marker+root]}},post);
+ assert.equal(r.matched,false);assert.equal(r.rows.length,0);
+});
