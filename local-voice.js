@@ -12,8 +12,8 @@ export function selectLocalVoice(voices,{requested='',configured=''}={}){
 }
 
 export function validateLocalWav(bytes,headers){
- if(headers?.get?.('x-cancelled')==='1'||headers?.get?.('x-timed-out')==='1'||headers?.get?.('x-complete')==='0')throw Error('VoiceLab 返回了未完成或被截断的语音，未当作完整语音发送。');
- if(bytes.length<44||bytes.subarray(0,4).toString()!=='RIFF'||bytes.subarray(8,12).toString()!=='WAVE')throw Error('VoiceLab 未返回有效 WAV 音频，未将响应当作语音文件');
+ if(headers?.get?.('x-cancelled')==='1'||headers?.get?.('x-timed-out')==='1'||headers?.get?.('x-complete')==='0')throw Error('本地语音服务返回了未完成或被截断的语音，未当作完整语音发送。');
+ if(bytes.length<44||bytes.subarray(0,4).toString()!=='RIFF'||bytes.subarray(8,12).toString()!=='WAVE')throw Error('本地语音服务未返回有效 WAV 音频，未将响应当作语音文件');
  return bytes;
 }
 
@@ -119,3 +119,4 @@ export async function releaseVoiceService(service,{fetchImpl=fetch,signal}={}){
  const response=await fetchImpl(voiceEndpoint(service.baseUrl,path),{method:'POST',headers:voiceHeaders(service),redirect:'error',signal});
  return response.ok;
 }
+
