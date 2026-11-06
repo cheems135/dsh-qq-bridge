@@ -48,6 +48,7 @@ import {managedMediaSnapshot,cleanManagedMedia,migrateManagedMedia,mediaRetentio
 import {createMemeStudy} from './meme-study.js';
 import {cleanOutgoingText,deliveryFingerprint,existingDelivery,removeDuplicatePassages,parseQzoneResponse,qqActionTarget,qqActionResult} from './qq-reliability.js';
 import {createQqForwardReader} from './qq-forward-reader.js';
+import {createQqNativeCapabilities} from './qq-native-capabilities.js';
 import {digitalArtifact} from './digital-artifacts.js';
 import {DIGITAL_PERSON_RULES} from './digital-life.js';
 import {insightHint} from './companion-insight.js';
@@ -179,6 +180,7 @@ const PLUGIN_VERSION = (() => { try { return JSON.parse(readFileSync(new URL('./
 const {createQzoneService}=await import(new URL('./qzone-service.js?socialRevision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
 const {createSocialAssets,SOCIAL_IMAGE_RULES}=await import(new URL('./social-assets.js?socialRevision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
 const {publicExpression}=await import(new URL('./social-expression.js?socialRevision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
+const {verifyDelivery,compareDeliveryMessage}=await import(new URL('./delivery-verification.js?revision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
 const {naturalLinkReply,sharedUrls}=await import(new URL('./link-sharing.js?socialRevision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
 const {applyNonpaymentPolicy,nonpaymentOpen}=await import(new URL('./nonpayment-policy.js?socialRevision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
 const {GROUP_ATTENTION_PROMPT,GROUP_REPLY_RULES,CONVERSATION_PARTICIPATION_RULES,IMAGE_CONVERSATION_HINT,parseGroupDecision,groupTurnHint,mergeGroupWindow,collectAssistantMessage,visibleAssistantText,silentGroupReply,silentConversationReply}=await import(new URL('./group-conversation.js?socialRevision='+encodeURIComponent(PLUGIN_VERSION),import.meta.url));
@@ -1029,7 +1031,7 @@ export function apply(ctx, rawConfig) {
     if(context.meta?.lifeJobId)tasks.push(lifeExecution.job(context.meta.lifeJobId,calendarMeta('',context.personaId,context.accountId)));
     const item=tasks.flatMap(j=>j.shares||[]).find(s=>s.deliveryId===id);if(!item)throw Error('没有找到当前账号人设在本对话提交的这次消息');
     const ids=item.deliveryIds||[item.deliveryId],rows=ids.map(id=>featureState.outbox.find(o=>o.id===id)),status=rows.every(r=>r?.status==='sent')?'sent':rows.some(r=>r?.status==='failed')?'failed':rows.some(r=>!r||r.status==='unknown')?'unknown':'pending';
-    return {ok:true,deliveryId:item.deliveryId,deliveryIds:ids,status,substantive:status==='sent',coverage:status==='sent'?'QQ已确认本次消息送达':'尚未取得完整送达确认，不宣称已收到'};
+    return {ok:true,deliveryId:item.deliveryId,deliveryIds:ids,status,substantive:rows.every(r=>r?.verification?.state==='observed'),verified:rows.every(r=>r?.verification?.state==='observed'),verification:{state:rows.every(r=>r?.verification?.state==='observed')?'observed':'unconfirmed',recipient:'unknown',read:'unknown'},checks:rows.filter(Boolean).map(deliveryCheckSummary),coverage:rows.every(r=>r?.verification?.state==='observed')?'已在QQ目标会话读回本次消息；对方接收和已读情况未知':status==='sent'?'QQ已接收，后台正在读回核对；不要重复发送，不能声称对方已收到':'尚未取得平台接收回执，不宣称已收到'};
   }
   function outgoingActivityChat(context,target){
     const [kind,id]=target.split(':'),reply=context.meta?.kind==='user'&&target===context.key;
@@ -1046,6 +1048,7 @@ export function apply(ctx, rawConfig) {
   function currentOwnerToolDenial(chat,exec) {
     if (chats.get(chat.sessionId)!==chat) return '当前 QQ 会话已被替换。';
     if(String(exec?.name||'')==='bridge_qq_read')return qqReadToolDenial(chat,exec);
+    if(String(exec?.name||'')==='bridge_qq_api')return qqReadToolDenial(chat,{...exec,name:'bridge_qq_read',arguments:{action:'capabilities'}});
     const turn=[...chat.turns.values()].at(-1),meta=turn?.meta||(Array.isArray(chat.pendingTurns)?chat.pendingTurns.at(-1):undefined);
     const autonomous=meta?.kind==='proactive'&&settings.agency.enabled&&settings.agency.autonomous&&autonomyConfig().enabled&&meta.initiativeAccountId===(settings.activeAccountId||'')&&meta.initiativePersonaId===activePersona(chat.key).id;
     if(meta?.lifeJobId&&lifeExecution){try{const j=lifeExecution.job(meta.lifeJobId,calendarMeta('',activePersona(chat.key).id));if(['waiting_user','paused','needs_reconcile'].includes(j.status)&&!['bridge_capabilities','bridge_life_request','bridge_life_finish','bridge_life_checkpoint','bridge_task','bridge_operation_request'].includes(String(exec?.name||''))&&!['observe','snapshot','screenshot','status','list','recent'].includes(String(exec?.arguments?.action||'')))return '任务保留了待决定或待核对事项，先观察或处理对应问题';}catch{return '旧日程任务已失效';}}
@@ -4525,13 +4528,17 @@ export function apply(ctx, rawConfig) {
   }
   const qzoneMaintenanceTimer=setInterval(()=>{if(socket?.ready&&!accountPaused&&!stopped)void maintainQzoneSession().catch(()=>{});},60000);qzoneMaintenanceTimer.unref?.();
   ctx.effect(()=>()=>{clearInterval(qzoneMaintenanceTimer);clearTimeout(qzoneWarmTimer);qzoneSessionManager?.close();});
+  const socialReadbacks=new Map();let socialReadbackTimer=null;
+  function resumeSocialReadbacks(){for(const owner of settings.owners){const key='private:'+owner;if(!recordsAllowed(key))continue;const c=socialContext({panel:true,key,accountId:settings.activeAccountId||'',personaId:activePersona(key).id});for(const row of qzone().status(c).entries)if(['publish','reply'].includes(row.kind)&&['accepted','unknown'].includes(row.status)&&row.verification&&['pending','checking','unconfirmed'].includes(row.verification.state)&&Date.now()-(row.at||0)<24*3600000&&!socialReadbacks.has(row.id))queueSocialReadback(row.id,c);}}
+  function queueSocialReadback(id,c){if(!id)return;socialReadbacks.set(id,{id,key:c.key,accountId:c.accountId,personaId:c.personaId,attempts:0,at:Date.now()+1200});armSocialReadbacks();}
+  function armSocialReadbacks(){clearTimeout(socialReadbackTimer);socialReadbackTimer=null;if(stopped||accountPaused||!socket?.ready)return;const next=[...socialReadbacks.values()].sort((a,b)=>a.at-b.at)[0];if(!next)return;socialReadbackTimer=setTimeout(()=>{socialReadbackTimer=null;void(async()=>{try{if(next.accountId!==(settings.activeAccountId||'')||next.personaId!==activePersona(next.key).id){socialReadbacks.delete(next.id);return;}const c=socialContext({panel:true,key:next.key,accountId:next.accountId,personaId:next.personaId}),result=await qzone().verifyEntry(next.id,c);next.attempts++;if(result.state==='observed'||next.attempts>=3){socialReadbacks.delete(next.id);if(result.state!=='observed')reportBridgeIssue({id:'space-check:'+next.id,kind:'qzone-check',message:'空间已接收本次提交，但尚未完整读回核对。可在空间记录里再次核对，不自动重复发布。'},{accountId:next.accountId,personaId:next.personaId,chat:next.key,backend:settings.localChat?.enabled?'local':'api'});}else next.at=Date.now()+[0,4000,12000][next.attempts];}catch{socialReadbacks.delete(next.id);}finally{armSocialReadbacks();}})();},Math.max(100,Math.min(60000,next.at-Date.now())));socialReadbackTimer.unref?.();}
   function qzone(){return qzoneService||(qzoneService=createQzoneService({
     storage:{read:()=>JSON.parse(readFileSync(join(cfg.dataDir,'qzone-social.json'),'utf8')),write:data=>writeAtomic(join(cfg.dataDir,'qzone-social.json'),data)},
     authorize:c=>!stopped&&!accountPaused&&socket?.ready===true&&c.connectionRevision===qzoneConnectionRevision&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&(c.generation===undefined||c.generation===(featureState.generation||0))&&recordsAllowed(c.key)&&settings.owners.includes(String(c.key).replace(/^private:/,''))&&(!c.scope||agencyAuthorized(c)),
     getAuth:()=>qzoneSession().getAuth(),
     onAuthFailure:()=>{qzoneSession().invalidate('auth-required');void maintainQzoneSession().catch(()=>{});},
     loadImage:socialImage,
-    onRecord:(row,c)=>recordInvocation({id:'qzone:'+(row.id||row.kind+':'+row.at),tool:row.kind==='comment-poll'?'qq.qzone.comments':row.kind==='reply'?'qq.qzone.reply':'qq.qzone.publish',kind:'tool',status:row.stage==='receipt'?'returned':['failed','comment-poll-failed'].includes(row.stage)?'failed':'started',arguments:{text:row.text,target:row.target,commentId:row.commentId,commentUin:row.commentUin,imageCount:row.imageCount,images:row.images},result:{stage:row.stage,status:row.status,uploaded:row.uploaded,files:row.uploaded?.map(image=>image.file).filter(Boolean),itemId:row.itemId,imageCount:row.imageCount,coverage:row.coverage,nextPollAt:row.nextPollAt},error:typeof row.error==='object'?row.error.message:row.error},{...invocationScope(c.key),backend:'api'})
+    onRecord:(row,c)=>recordInvocation({id:'qzone:'+(row.id||row.kind+':'+row.at),tool:row.kind==='comment-poll'?'qq.qzone.comments':row.kind==='reply'?'qq.qzone.reply':'qq.qzone.publish',kind:'tool',status:['receipt','verification'].includes(row.stage)?'returned':['failed','comment-poll-failed'].includes(row.stage)?'failed':'started',arguments:{text:row.text,target:row.target,commentId:row.commentId,commentUin:row.commentUin,imageCount:row.imageCount,images:row.images},result:{stage:row.stage,status:row.status,uploaded:row.uploaded,files:row.uploaded?.map(image=>image.file).filter(Boolean),itemId:row.itemId,imageCount:row.imageCount,coverage:row.coverage,nextPollAt:row.nextPollAt,verification:row.verification},error:typeof row.error==='object'?row.error.message:row.error},{...invocationScope(c.key),backend:'api'})
   }));}
   async function naturalizePublicText(text,c,{kind='post',comment=null}={}){
     const persona=activePersona(c.key),generation=featureState.generation||0,account=settings.activeAccountId||'';
@@ -4546,7 +4553,7 @@ export function apply(ctx, rawConfig) {
     if(operation.context&&!/(?:原文|照发|一字不改)/.test(operation.context.meta?.userWords||'')){text=await naturalizePublicText(text,socialContext(operation.context));if(text==='[skip]')return {ok:false,skipped:true,coverage:'这次没有合适的公开感想，未发布'};}
     const execution=await socialOperation('qq.qzone.publish',text,operation),context=socialContext(execution.context);
     const evidence=beginQqAction('qzone.publish',{user_id:String(lastSelfId)},{contentHash:textHash(text)});
-    try{const result=await qzone().publish({text,images:operation.images||[]},context);finishQqAction(evidence,result);executionRuntime.finish(execution.exec,execution.context,result);return result;}
+    try{const result=await qzone().publish({text,images:operation.images||[]},context);finishQqAction(evidence,result);if(result.ok)queueSocialReadback(result.id,context);executionRuntime.finish(execution.exec,execution.context,result);return result;}
     catch(error){finishQqAction(evidence,{status:error.deliveryUnknown?'unknown':'failed',verified:false,error:String(error.message)});executionRuntime.finish(execution.exec,execution.context,null,{error:String(error.message)});throw error;}
   }
   async function replyQzone(args,context){
@@ -4556,7 +4563,7 @@ export function apply(ctx, rawConfig) {
     if(!observed)throw Error('目标评论尚未实际读取，先刷新该动态评论再回复');
     if(!/(?:原文|照发|一字不改)/.test(c.meta?.userWords||'')){const expression=await naturalizePublicText(args.text,c,{kind:'reply',comment:{text:observed.text,postText:qzone().status(c).entries.find(r=>r.kind==='publish'&&r.itemId===observed.tid)?.text||''}});if(expression==='[skip]')return {ok:false,skipped:true,coverage:'这次没有合适的评论回应，未提交'};args={...args,text:expression};}
     const operation=await socialOperation('qq.qzone.reply',args.text,{context:c.panel?undefined:c,decisionId:args.decisionId,images:args.images,target:'qq:post:'+args.uin+':'+args.tid+':comment:'+args.commentId});
-    try{const result=await qzone().publish({text:args.text,images:args.images||[],target:{uin:String(args.uin),tid:String(args.tid)},commentId:String(args.commentId),commentUin:String(args.commentUin)},c);executionRuntime.finish(operation.exec,c,result);return result;}catch(error){executionRuntime.finish(operation.exec,c,null,{error:String(error.message)});throw error;}
+    try{const result=await qzone().publish({text:args.text,images:args.images||[],target:{uin:String(args.uin),tid:String(args.tid)},commentId:String(args.commentId),commentUin:String(args.commentUin)},c);if(result.ok)queueSocialReadback(result.id,c);executionRuntime.finish(operation.exec,c,result);return result;}catch(error){executionRuntime.finish(operation.exec,c,null,{error:String(error.message)});throw error;}
   }
 
   /** One bounded analysis supplies mood evidence and optional media reflection. */
@@ -5281,8 +5288,8 @@ export function apply(ctx, rawConfig) {
       onOpen: () => {
         reconnectDelay = 1000;
         lastDisconnectAt = 0;
-        log('onebot websocket connected');
-        qzoneConnectionRevision++;qzoneSessionManager?.invalidate('qq-reconnected');clearTimeout(qzoneWarmTimer);qzoneWarmTimer=setTimeout(()=>{void maintainQzoneSession().catch(()=>{});},2500);qzoneWarmTimer.unref?.();
+        log('onebot websocket connected');void request('get_login_info',{},10000).then(info=>{if(socket===client&&/^\d{5,20}$/.test(String(info?.user_id||''))){lastSelfId=String(info.user_id);armDeliveryVerification();}}).catch(()=>{});armDeliveryVerification();
+        qzoneConnectionRevision++;qzoneSessionManager?.invalidate('qq-reconnected');clearTimeout(qzoneWarmTimer);qzoneWarmTimer=setTimeout(()=>{void maintainQzoneSession().then(()=>resumeSocialReadbacks()).catch(()=>{});},2500);qzoneWarmTimer.unref?.();
         void flushOutbox();
         void (async()=>{
           recoverUncertainInbox();
@@ -5309,7 +5316,8 @@ export function apply(ctx, rawConfig) {
             else { const error = new Error(`${entry.name}: ${payload.message ?? payload.wording ?? payload.retcode}`); error.retcode = payload.retcode; error.deliveryUnknown = payload.status === 'async' || payload.retcode === 1; entry.reject(error); }
             return;
           }
-          handlePayload(payload);
+          if(payload.post_type==='message_sent'){observeOwnMessage(payload);return;}
+          observeRecipientReply(payload);handlePayload(payload);
         } catch (error) {
           log(`bad onebot payload: ${error?.message ?? error}`);
         }
@@ -5913,7 +5921,7 @@ export function apply(ctx, rawConfig) {
     turnContext.personaReferenceDiagnostics=localPersonaReferenceDiagnostics(chat,turnContext.imagePlan,turnContext.personaImage);
     const requestMessages=[{role:'system',content:system,_localContextKind:'persona'}];
     requestMessages.push(...packed.messages,{role:'system',_localContextKind:'instruction',content:personaStateHint(personaState)});
-    if(chat.kind==='group')requestMessages.push({role:'system',_localContextKind:'instruction',content:speakerIdentity(String(payload.user_id||chat.userId),settings)+'\n'+groupTurnHint(chat.groupPlan)+'\n当前是群聊，区分不同说话者，不向群内透露私聊资料。'+groupTranscriptLines(chat.key,payload._bridgeReceivedIds||[payload.message_id]).slice(-1400)});
+    if(chat.kind==='group')requestMessages.push({role:'system',_localContextKind:'instruction',content:speakerIdentity(String(payload.user_id||chat.userId),settings)+'\n'+groupTurnHint(chat.groupPlan)+'\n当前是群聊，区分不同说话者，不向群内透露私聊资料。想看历史图片时使用bridge_qq_read action=history读取本群真实记录和原图；其他QQ能力先用bridge_qq_api action=catalog查看，不能把目录当成已执行。'+groupTranscriptLines(chat.key,payload._bridgeReceivedIds||[payload.message_id]).slice(-1400)});
     requestMessages.push(...history,{role:'user',content:user});
     audit=auditForTurn(chat,text,payload,Object.assign(shared,{modelContextChars:packed.chars}));audit.model='local:'+String(settings.localChat.backend||'comfyui');audit.local=true;turnContext.recordScope.auditId=audit.id;
     const gatewayDeadline=localTurnSignals(controller.signal,AbortSignal.timeout(900000));
@@ -5932,7 +5940,7 @@ export function apply(ctx, rawConfig) {
         if(!id)throw Error('流式回复未能进入发送队列');streamed.push(text);audit.answer=streamed.join('\n');saveFeatures();
       };
       let response;
-      const routedMedia=typeof serviceConnections!=='undefined'&&serviceConnections?routedHostMediaTools(chat):{};
+      const routedMedia={...(typeof serviceConnections!=='undefined'&&serviceConnections?routedHostMediaTools(chat):{}),...localQqTools(chat,active)};
       if(chat.kind==='private'&&chat.isOwner===true&&settings.agency?.enabled&&agencyTools?.localTools||Object.keys(routedMedia).length){
         const localContext={localTurn:true,capabilities:{tools:payload._bridgeModelCapabilities?.features?.tools?.supported===true},localTurnId:deliveryKey,sessionId:'local:'+deliveryKey,scope:JSON.stringify([scope.accountId,chat.key,scope.personaId,featureState.revisions[chat.key]||0]),generation:featureState.generation||0,accountId:scope.accountId,personaId:scope.personaId,key:chat.key,chat,meta:{kind:'user',userWords:String(text),allowSideEffects:true},signal:gatewayDeadline.signal};
         active.localContext=localContext;
@@ -7027,9 +7035,64 @@ export function apply(ctx, rawConfig) {
   {const web=ctx.get('webServer');if(web)ctx.effect(()=>web.register({kind:'exact',path:'/im-bridge/invocations',handler:(req,res)=>{if(req.method!=='GET')return jsonResponse(res,405,{error:'只支持读取'});void(async()=>{try{const base=String(settings.localChat?.baseUrl||'http://127.0.0.1:8777').replace(/\/+$/,'');if(isDesktop&&isLoopbackUrl(base)){try{const response=await requestLocalJson(base+'/v1/local/invocations',{timeoutMs:2500});if(response.body?.mediaRoot)localInvocationMediaRoot=String(response.body.mediaRoot);for(const row of response.body?.records||[])if(row.accountId===(settings.activeAccountId||''))recordInvocation(row,{backend:'local'});}catch{}}const query=new URL(req.url,'http://localhost').searchParams;jsonResponse(res,200,{records:invocationJournal.list({accountId:settings.activeAccountId||'',backend:query.get('backend')||'',kind:query.get('kind')||'',limit:120}).map(row=>({...row,outputs:invocationOutputs(row,{roots:invocationMediaRoots(),outbox:featureState.outbox||[]})})),routes:featureState.modelRoutes||[]});}catch(error){jsonResponse(res,500,{error:String(error.message)});}})();}}));}
 
   const inboxRunning = new Set();
+  {const web=ctx.get('webServer');if(web)ctx.effect(()=>web.register({kind:'exact',path:'/im-bridge/deliveries',handler:(req,res)=>{if(req.method!=='GET')return jsonResponse(res,405,{error:'只支持读取'});jsonResponse(res,200,{jobs:featureState.outbox.filter(j=>j.accountId===(settings.activeAccountId||'')&&recordsAllowed(j.chat)).slice(-200).map(({segments,...job})=>({...job,verification:job.verification||null,preview:(segments||[]).map(s=>s.type==='text'?s.data?.text:'['+s.type+']').join('').slice(0,500)})),checkedAt:Date.now()});}}));}
   const outboundWaiters = new Set();
   const restorePreviews = new Map();
   let outboxRunning = false,outboxWakeTimer=null;
+  const deliveryVerificationInFlight=new Map(),deliveryHistoryCache=new Map();
+  let deliveryVerificationTimer=null;
+  function deliveryVerificationCurrent(job,scope){return !stopped&&!accountPaused&&socket?.ready&&socket===scope.socket&&job.accountId===(settings.activeAccountId||'')&&job.personaId===activePersona(job.chat).id&&recordsAllowed(job.chat)&&scope.generation===(featureState.generation||0);}
+  function deliveryCheckSummary(job){
+    const check=job.verification;return {...(check||{state:job.status==='sent'?'unconfirmed':'pending'}),recipient:check?.recipient||'unknown',read:check?.read||'unknown',coverage:check?.state==='observed'?'已在QQ目标会话中读回消息；对方是否收到或读过尚无回执':job.status==='sent'?'QQ已接收发送请求，目标会话尚未读回核对；不代表对方已收到':'尚未取得可核对的发送记录'};
+  }
+  async function deliveryReadRequest(job,scope,name,params,timeout){
+    if(!deliveryVerificationCurrent(job,scope))throw Object.assign(Error('核对范围已变化'),{name:'AbortError'});
+    if(!['get_friend_msg_history','get_group_msg_history','get_msg'].includes(name))throw Error('消息核对只允许读取');
+    if(name==='get_msg')return request(name,params,timeout);
+    const key=JSON.stringify([job.accountId,job.chat]),old=deliveryHistoryCache.get(key);
+    if(old&&old.socket===scope.socket&&Date.now()-old.at<1800)return old.promise;
+    const promise=request(name,params,timeout);deliveryHistoryCache.set(key,{at:Date.now(),socket:scope.socket,promise});
+    if(deliveryHistoryCache.size>40)deliveryHistoryCache.delete(deliveryHistoryCache.keys().next().value);
+    try{return await promise;}catch(error){if(deliveryHistoryCache.get(key)?.promise===promise)deliveryHistoryCache.delete(key);throw error;}
+  }
+  async function checkOutgoingDelivery(job,{force=false}={}){
+    if(!job||!['sent','unknown'].includes(job.status)||!job.messageId)throw Error('这条消息尚无可核对的平台消息ID');
+    const scope={socket,generation:featureState.generation||0};if(!deliveryVerificationCurrent(job,scope))throw Error('请在原账号、人设和允许的对话中核对');
+    if(job.verification?.state==='observed'&&!force)return deliveryCheckSummary(job);
+    if(deliveryVerificationInFlight.has(job.id))return deliveryVerificationInFlight.get(job.id);
+    const pending=(async()=>{
+      const attempts=(job.verification?.attempts||0)+1;job.verification={...job.verification,state:'checking',attempts,recipient:job.verification?.recipient||'unknown',read:'unknown'};saveFeatures();
+      const result=await verifyDelivery(job,{selfId:String(lastSelfId||''),request:(name,args,timeout)=>deliveryReadRequest(job,scope,name,args,timeout)});
+      if(!deliveryVerificationCurrent(job,scope))return {state:'unconfirmed',recipient:'unknown',read:'unknown',coverage:'核对期间会话已变化，旧结果未采用'};
+      const observed=result.state==='observed';
+      const received=job.verification?.recipient==='reply_observed'?{recipient:'reply_observed',recipientId:job.verification.recipientId,recipientObservedAt:job.verification.recipientObservedAt}:{};job.verification={...result,...received,attempts,reason:observed?'已读回同一消息ID、发送账号及正文/媒体类型；对方接收和已读情况未知':result.state==='unsupported'?'当前QQ接口暂不支持读回核对，平台接收回执仍保留':'暂未读回匹配的消息，不等于发送失败；不自动重发',detail:result.reason,nextCheckAt:!observed&&result.state!=='unsupported'&&attempts<3?Date.now()+[0,4000,12000][attempts]:0};
+      if(observed&&job.status==='unknown')job.status='sent';job.updatedAt=Date.now();saveFeatures();logDelivery(job);
+      recordInvocation({id:'delivery-check:'+job.id,tool:'qq.message.verify',kind:'tool',status:'returned',arguments:{deliveryId:job.id,messageId:job.messageId,target:job.chat},result:deliveryCheckSummary(job)},{accountId:job.accountId,personaId:job.personaId,chat:job.chat,backend:settings.localChat?.enabled?'local':'api'});
+      if(!observed&&!job.verification.nextCheckAt)reportBridgeIssue({id:'delivery-check:'+job.id,kind:'delivery-check',message:'QQ已接收这条消息，但读回核对尚未完成。可在发送记录里再次核对，先别直接重发。'},{accountId:job.accountId,personaId:job.personaId,chat:job.chat,backend:settings.localChat?.enabled?'local':'api'});
+      return deliveryCheckSummary(job);
+    })();deliveryVerificationInFlight.set(job.id,pending);
+    try{return await pending;}finally{deliveryVerificationInFlight.delete(job.id);armDeliveryVerification();}
+  }
+  function armDeliveryVerification(){
+    clearTimeout(deliveryVerificationTimer);deliveryVerificationTimer=null;if(stopped||accountPaused||!socket?.ready)return;
+    const now=Date.now(),jobs=featureState.outbox.filter(j=>j.accountId===(settings.activeAccountId||'')&&j.personaId===activePersona(j.chat).id&&recordsAllowed(j.chat)&&j.messageId&&['sent','unknown'].includes(j.status)&&j.verification&&['pending','checking','unconfirmed'].includes(j.verification.state)&&j.verification.nextCheckAt>0&&!deliveryVerificationInFlight.has(j.id));
+    const next=jobs.sort((a,b)=>a.verification.nextCheckAt-b.verification.nextCheckAt)[0];if(!next)return;
+    deliveryVerificationTimer=setTimeout(()=>{deliveryVerificationTimer=null;void checkOutgoingDelivery(next).catch(()=>armDeliveryVerification());},Math.max(100,Math.min(60000,next.verification.nextCheckAt-now)));deliveryVerificationTimer.unref?.();
+  }
+  function observeRecipientReply(payload){
+    if(payload.post_type!=='message'||String(payload.user_id)===String(lastSelfId)||!['private','group'].includes(payload.message_type))return;
+    const key=payload.message_type+':'+String(payload.message_type==='group'?payload.group_id:payload.user_id);if(!recordsAllowed(key)||groupStopped(key))return;
+    const ids=segmentsOf(payload.message).filter(s=>s.type==='reply').map(s=>String(s.data?.id||''));if(!ids.length)return;
+    for(const job of featureState.outbox){if(job.accountId!==(settings.activeAccountId||'')||job.personaId!==activePersona(key).id||job.chat!==key||!job.messageId||!ids.includes(String(job.messageId)))continue;
+      job.verification={...job.verification,recipient:'reply_observed',recipientId:String(payload.user_id),recipientObservedAt:Date.now(),read:'unknown'};saveFeatures();logDelivery(job);}
+  }
+  function observeOwnMessage(payload){
+    if(payload.post_type!=='message_sent')return;const kind=payload.message_type,target=String(kind==='group'?payload.group_id:payload.target_id||payload.peer_id||payload.user_id||'');
+    for(const job of featureState.outbox){if(job.accountId!==(settings.activeAccountId||'')||job.personaId!==activePersona(job.chat).id||!recordsAllowed(job.chat)||job.kind!==kind||job.chatId!==target||String(job.messageId)!==String(payload.message_id))continue;
+      if(job.verification?.state==='observed')continue;const match=compareDeliveryMessage(job,payload,{selfId:String(lastSelfId||''),historyScoped:true});if(!match.matched)continue;
+      job.verification={...job.verification,state:'pending',sendEventAt:Date.now(),nextCheckAt:Date.now()+300,recipient:'unknown',read:'unknown'};saveFeatures();armDeliveryVerification();}
+  }
+
   function writeAtomic(file, value) { mkdirSync(dirname(file), { recursive: true }); const temp = file + '.tmp'; writeFileSync(temp, JSON.stringify(value, null, 2)); renameSync(temp, file); }
   function saveFeatures() {
     const active = featureState.outbox.filter(j => ['queued','sending'].includes(j.status));
@@ -7231,15 +7294,15 @@ export function apply(ctx, rawConfig) {
   function auditAnswerCap(audit){return String(audit?.chat||'').startsWith('group:')?1200:20000;}
   function logDelivery(job) {
     const replyAudit=auditById(job.auditId);if(replyAudit){const rows=featureState.outbox.filter(row=>row.auditId===job.auditId),states=rows.map(row=>row.status);replyAudit.deliveryState=states.every(state=>state==='sent')?'sent':states.includes('unknown')?'unknown':states.includes('failed')?'failed':states.some(state=>['queued','sending'].includes(state))?'queued':'cancelled';replyAudit.deliveryReason=['failed','unknown','cancelled'].includes(replyAudit.deliveryState)?job.error||'':'回复已进入发送队列，以QQ回执为准';}
-    if(['sent','failed','unknown'].includes(job.status)){lifeExecution?.deliveryReceipt(job.id,{status:job.status,messageId:job.messageId});for(const item of featureState.operations||[])if(item.deliveryIds?.includes(job.id)){item.deliveryStates||={};item.deliveryStates[job.id]=job.status;if(item.deliveryIds.every(id=>item.deliveryStates[id]==='sent')){item.status='confirmed';item.verified=true;}else if(job.status==='unknown')item.status='unknown';item.updatedAt=Date.now();}}
+    if(['sent','failed','unknown'].includes(job.status)){lifeExecution?.deliveryReceipt(job.id,{status:job.status,messageId:job.messageId,verification:job.verification});for(const item of featureState.operations||[])if(item.deliveryIds?.includes(job.id)){item.deliveryStates||={};item.deliveryStates[job.id]=job.status;if(item.deliveryIds.every(id=>item.deliveryStates[id]==='sent')){item.verified=item.deliveryIds.every(id=>featureState.outbox.find(j=>j.id===id)?.verification?.state==='observed');item.status=item.verified?'confirmed':'accepted';item.coverage=item.verified?'已在QQ记录读回，对方接收与已读仍未知':'QQ已接收，等待读回核对；对方接收与已读未知';}else if(job.status==='unknown')item.status='unknown';item.updatedAt=Date.now();}}
     const mediaTask=(featureState.mediaTasks||[]).find(task=>task.id===job.mediaTaskId||task.deliveryId===job.id);
-    if(mediaTask){Object.assign(mediaTask,{status:job.status,error:job.error||'',deliveryId:job.id,updatedAt:Date.now()});saveFeatures();}
+    if(mediaTask){Object.assign(mediaTask,{status:job.status,error:job.error||'',deliveryId:job.id,verification:job.verification,updatedAt:Date.now()});saveFeatures();}
     if (!recordsAllowed(job.chat)) return;
     const existing = messages.find(m => m.localId === job.id);
     const text = (job.localTranscript ? '[语音]'+job.localTranscript : job.segments.map(s => s.type === 'text' ? String(s.data?.text || '') : s.type === 'record' ? '[语音]' : s.type === 'image' ? '[图片]' : '[' + s.type + ']').join(''));
     const files = [...new Set((job.monitorImages || []).concat(job.segments.filter(s=>s.type==='image').map(s=>monitorImage(s.data)).filter(Boolean)))];
     job.monitorImages = files;
-    const entry = { accountId: job.accountId, delivery: job.status, messageId: job.messageId || '', error: job.error || '', files };
+    const entry = { accountId: job.accountId, delivery: job.status,verification:job.verification, messageId: job.messageId || '', error: job.error || '', files };
     if (existing) { Object.assign(existing, entry); try { pruneMonitor(); } catch {} }
     else logMessage({ dir: 'out', chat: job.chat, text: text.slice(0,20000), localId: job.id, ...entry });
     memeStudy?.recordOutcome(learningMeta(job.chat),{auditId:job.auditId,status:job.status==='sent'?'delivered':job.status==='unknown'?'unknown':'failed',reply:text});
@@ -7295,7 +7358,7 @@ export function apply(ctx, rawConfig) {
     const recipient=recipientDenial({kind:job.kind,chatId:job.chatId,key:job.chat},settings);if(recipient)return recipient;
     if(job.initiative&&job.kind==='private'&&!privateInitiativeAllowed(job.chat,settings))return '该联系人未单独允许主动联系';
     if(wrongOwnerAddress(job.segments.filter(s=>s.type==='text').map(s=>s.data?.text||'').join('\n'),job.chat,settings))return '收件人不是号主，称呼不匹配';
-    if(job.afterImageId&&featureState.outbox.find(item=>item.id===job.afterImageId)?.status!=='sent')return '图片尚未确认送达，未发送后续配文';
+    if(job.afterImageId&&featureState.outbox.find(item=>item.id===job.afterImageId)?.status!=='sent')return '图片尚未取得平台接收回执，未发送后续配文';
     if(groupStopped(job.chat))return '该群已停用';
     if(job.initiative&&!job.manualInitiative&&!autonomyConfig().enabled)return '自主总开关已关闭';
     if(auditById(job.auditId)?.status==='superseded')return '用户已纠正或撤回旧要求';
@@ -7334,7 +7397,7 @@ export function apply(ctx, rawConfig) {
           logDelivery(job);guardState.lastSendAt=Date.now();guardState.windowCount+=1;
           submitted=true;const result=await request('send_msg',params,15000);
           job.messageId=qqActionResult('send_msg',result).messageId||'';
-          job.status=job.messageId?'sent':'unknown';job.error=job.messageId?'':'平台未返回消息 ID，请先核实是否送达';delete job.nextAttemptAt;
+          job.status=job.messageId?'sent':'unknown';if(job.messageId)job.verification={state:'pending',transport:'accepted',acceptedAt:Date.now(),attempts:0,nextCheckAt:Date.now()+1000,recipient:'unknown',read:'unknown'};job.error=job.messageId?'':'平台未返回消息 ID，请先核实是否送达';delete job.nextAttemptAt;
           const audit=auditById(job.auditId);if(audit&&job.messageId){if(!audit.messageIds.includes(job.messageId))audit.messageIds.push(job.messageId);if(job.accountId===(settings.activeAccountId||'')){learningMemory?.recordOutcome(learningMeta(job.chat),{auditId:audit.id,status:'delivered',reply:audit.answer,messageIds:audit.messageIds});expressionLearning?.recordOutcome(learningMeta(job.chat),{auditId:audit.id,status:'delivered',messageIds:audit.messageIds});}}
         }catch(error){
           if(job.cancelRequested){job.status=error.submitted===false?'cancelled':'unknown';job.error=job.status==='unknown'?'停止期间发送回执未确认，原消息可能已送达，不自动重发':'已停止，本条没有提交QQ';}
@@ -7344,7 +7407,7 @@ export function apply(ctx, rawConfig) {
             else{job.status=error.submitted===false?'failed':error.deliveryUnknown||submitted&&/超时|断开|连接/.test(String(error.message))?'unknown':'failed';job.error=calendarSafeText(String(error.message||'发送未完成')).slice(0,300);}
           }
         }
-        job.updatedAt=Date.now();saveFeatures();logDelivery(job);
+        job.updatedAt=Date.now();saveFeatures();logDelivery(job);armDeliveryVerification();
         if(['failed','unknown'].includes(job.status))noteDeliveryIssue(job,job.error||'QQ发送结果需要检查');
         if(['failed','unknown'].includes(job.status)&&job.segments.some(segment=>['image','record'].includes(segment.type))&&!job.failureNoticeSent){job.failureNoticeSent=true;const kind=job.segments.some(s=>s.type==='image')?'image':'voice';if(kind==='image')rememberImageFailure(new Error(job.error),'send');mediaFailureNotice({key:job.chat,kind:job.kind,chatId:job.chatId,auditId:job.auditId,turnKind:job.initiative?'proactive':'user'},kind,job.status);saveFeatures();}
       }
@@ -7357,7 +7420,7 @@ export function apply(ctx, rawConfig) {
     for(const [key,active] of localTurns){try{active.controller.abort();}catch{}log('local turn cancelled for '+key+'：'+reason);}localTurns.clear();
     for(const attention of groupAttention.values())if(attention.timer)clearTimeout(attention.timer);
     groupAttention.clear();groupTranscripts.clear();
-    clearTimeout(outboxWakeTimer);outboxWakeTimer=null;
+    clearTimeout(outboxWakeTimer);outboxWakeTimer=null;clearTimeout(deliveryVerificationTimer);deliveryHistoryCache.clear();clearTimeout(socialReadbackTimer);socialReadbacks.clear();
     for(const job of featureState.outbox)if(['queued','sending'].includes(job.status)){job.cancelRequested=true;if(cancelOutgoingDelivery(job,reason))logDelivery(job);}
     for (const job of featureState.inbox) if (job.status === 'queued') { job.status = 'failed'; job.error = reason+'，未提交模型'; }
     for (const timer of inboxTimers.values()) clearTimeout(timer); inboxTimers.clear();
@@ -7620,7 +7683,8 @@ export function apply(ctx, rawConfig) {
             _bridgeCatchUp: true,
           };
           if (!incomingAllowed(payload)) continue;
-          handlePayload(payload);
+          if(payload.post_type==='message_sent'){observeOwnMessage(payload);return;}
+          observeRecipientReply(payload);handlePayload(payload);
           queued += 1;
         }
       }
@@ -8140,11 +8204,13 @@ export function apply(ctx, rawConfig) {
     }catch(error){for(const name of Object.keys(settings))delete settings[name];Object.assign(settings,oldSettings);memories=oldMemories;messages=oldMessages;for(const snapshot of memoryCheckpoint){try{if(existsSync(snapshot.root))for(const n of readdirSync(snapshot.root).filter(n=>/^(?:limit-|growth-|source-[a-f0-9]{64}-)?[a-f0-9]{64}\.json$/.test(n)))if(!snapshot.files.some(f=>f.name===n))unlinkSync(join(snapshot.root,n));for(const file of snapshot.files){mkdirSync(snapshot.root,{recursive:true});writeFileSync(join(snapshot.root,file.name),file.bytes);}}catch{}}lifeMemory?.reload();learningMemory?.reload();websiteReader?.reload();personaGrowth?.reload();memoryHub?.reload();for(const file of created)try{unlinkSync(file)}catch{};try{writeAtomic(settingsFile,settings);writeAtomic(memoryFile,memories);writeAtomic(messagesFile,messages)}catch{};throw error}
   }
   async function featureAction(route, body) {
+    if(route==='delivery-check'){const job=featureState.outbox.find(j=>j.id===body.id);return {ok:true,verification:await checkOutgoingDelivery(job,{force:true})};}
     if(!isDesktop&&route==='agency'&&(body.desktop===true||body.workspace==='desktop'))throw Error(mobileApiMessage);
     if(route==='qzone'){
       const key=panelOperationKey(String(body.key||''));if(!settings.owners.includes(key.replace(/^private:/,'')))throw Error('空间面板仅对号主开放');const c=socialContext({panel:true,key,accountId:settings.activeAccountId||'',personaId:activePersona(key).id});
       if(body.action==='status')return {ok:true,...qzone().status(c),connection:qzoneConnectionStatus()};
       if(body.action==='check-session'){const connection=await maintainQzoneSession(true);return {ok:connection.state==='ready',connection,coverage:connection.reason};}
+      if(body.action==='verify')return {ok:true,verification:await qzone().verifyEntry(String(body.id||''),c)};
       if(body.action==='comments')return qzone().comments({tid:String(body.tid),uin:String(body.uin||lastSelfId)},c);
       if(body.action==='reply'){if(body.confirm!==true)throw Error('请先核对完整回复与原评论');return replyQzone(body,c);}
       throw Error('未知空间操作');
@@ -8287,7 +8353,7 @@ export function apply(ctx, rawConfig) {
     }
     if(route==='reliability'){const mergeMs=body.mergeMs===undefined?(Number(settings.reliability.mergeMs)||0):(Number(body.mergeMs)||0),replyDelayMs=body.replyDelayMs===undefined?(Number(settings.reliability.replyDelayMs)||0):(Number(body.replyDelayMs)||0);settings.reliability={mergeMs:Math.min(2000,Math.max(0,mergeMs)),replyDelayMs:Math.min(15000,Math.max(0,replyDelayMs))};saveSettings();return{ok:true};}
     if(route==='retry'){
-      const job=featureState.outbox.find(j=>j.id===body.id);if(!job||!['failed','unknown','cancelled'].includes(job.status))throw new Error('该消息不需要重发');if(job.accountId!==(settings.activeAccountId||''))throw new Error('该消息属于其他账号，请先切换回原账号');if(job.status==='unknown'&&body.confirmUncertain!==true)throw new Error('请先确认原消息是否已送达，重发可能产生重复');return{ok:true,id:queueOutgoing({key:job.chat,kind:job.kind,chatId:job.chatId,auditId:job.auditId,mediaTaskId:job.mediaTaskId},job.segments,job.id)};
+      const job=featureState.outbox.find(j=>j.id===body.id);if(!job||!['failed','unknown','cancelled'].includes(job.status))throw new Error('该消息不需要重发');if(job.accountId!==(settings.activeAccountId||''))throw new Error('该消息属于其他账号，请先切换回原账号');if(job.messageId&&job.verification?.state==='observed')throw Error('已在QQ聊天记录查到这条消息，无需重复发送');if(job.status==='unknown'&&body.confirmUncertain!==true)throw new Error('请先确认原消息是否已送达，重发可能产生重复');return{ok:true,id:queueOutgoing({key:job.chat,kind:job.kind,chatId:job.chatId,auditId:job.auditId,mediaTaskId:job.mediaTaskId},job.segments,job.id)};
     }
     if(route==='inbox-retry'){
       const job=featureState.inbox.find(j=>j.id===body.id);if(!job?.payload||!['failed','uncertain'].includes(job.status))throw new Error('该消息没有可重试的输入');if(job.status==='uncertain'&&body.confirmUncertain!==true)throw new Error('请确认重启前没有生成过回复');job.status='queued';saveFeatures();void drainInbox(job.key);return{ok:true};
@@ -8310,7 +8376,7 @@ export function apply(ctx, rawConfig) {
     function rememberEndpoint(){}
     ctx.effect(()=>{let disposed=false,close=null;void createMobileEndpoint({dataDir:cfg.dataDir,act:body=>featureAction('phone',body),status:()=>({version:PLUGIN_VERSION,edition:isDesktop?'desktop':'mobile',requiresComputer:false,connected:socket?.ready===true,paused:accountPaused,modelConfigured:!!effectiveModel(),phoneBackend:'dshbox-pilot',records:messages.length,personae:settings.personae.length})}).then(stop=>{if(disposed)stop();else close=stop;}).catch(()=>log('手机本地客户端服务启动失败'));return()=>{disposed=true;close?.();};});
     ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/features',handler:(req,res)=>{rememberEndpoint(req);jsonResponse(res,200,featureSnapshot());}}));
-    for(const route of ['qzone','bilibili','companion','singing','music','memory-hub','phone','persona-growth','sharing','learning','wallet','calendar','companion-state','memory','profile','reliability','retry','inbox-retry','withdraw','regenerate','correction','backup-export','backup-preview','backup-restore'])ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/features/'+route,handler:(req,res)=>{
+    for(const route of ['delivery-check','qzone','bilibili','companion','singing','music','memory-hub','phone','persona-growth','sharing','learning','wallet','calendar','companion-state','memory','profile','reliability','retry','inbox-retry','withdraw','regenerate','correction','backup-export','backup-preview','backup-restore'])ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/features/'+route,handler:(req,res)=>{
       if(req.method!=='POST')return jsonResponse(res,405,{error:'需要 POST 请求'});
       const origin=req.headers?.origin;if(origin){try{if(new URL(origin).host!==req.headers.host)return jsonResponse(res,403,{error:'请求来源不匹配'})}catch{return jsonResponse(res,403,{error:'请求来源无效'})}}
       rememberEndpoint(req);
@@ -8318,7 +8384,7 @@ export function apply(ctx, rawConfig) {
       req.on('end',()=>{if(tooLarge)return;void(async()=>{try{const result=await featureAction(route,JSON.parse(body||'{}'));jsonResponse(res,200,result)}catch(error){jsonResponse(res,400,{error:String(error.message||error).slice(0,500)})}})();});
     }}));
   }
-  ctx.effect(()=>()=>{clearTimeout(outboxWakeTimer);outboxWakeTimer=null;for(const timer of inboxTimers.values())clearTimeout(timer);for(const waiter of outboundWaiters){clearTimeout(waiter.timer);waiter.resolve()}saveFeatures();});
+  ctx.effect(()=>()=>{clearTimeout(outboxWakeTimer);outboxWakeTimer=null;clearTimeout(deliveryVerificationTimer);deliveryHistoryCache.clear();clearTimeout(socialReadbackTimer);socialReadbacks.clear();for(const timer of inboxTimers.values())clearTimeout(timer);for(const waiter of outboundWaiters){clearTimeout(waiter.timer);waiter.resolve()}saveFeatures();});
 
 
   saveFeatures();
@@ -9397,10 +9463,10 @@ export function apply(ctx, rawConfig) {
                   segments.push({ type: 'image', data: { file } });
                 }
                 if (segments.length === 0) throw new Error('没有要发的内容');
-                sendSegments(chat, segments);
+                const deliveryId=sendSegments(chat, segments);if(!deliveryId)throw Error('本条内容没有进入QQ发送队列，请查看发送记录');
                 // Delivery records and image copies are created by sendSegments().
                 log(`manual send to ${chat.key}: ${segments.map((s) => s.type).join('+')}`);
-                jsonResponse(res, 200, { ok: true, target: chat.key, segments: segments.map((s) => s.type) });
+                jsonResponse(res, 200, { ok: true, queued:true,deliveryId,target: chat.key, segments: segments.map((s) => s.type) });
               } catch (error) {
                 jsonResponse(res, 500, { error: String(error?.message ?? error) });
               }
@@ -10336,9 +10402,9 @@ export function apply(ctx, rawConfig) {
   ctx.on('tools/execute',async(exec,next)=>{
     const chat=chats.get(String(exec.agent?.id||''));if(!chat)return next();
     const id=randomUUID(),scope={...invocationScope(chat.key,chat.turns?.get(exec.turn)?.meta?.auditId||''),backend:'api'};recordInvocation({id,tool:exec.name,kind:invocationKind(exec.name,exec.arguments),arguments:exec.arguments,status:'started'},scope);
-    let context;try{if(chat.backendRetired||settings.localChat?.enabled&&(!settings.localChat.apiComplement||!chat.apiComplement))throw Error('当前模式已停止旧的宿主 API 会话工具');const denial=currentOwnerToolDenial(chat,exec);if(denial)throw Error(denial);context=agencyContext(exec);if(exec.name!=='bridge_qq_read')executionRuntime.beginHost(exec,context);const result=await apiModelScope.run({complement:chat.apiComplement===true,recordScope:scope},()=>next());executionRuntime.finish(exec,context,result);recordInvocation({id,status:result?.isError||result?.value?.ok===false?'failed':'returned',result},scope);return result;}catch(error){if(context)executionRuntime.finish(exec,context,null,{error:String(error.message)});recordInvocation({id,status:error.name==='AbortError'?'cancelled':'failed',error:String(error.message)},scope);throw error;}
+    let context;try{if(chat.backendRetired||settings.localChat?.enabled&&(!settings.localChat.apiComplement||!chat.apiComplement))throw Error('当前模式已停止旧的宿主 API 会话工具');const denial=currentOwnerToolDenial(chat,exec);if(denial)throw Error(denial);context=['bridge_qq_read','bridge_qq_api'].includes(exec.name)?{...qqReadScope(chat.key),sessionId:chat.sessionId,chat,meta:[...chat.turns.values()].at(-1)?.meta,signal:exec.signal}:agencyContext(exec);if(!['bridge_qq_read','bridge_qq_api'].includes(exec.name))executionRuntime.beginHost(exec,context);const result=await apiModelScope.run({complement:chat.apiComplement===true,recordScope:scope},()=>next());executionRuntime.finish(exec,context,result);recordInvocation({id,status:result?.isError||result?.value?.ok===false?'failed':'returned',result},scope);return result;}catch(error){if(context)executionRuntime.finish(exec,context,null,{error:String(error.message)});recordInvocation({id,status:error.name==='AbortError'?'cancelled':'failed',error:String(error.message)},scope);throw error;}
   });
-  ctx.on('tools/result',(exec,result)=>{const chat=chats.get(String(exec.agent?.id||''));if(!chat?.isOwner)return;try{executionRuntime.finish(exec,agencyContext(exec),result);}catch{}});
+  ctx.on('tools/result',(exec,result)=>{const chat=chats.get(String(exec.agent?.id||''));if(!chat?.isOwner)return;try{executionRuntime.finish(exec,['bridge_qq_read','bridge_qq_api'].includes(exec.name)?{...qqReadScope(chat.key),chat}:agencyContext(exec),result);}catch{}});
   async function spokenPaymentQuestion(question,key){
     const generation=featureState.generation||0,accountId=settings.activeAccountId||'',persona=JSON.stringify(activePersona(key));let voice;
     try{const input=paymentQuestionInput(question,{persona:personaPromptText(activePersona(key)),tone:moodDelivery(soulFor(key).mood,{config:settings.mood}).tone||'',recent:operationContext(key)});const raw=await askModel(input.system,input.user,350,effectiveModel(key),15000,true);voice=JSON.parse(String(raw).replace(/^```(?:json)?\s*|\s*```$/g,''));}catch{/* exact payment facts remain available without a rewrite */}
@@ -10372,6 +10438,21 @@ export function apply(ctx, rawConfig) {
     try{executionRuntime.begin(exec,context,args);}catch(error){if(['DECISION_REQUIRED','HOST_GUARD_REQUIRED'].includes(error.code)){await operationRequest(context,toolName,args,(toolName==='qq.signature'?'把这句话改成QQ签名':'把这句话发到QQ空间')+'，可以吗？');throw Error('已保留准确内容，等待本人决定后再提交');}throw error;}
     return {exec,context};
   }
+  async function readQqHistory(chat,args,scope){
+    const target=String(args.target||chat.key);if(!/^(?:private|group):\d{5,20}$/.test(target)||!recordsAllowed(target)||groupStopped(target))throw Error('历史记录目标不在当前允许范围');
+    if(target!==chat.key&&(chat.kind==='group'||!settings.owners.includes(String(chat.userId||chat.chatId))))throw Error('只能在号主私聊中查看其他已允许会话；群聊不能读取其他会话');
+    const [kind,id]=target.split(':'),limit=Math.min(40,Math.max(1,Number(args.limit)||20)),offset=Math.max(0,Number(args.offset)||0),count=Math.min(100,offset+limit);
+    const response=await request(kind==='group'?'get_group_msg_history':'get_friend_msg_history',kind==='group'?{group_id:id,count}:{user_id:id,count},12000);
+    if(JSON.stringify(scope)!==JSON.stringify(qqReadScope(chat.key)))throw Error('读取期间账号或人设已改变');
+    const messages=(Array.isArray(response)?response:response?.messages||[]).filter(row=>row&&typeof row==='object');
+    if(!messages.length)return {ok:true,records:[],parts:[],coverage:'该会话接口本次没有返回消息，不能据此认为没有历史记录'};
+    const forwardId=qqForwardReader.remember(scope,'history:'+randomUUID(),{sourceChat:target,time:Date.now()/1000},messages);
+    let media=args.media;if(!Array.isArray(media)){
+      media=[];for(let i=offset;i<Math.min(messages.length,offset+limit)&&media.length<2;i++)for(const [index,segment]of segmentsOf(messages[i].message||messages[i].content||[]).entries())if(['image','mface'].includes(segment.type)&&media.length<2)media.push(i+':'+index);
+    }
+    const result=await qqForwardReader.read(scope,forwardId,{offset,limit,depth:args.depth||0,media});
+    return {...result,sourceChat:target,historyId:forwardId,coverage:'已读取QQ接口实际返回的历史消息，'+result.coverage+'。可用forward和historyId按media目录继续读取未选的图片、语音、视频。'};
+  }
   function qqReadToolDenial(chat,exec={}) {
     if(String(exec.name||'')!=='bridge_qq_read')return '不是本对话只读工具';
     if(!chat||chats.get(chat.sessionId)!==chat||stopped||accountPaused||!recordsAllowed(chat.key)||groupStopped(chat.key))return 'QQ会话已暂停、替换或不在允许范围';
@@ -10379,7 +10460,7 @@ export function apply(ctx, rawConfig) {
     if(!meta||!['user','proactive'].includes(meta.kind)||meta.inboundVersion<(chat.supersedingVersion||0)||['superseded','cancelled','failed'].includes(audit?.status))return '本轮已经失效，不能继续读取附件';
     if(audit&&audit.accountId!==(settings.activeAccountId||''))return '账号已改变';
     const args=exec.arguments||exec.args||{};
-    if(!['capabilities','list','forward','video','record','image'].includes(args.action))return '未知只读QQ动作';
+    if(!['capabilities','history','list','forward','video','record','image'].includes(args.action))return '未知只读QQ动作';
     if(['forward','video','record','image'].includes(args.action)){
       const scope=qqReadScope(chat.key);
       if(args.action==='forward'){if(!qqForwardReader.known(scope,String(args.id||'')))return '本对话没有收到这个转发记录';}
@@ -10387,18 +10468,39 @@ export function apply(ctx, rawConfig) {
     }
     return undefined;
   }
+  function nativeQqContext(chat){return {...qqReadScope(chat.key),kind:chat.kind,chatId:String(chat.chatId||chat.key.split(':')[1]),userId:String(chat.userId||''),chat};}
+  const nativeQq=createQqNativeCapabilities({
+    allowedUsers:()=>allowedPrivateUsers(settings),allowedGroups:()=>effectiveGroups().filter(id=>recordsAllowed('group:'+id)&&!groupStopped('group:'+id)),
+    isOwner:c=>c.chat?.isOwner===true&&settings.owners.includes(String(c.chat.userId||'')),
+    request:async(name,args,c)=>{c.validate?.();const stamp=JSON.stringify(qqReadScope(c.key));if(c.accountId!==(settings.activeAccountId||'')||c.personaId!==activePersona(c.key).id||!recordsAllowed(c.key)||groupStopped(c.key)||stopped||accountPaused)throw Error('QQ操作范围已变化');const value=await request(name,args,15000);c.validate?.();if(stamp!==JSON.stringify(qqReadScope(c.key)))throw Error('操作期间账号或人设已变化');return {status:'ok',data:value};}
+  });
+  const qqNativeParameters={type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['catalog','call']},name:{type:'string',description:'catalog实际列出的action名称'},params:{type:'object',additionalProperties:true}},required:['action']};
+  async function executeNativeQq(chat,args,validate){const context={...nativeQqContext(chat),validate};if(args.action==='catalog')return {ok:true,capabilities:nativeQq.catalog(context),existing:{history:'bridge_qq_read history读取实际图片、语音、视频与合并转发',send:'正常QQ回复及bridge_life_qq/bridge_life_share，经持久发送队列和后台核对',profile:'bridge_qq_profile签名、空间动态、评论与回复'},coverage:'目录中的unknown尚未实测，不等于平台已支持；操作权限以当前账号和群角色为准'};if(args.action!=='call')throw Error('未知QQ能力操作');return nativeQq.call({action:String(args.name||''),params:args.params||{}},context);}
+  function registerQqNativeTool(){const tools=ctx.get('tools');if(!tools?.register)return false;const stop=tools.register({name:'bridge_qq_api',description:'QQ原生能力目录。先catalog查看实际名称、必填参数与支持状态，再call传name及params。可查询群成员、公告、精华、群文件，点赞、戳一戳、改群名片及具有权限的群管理。群聊只操作当前允许群，其他允许会话仅限号主私聊；写操作限号主发起。历史图片用bridge_qq_read，聊天发送仍走持久队列。目录未知能力不保证支持，失败不自动重复写操作。',parameters:qqNativeParameters,output:{schema:{type:'object',additionalProperties:true},render:(_a,value)=>[{type:'text',text:JSON.stringify(value).slice(0,26000)}]},execute:async(args,exec)=>{const chat=chats.get(String(exec.agent?.id||''));const denial=chat?qqReadToolDenial(chat,{...exec,name:'bridge_qq_read',arguments:{action:'capabilities'}}):'QQ对话不可用';if(denial)throw Error(denial);exec.signal?.throwIfAborted();return executeNativeQq(chat,args,()=>{exec.signal?.throwIfAborted();const reason=qqReadToolDenial(chat,{...exec,name:'bridge_qq_read',arguments:{action:'capabilities'}});if(reason)throw Error(reason);});}});if(typeof stop==='function')ctx.effect(()=>stop);return true;}
+  function localQqTools(chat,active){
+    const scope=qqReadScope(chat.key),stamp=JSON.stringify(scope);
+    const check=()=>{if(stopped||accountPaused||active.controller.signal.aborted||localTurns.get(chat.key)!==active||stamp!==JSON.stringify(qqReadScope(chat.key))||!recordsAllowed(chat.key)||groupStopped(chat.key))throw Error('本地QQ工具会话已变化');};
+    const wrap=(name,description,parameters,run)=>({name,description,parameters,kind:'data',repeatable:true,execute:async(args)=>{check();const id=randomUUID(),recordScope={...scope,chat:chat.key,backend:'local'};recordInvocation({id,tool:name,kind:'tool',arguments:args,status:'started'},recordScope);try{const result=await run(args);check();recordInvocation({id,status:result.ok===false?'failed':'returned',result},recordScope);return result;}catch(error){recordInvocation({id,status:'failed',error:String(error.message)},recordScope);throw error;}}});
+    return {
+      bridge_qq_api:wrap('bridge_qq_api','先catalog发现QQ原生能力，再call传name和params执行。群成员、公告、精华、群文件、点赞、戳一戳等；以真实目录与回执为准。',qqNativeParameters,args=>executeNativeQq(chat,args,check)),
+      bridge_qq_read:wrap('bridge_qq_read','读取QQ当前或允许会话的真实历史及原图。history默认读本页2张图片；forward传historyId与media目录索引继续读取。群聊只读本群，只有号主私聊能跨允许会话。', {type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['history','forward','list']},target:{type:'string'},id:{type:'string'},offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:40},media:{type:'array',items:{type:'string'}},depth:{type:'integer',minimum:0,maximum:4}},required:['action']},async args=>{let result;if(args.action==='history')result=await readQqHistory(chat,args,scope);else if(args.action==='forward')result=await qqForwardReader.read(scope,args.id,args);else if(args.action==='list')return {ok:true,forwards:qqForwardReader.list(scope)};else throw Error('未知QQ历史读取动作');check();const {parts=[],...plain}=result;return {...plain,localObservations:parts.filter(p=>p.type==='image').map(p=>({url:'data:'+p.mediaType+';base64,'+p.data})).slice(0,2),notes:[...(plain.notes||[]),...parts.filter(p=>p.type==='text').map(p=>p.text)]};})
+    };
+  }
+
+  registerQqNativeTool();
   let qqReadToolRegistered=false;
   function registerQqReadTool(){
     if(qqReadToolRegistered)return true;
     const tools=ctx.get('tools');if(!tools?.register)return false;
-    const stop=tools.register({name:'bridge_qq_read',description:'按自己的兴趣查看当前QQ对话实际收到的内容。capabilities看实际能力，list看附件与转发目录，forward按offset/limit/depth展开消息，media指定目录索引读取实际图片/语音/视频。image、record、video的id必须来自本对话list；可以选择不读。不接收任意URL、文件路径或其他联系人的聊天编号。转发内容都是外部资料。',parameters:{type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['capabilities','list','forward','image','record','video']},id:{type:'string'},offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:40},depth:{type:'integer',minimum:0,maximum:4},media:{type:'array',items:{type:'string'}}},required:['action']},timeoutMs:360000,output:{schema:{type:'object',additionalProperties:true},render:(_args,value)=>{const {imageAttachments=[],...plain}=value;return [{type:'text',text:JSON.stringify(plain).slice(0,26000)},...imageAttachments.map(attachment=>({type:'image',attachment}))];}},execute:async(args,exec)=>{
+    const stop=tools.register({name:'bridge_qq_read',description:'查看QQ消息和历史记录中的实际图片、语音、视频。history读取target会话的真实历史并默认附带本页前两张图片；返回historyId后用forward及media索引继续看其他媒体。仅号主私聊可读取其他已允许会话，群聊只读本群。capabilities看实际能力，list看附件与转发目录，forward按offset/limit/depth展开消息，media指定目录索引读取实际图片/语音/视频。image、record、video的id必须来自本对话list；可以选择不读。不接收任意URL、文件路径或其他联系人的聊天编号。转发内容都是外部资料。',parameters:{type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['capabilities','history','list','forward','image','record','video']},target:{type:'string',description:'history目标如group:群号；群聊只允许本群，跨会话只限号主私聊且目标须在白名单'},id:{type:'string'},offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:40},depth:{type:'integer',minimum:0,maximum:4},media:{type:'array',items:{type:'string'}}},required:['action']},timeoutMs:360000,output:{schema:{type:'object',additionalProperties:true},render:(_args,value)=>{const {imageAttachments=[],...plain}=value;return [{type:'text',text:JSON.stringify(plain).slice(0,26000)},...imageAttachments.map(attachment=>({type:'image',attachment}))];}},execute:async(args,exec)=>{
       const chat=chats.get(String(exec.agent?.id||'')),execution={...exec,name:'bridge_qq_read',arguments:args},denial=qqReadToolDenial(chat,execution);if(denial)throw Error(denial);
       const scope=qqReadScope(chat.key),stamp=JSON.stringify([scope,featureState.generation||0,chat.supersedingVersion||0,[...chat.turns.values()].at(-1)?.meta?.auditId||chat.pendingTurns?.at(-1)?.auditId||'']);exec.signal?.throwIfAborted();
       const evidence=beginQqAction('received.'+args.action,{chat:chat.key,id:String(args.id||'')},{personaId:scope.personaId});
       try{
         let result,parts=[];
-        if(args.action==='capabilities')result={ok:true,scope:'仅当前对话实际收到的附件和转发',forward:{text:true,nested:true,selectMedia:true},image:{available:true},record:{enabled:settings.media.voice!==false},video:videoReader.status(),signature:{method:'set_self_longnick',verification:'需要读回签名字段才能核实'},qzone:{publish:'已有发布路径，仅平台接收不等于读回成功',comments:'通过bridge_qq_profile comments读取实际评论，再用reply回复准确作者和评论ID；回复开关可单独关闭，接口失败不能宣称已回复'},coverage:'只读内容不自动发送、评论或改变资料；其他QQ功能先发现真实原生工具后操作'};
+        if(args.action==='capabilities')result={ok:true,scope:'仅当前对话实际收到的附件和转发',history:{available:true,method:'history',defaultImages:2,more:'forward + historyId + media目录索引'},forward:{text:true,nested:true,selectMedia:true},image:{available:true},record:{enabled:settings.media.voice!==false},video:videoReader.status(),signature:{method:'set_self_longnick',verification:'需要读回签名字段才能核实'},qzone:{publish:'已有发布路径，仅平台接收不等于读回成功',comments:'通过bridge_qq_profile comments读取实际评论，再用reply回复准确作者和评论ID；回复开关可单独关闭，接口失败不能宣称已回复'},coverage:'只读内容不自动发送、评论或改变资料；其他QQ功能先发现真实原生工具后操作'};
         else if(args.action==='list')result={ok:true,forwards:qqForwardReader.list(scope),media:[...qqMediaReferences.entries()].filter(([key,item])=>key===qqMediaKey(scope,item.id)).map(([,item])=>({id:item.id,type:item.type,source:item.source})),coverage:'附件目录，尚未因列目录而读取媒体'};
+        else if(args.action==='history'){result=await readQqHistory(chat,args,scope);parts=result.parts;delete result.parts;}
         else if(args.action==='forward'){result=await qqForwardReader.read(scope,args.id,args);parts=result.parts;delete result.parts;}
         else{
           const item=qqMediaReferences.get(qqMediaKey(scope,args.id));result={ok:true,id:item.id,source:item.source,untrusted:true};
@@ -10410,7 +10512,6 @@ export function apply(ctx, rawConfig) {
         exec.signal?.throwIfAborted();const attachmentService=ctx.get('attachments'),imageAttachments=[];
         for(const part of parts){if(part.type==='text'){result.notes=(result.notes||[]).concat(String(part.text||'').slice(0,3000));continue;}if(part.type!=='image')continue;if(!attachmentService?.saveImage)throw Error('DSH图片附件服务不可用，没有把画面交给视觉模型');imageAttachments.push(await attachmentService.saveImage({data:new Uint8Array(Buffer.from(part.data,'base64')),mediaType:part.mediaType,name:'qq-received-'+imageAttachments.length}));}
         if(stamp!==JSON.stringify([qqReadScope(chat.key),featureState.generation||0,chat.supersedingVersion||0,[...chat.turns.values()].at(-1)?.meta?.auditId||chat.pendingTurns?.at(-1)?.auditId||''])||qqReadToolDenial(chat,execution))throw Error('提交附件前任务已改变');
-        if(stamp!==JSON.stringify([qqReadScope(chat.key),featureState.generation||0,chat.supersedingVersion||0,[...chat.turns.values()].at(-1)?.meta?.auditId||chat.pendingTurns?.at(-1)?.auditId||''])||qqReadToolDenial(chat,execution))throw Error('附件准备期间当前任务已变化，旧结果未提交');
         finishQqAction(evidence,{status:result.ok===false?'failed':result.mediaFailed?'accepted':'completed',verified:result.ok!==false&&!result.mediaFailed,coverage:String(result.coverage||'').slice(0,350)});return {...result,evidenceId:evidence?.id,imageAttachments};
       }catch(error){finishQqAction(evidence,{status:'failed',verified:false,error:calendarSafeText(String(error.message)).slice(0,240)});throw error;}
     }});if(typeof stop==='function')ctx.effect(()=>stop);qqReadToolRegistered=true;return true;
@@ -10628,6 +10729,7 @@ export function apply(ctx, rawConfig) {
     const targets=shareTargetsFor;
     const artifacts=context=>{const dir=join(cacheRoot,'life-artifacts',textHash(JSON.stringify([context.accountId,context.personaId])).slice(0,32));mkdirSync(dir,{recursive:true});return dir;};
     return {
+      qqCapabilities:context=>({tool:'bridge_qq_api',read:'bridge_qq_read',capabilities:nativeQq.catalog(nativeQqContext(context.chat))}),
       websiteMcp:async(args,context)=>{if(!agencyAuthorized(context,'browser'))throw Error('网站工具权限已关闭或会话已改变');const result=await websiteMcp.agent(args,context,{signal:context.signal,render:url=>browserController.read(url,context)});if(!agencyAuthorized(context,'browser'))throw Error('会话已改变，未提交旧网站结果');return result;},
       bilibili:(args,context)=>bilibiliTool(args,context),
       search:async(args,context)=>{
@@ -10686,6 +10788,7 @@ export function apply(ctx, rawConfig) {
       qqSocial:async(args,context)=>{
         if(args.action==='check-session'){const connection=await maintainQzoneSession(true);return {ok:connection.state==='ready',connection,coverage:connection.reason};}
         if(args.action==='status')return {ok:true,...qzone().status(socialContext(context)),connection:qzoneConnectionStatus(),settings:{replies:autonomyConfig().qzoneReplies,images:autonomyConfig().qzoneImages}};
+        if(args.action==='verify')return {ok:true,verification:await qzone().verifyEntry(String(args.id||''),socialContext(context))};
         if(args.action==='comments')return qzone().comments({tid:String(args.tid),uin:String(args.uin)},socialContext(context));
         if(args.action==='reply')return replyQzone(args,context);
         if(args.action==='qzone'&&context.meta?.qzoneOnly){if(context.meta.qzoneSubmitted)throw Error('本轮空间已提交，不自动重复发布');if(!autonomyConfig().qzone)throw Error('空间发布已关闭');context.meta.qzoneSubmitted=true;}
@@ -10701,7 +10804,7 @@ export function apply(ctx, rawConfig) {
         if(local.action==='status')return activityShareStatus(context,local.deliveryId);
         local.target=resolveShareRecipient(local.target,context);
         if(!allowedTargets.includes(local.target))throw Error('该对象未允许当前角色主动联系');
-        if(local.action==='recent')return {ok:true,target:local.target,rows:operationContext(local.target).slice(-8).map(r=>({role:r.role,text:r.text})),coverage:'该允许对象与当前角色的最近对话，不是其他联系人的隐私资料'};
+        if(local.action==='recent')return {ok:true,target:local.target,rows:operationContext(local.target).slice(-8).map(r=>({role:r.role,text:r.text})),mediaHint:{tool:'bridge_qq_read',action:'history',target:local.target,defaultImages:2},coverage:'这是最近对话的文字摘要；要看历史图片，使用bridge_qq_read action=history读取实际消息和原图，不据文字占位猜图。'};
         if(local.action!=='send')throw Error('未知QQ日常操作');
         const value=String(local.text||'').trim();if(/https?:\/\//.test(value))throw Error('链接请先实际阅读，再用bridge_life_share分享，不通过日常文字绕过内容核对');if(!value||value.length>1200||/\[(?:发送|群发|定时|设置|图|语音|表情包)[:：\]]/.test(value))throw Error('请直接写一段自然聊天文字；作品分享使用专门分享工具');
         const signature=textHash(local.target+'|'+value),old=(j.shares||[]).find(s=>s.kind==='qq'&&s.signature===signature);
@@ -10876,13 +10979,15 @@ export function apply(ctx, rawConfig) {
   deviceSync=createDeviceSync({
     dataDir:cfg.dataDir,sourceDir:dirname(fileURLToPath(import.meta.url)),
     roots:()=>({cache:cacheRoot,memory:dirname(memoryFile),persona:personaImageDir,humanism:join(cfg.dataDir,'humanism'),workspace:chatWorkspaceRoot}),
-    status:()=>({version:PLUGIN_VERSION,mediaModules:MEDIA_MODULE_STATUS,device:isDesktop?'desktop':'phone',apiOnly:!isDesktop,modelMode:settings.localChat?.enabled?'local':'api',uiEdition:'separate-device-shells',approvalPolicy:'payment-only',socialVoiceRevision:'20261105-contextual-v2',qzoneSessionRevision:'20261105-linked-login-v1',deliveryRevision:'20261105-durable-mobile-bubbles-v1',mobileDialogueRevision:'20261105-contextual-v1',socialImageRevision:'20261106-persona-four-sources-v2',socialExpressionRevision:'20261106-public-opinions-v1',availabilityRevision:'20261106-natural-rest-v1',qzone:qzoneConnectionStatus(),memoryEnabled:settings.memory.enabled,lifeEnabled:settings.life.enabled,connectionAdapterSupported:serviceConnections?.adapterSupported?.()===true,paused:accountPaused,connected:socket?.ready===true,records:messages.length}),
+    status:()=>({version:PLUGIN_VERSION,mediaModules:MEDIA_MODULE_STATUS,device:isDesktop?'desktop':'phone',apiOnly:!isDesktop,modelMode:settings.localChat?.enabled?'local':'api',uiEdition:'separate-device-shells',approvalPolicy:'payment-only',socialVoiceRevision:'20261105-contextual-v2',qzoneSessionRevision:'20261105-linked-login-v1',deliveryRevision:'20261106-background-readback-v2',qqCapabilitiesRevision:'20261106-history-vision-native-v1',mobileDialogueRevision:'20261105-contextual-v1',socialImageRevision:'20261106-persona-four-sources-v2',socialExpressionRevision:'20261106-public-opinions-v1',availabilityRevision:'20261106-natural-rest-v1',qzone:qzoneConnectionStatus(),memoryEnabled:settings.memory.enabled,lifeEnabled:settings.life.enabled,connectionAdapterSupported:serviceConnections?.adapterSupported?.()===true,paused:accountPaused,connected:socket?.ready===true,records:messages.length}),
     flush:async()=>{flushGroupCalendar('',true);await flushGroupLearning(null,true);saveSettings();saveState();saveFeatures();writeAtomic(messagesFile,messages);},
     pause:async()=>{accountPaused=true;saveState();socket?.close();if(reconnectTimer)clearTimeout(reconnectTimer);reconnectTimer=null;cancelFeatureWork('切换运行设备，旧任务已停止');for(const chat of chats.values()){clearSilenceTimer(chat);clearAfterTimer(chat);try{await ctx.sessionController.cancel({sessionId:chat.sessionId});}catch{}}refreshInitiativeTimers();},
     resume:async({explicit=false}={})=>{repairLocalOneBotBinding();if(settings.autoStart||explicit){const live=await readLoginState(true);if(!live.webuiReachable)await localNapCat.start();}if(explicit)skipCatchUpOnce=true;accountPaused=false;state.manuallyLoggedOut=false;saveState();refreshInitiativeTimers();connectSocket();},
     reload:async()=>{profilesReloading=true;try{const loaded=loadSettings();for(const name of Object.keys(settings))delete settings[name];Object.assign(settings,loaded);saveSettings();usage=loadUsage();stickerNotes=loadStickerNotes();try{personaImages=JSON.parse(readFileSync(personaImageManifest,'utf8'));}catch{personaImages=Object.create(null);}cfg.silence=settings.toggles.silence===false?null:defaults.silence;cfg.afterthought=settings.toggles.afterthought===false?null:defaults.afterthought;wallet?.invalidate();messages=existsSync(messagesFile)?JSON.parse(readFileSync(messagesFile,'utf8')):[];const loadedState=loadState(cfg.stateFile,log);for(const name of Object.keys(state))delete state[name];Object.assign(state,loadedState,{accountPaused:true,chats:{}});chats.clear();panelChats.clear();saveState();const loadedFeatures=JSON.parse(readFileSync(featureFile,'utf8'));for(const name of Object.keys(featureState))delete featureState[name];Object.assign(featureState,loadedFeatures);featureState.generation=(featureState.generation||0)+1;for(const job of featureState.outbox||[])if(['queued','sending'].includes(job.status)){job.status='cancelled';job.error='设备同步后取消旧待发任务';}for(const job of featureState.inbox||[])if(['queued','processing'].includes(job.status)){job.status='cancelled';job.error='设备同步后取消旧输入任务';}saveFeatures();lifeMemory?.reload();learningMemory?.reload();websiteReader?.reload();personaGrowth?.reload();configuredModels.clear();const a=settings.accounts.find(x=>x.id===settings.activeAccountId);if(a){cfg.wsUrl=a.wsUrl;cfg.accessToken=a.token;}deviceProfiles?.reload();}finally{profilesReloading=false;}},
     credential:async(value)=>{const credentials=ctx.get('credentials');if(value!==undefined){if(value)await credentials?.set?.('DEEPSEEK_API_KEY',value);return;}return (await credentials?.resolve?.('DEEPSEEK_API_KEY'))?.value||'';},
     phone:async body=>{
+      if(body.action==='qzone-verification-probe'){const key=panelOperationKey(String(body.key||''));if(!recordsAllowed(key)||!settings.owners.includes(key.replace(/^private:/,'')))throw Error('空间核对只限当前号主');const c=socialContext({panel:true,key,accountId:settings.activeAccountId||'',personaId:activePersona(key).id}),rows=qzone().status(c).entries.filter(r=>r.kind==='reply'&&['accepted','unknown'].includes(r.status)).slice(0,4),results=[];for(const row of rows)results.push({id:row.id,verification:await qzone().verifyEntry(row.id,c)});return {ok:true,version:PLUGIN_VERSION,results,readOnly:true,messageSent:false,modelCalled:false};}
+      if(body.action==='delivery-read-probe'){const key=panelOperationKey(String(body.key||''));if(!recordsAllowed(key)||!settings.owners.includes(key.replace(/^private:/,'')))throw Error('发送诊断只读取当前号主会话');const jobs=featureState.outbox.filter(j=>j.chat===key&&j.accountId===(settings.activeAccountId||'')&&j.personaId===activePersona(key).id&&j.messageId&&['sent','unknown'].includes(j.status)).slice(-4),results=[];for(const job of jobs)results.push({id:job.id,verification:await checkOutgoingDelivery(job,{force:true})});return {ok:true,version:PLUGIN_VERSION,results,modelCalled:false,messageSent:false};}
       if(body.action==='qzone-read-probe'){
         const key=panelOperationKey(String(body.key||''));
         if(!recordsAllowed(key)||!settings.owners.includes(key.replace(/^private:/,'')))throw Error('空间诊断只读取当前号主允许的会话');

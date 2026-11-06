@@ -11,7 +11,7 @@ export function createQqForwardReader({request,readImage,readRecord,readVideo,no
   const references=new Map();
   function remember(scope,id,source={},inline) {
     if(!String(id||'').trim()||String(id).length>200)throw Error('转发编号无效');
-    references.set(scoped(scope,id),{id:String(id),at:now(),...(inline?{inline}:{}),source:{messageId:String(source.messageId||''),parentId:String(source.parentId||''),speakerId:String(source.speakerId||''),time:Number(source.time)||0}});
+    references.set(scoped(scope,id),{id:String(id),at:now(),...(inline?{inline}:{}),source:{sourceChat:String(source.sourceChat||scope.key||''),messageId:String(source.messageId||''),parentId:String(source.parentId||''),speakerId:String(source.speakerId||''),time:Number(source.time)||0}});
     while(references.size>maxReferences)references.delete(references.keys().next().value);
     return String(id);
   }

@@ -1,4 +1,4 @@
-const {feedsComments}=await import(new URL('./qzone-feeds.js'+new URL(import.meta.url).search,import.meta.url));
+const {feedsComments,feedsPost}=await import(new URL('./qzone-feeds.js'+new URL(import.meta.url).search,import.meta.url));
 import {qzoneJson} from './qzone-protocol.js';
 export {qzoneJson} from './qzone-protocol.js';
 import {createHash,randomUUID} from 'node:crypto';
@@ -7,6 +7,9 @@ import {safeImageList} from './social-images.js';
 const user='https://user.qzone.qq.com',api=user+'/proxy/domain/taotao.qzone.qq.com/cgi-bin/';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const clean=(v,n=2000)=>String(v??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim().slice(0,n);
+const normalizedText=v=>String(v??'').replace(/\s+/g,' ').trim();
+// QQ may remove line separators from posted comments in its HTML rendering.
+const renderedReplyText=v=>String(v??'').replace(/\s+/g,'');
 const commentIdPattern=/^\d{1,30}$/,uinPattern=/^\d{5,20}$/,tidPattern=/^[\w-]{1,200}$/;
 const POLL_INTERVAL_MS=60000,POLL_RETRY_MIN_MS=15000,POLL_RETRY_MAX_MS=5*60000;
 const commentListKeys=['commentlist','comment_list','commentList','comments'];
@@ -152,12 +155,13 @@ export function createQzoneService({storage,getAuth,loadImage,fetchImpl=fetch,au
    row.status='sending';save();writeStarted=true;
    const raw=await transport((isReply?'https://h5.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin/':api)+(isReply?'emotion_cgi_re_feeds':'emotion_cgi_publish_v6'),params,auth,c);
    const value=parsed(raw,c),receipt=isReply?{ok:true,status:'accepted',verified:false,itemId:String(value.data?.commentid||value.commentid||''),coverage:'平台已接收评论回复；尚未读回核对'}:parseQzoneResponse(raw);
-   Object.assign(row,{status:'accepted',itemId:receipt.itemId,updatedAt:now(),owner:String(auth.uin)});save();onRecord({...safe(row),stage:'receipt',result:receipt},c);return {...receipt,id:row.id,imageCount:row.imageCount};
+   const verification={state:'pending',recipient:'unknown',read:'unknown'};
+   Object.assign(row,{status:'accepted',itemId:receipt.itemId,updatedAt:now(),owner:String(auth.uin),verification});save();onRecord({...safe(row),stage:'receipt',result:receipt},c);return {...receipt,id:row.id,imageCount:row.imageCount,verification:{...verification}};
   }catch(error){row.status=writeStarted&&error.apiCode===undefined?'unknown':'failed';row.updatedAt=now();row.error=row.status==='unknown'?'空间提交结果待核对，未自动重试':'空间'+(writeStarted?'发布':'图片准备或上传')+'未完成：'+String(error.message).replace(/https?:\/\/\S+/g,'[接口]').slice(0,180);save();onRecord({...safe(row),stage:'failed'},c);throw Object.assign(Error(row.error),{deliveryUnknown:row.status==='unknown'});}
  }
  const feedCache=new Map();
- async function feedPreview(auth,c){
-  const key=scope(c)+'\0'+hash([auth.uin,auth.cookie,c.connectionRevision]),old=feedCache.get(key);if(old&&now()-old.at<(old.error?15000:30000)){if(old.error)throw old.error;return old.value;}
+ async function feedPreview(auth,c,{fresh=false}={}){
+  const key=scope(c)+'\0'+hash([auth.uin,auth.cookie,c.connectionRevision]),old=fresh?null:feedCache.get(key);if(old&&now()-old.at<(old.error?15000:30000)){if(old.error)throw old.error;return old.value;}
   try{
   const raw=await transport(user+'/proxy/domain/ic2.qzone.qq.com/cgi-bin/feeds/feeds3_html_more',{uin:auth.uin,scope:1,view:1,daylist:'',uinlist:'',gid:'',flag:1,filter:'all',applist:'all',refresh:1,pagenum:0,begintime:0,dayspac:7,sidomain:'qzonestyle.gtimg.cn',useutf8:1,outputhtmlfeed:1,format:'json'},auth,c,{post:false});
   const value=parsed(raw,c);check(c);feedCache.set(key,{at:now(),value});return value;
@@ -169,13 +173,69 @@ export function createQzoneService({storage,getAuth,loadImage,fetchImpl=fetch,au
   try{const raw=await transport(api+'emotion_cgi_getdetailv6',{uin:postUin,tid:postTid,hostuin:auth.uin,format:'json',replynum:100},auth,c,{post:false});rows=parseQzoneComments(parsed(raw,c),{tid:postTid,uin:postUin});}
   catch(error){check(c);if(error.code==='QZONE_AUTH_REQUIRED')throw error;detailError=error;}
   if(!rows.length&&postUin===String(auth.uin)){
-   try{const preview=feedsComments(await feedPreview(auth,c),{tid:postTid,uin:postUin});if(preview.matched){rows=preview.rows.map(row=>({...row,owner:postUin,tid:postTid}));source='feeds3-preview';coverage=preview.coverage;}else if(detailError)throw Object.assign(Error('当前动态未出现在空间实际返回的列表中'),{code:'QZONE_POST_NOT_OBSERVED'});}
+   try{const preview=feedsComments(await feedPreview(auth,c),{tid:postTid,uin:postUin,includeReplies:true});if(preview.matched){rows=preview.rows.map(row=>({...row,owner:postUin,tid:postTid}));source='feeds3-preview';coverage=preview.coverage;}else if(detailError)throw Object.assign(Error('当前动态未出现在空间实际返回的列表中'),{code:'QZONE_POST_NOT_OBSERVED'});}
    catch(error){check(c);if(detailError||error.code==='QZONE_AUTH_REQUIRED')throw error;coverage+='；动态流备用读取暂不可用';}
   }else if(detailError)throw detailError;
   rows=rows.map(row=>({...row,scope:scope(c)}));
   // A preview must not erase previously observed detailed replies.
   const same=r=>r.scope===scope(c)&&r.owner===postUin&&r.tid===postTid;
   state.comments=state.comments.filter(r=>!same(r)||source==='feeds3-preview'&&!rows.some(n=>n.id===r.id&&n.uin===r.uin)).concat(rows).slice(-500);save();return {ok:true,source,comments:rows.map(safe),coverage};
+ }
+ function verificationOutcome(state,method,checkedAt,reason,matchedChildId){
+  const result={state,method,checkedAt,reason,recipient:'unknown',read:'unknown'};
+  if(validCommentId(matchedChildId))result.matchedChildId=String(matchedChildId);
+  return result;
+ }
+ function readFailureReason(error){
+  const code=String(error?.code||'');
+  if(code==='QZONE_AUTH_REQUIRED')return'空间登录状态不可用，未读回核对';
+  if(code==='QZONE_THROTTLED')return'空间读回请求被限流，未读回核对';
+  if(code==='QZONE_RESPONSE_INVALID')return'空间读回内容无法验证，未读回核对';
+  if(code==='QZONE_NETWORK')return'空间读回网络请求失败，未读回核对';
+  if(code==='QZONE_ABORTED'||code==='ABORT_ERR')return'空间读回已取消，未读回核对';
+  if(code==='QZONE_API_ERROR'&&Number.isFinite(Number(error?.apiCode)))return`空间接口拒绝读回（code=${Number(error.apiCode)}）`;
+  return'空间读回失败，未读回核对';
+ }
+ async function verifyEntry(id,c){
+  check(c);
+  const key=scope(c),row=state.entries.find(item=>item.scope===key&&item.id===String(id));
+  if(!row)throw Error('空间发布记录不存在或不属于当前账号人设');
+  const method=row.kind==='reply'?'feeds3-reply':'feeds3-post';
+  const remember=result=>{row.verification={...result};save();try{onRecord({...safe(row),stage:'verification',verification:{...result},result:{...result}},c);}catch{}return{...result};};
+  const unavailable=reason=>remember(verificationOutcome('unconfirmed',method,now(),reason));
+  if(!['accepted','unknown'].includes(row.status))return unavailable('仅平台已接收或结果待核对的发布记录可读回');
+  if(row.kind==='publish'){
+   if(!tidPattern.test(String(row.itemId??''))||!validUin(row.owner))return unavailable('缺少可核对的动态 ID 或发布账号，未猜测补全');
+  }else if(row.kind==='reply'){
+   const targetUin=String(row.target?.uin??''),targetTid=String(row.target?.tid??''),commentId=String(row.commentId??''),commentUin=String(row.commentUin??'');
+   if(!validUin(targetUin)||!tidPattern.test(targetTid)||!validCommentId(commentId)||!validUin(commentUin))return unavailable('缺少可核对的评论回复标识，未猜测补全');
+   if(row.status==='unknown'&&!state.comments.some(item=>item.scope===key&&item.owner===targetUin&&item.tid===targetTid&&item.id===commentId&&item.uin===commentUin))return unavailable('未知结果回复的目标评论尚未实际读取，暂不读回');
+  }else return unavailable('未知的空间发布类型，无法读回');
+  let auth;try{auth=await getAuth(c);}catch(error){check(c);return unavailable(readFailureReason(error));}
+  check(c);
+  if(!auth?.cookie||auth.gtk===undefined||auth.gtk===null||!validUin(auth.uin))return unavailable('空间登录状态不可用，未读回核对');
+  const storedOwner=String(row.owner||row.target?.uin||'');
+  if(!validUin(storedOwner)||storedOwner!==String(auth.uin))return unavailable('当前空间登录账号与发布账号不一致，未读回核对');
+  if(row.kind==='reply'&&String(row.target.uin)!==String(auth.uin))return unavailable('评论读回只适用于当前账号自己的动态');
+  try{
+   const value=await feedPreview(auth,c,{fresh:true});check(c);
+   if(row.kind==='publish'){
+    const observed=feedsPost(value,{tid:row.itemId,uin:auth.uin});
+    if(!observed.matched)return unavailable(observed.coverage||'当前空间列表尚未覆盖目标动态');
+    if(normalizedText(observed.text)!==normalizedText(row.text))return unavailable('已找到同一动态，但当前预览未返回匹配的完整正文；不能据此判定发布失败');
+    const expectedImages=Number.isInteger(row.imageCount)&&row.imageCount>=0?row.imageCount:Array.isArray(row.images)?row.images.length:null;
+    if(expectedImages>0){
+     if(!Number.isInteger(observed.imageCount)||observed.imageCount<0)return unavailable('已找到同一动态且正文一致，但无法确认实际配图数量');
+     if(observed.imageCount!==expectedImages)return unavailable(`已找到同一动态且正文一致，但实际配图数量不一致（预期${expectedImages}，实际${observed.imageCount}）`);
+    }
+    return remember(verificationOutcome('observed',method,now(),'已在当前账号动态流读回完整正文'));
+   }
+   const observed=feedsComments(value,{tid:row.target.tid,uin:row.target.uin,includeReplies:true});
+   if(!observed.matched)return unavailable(observed.coverage||'当前空间列表尚未覆盖目标动态');
+   const child=observed.rows.find(item=>Number(item.depth)===1&&String(item.parentId??'')===String(row.commentId)&&String(item.parentUin??'')===String(row.commentUin)&&String(item.uin??'')===String(auth.uin)&&renderedReplyText(item.text)===renderedReplyText(row.text)&&validCommentId(item.id));
+   if(!child)return unavailable('动态已读回，但未找到作者、父评论和完整正文都匹配的楼中楼');
+   return remember(verificationOutcome('observed',method,now(),'已读回当前账号在该评论下的完整回复',child.id));
+  }catch(error){check(c);return unavailable(readFailureReason(error));}
  }
  const polls=new Map(),polling=new Map(),POLL_POST_LIMIT=20,POLL_LOOKBACK_MS=7*86400000;
  function pollError(error){
@@ -219,5 +279,5 @@ export function createQzoneService({storage,getAuth,loadImage,fetchImpl=fetch,au
   const target=state.comments.filter(r=>r.scope===key&&postByThread.has(r.owner+'\0'+r.tid)&&validCommentId(r.id)&&validUin(r.uin)&&r.uin!==r.owner&&r.text&&!state.entries.some(e=>e.scope===key&&e.kind==='reply'&&e.target?.uin===r.owner&&e.target?.tid===r.tid&&e.commentId===r.id&&(!e.commentUin||e.commentUin===r.uin)&&['uploading','sending','accepted','unknown'].includes(e.status))).at(-1);
   return target?{...safe(target),postText:posts.find(p=>p.itemId===target.tid)?.text}:null;
  }
- return {publish,comments,nextReply,status:c=>{const key=scope(c);return{entries:state.entries.filter(r=>r.scope===key).slice(-30).reverse().map(safe),comments:state.comments.filter(r=>r.scope===key).slice(-60).map(safe),poll:pollSnapshot(key)};}};
+ return {publish,comments,nextReply,verifyEntry,status:c=>{const key=scope(c);return{entries:state.entries.filter(r=>r.scope===key).slice(-30).reverse().map(safe),comments:state.comments.filter(r=>r.scope===key).slice(-60).map(safe),poll:pollSnapshot(key)};}};
 }

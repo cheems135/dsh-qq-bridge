@@ -3,7 +3,7 @@ import {describeOperation} from './operation-policy.js';
 import {nativeDesktopDelegation} from './native-desktop.js';
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const OBSERVE=new Set(['observe','windows','snapshot','screenshot','scroll','wait','tabs','switch','back','focus','navigate','launch','capabilities','status','get','list','read','recent','targets','schema']);
-const ADMIN=new Set(['bridge_capabilities','bridge_operation_request','bridge_life_request','bridge_life_checkpoint','bridge_task','bridge_life_finish','bridge_life_adjust','bridge_qq_read','bridge_screen_share','bridge_workspace','bridge_recharge','bridge_game','bridge_storage','bridge_drawing']);
+const ADMIN=new Set(['bridge_capabilities','bridge_operation_request','bridge_life_request','bridge_life_checkpoint','bridge_task','bridge_life_finish','bridge_life_adjust','bridge_qq_read','bridge_qq_api','bridge_screen_share','bridge_workspace','bridge_recharge','bridge_game','bridge_storage','bridge_drawing']);
 export function executableOperation(name,args={}){
  if(name==='bridge_native')return {...args.arguments,toolName:args.name,decisionId:args.decisionId||args.arguments?.decisionId};
  return {...args,toolName:name};
@@ -57,7 +57,7 @@ export function createExecutionRuntime({policy,metaFor,trustedFor=()=>({}),journ
   observe(exec,context,result);const item=entries.get(exec);if(!item||item.delegate||!item.started||item.finished||item.inherited)return;
   item.finished=true;const value=result?.value??result,failed=!!error||result?.isError===true||value?.ok===false;
   const loginGesture=item.args.toolName==='bridge_browser'&&item.trusted.loginPage===true&&['credential','submit'].includes(item.trusted.loginControl)&&!item.trusted.oauthConsent&&['login','privacy'].includes(item.effect);
-  const unsafe=!loginGesture&&!['read','local','input','gesture'].includes(item.effect),queued=value?.queued===true,verified=value?.verified===true||value?.status==='sent'||!!value?.messageId||!!value?.message_id;
+  const unsafe=!loginGesture&&!['read','local','input','gesture'].includes(item.effect),queued=value?.queued===true,verified=value?.verified===true||(item.effect!=='send'&&!value?.deliveryId&&!value?.deliveryIds?.length&&(value?.status==='sent'||!!value?.messageId||!!value?.message_id));
   const status=failed?'unknown':queued?'unknown':unsafe&&!verified?'accepted':'confirmed';
   emit(item,status,{verified:!failed&&(verified||!unsafe),deliveryIds:value?.deliveryIds||[value?.deliveryId].filter(Boolean),error:error?String(error).slice(0,200):'',coverage:queued?'已排队，尚未取得平台确认':String(value?.coverage||'').slice(0,350)});
   if(item.stepId){const life=getLife();try{const deliveryIds=value?.deliveryIds||[value?.deliveryId].filter(Boolean);life?.settleStep(context.meta.lifeJobId,{accountId:context.accountId,personaId:context.personaId},item.stepId,{status:failed||queued||unsafe&&!verified?'unknown':'confirmed',evidence:{operationId:item.id,verified:!failed&&(verified||!unsafe),deliveryId:value?.deliveryId||'',deliveryIds}});for(const id of deliveryIds){const delivery=getDelivery(id);if(delivery)life?.deliveryReceipt(id,delivery);}}catch{}}

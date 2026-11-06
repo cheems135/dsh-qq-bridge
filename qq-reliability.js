@@ -57,6 +57,6 @@ export function qqActionTarget(params={}) {
 }
 
 export function qqActionResult(name,result) {
-  if(/^send_(?:msg|private_msg|group_msg)$/.test(name)){const id=String(result?.message_id??''),valid=/^-?\d{1,24}$/.test(id)&&!/^-?0+$/.test(id);return {status:valid?'confirmed':'unknown',messageId:valid?id:'',verified:valid};}
+  if(/^send_(?:msg|private_msg|group_msg)$/.test(name)){const id=String(result?.message_id??''),valid=/^-?\d{1,24}$/.test(id)&&!/^-?0+$/.test(id);return {status:valid?'accepted':'unknown',messageId:valid?id:'',verified:false,transportAccepted:valid,recipient:'unknown',read:'unknown'};}
   return {status:/^(?:get_|can_|check_)/.test(name)?'completed':'accepted',verified:/^(?:get_|can_|check_)/.test(name)};
 }
