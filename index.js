@@ -1,4 +1,5 @@
 import {signatureAvailable,claimSignature,claimSpaceComment,proactiveDenial,reserveProactive} from './social-pacing.js';
+import {preferredPhotoSource,readPhotoResponse} from './photo-search.js';
 import {qzoneEnabled,dailySpaceOffer,claimSpaceOffer,spaceAccessAllowed,QZONE_DAILY_CUE} from './qzone-policy.js';
 import {connectionVideo} from './video-api.js';
 import {buildVideoPrompt,videoConfig} from './video-prompt.js';
@@ -64,7 +65,7 @@ import {createMusicInput,selectMusicInput} from './music-input.js';
 import {createSingingLibrary} from './singing-library.js';
 import {CORE_CONTINUITY_RULES,personaMood,updateCoreMood} from './companion-core.js';
 import {createWorkspaceLeases} from './workspace-lease.js';
-import {workspaceMode,requestedWorkspaceDefault,WORKSPACE_RULES} from './agent-workspace.js';
+import {workspaceMode,browserWorkspaceMode,requestedWorkspaceDefault,WORKSPACE_RULES} from './agent-workspace.js';
 import {rechargeAmount,nativeRechargeEntry,RECHARGE_RULES} from './recharge-request.js';
 import {mergeSyncJson} from './sync-union.js';
 import {createMemoryHub,MEMORY_HUB_RULES} from './memory-hub.js';
@@ -89,6 +90,7 @@ import {abortScopedLocalTurn,deliveryScopeCurrent,localScopeCurrent as currentSc
 import {companionConfig,conversationStep,conversationHint,expressionHint,initiativeHint,nudgeAllowed,realismConfig,realismHint} from './conversation-care.js';
 import {createQqImageInput,IMAGE_INPUT_REVISION} from './qq-image-input.js';
 import {createBrowserController} from './browser-controller.js';
+import {readBrowserVideo} from './browser-video.js';
 import {createNativeDesktop} from './native-desktop.js';
 import {createDesktopController} from './desktop-controller.js';
 import {createAudioAnalysis} from './audio-analysis.js';
@@ -1755,8 +1757,6 @@ export function apply(ctx, rawConfig) {
         localVoiceDir: '',
         workflows: {
           caption: { file: 'assets/comfyui/caption.json', inputs: { text: { node: '6', field: '提示词' }, image: { node: '9', field: 'image' } }, output: { node: '47', field: 'text' }, timeoutMs: 180000 },
-          chat: { file: 'assets/comfyui/chat-4b.json', inputs: { text: { node: '1', field: '用户消息' }, history: { node: '1', field: '对话历史JSON' } }, output: { node: '1', field: '助手回复' }, timeoutMs: 300000 },
-          'chat-slow': { file: 'assets/comfyui/chat.json', inputs: { text: { node: '1', field: '用户消息' }, history: { node: '1', field: '对话历史JSON' } }, output: { node: '1', field: '助手回复' }, timeoutMs: 900000 },
         },
       },
       qzoneAccess: {enabled:false},
@@ -3680,11 +3680,10 @@ export function apply(ctx, rawConfig) {
       if (seen.has(url)) continue;
       seen.add(url);
       if (/logo|icon|avatar|badge|favicon|sprite|qrcode/i.test(url)) continue;
-      if (PHOTO_BAD_DOMAINS.some((domain) => url.includes(domain))) continue;
       try {
         const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { 'user-agent': USER_AGENT } });
         if (!response.ok) continue;
-        const bytes = Buffer.from(await response.arrayBuffer());
+        const bytes = await readPhotoResponse(response);
         if (bytes.length < 40000 || bytes.length > 12 * 1024 * 1024) continue;
         const mediaType = sniffImage(new Uint8Array(bytes.subarray(0, 16)));
         if (mediaType === null) continue;
@@ -3692,7 +3691,7 @@ export function apply(ctx, rawConfig) {
         if (size === null || size.width < minWidth || size.height < minWidth * 0.6) continue;
         const ratio = size.width / size.height;
         if (ratio < 0.55 || ratio > 2) continue;
-        const good = PHOTO_GOOD_DOMAINS.some((domain) => url.includes(domain));
+        const good = preferredPhotoSource(url);
         scored.push({ bytes, mediaType, width: size.width, height: size.height, score: size.width * size.height * (good ? 2 : 1) });
       } catch {
         /* next */
@@ -5847,7 +5846,8 @@ export function apply(ctx, rawConfig) {
 
   function localPersonaReferenceDiagnostics(chat,plan,reference){
     let entry=null;try{if(typeof personaImageInfo==='function')entry=personaImageInfo(activePersona(chat.key).id);}catch{}
-    return {personaId:activePersona(chat.key).id,configured:!!entry,referenceFile:entry?.file||'',plannedOwnPortrait:plan?.ownPortrait===true,subjectResolution:plan?.subjectResolution||null,prepared:!!reference?.dataUrl,reason:reference?.dataUrl?'reference_prepared':plan?.subjectResolution?.ambiguous?'subject_needs_clarification':!plan?'no_image_plan':!entry?'no_saved_reference':!plan.ownPortrait?'not_selected_by_subject_check':'reference_preparation_failed'};
+    const required=!!reference?.dataUrl||!!entry&&plan?.ownPortrait===true;
+    return {personaId:activePersona(chat.key).id,configured:!!entry,referenceFile:entry?.file||'',plannedOwnPortrait:plan?.ownPortrait===true,required,selectionPolicy:required?'persona-required':!plan||plan.subjectResolution?.ambiguous?'subject-unresolved':'scene-or-other',subjectResolution:plan?.subjectResolution||null,prepared:!!reference?.dataUrl,reason:reference?.dataUrl?'reference_prepared':plan?.subjectResolution?.ambiguous?'subject_needs_clarification':!plan?'no_image_plan':!entry?'no_saved_reference':!plan.ownPortrait?'not_selected_by_subject_check':'reference_preparation_failed'};
   }
 
   let localForegroundAt=0,localInitiative=null;
@@ -8588,7 +8588,7 @@ export function apply(ctx, rawConfig) {
                 backend: settings.localChat?.backend || 'comfyui',
                 modelBaseUrl: settings.localChat?.modelBaseUrl || '',
                 modelId: settings.localChat?.modelId || '',
-                chatWorkflow: settings.localChat?.chatWorkflow || 'chat-4b',
+                chatWorkflow: settings.localChat?.chatWorkflow || '',
                 temperature: Number(settings.localChat?.temperature ?? 0.7),
                 maxTokens: Number(settings.localChat?.maxTokens ?? 512),
                 historyChars: Number(settings.localChat?.historyChars ?? 12000),
@@ -10722,7 +10722,7 @@ export function apply(ctx, rawConfig) {
     const denial=ownerToolDenial(context.chat,context.meta,{owners:settings.owners,paused:accountPaused,stopped,freeTools:true,autonomous:settings.agency.autonomous&&context.meta?.kind==='proactive'&&autonomyConfig().enabled&&context.meta.initiativeAccountId===(settings.activeAccountId||'')&&context.meta.initiativePersonaId===activePersona(context.key).id,supersedingVersion:context.chat.supersedingVersion||0,auditStatus:auditById(context.meta?.auditId)?.status||''});
     return denial===undefined;
   }
-  browserController=createBrowserController({getDataDir:()=>cfg.dataDir,getCacheDir:()=>cacheRoot,getExecutablePath:()=>isDesktop?settings.agency.browserExecutable:'',getHeadless:c=>workspaceMode(settings.agency,c)!=='desktop',authorize:c=>agencyAuthorized(c,'browser'),beforeAction:(args,c,observation)=>{if(c.exec)executionRuntime.begin(c.exec,c,{...args,toolName:'bridge_browser'},observation);}});
+  browserController=createBrowserController({getDataDir:()=>cfg.dataDir,getCacheDir:()=>cacheRoot,getExecutablePath:()=>isDesktop?settings.agency.browserExecutable:'',getHeadless:c=>browserWorkspaceMode(settings.agency,c)!=='desktop',authorize:c=>agencyAuthorized(c,'browser'),beforeAction:(args,c,observation)=>{if(c.exec)executionRuntime.begin(c.exec,c,{...args,toolName:'bridge_browser'},observation);}});
   desktopController=createDesktopController({getCacheDir:()=>cacheRoot,authorize:c=>agencyAuthorized(c,'desktop'),nativeExecute:createNativeDesktop({getTools:()=>ctx.get('tools'),getAgent:id=>ctx.get('agents')?.get(id)}),beforeAction:async(args,c,observed)=>{
     let proof={};const focused=observed.focused,element=args.action==='click'?(observed.controls||[]).find(e=>args.x>=e.x&&args.x<e.x+e.width&&args.y>=e.y&&args.y<e.y+e.height):focused;
     if(element&&!element.password)proof={risk:'safe',label:element.label||observed.title,target:observed.title};
@@ -10759,7 +10759,7 @@ export function apply(ctx, rawConfig) {
   comfyuiRuntime=createComfyRuntime({root:dirname(fileURLToPath(import.meta.url)),getConfig:()=>settings.comfyui});
   gameSessions=createGameSessions({policy:operationPolicy,metaFor:operationMeta,request:operationRequest,open:async(args,c)=>{if(args.url)return browserController.act({action:'navigate',url:args.url},c);c.workspaceLease=workspaceLeases.grant(c,{approved:true});return desktopController.act({action:'launch-shortcut',shortcut:args.shortcut},c);}});
   const mediaCleanupTimer=setInterval(()=>{if(settings.mediaRetention?.enabled!==false&&!stopped)try{mediaCleanup();}catch{log('媒体清理等待下次检查');}},30*60000);ctx.effect(()=>()=>clearInterval(mediaCleanupTimer));
-  bilibiliService=createBilibiliService({directory:join(cfg.dataDir,'bilibili'),loadImage:socialImage,readVideo:(data,c)=>{if(settings.media?.video===false)throw Error('视频识别已关闭');return videoReader.read({...data,streamScope:videoScope(c.key)});},makeQr:createQrDataUrl,authorize:c=>c?.bilibiliMedia===true?!stopped&&!accountPaused&&recordsAllowed(c.key)&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&c.generation===(featureState.generation||0):c?.bilibiliPanel===true?!stopped&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&settings.owners.includes(String(c.key).replace(/^private:/,'')):agencyAuthorized(c)});
+  bilibiliService=createBilibiliService({directory:join(cfg.dataDir,'bilibili'),loadImage:socialImage,watchVideo:isDesktop?((data,c)=>c.bilibiliMedia?null:watchDesktopVideo(data,c)):undefined,readVideo:(data,c)=>{if(settings.media?.video===false)throw Error('视频识别已关闭');return videoReader.read({...data,streamScope:videoScope(c.key)});},makeQr:createQrDataUrl,authorize:c=>c?.bilibiliMedia===true?!stopped&&!accountPaused&&recordsAllowed(c.key)&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&c.generation===(featureState.generation||0):c?.bilibiliPanel===true?!stopped&&c.accountId===(settings.activeAccountId||'')&&c.personaId===activePersona(c.key).id&&settings.owners.includes(String(c.key).replace(/^private:/,'')):agencyAuthorized(c)});
   bilibiliTool=createBilibiliTool({service:bilibiliService,sendQr:(file,context,key)=>{
     if(!agencyAuthorized(context)||context.chat?.isOwner!==true||context.chat.kind!=='private')throw Error('二维码只发到当前号主私聊');
     return queueOutgoing({...context.chat,deliveryKey:'bilibili-qr:'+textHash(key),turnKind:context.meta?.kind||'user',expectedAccountId:context.accountId,expectedPersonaVersion:personaContextIdentity(context.key)},[{type:'image',data:{file:pathToFileURL(file).href}}]);
@@ -10924,6 +10924,15 @@ export function apply(ctx, rawConfig) {
     {id:'expression',label:'自然说话与梗学习',state:settings.learning.enabled!==false?'ready':'disabled',reason:'按对话和人设隔离学习，使用真人样例与梗的语境；不是模型微调'},
   ];}
   function lifeOwnerRoles(){const user=settings.owners.find(id=>privateInitiativeAllowed('private:'+id,settings));if(!user)return [];const key='private:'+user;return [{...calendarRole(activePersona(key).id),ownerKey:key}];}
+  async function watchDesktopVideo(args,context){
+    if(settings.media?.video===false)throw Error('视频识别已关闭');
+    if(context.bilibiliPanel)context={...context,panel:true,reading:true,signature:JSON.stringify(settings.websites)};
+    const scope=videoScope(context.key),previous=featureState.watchSessions?.[context.key];
+    const result=await readBrowserVideo({browser:browserController,args,context,scope,previous,authorize:c=>scope===videoScope(c.key)&&agencyAuthorized(c,'browser')});
+    featureState.watchSessions||={};featureState.watchSessions[context.key]={url:result.url,finalUrl:result.finalUrl,scope,sessionId:result.sessionId,mode:'browser',at:result.cursor,status:result.status,updatedAt:Date.now(),browserExecutable:result.browserExecutable};saveFeatures();
+    websiteReader?.markExperienced?.(learningMeta(context.key),result.url,result.coverage);
+    return result;
+  }
   function lifeServices(){
     const meta=context=>calendarMeta('',context.personaId,context.accountId),jobFor=context=>{if(!context.meta?.lifeJobId)throw Error('当前不是实际日程任务');return lifeExecution.job(context.meta.lifeJobId,meta(context));};
     const targets=shareTargetsFor;
@@ -10944,8 +10953,8 @@ export function apply(ctx, rawConfig) {
         if(args.action==='stop'||args.action==='use'&&args.mode==='internal'){workspaceLeases.revoke(c);c.workspaceLease=null;}
         if(args.action==='use'&&args.mode==='desktop'&&!desktopEnvironmentAllowed(c)){
           const operation={toolName:'bridge_workspace',action:'use',mode:'desktop',target:'Windows desktop current task'},trusted={risk:'permission',target:'Windows desktop current task'};
-          c.workspaceLease=workspaceLeases.grant(c,{approved:true});
-          try{const receipt=operationPolicy.check(operationMeta(c),operation,trusted,{allowMatchingGrant:true,decisionId:args.decisionId});operationPolicy.consume(receipt);c.workspaceLease=workspaceLeases.grant(c,{approved:true});}catch(error){if(error.code==='DECISION_REQUIRED')return operationRequest(c,'bridge_workspace',operation,'这件事需要切到你的电脑桌面操作，可以吗？',trusted);throw error;}
+          c.workspaceLease=workspaceLeases.grant(c,{approved:true,browserVisible:true});
+          try{const receipt=operationPolicy.check(operationMeta(c),operation,trusted,{allowMatchingGrant:true,decisionId:args.decisionId});operationPolicy.consume(receipt);c.workspaceLease=workspaceLeases.grant(c,{approved:true,browserVisible:true});}catch(error){if(error.code==='DECISION_REQUIRED')return operationRequest(c,'bridge_workspace',operation,'这件事需要切到你的电脑桌面操作，可以吗？',trusted);throw error;}
         }
         return {ok:true,default:settings.agency.workspace||'internal',current:c.workspaceLease?.mode||workspaceMode(settings.agency,c),temporaryUntil:c.workspaceLease?.until||0,rules:WORKSPACE_RULES};
       },
@@ -11047,14 +11056,15 @@ export function apply(ctx, rawConfig) {
         const scope=videoScope(context.key),action=String(args.action||'next'),saved=featureState.watchSessions?.[context.key];
         if(['status','pause','resume','seek','stop'].includes(action)){
           if(saved?.mode==='browser'&&saved.scope===scope){
-            if(action==='stop'){delete featureState.watchSessions[context.key];saveFeatures();return {ok:true,status:'stopped',frames:[]};}
-            if(action==='seek')throw Error('当前跟随真实播放器，请在播放器定位，下一次读取会自动跟随；没有伪造网页播放位置');
+            if(action==='stop'){if(await browserController.peekVideo(context))await browserController.act({action:'pause'},context);delete featureState.watchSessions[context.key];saveFeatures();return {ok:true,status:'stopped',frames:[]};}
+            if(action==='seek')await browserController.act({action:'seek',at:args.at},context);
             if(action==='pause'||action==='resume')await browserController.act({action:action==='pause'?'pause':'play'},context);
-            const current=await browserController.peekVideo(context);return {ok:true,status:current?.paused?'paused':'streaming',position:current?playerPosition(current):null,sessionId:saved.sessionId,frames:[]};
+            const current=await browserController.peekVideo(context);if(!current)throw Error('指定浏览器中的视频播放器已关闭，请重新打开视频');return {ok:true,status:current.ended?'ended':current.paused?'paused':'streaming',position:playerPosition(current),sessionId:saved.sessionId,browserExecutable:browserController.status().executablePath,frames:[]};
           }
           return videoReader.control({action,streamScope:scope,sessionId:args.sessionId,at:args.at});
         }
         const url=String(args.url||saved?.url||'').trim();if(!url)throw Error('先提供想看的视频链接');
+        if(isDesktop)return watchDesktopVideo({...args,url},context);
         let at=args.at===undefined?NaN:Number(args.at),position=null,livePlayer=null,positionSource=Number.isFinite(at)?'argument':'decoder-clock';
         try{const player=await browserController.peekVideo(context);if(player&&(player.url===url||String(player.url).match(/BV[\w]{10}/)?.[0]&&String(player.url).match(/BV[\w]{10}/)?.[0]===url.match(/BV[\w]{10}/)?.[0])){const observed=playerPosition(player);if(['fresh','extrapolated','ended'].includes(observed.confidence)&&(Number(player.duration)>0||Number(player.currentTime)>0)){livePlayer=player;at=observed.at;position={...observed,source:'internal-browser'};positionSource='internal-browser';}}}catch{}
         if(livePlayer){

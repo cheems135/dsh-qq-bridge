@@ -64,12 +64,13 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
   function commit(state,flags){const previous=load();storage.write(state);try{onChange(state,flags);}catch(error){storage.write(previous);try{onChange(previous,{rollback:true});}catch{}throw error;}}
   function profile(id){const found=load().profiles.find(p=>p.id===String(id).replace(/^profile:/,''));if(!found)throw Error('所选连接已移除，请重新选择');assertMobileConnection(found.type,apiOnly);return found;}
   function save(input){
-    assertMobileConnection(input.type,apiOnly);
     const state=load(),old=state.profiles.find(p=>p.id===input.id),id=old?.id||'conn_'+randomUUID().replaceAll('-','').slice(0,12);
+    const type=input.type??old?.type,baseUrl=connectionUrl(input.baseUrl??old?.baseUrl);
+    assertMobileConnection(type,apiOnly);
     if(!old&&state.profiles.length>=30)throw Error('最多保存 30 个连接');
-    if(!CONNECTION_TYPES.includes(input.type))throw Error('先识别或手动选择连接类型');
-    if(old?.apiKey&&!input.apiKey&&!input.clearKey&&new URL(connectionUrl(input.baseUrl)).origin!==new URL(old.baseUrl).origin)throw Error('服务所属站点已改变，请重新填写该站点的密钥，旧密钥不会自动发送过去');
-    const p={id,name:String(input.name||'未命名连接').trim().slice(0,80),type:input.type,baseUrl:connectionUrl(input.baseUrl),apiKey:input.clearKey?'':String(input.apiKey||old?.apiKey||'').trim().slice(0,4000),chatModel:String(input.chatModel||'').trim().slice(0,200),imageModel:String(input.imageModel||'').trim().slice(0,200),speechModel:String(input.speechModel||'').trim().slice(0,200),voice:String(input.voice||'').trim().slice(0,120),imageMode:input.imageMode==='edits'?'edits':'generations',models:Array.isArray(input.models)?input.models.filter(x=>typeof x==='string'&&x.length<=200).slice(0,300):[],evidence:Array.isArray(input.evidence)?input.evidence.map(x=>String(x).slice(0,200)).slice(0,8):[]};
+    if(!CONNECTION_TYPES.includes(type))throw Error('先识别或手动选择连接类型');
+    if(old?.apiKey&&!input.apiKey&&!input.clearKey&&new URL(baseUrl).origin!==new URL(old.baseUrl).origin)throw Error('服务所属站点已改变，请重新填写该站点的密钥，旧密钥不会自动发送过去');
+    const p={id,name:String(input.name??old?.name??'未命名连接').trim().slice(0,80),type,baseUrl,apiKey:input.clearKey?'':String(input.apiKey||old?.apiKey||'').trim().slice(0,4000),chatModel:String(input.chatModel??old?.chatModel??'').trim().slice(0,200),imageModel:String(input.imageModel??old?.imageModel??'').trim().slice(0,200),speechModel:String(input.speechModel??old?.speechModel??'').trim().slice(0,200),voice:String(input.voice??old?.voice??'').trim().slice(0,120),imageMode:(input.imageMode??old?.imageMode)==='edits'?'edits':'generations',models:Array.isArray(input.models)?input.models.filter(x=>typeof x==='string'&&x.length<=200).slice(0,300):old?.models||[],evidence:Array.isArray(input.evidence)?input.evidence.map(x=>String(x).slice(0,200)).slice(0,8):old?.evidence||[]};
     p.paths=normalizeConnectionPaths(input.paths===undefined?old?.paths:input.paths,p.baseUrl);
     p.videoModel=String(input.videoModel??old?.videoModel??'').trim().slice(0,200);
     p.videoMode=(input.videoMode||old?.videoMode)==='json'?'json':'multipart';

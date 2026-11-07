@@ -1,0 +1,19 @@
+{
+  "version": "1.59.1",
+  "tests": 748,
+  "failures": 0,
+  "layoutChecks": 128,
+  "desktopStartup": true,
+  "mobileStartup": true,
+  "mobileApiOnly": true,
+  "realBrowserLocalPage": true,
+  "realModelCalls": 0,
+  "realQqMessages": 0,
+  "realPublicPosts": 0,
+  "actualPhoneInstalled": false,
+  "automaticRestart": false,
+  "knownDeferred": [
+    "Live2D emotion variable, retained at user request"
+  ],
+  "staticFilesChecked": 171
+}

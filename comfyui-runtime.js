@@ -15,6 +15,28 @@ const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.gif']);
 const AUDIO_EXTENSIONS = new Set(['.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac']);
 const DEFAULT_MAX_BYTES = {image: 64 * 1024 * 1024, video: 512 * 1024 * 1024, audio: 128 * 1024 * 1024, speech: 128 * 1024 * 1024};
 
+// Only declared port mappings are used; node/model names have no special meaning.
+export function prepareLocalChatImages(workflow, spec, args = {}) {
+  const hasImage = !!args.image || !!args.imageFiles?.length;
+  const toggle=spec.inputs?.imageEnabled;
+  if(!toggle?.node)return workflow;
+  const node=workflow[toggle.node];
+  if(typeof node?.inputs?.[toggle.field]!=='boolean')throw Error('图片开关映射必须指向布尔输入');
+  const binding=spec.inputs?.image;
+  const reaches=(id,target,seen=new Set())=>{
+    id=String(id);if(id===String(target))return true;
+    if(seen.has(id)||!workflow[id])return false;seen.add(id);
+    return Object.values(workflow[id].inputs||{}).some(value=>Array.isArray(value)&&value.length===2&&Number.isInteger(value[1])&&reaches(value[0],target,seen));
+  };
+  const imagePorts=Object.entries(node.inputs).filter(([,value])=>Array.isArray(value)&&value.length===2&&Number.isInteger(value[1])&&binding?.node&&reaches(value[0],binding.node));
+  if(hasImage&&binding?.node&&!imagePorts.length)throw Error('图片开关与图片输入不在同一条连接路径，请检查工作流映射');
+  if(hasImage&&!binding?.node&&!spec.inputs?.images?.node)throw Error('图片开关缺少对应的图片输入映射');
+  setField(workflow,spec.inputs,'imageEnabled',hasImage);
+  // A mapped switch declares the associated image branch optional on text turns.
+  if(!hasImage)for(const [field]of imagePorts)delete node.inputs[field];
+  return workflow;
+}
+
 function apiWorkflow(spec, root) {
   if (spec?.api && typeof spec.api === 'object') return JSON.parse(JSON.stringify(spec.api));
   if (!spec?.file) throw new Error('工作流没有配置 file');
@@ -312,6 +334,7 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
       const workflow = applyLocalGpuPolicy(prepareMediaWorkflow(apiWorkflow(spec, root),{kind:spec.output?.kind,hasImage:!!args.image,recompose:args.recomposeScene===true,outputNode:spec.output?.node}), {memoryProfile:c.memoryProfile || 'workflow',kind,vision:kind==='caption'||!!args.image||!!args.imageFiles?.length,fastDialogue:args.fastDialogue===true});
       job.qwenFamily=Object.values(workflow).some(node=>/^QwenTE_/.test(node.class_type||''));
       qwenMayBeLoaded=qwenMayBeLoaded||job.qwenFamily;
+      if(kind==='chat'||spec.output?.kind==='text')prepareLocalChatImages(workflow,spec,args);
       if(spec.output?.kind==='text'&&spec.output.node){
         const reachable=new Set(),visit=id=>{id=String(id);if(reachable.has(id)||!workflow[id])return;reachable.add(id);for(const value of Object.values(workflow[id].inputs||{}))if(Array.isArray(value)&&value.length===2&&Number.isInteger(value[1]))visit(value[0]);};
         visit(spec.output.node);if(!reachable.size)throw Error('聊天工作流中找不到选定的输出节点');

@@ -33,7 +33,6 @@ import {
   assertModelBaseUrl,
   buildPromptContext,
   budgetConversation,
-  CHAT_WORKFLOWS,
   chatWorkflowSpec,
   defaultLocalConfig,
   mediaWorkflowSpecs,
@@ -85,10 +84,26 @@ function readBody(req, limitMb = 40) {
 }
 
 function loadConfig(file, env) {
+  let raw;
+  try {raw=readFileSync(file,'utf8');}catch(error){
+    if(error.code==='ENOENT')return normalizeLocalConfig(defaultLocalConfig(env));
+    throw Error('无法读取本地配置，已保留原文件；请检查文件权限：'+file);
+  }
+  let saved;
+  try{saved=JSON.parse(raw.replace(/^\uFEFF/,''));}catch{throw Error('本地配置不是有效 JSON，已保留原文件，未切换默认模型：'+file);}
   try {
-    return normalizeLocalConfig(JSON.parse(readFileSync(file, 'utf8')), defaultLocalConfig(env));
-  } catch {
-    return normalizeLocalConfig(defaultLocalConfig(env));
+    // Old imports predate the optional image-switch port. Identify only that
+    // missing mapping; an explicitly empty mapping remains authoritative.
+    for(const entry of saved.workflowLibrary||[]){
+      if(entry.kind!=='chat'||Object.hasOwn(entry.inputs||{},'imageEnabled'))continue;
+      try{
+        const analysis=inspectWorkflow(JSON.parse(readFileSync(resolve(root,entry.file),'utf8')),{},{preferredKind:'chat'});
+        if(analysis.inputs.imageEnabled?.node)entry.inputs={...entry.inputs,imageEnabled:analysis.inputs.imageEnabled};
+      }catch{}
+    }
+    return normalizeLocalConfig(saved, defaultLocalConfig(env));
+  } catch(error) {
+    throw Error('本地配置无效，已保留原文件，未切换默认模型：'+String(error.message).slice(0,240));
   }
 }
 
@@ -285,7 +300,7 @@ export function createLocalModelServer({
       })().finally(()=>{queueCheck=null;});
     }
     if(queueCheck)await queueCheck;
-    return {ok:true,version:'1.58.5',execution:execution.snapshot(),priority:priority.snapshot(),comfyQueue:queueStatus,model:config.backend==='comfyui'?config.chatWorkflow:config.modelId,backend:config.backend};
+    return {ok:true,version:'1.59.1',execution:execution.snapshot(),priority:priority.snapshot(),comfyQueue:queueStatus,model:config.backend==='comfyui'?config.chatWorkflow:config.modelId,backend:config.backend};
   }
 
   async function analyzeWorkflow(body) {
@@ -461,6 +476,9 @@ export function createLocalModelServer({
     // The small VL preset shares one model for seeing and talking. A large
     // model receives observations from the small VL model, loaded in sequence.
     let graph={};try{graph=JSON.parse(readFileSync(resolve(root,spec.file),'utf8'));}catch{}
+    // Imported workflows declare their own image port. Their model choice and
+    // implementation are owned by the workflow, not inferred from node names.
+    if(config.workflowLibrary.some(item=>item.id===config.chatWorkflow&&item.kind==='chat'))return 'native';
     const loaders=Object.values(graph).filter(node=>node.class_type==='QwenTE_ModelLoader');
     return loaders.length && loaders.every(node=>{const size=modelBillions(node.inputs?.['主模型']);return size>0&&size<=8;}) ? 'native' : 'caption';
   }
@@ -571,7 +589,7 @@ export function createLocalModelServer({
     const context = buildPromptContext(rows, {historyChars:fastDialogue&&config.dialoguePriority==='speed'?Math.min(1800,config.historyChars):config.historyChars,stepChars:4000,withSections:true});
     const imageFiles=[...messages].reverse().find(message=>message.role==='user'&&!message._localReceipt)?._localImages||[];
     const spec = chatWorkflowSpec(config, 'chat');
-    if(!spec.inputs?.text?.node)throw new Error('聊天工作流没有识别到用户输入，请重新识别工作流');
+    if(!spec.inputs?.text?.node)throw new Error('请先导入并选择聊天工作流，确认用户输入和文字输出映射');
     const requestId = Date.now() + (fastDialogue&&onText?'-qqs-':'-') + randomUUID();
     const seed = randomInt(0, 0x7fffffff);
     let window=4096;
@@ -643,12 +661,14 @@ export function createLocalModelServer({
         execute: async (args, options) => {
           const selected = resolveMediaWorkflow(config, kind, args.workflowId);
           if(kind==='image')options?.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',reference:{...referenceDiagnostics,prepared:!!personaReference,used:false},workflowSelection:{id:selected.id,name:selected.name,file:selected.file}}});
-          const needsIdentity=kind==='image'&&referenceDiagnostics.configured===true&&referenceDiagnostics.plannedOwnPortrait===true;
+          const needsIdentity=kind==='image'&&(referenceDiagnostics.required===true||referenceDiagnostics.configured===true&&referenceDiagnostics.plannedOwnPortrait===true||!!personaReference);
+          if(kind==='image'&&referenceDiagnostics.configured===true&&!personaReference&&referenceDiagnostics.reason==='no_image_plan')throw Error('当前已有人设图，但这轮没有确认图片主体，未绕过人设图直接提交文生图；请先明确拍当前角色还是其他主体');
           if(needsIdentity&&!personaReference)throw Error('这轮需要已保存的人设参考图，但图片没有准备成功，未提交无参考图的生成任务');
           if(needsIdentity)args={...args,image:personaReference.file,requirePersonaReference:true};
           if(beforeMedia)await beforeMedia(kind,args,options);
           if(kind==='image'&&prepareImage)args=await prepareImage(args,selected,options);
-          if(kind==='image'&&!args.image&&personaReference){
+          if(needsIdentity&&args.image!==personaReference.file)throw Error('人设参考图在提示词准备后发生变化，未提交缺失或替换参考图的任务');
+          if(kind==='image'&&personaReference&&(!args.image||needsIdentity&&!prepareImage)){
             if(!selected.inputs?.image?.node)throw Error('当前图片工作流没有参考图输入映射，不能保持已保存的人设图身份');
             args={...args,image:personaReference.file,prompt:prepareImage?args.prompt:'以提供的人设图保持角色身份、脸部和稳定外观特征，服装、姿势和背景按本轮要求。'+(personaReference.description||'')+'\n本轮画面：'+args.prompt+(personaReference.camera?'\n镜头约束：'+personaReference.camera:'')};
           }
@@ -704,17 +724,18 @@ export function createLocalModelServer({
       let mediaTask=resolveLocalMediaTask(request,{history:mediaHistory});
       if(turnContext.mediaOnly&&['image','speech'].includes(turnContext.mediaOnly.kind))mediaTask={...mediaTask,source:'explicit',ambiguous:false,image:turnContext.mediaOnly.kind==='image',speech:turnContext.mediaOnly.kind==='speech',video:false,effectiveRequest:turnContext.mediaOnly.prompt||request,semanticChecked:true};
       if(!turnContext.mediaOnly&&turnContext.toolsEnabled!==false){try{mediaTask=await planLocalMediaTask(mediaTask,{request,history:mediaHistory,model:modelRunner,signal,onProgress});}catch(error){if(signal?.aborted)throw error;log('local media intent check deferred; explicit requests preserved');}}
-      const subjectNeedsClarification=turnContext.imagePlan?.subjectResolution?.ambiguous||!turnContext.imagePlan?.subjectResolution&&turnContext.personaReferenceDiagnostics?.configured===true&&turnContext.imagePlan&&resolveLocalPhotoSubject(mediaTask.effectiveRequest,{history:mediaHistory}).ambiguous;
+      const missingImagePlan=turnContext.personaReferenceDiagnostics?.configured===true&&!turnContext.imagePlan&&!turnContext.personaImage?.dataUrl&&turnContext.personaReferenceDiagnostics?.reason==='no_image_plan';
+      const subjectNeedsClarification=missingImagePlan||turnContext.imagePlan?.subjectResolution?.ambiguous||!turnContext.imagePlan?.subjectResolution&&turnContext.personaReferenceDiagnostics?.configured===true&&turnContext.imagePlan&&resolveLocalPhotoSubject(mediaTask.effectiveRequest,{history:mediaHistory}).ambiguous;
       if(mediaTask.image&&subjectNeedsClarification){
         mediaTask={...mediaTask,image:false,ambiguous:true,subjectAmbiguous:true};
         prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:'【拍摄主体还未明确】本轮想要一张图片，但当前可靠上下文没有明确是拍你本人、眼前景物还是其他主体。按人设自然确认拍什么，只问这个缺失信息；不调用媒体工具，不默认普通场景图，不说已经开始生成。'});
-        onProgress({phase:'invocation',invocation:{id:randomUUID(),tool:'image',kind:'image',status:'rejected',reference:{...turnContext.personaReferenceDiagnostics,used:false,verified:false,reason:'subject_needs_clarification'},result:{ok:false,needsClarification:true,generated:false}}});
+        onProgress({phase:'invocation',invocation:{id:randomUUID(),tool:'image',kind:'image',status:'rejected',reference:{...turnContext.personaReferenceDiagnostics,used:false,verified:false,reason:missingImagePlan?'image_plan_missing_reference_not_bypassed':'subject_needs_clarification'},result:{ok:false,needsClarification:true,generated:false}}});
       }
       const mediaState={source:mediaTask.source,requested:['image','speech','video'].filter(kind=>mediaTask[kind]),ambiguous:mediaTask.ambiguous};
       onProgress({mediaTask:mediaState});
       if(!mediaTask.subjectAmbiguous&&(mediaTask.source==='followup'||mediaTask.ambiguous))prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:mediaTask.ambiguous?'【本轮重复发送请求】当前可靠上下文无法确认要重复哪份媒体。先按角色口吻简短确认要发什么；没有实际任务时不能说图片正在渲染、语音正在合成或已经发送。':'【本轮媒体续接】当前人类要求重复前面的媒体请求：'+mediaTask.effectiveRequest+'。请实际执行对应工具，不只答应，不把旧助手的口头承诺当作成功回执。'});
       let personaReference=null;
-      if(turnContext.personaImage?.dataUrl&&mediaTask.image){
+      if(turnContext.personaImage?.dataUrl){
         const files=imageDataFiles([{type:'image_url',image_url:{url:turnContext.personaImage.dataUrl}}],env.LOCAL_AI_WORK_DIR||'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
         if(files.directory)tempFiles.push(files.directory);
         if(files[0]){personaReference={file:files[0],description:String(turnContext.personaImage.description||'').slice(0,500),camera:String(turnContext.personaImage.camera||'').slice(0,700),sha256:createHash('sha256').update(readFileSync(files[0])).digest('hex')};sourceImages.add(resolve(files[0]));}
@@ -867,7 +888,7 @@ export function createLocalModelServer({
     return {
       ok: true,
       service: 'local-ai',
-      version: '1.58.5',
+      version: '1.59.1',
       execution:execution.snapshot(),
       config: publicLocalConfig(config),
       chat: {backend: config.backend, model: config.modelId, chatWorkflow: config.chatWorkflow, comfy: comfy.reachable === true, workflows: comfy.workflows || []},
@@ -949,7 +970,7 @@ export function createLocalModelServer({
         config: publicLocalConfig(config),
         options: {
           backends: ['comfyui', 'openai'],
-          chatWorkflows: [...new Set([...config.workflowLibrary.filter(x=>x.kind==='chat').map(x=>x.id),...Object.keys(CHAT_WORKFLOWS)])],
+          chatWorkflows: [...new Set([...config.workflowLibrary.filter(x=>x.kind==='chat').map(x=>x.id),...(config.chatWorkflow?[config.chatWorkflow]:[])])],
           chatWorkflowManagement:true,
           workflowLibrary: mediaWorkflowSpecs(config),
           defaultWorkflows: config.defaultWorkflows,
@@ -985,7 +1006,7 @@ export function createLocalModelServer({
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/models') {
-      const data = [{id: config.modelId, object: 'model', owned_by: 'local-gateway'}];
+      const data = config.modelId ? [{id: config.modelId, object: 'model', owned_by: 'local-gateway'}] : [];
       if (config.voiceEnabled) data.push({id: 'local-tts', object: 'model', owned_by: 'local-'+voiceService().type});
       for (const workflow of config.workflowLibrary||[]) {
         if(data.some(row=>row.id===workflow.id))continue;

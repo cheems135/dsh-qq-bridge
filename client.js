@@ -20,22 +20,27 @@ window.__ModuleLoader__.load({
 
     function Panel() {
       const [height, setHeight] = React.useState(760);
+      const frame = React.useRef(null);
 
       React.useEffect(() => {
         const measure = () => {
           try {
             const viewport = window.visualViewport?.height || window.innerHeight || 900;
-            setHeight(Math.max(280, viewport - 90));
+            const top = Math.max(0, frame.current?.getBoundingClientRect().top || 90);
+            setHeight(Math.max(240, Math.floor(viewport - top - 16)));
           } catch {
             /* keep the default */
           }
         };
         measure();
         window.addEventListener('resize', measure);
-        return () => window.removeEventListener('resize', measure);
+        window.visualViewport?.addEventListener('resize', measure);
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+        if (frame.current?.parentElement) observer?.observe(frame.current.parentElement);
+        return () => {window.removeEventListener('resize', measure);window.visualViewport?.removeEventListener('resize', measure);observer?.disconnect();};
       }, []);
 
-      return h('div', { style: { width: '100%' } }, [
+      return h('div', { style: { width: '100%', maxWidth: '100%', minWidth: 0 } }, [
         h(
           'div',
           { key: 'hint', style: { fontSize: 12, opacity: 0.6, marginBottom: 8 } },
@@ -43,10 +48,14 @@ window.__ModuleLoader__.load({
         ),
         h('iframe', {
           key: 'frame',
+          ref: frame,
           src: '/im-bridge/console',
           title: 'QQ 桥接 · 手机与电脑',
           style: {
             width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            display: 'block',
             height,
             border: '1px solid rgba(128,128,128,.18)',
             borderRadius: 12,

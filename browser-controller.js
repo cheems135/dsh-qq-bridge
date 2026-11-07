@@ -20,7 +20,8 @@ export function sameBrowserDestination(current,target,previous){
 export function createBrowserController({getDataDir,getCacheDir,authorize=()=>true,beforeAction=()=>{},chromium:injected,executablePath,getExecutablePath,headless=true,getHeadless,now=()=>Date.now()}={}){
  const sessions=new Map(),acquiring=new Map();let closed=false;const hidden=c=>getHeadless?getHeadless(c):headless;
  const configuredPath=()=>String(getExecutablePath?getExecutablePath():executablePath||process.env.QQ_BRIDGE_BROWSER_PATH||'').trim();
- const sessionKey=c=>(c.accountId&&c.personaId?JSON.stringify([c.accountId,c.personaId,'desktop-browser']):String(c.scope||c.sessionId||''))+(hidden(c)?'':':desktop');
+ const identityKey=c=>c.accountId&&c.personaId?JSON.stringify([c.accountId,c.personaId,'desktop-browser']):String(c.scope||c.sessionId||'');
+ const sessionKey=c=>identityKey(c)+(hidden(c)?'':':desktop');
  const check=context=>{if(closed||!authorize(context))throw Error('设备操作权限、账号或人设已变化，浏览器任务停止');context.signal?.throwIfAborted();};
  function engine(){return injected||require('./vendor/playwright-core').chromium;}
  async function acquire(context){
@@ -28,9 +29,12 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
   const task=launch(context);acquiring.set(key,task);try{return await task;}finally{acquiring.delete(key);}
  }
  async function launch(context){
-  check(context);const key=sessionKey(context);if(!key)throw Error('缺少浏览器会话身份');
+  check(context);const key=sessionKey(context),identity=identityKey(context);if(!identity)throw Error('缺少浏览器会话身份');
+  // Only one managed context per identity is active across visibility modes.
+  // Persist cookies before the handoff; never touch manually opened browsers.
+  for(const [other,value]of sessions)if(other!==key&&value.identity===identity){await persist(value);await value.context.close();sessions.delete(other);}
   let session=sessions.get(key);if(session){if(session.page.isClosed?.()){sessions.delete(key);session=null;}else if(session.configuredPath!==configuredPath()){await persist(session);await session.context.close();sessions.delete(key);session=null;}else{session.used=now();return session;}}
-  if(sessions.size>=3){const oldest=[...sessions.entries()].sort((a,b)=>a[1].used-b[1].used)[0];await oldest[1].context.close();sessions.delete(oldest[0]);}
+  if(sessions.size>=3){const oldest=[...sessions.entries()].sort((a,b)=>a[1].used-b[1].used)[0];await persist(oldest[1]);await oldest[1].context.close();sessions.delete(oldest[0]);}
   const dir=join(getDataDir(),'browser-profiles',createHash('sha256').update(key).digest('hex').slice(0,24));mkdirSync(dir,{recursive:true});
   const runtime=join(getCacheDir(),'browser','runtime');mkdirSync(runtime,{recursive:true});const browser=engine(),launch={headless:hidden(context),viewport:{width:1280,height:900},acceptDownloads:false,env:{...process.env,TEMP:runtime,TMP:runtime},artifactsDir:runtime,args:['--disable-background-networking','--autoplay-policy=no-user-gesture-required','--disk-cache-dir='+join(runtime,'disk-cache')]};
   if(process.platform!=='win32'){launch.args.push('--disable-dev-shm-usage');if(process.getuid?.()===0)launch.args.push('--no-sandbox');}
@@ -41,8 +45,10 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
   for(const options of [...paths.map(p=>({...launch,executablePath:p})),...(selected?[]:[launch])])try{ctx=await browser.launchPersistentContext(dir,options);break;}catch(e){error=e;}
   if(!ctx)throw Error('没有可启动的浏览器，请安装Chrome/Edge或在设备设置填写浏览器路径；'+String(error?.message||'').split('\n')[0].slice(0,100));
   try{check(context);}catch(e){await ctx.close();throw e;}
-  const profileState=join(dir,'bridge-session.json');if(existsSync(profileState))try{const saved=JSON.parse(readFileSync(profileState,'utf8'));if(Array.isArray(saved.cookies))await ctx.addCookies(saved.cookies);}catch{}
-  const page=ctx.pages().find(p=>p.url()!=='about:blank')||ctx.pages()[0]||await ctx.newPage();session={context:ctx,page,profileState,configuredPath:selected,headless:launch.headless,used:now(),observations:0,captionResponses:[],requestPages:new WeakMap(),navigation:new WeakMap()};sessions.set(key,session);ctx.on?.('close',()=>{if(sessions.get(key)===session)sessions.delete(key);});page.on?.('framenavigated',()=>{void persist(session);});
+  const stateDir=join(getDataDir(),'browser-profiles',createHash('sha256').update(identity).digest('hex').slice(0,24));mkdirSync(stateDir,{recursive:true});
+  const profileState=join(stateDir,'bridge-session.json'),legacyState=join(dir,'bridge-session.json'),savedState=existsSync(profileState)?profileState:legacyState;
+  if(existsSync(savedState))try{const saved=JSON.parse(readFileSync(savedState,'utf8'));if(Array.isArray(saved.cookies))await ctx.addCookies(saved.cookies);}catch{}
+  const page=ctx.pages().find(p=>p.url()!=='about:blank')||ctx.pages()[0]||await ctx.newPage();session={context:ctx,page,identity,profileState,configuredPath:selected,headless:launch.headless,used:now(),observations:0,captionResponses:[],requestPages:new WeakMap(),navigation:new WeakMap()};sessions.set(key,session);ctx.on?.('close',()=>{if(sessions.get(key)===session)sessions.delete(key);});page.on?.('framenavigated',()=>{void persist(session);});
   ctx.on?.('request',r=>session.requestPages.set(r,session.page.url()));
   ctx.on?.('response',r=>{void(async()=>{try{const url=new URL(r.url());if(!/subtitle|caption|\.vtt$|\.srt$|\.bcc$/i.test(url.pathname)||Number(r.headers()['content-length'])>2*1024*1024)return;const bytes=await r.body();if(bytes.length>2*1024*1024)return;session.captionResponses.push({page:session.requestPages.get(r.request())||'',source:url.origin+url.pathname,text:bytes.toString('utf8')});session.captionResponses=session.captionResponses.slice(-6);}catch{}})();});return session;
  }
@@ -95,6 +101,7 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
     if(refresh)session.navigation.set(page,{requested:page.url(),landed:page.url(),at:now()});
    }
    else if(action==='play'||action==='pause'){const node=args.ref?target():page.locator('video,audio').first();if(await node.count()!==1)throw Error('当前页没有可操作的音视频播放器');await node.evaluate(async(e,a)=>{if(!['VIDEO','AUDIO'].includes(e.tagName))throw Error('目标不是实际音视频播放器');if(a==='play')await e.play();else e.pause();},action);}
+   else if(action==='seek'){const at=Number(args.at);if(!Number.isFinite(at)||at<0)throw Error('视频定位需要有效秒数');const node=page.locator('video').first();if(await node.count()!==1)throw Error('当前页没有可定位的视频播放器');await node.evaluate((e,t)=>{e.currentTime=Number.isFinite(e.duration)?Math.min(t,e.duration):t;},at);}
    else if(action==='scroll')await page.mouse.wheel(0,Math.max(-4000,Math.min(4000,Number(args.amount)||650)));
    else if(action==='wait')await new Promise(resolve=>setTimeout(resolve,Math.min(8000,Math.max(100,Number(args.milliseconds)||1200))));
    else if(action==='back')await page.goBack({waitUntil:'domcontentloaded',timeout:20000});

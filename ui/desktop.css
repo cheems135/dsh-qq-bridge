@@ -17,3 +17,58 @@ html[data-device-ui="desktop"] .card{box-shadow:0 3px 18px #233b4b04}
 @media(min-width:1500px){html[data-device-ui="desktop"] .form-two{gap:18px}html[data-device-ui="desktop"] .card{padding:26px 28px}}
 @media(max-width:800px){html[data-device-ui="desktop"] .app{grid-template-columns:190px minmax(0,1fr)}html[data-device-ui="desktop"] .side{width:190px}html[data-device-ui="desktop"] .device-ui-bar{padding:12px 18px 12px 208px}html[data-device-ui="desktop"] .device-ui-title small{display:none}html[data-device-ui="desktop"] .device-preview{margin-left:208px}html[data-device-ui="desktop"] .maininner,html[data-device-ui="desktop"] .topbar{padding-left:20px;padding-right:20px}}
 @media(max-width:600px){html[data-device-ui="desktop"] .app{display:block}html[data-device-ui="desktop"] .side{position:static;width:100%;height:auto}html[data-device-ui="desktop"] .device-ui-bar{padding:12px 14px}html[data-device-ui="desktop"] .device-preview{margin:12px 14px}}
+
+/* Adapt to the settings iframe width, including narrow PC windows. */
+html[data-device-ui="desktop"] .side{width:auto;min-width:0}
+html[data-device-ui="desktop"] .topbar{height:auto;min-height:64px;flex-wrap:wrap;padding-block:12px}
+html[data-device-ui="desktop"] :is(.main,.page-content,.card,.field,.row,.btnrow,.form-two,.persona-layout,.section-heading)>*{min-width:0}
+html[data-device-ui="desktop"] :is(input,select,textarea,iframe,img,video,canvas){max-width:100%}
+html[data-device-ui="desktop"] :is(.row,.btnrow,.section-heading,.companion-toolbar,.top-actions,.pagehead){flex-wrap:wrap}
+html[data-device-ui="desktop"] :is(.card,.muted,summary,.device-ui-title){overflow-wrap:anywhere}
+html[data-device-ui="desktop"] .btnrow>input{min-width:0!important;flex:1 1 150px}
+html[data-device-ui="desktop"] .btnrow>select{min-width:0;flex:0 1 auto}
+html[data-device-ui="desktop"] button{white-space:normal;overflow-wrap:anywhere;max-width:100%}
+html[data-device-ui="desktop"] pre{max-width:100%;overflow:auto}
+html[data-device-ui="desktop"] table{display:block;max-width:100%;overflow-x:auto}
+html[data-device-ui="desktop"] .page-content{container-type:inline-size;container-name:bridge-content}
+html[data-device-ui="desktop"] .schedule-locator{bottom:100px}
+html[data-device-ui="desktop"] .save-dock{max-width:calc(100vw - 160px)}
+@container bridge-content (max-width:640px){
+ .form-two,.persona-layout,[style*="grid-template-columns:1fr 1fr"],[style*="grid-template-columns: 1fr 1fr"]{grid-template-columns:minmax(0,1fr)!important}
+ .persona-preview{position:static}.companion-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .life-hero{padding:22px;gap:18px}.life-avatar{width:75px;height:75px}.life-avatar svg{width:70px;height:65px}.life-copy{max-width:100%}
+ .section-heading{align-items:flex-start}.companion-toolbar .field{flex-basis:100%;max-width:none}
+}
+@media(max-width:1200px) and (min-width:901px){
+ html[data-device-ui="desktop"] .app{grid-template-columns:190px minmax(0,1fr)}
+ html[data-device-ui="desktop"] .device-ui-bar{padding-left:210px}.device-preview{margin-left:210px}
+ html[data-device-ui="desktop"] .maininner,html[data-device-ui="desktop"] .topbar{padding-inline:22px}
+}
+@media(max-width:900px){
+ html[data-device-ui="desktop"] .app{display:block}
+ html[data-device-ui="desktop"] .device-ui-bar{padding:12px 18px}.device-ui-title small{display:none}
+ html[data-device-ui="desktop"] .device-preview{margin:12px 18px}
+ html[data-device-ui="desktop"] .side{position:sticky;top:0;z-index:35;width:100%;height:auto;padding:8px 12px;display:block;overflow:visible;border-right:0;border-bottom:1px solid var(--line)}
+ html[data-device-ui="desktop"] .side :is(.brand,.nav-label,.side-guide,.sidefoot){display:none}
+ html[data-device-ui="desktop"] .nav{display:flex;flex-direction:row;gap:4px;overflow-x:auto;max-width:100%;padding:2px 0 4px;overscroll-behavior-inline:contain}
+ html[data-device-ui="desktop"] .tab{flex:0 0 auto;width:auto;min-width:100px;max-width:180px;padding:10px 12px;flex-direction:row;gap:7px;border-radius:12px}
+ html[data-device-ui="desktop"] .tab>.ui-icon{margin:0;width:17px;height:17px}
+ html[data-device-ui="desktop"] .tab :is(small,.nav-arrow),html[data-device-ui="desktop"] .tab.on::after{display:none}
+ html[data-device-ui="desktop"] .tab b{font-size:12px;white-space:normal}
+ html[data-device-ui="desktop"] .maininner{padding:20px 18px 32px}
+ html[data-device-ui="desktop"] .subnav{flex-wrap:wrap;gap:5px}.subnav button{padding:7px 10px}
+ html[data-device-ui="desktop"] .top-actions{flex:1 1 200px;justify-content:flex-end}
+ html[data-device-ui="desktop"] .search-results{max-width:calc(100vw - 36px)}
+}
+@media(max-width:520px){
+ html[data-device-ui="desktop"] .device-ui-bar{padding:10px 12px;gap:8px;flex-wrap:wrap}
+ html[data-device-ui="desktop"] .device-ui-title b{font-size:15px}.device-ui-switch button{padding-inline:10px}
+ html[data-device-ui="desktop"] .topbar{padding:10px 12px;gap:8px}.maininner{padding:16px 12px 32px}
+ html[data-device-ui="desktop"] .card{padding:16px!important}
+ html[data-device-ui="desktop"] .form-two,html[data-device-ui="desktop"] .companion-grid{grid-template-columns:minmax(0,1fr)}
+ html[data-device-ui="desktop"] .life-hero{flex-wrap:wrap;padding:18px}
+ html[data-device-ui="desktop"] .save-dock{left:12px;right:12px;bottom:12px;max-width:none;gap:8px;padding:8px 10px}
+ html[data-device-ui="desktop"] .save-dock small{min-width:0;max-width:none;flex:1}
+ html[data-device-ui="desktop"] #bridgeIssueButton{bottom:82px}
+ html[data-device-ui="desktop"] .schedule-locator{bottom:138px;right:12px}
+}

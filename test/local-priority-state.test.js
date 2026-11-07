@@ -41,7 +41,7 @@ test('group focus preserves each speaker and cannot turn background image reques
 });
 
 test('an actual priority request cancels in-flight background inference and the next QQ tool turn succeeds',async()=>{
- const dir=mkdtempSync(join(tmpdir(),'local-preempt-')),file=join(dir,'config.json');writeFileSync(file,JSON.stringify({backend:'openai',modelBaseUrl:'http://127.0.0.1:8000/v1',voiceEnabled:false}));
+ const dir=mkdtempSync(join(tmpdir(),'local-preempt-')),file=join(dir,'config.json');writeFileSync(file,JSON.stringify({backend:'openai',modelId:'test-local-model',modelBaseUrl:'http://127.0.0.1:8000/v1',voiceEnabled:false}));
  let started,modelCalls=0,imageCalls=0;const ready=new Promise(r=>started=r);
  const service=createLocalModelServer({configFile:file,env:{LOCAL_AI_WORK_DIR:dir},logger:()=>{},runtime:{queue:async()=>({running:0,pending:0}),release:async()=>({ok:true}),close:()=>{}},model:async({signal})=>{
   modelCalls++;if(modelCalls===1){started();await new Promise((_,reject)=>{if(signal.aborted)return reject(signal.reason);signal.addEventListener('abort',()=>reject(signal.reason),{once:true});});}

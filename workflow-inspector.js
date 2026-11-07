@@ -1,4 +1,4 @@
-const KEYS = ['prompt', 'negativePrompt', 'seed', 'image', 'images', 'system', 'history', 'requestId', 'temperature', 'maxTokens'];
+const KEYS = ['prompt', 'negativePrompt', 'seed', 'image', 'images', 'imageEnabled', 'system', 'history', 'requestId', 'temperature', 'maxTokens'];
 const empty = () => ({node: '', field: ''});
 const linked = value => Array.isArray(value) && value.length === 2 && ['string','number'].includes(typeof value[0]) && Number.isInteger(value[1]);
 const primitiveTypes = new Set(['STRING','INT','FLOAT','BOOLEAN']);
@@ -158,6 +158,7 @@ export function inspectWorkflow(raw, objectInfo = {}, {filename = '',preferredKi
     const label=String(node._meta?.title||'')+' '+node.class_type;
     if(typeof value==='number'&&/^(?:seed|noise_seed|随机种子)$/i.test(field))add('seed',id,field,90,'采样随机种子');
     if(/^(?:image|图片)$/i.test(field)&&typeof value==='string'&&/load|upload|加载|上传/i.test(label)&&!/mask|遮罩|掩码/i.test(label))add('image',id,field,90,'可替换的输入图片');
+    if(preferredKind==='chat'&&typeof value==='boolean'&&/^(?:use_image|enable_image|image_enabled|使用图片|启用图片)$/i.test(field))add('imageEnabled',id,field,100,'随本轮是否有图片切换的布尔输入；请确认其含义');
     if(typeof value!=='string')continue;
     if(node.class_type === 'QwenTE_MultiTurnChat' && field === '当前图片JSON')add('images',id,field,110,'多模态聊天的本轮图片列表');
     if(/^(?:system|system_prompt|系统提示词)$/i.test(field))add('system',id,field,100,'系统提示词');

@@ -77,9 +77,9 @@ export function defaultLocalConfig(env = process.env) {
   return {
     backend: 'comfyui',
     modelBaseUrl: 'http://127.0.0.1:8000/v1',
-    modelId: 'chat-4b',
+    modelId: '',
     comfyUrl: String(env.COMFYUI_URL || 'http://127.0.0.1:8188'),
-    chatWorkflow: env.LOCAL_CHAT_WORKFLOW || 'chat-35b',
+    chatWorkflow: env.LOCAL_CHAT_WORKFLOW || '',
     temperature: 0.7,
     maxTokens: 512,
     historyChars: 12000,
@@ -142,7 +142,7 @@ export function assertModelBaseUrl(value) {
 function normalizeMap(map, name, required) {
   const source = map && typeof map === 'object' ? map : {};
   const out = {};
-  for (const key of ['prompt', 'negativePrompt', 'seed', 'image', 'images', 'system', 'history', 'requestId', 'temperature', 'maxTokens']) {
+  for (const key of ['prompt', 'negativePrompt', 'seed', 'image', 'images', 'imageEnabled', 'system', 'history', 'requestId', 'temperature', 'maxTokens']) {
     const node = String(source[key]?.node || '').trim();
     const field = String(source[key]?.field || '').trim();
     if (required && key === 'prompt' && (!node || !field)) throw new Error(`${name}.inputs.prompt 必须同时填写 node 和 field`);
@@ -257,9 +257,9 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
   let modelId = String(merged.modelId || '').trim();
   const comfyUrl = String(merged.comfyUrl || merged.baseUrl || '').trim();
   if (!isLoopbackUrl(comfyUrl)) throw new Error('ComfyUI 地址只能使用本机回环地址');
-  const chatWorkflow = String(merged.chatWorkflow || 'chat-4b');
+  const chatWorkflow = String(merged.chatWorkflow || '').trim();
   if (backend === 'comfyui') modelId = chatWorkflow;
-  if (!modelId || modelId.length > 200) throw new Error('modelId 不能为空且不能超过 200 字');
+  if ((backend==='openai'&&!modelId) || modelId.length > 200) throw new Error('modelId 不能为空且不能超过 200 字');
   const mediaDir = resolve(String(merged.mediaDir || LOCAL_MEDIA_DEFAULT).replace(/\\/g, '/'));
   const workflows = {
     caption: mergeWorkflow(defaultLocalConfig().workflows.caption, merged.workflows?.caption, 'workflows.caption'),
@@ -267,7 +267,7 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
     video: mergeWorkflow(base.workflows?.video || defaultLocalConfig().workflows.video, merged.workflows?.video, 'workflows.video'),
   };
   const workflowLibrary = normalizeWorkflowLibrary(Object.hasOwn(input, 'workflowLibrary') ? input.workflowLibrary : base.workflowLibrary?.length ? base.workflowLibrary : undefined, workflows);
-  if (!CHAT_WORKFLOWS[chatWorkflow] && !workflowLibrary.some(item=>item.id===chatWorkflow&&item.kind==='chat')) throw new Error('请导入或选择聊天工作流：' + chatWorkflow);
+  if (chatWorkflow && !CHAT_WORKFLOWS[chatWorkflow] && !workflowLibrary.some(item=>item.id===chatWorkflow&&item.kind==='chat')) throw new Error('请导入或选择聊天工作流：' + chatWorkflow);
   if (!workflowLibrary.some(item => item.kind === 'image' && item.id === String(merged.defaultWorkflows?.image || ''))) {
     merged.defaultWorkflows = {...(merged.defaultWorkflows || {}), image: workflowLibrary.find(item => item.kind === 'image')?.id || ''};
   }
@@ -314,6 +314,7 @@ export function bindChatWorkflowContext(spec,args={}){
 
 export function chatWorkflowSpec(config, kind = 'chat') {
   if (kind === 'chat') {
+    if(!config.chatWorkflow)return {file:'',inputs:{},output:{kind:'text',node:'',field:''}};
     const custom = config.workflowLibrary?.find(item=>item.id===config.chatWorkflow&&item.kind==='chat');
     const spec = custom ? {...custom, inputs:{...custom.inputs,text:custom.inputs.prompt},output:{...custom.output,kind:'text'}} : CHAT_WORKFLOWS[config.chatWorkflow];
     if (!spec) throw new Error('未知聊天工作流：' + config.chatWorkflow);

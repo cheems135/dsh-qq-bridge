@@ -66,7 +66,7 @@ export function biliWbi(params,images,seconds){
 }
 const videoRow=row=>({bvid:String(row.bvid||''),title:text(row.title),author:text(row.owner?.name||row.author),duration:row.duration,picture:row.pic||row.cover||'',url:row.bvid?'https://www.bilibili.com/video/'+row.bvid:'',description:text(row.desc||row.description).slice(0,1200)});
 
-export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date.now,authorize=()=>true,loadImage,readVideo}={}){
+export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date.now,authorize=()=>true,loadImage,readVideo,watchVideo}={}){
   const slots=new Map();let closed=false;
   function check(context){if(closed||!authorize(context))throw Error('账号、人设或任务已变化，B站操作停止');context.signal?.throwIfAborted();}
   function slot(context){
@@ -135,6 +135,13 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     return {video,page,language:selected.lan,segments,totalSegments:all.length,partial:segments.length<all.length,coverage:'实际字幕'+(segments.length<all.length?'片段':'文字')+'；未分析画面或音轨，不代表完整观看'};
   }
   async function frames(s,c,bvid,page=1){
+    if(typeof watchVideo==='function'){
+      const sample=await watchVideo({url:'https://www.bilibili.com/video/'+bvid+(page>1?'?p='+page:''),...c.videoOptions},c);check(c);
+      if(sample){
+        if(!sample.frames?.length&&!['paused','ended'].includes(sample.status))throw Error('指定浏览器没有取得实际视频画面');
+        return {...sample,bvid,page,video:{bvid,url:'https://www.bilibili.com/video/'+bvid},resourceAttempts:[]};
+      }
+    }
     if(typeof readVideo!=='function')throw Error('视频抽帧服务尚未接入');
     const video=await info(s,c,bvid),part=video.pages.find(p=>p.page===page);if(!part)throw Error('该视频没有这个分P');
     const response=await api(s,c,'/x/player/wbi/playurl',{bvid,cid:part.cid,qn:32,fnval:0,fnver:0,fourk:0},{signed:true});check(c);
@@ -169,7 +176,7 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     try{const result=await subtitles(s,c,bvid,page);Object.assign(material,result);}catch(error){check(c);material.errors.push(error.message);material.video=await info(s,c,bvid);material.segments=[];}
     try{material.comments=(await comments(s,c,bvid)).comments;}catch(error){check(c);material.errors.push(error.message);material.comments=[];}
     check(c);material.coverage=material.segments.length?'已取得实际字幕与可取得的评论；未分析画面、音轨或完整观看':material.comments.length?'仅视频信息与实际评论；没有取得视频内容':'仅视频信息；没有取得视频内容';
-    if(typeof readVideo==='function')try{const visual=await frames(s,c,bvid,page);Object.assign(material,{frames:visual.frames,duration:visual.duration,audio:visual.audio,audioDecoded:visual.audioDecoded,window:visual.window,status:visual.status,sessionId:visual.sessionId,continuous:visual.continuous,cursor:visual.cursor,observed:visual.observed,resourceAttempts:visual.resourceAttempts});material.coverage=visual.coverage+(material.segments.length?'；另有实际字幕':'');}catch(error){check(c);if(Array.isArray(error.resourceAttempts))material.resourceAttempts=error.resourceAttempts.map(item=>({...item}));material.errors.push('画面未取得：'+String(error.message).slice(0,180));}
+    if(typeof readVideo==='function'||typeof watchVideo==='function')try{const visual=await frames(s,c,bvid,page);Object.assign(material,{frames:visual.frames,duration:visual.duration,audio:visual.audio,audioDecoded:visual.audioDecoded,window:visual.window,status:visual.status,sessionId:visual.sessionId,continuous:visual.continuous,cursor:visual.cursor,observed:visual.observed,resourceAttempts:visual.resourceAttempts,backend:visual.backend,browserExecutable:visual.browserExecutable});material.coverage=visual.coverage+(material.segments.length?'；另有实际字幕':'');}catch(error){check(c);if(Array.isArray(error.resourceAttempts))material.resourceAttempts=error.resourceAttempts.map(item=>({...item}));material.errors.push('画面未取得：'+String(error.message).slice(0,180));}
     if(material.continuous&&material.window){material.subtitleTotal=material.segments.length;material.segments=material.segments.filter(r=>r.start<=material.window.end&&r.end>=material.window.start);material.partial=true;}
     const prior=s.state.history.find(h=>h.bvid===bvid&&h.page===page);
     const row={id:prior?.id||randomUUID(),bvid,page,title:material.video?.title||bvid,url:material.url,at:now(),coverage:material.coverage,subtitleSegments:material.segments.length,comments:material.comments.length};
