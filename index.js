@@ -1124,17 +1124,17 @@ export function apply(ctx, rawConfig) {
       }finally{deadline.close();}
     };
     if(req.method==='GET'){
-      void(async()=>{try{const health=await gateway('/health');const voiceDir=String(health.config?.voiceService?.directory||settings.comfyui?.localVoiceDir||'');jsonResponse(res,200,{ok:true,...health,config:health.config,localChat:{enabled:settings.localChat?.enabled===true,apiComplement:settings.localChat?.apiComplement===true,baseUrl:gatewayBase()},gateway:{reachable:true},status:{reachable:health.chat?.comfy===true,baseUrl:health.config?.comfyUrl||'',workflows:health.chat?.workflows||[]},localVoice:{...health.voice,running:health.voice?.alive===true,exists:!!voiceDir&&existsSync(voiceDir),dir:voiceDir,baseUrl:health.voice?.baseUrl||'',engine:health.voice?.engine||'',device:health.voice?.device||'',state:health.voice?.alive===null?'unknown':health.voice?.alive?'online':'offline'}});}
+      void(async()=>{try{const health=await gateway('/health');const voiceDir=String(health.config?.voiceService?.directory||settings.comfyui?.localVoiceDir||'');jsonResponse(res,200,{ok:true,...health,hostVersion:PLUGIN_VERSION,chatWorkflowManagement:health.capabilities?.chatWorkflowManagement===true,config:health.config,localChat:{enabled:settings.localChat?.enabled===true,apiComplement:settings.localChat?.apiComplement===true,baseUrl:gatewayBase()},gateway:{reachable:true},status:{reachable:health.chat?.comfy===true,baseUrl:health.config?.comfyUrl||'',workflows:health.chat?.workflows||[]},localVoice:{...health.voice,running:health.voice?.alive===true,exists:!!voiceDir&&existsSync(voiceDir),dir:voiceDir,baseUrl:health.voice?.baseUrl||'',engine:health.voice?.engine||'',device:health.voice?.device||'',state:health.voice?.alive===null?'unknown':health.voice?.alive?'online':'offline'}});}
         catch(error){jsonResponse(res,502,{ok:false,error:'本地网关不可用：'+String(error?.message||error).slice(0,240),gateway:{reachable:false}});}})();
       return;
     }
     let raw='';req.on('data',chunk=>{raw+=chunk;if(Buffer.byteLength(raw)>40*1024*1024)req.destroy();});
     req.on('end',()=>{void(async()=>{try{
       const input=JSON.parse(raw||'{}');
-      if(input.action==='inspect-workflow')return jsonResponse(res,200,await gateway('/v1/local/workflow/inspect',{method:'POST',body:{workflow:input.workflow,filename:input.filename,workflowId:input.workflowId}}));
+      if(input.action==='inspect-workflow')return jsonResponse(res,200,await gateway('/v1/local/workflow/inspect',{method:'POST',body:{workflow:input.workflow,filename:input.filename,workflowId:input.workflowId,kind:input.kind}}));
       if(input.action==='import-workflow'){
         const imported=await gateway('/v1/local/workflow/import',{method:'POST',body:input});
-        settings.localChat={...settings.localChat,workflowLibrary:imported.config.workflowLibrary,defaultWorkflows:imported.config.defaultWorkflows};saveSettings();
+        settings.localChat={...settings.localChat,workflowLibrary:imported.config.workflowLibrary,defaultWorkflows:imported.config.defaultWorkflows,backend:imported.config.backend,chatWorkflow:imported.config.chatWorkflow,modelId:imported.config.modelId};saveSettings();
         return jsonResponse(res,200,imported);
       }
       if(input.action==='probe-capabilities')return jsonResponse(res,200,await getLocalCapabilities({vision:true,force:true}));

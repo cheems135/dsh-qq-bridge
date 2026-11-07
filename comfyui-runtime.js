@@ -1,4 +1,5 @@
 import {applyLocalImageFixedPrompts} from './local-image-template.js';
+import {bindChatWorkflowContext} from './local-config.js';
 // ComfyUI runtime: declarative workflow mapping, serial GPU execution, and
 // verified media retrieval. Workflow JSON remains under assets/comfyui.
 import {createHash, randomUUID} from 'node:crypto';
@@ -42,7 +43,8 @@ function readTextOutput(entry, spec) {
   const node = entry?.outputs?.[String(spec.node)];
   if (!node) return '';
   if (spec.kind && spec.kind !== 'text') return '';
-  const raw = node[spec.field || 'text'] ?? node.text ?? node.string;
+  const raw = spec.kind==='text'?node[spec.field||'text']:node[spec.field || 'text'] ?? node.text ?? node.string;
+  if(raw!==undefined&&typeof raw!=='string'&&!(Array.isArray(raw)&&raw.every(x=>typeof x==='string')))return '';
   const text = Array.isArray(raw) ? raw.join('\n') : raw;
   return String(text ?? '').trim();
 }
@@ -170,6 +172,7 @@ async function uploadImage(baseUrl, file, fetchImpl, signal) {
 
 export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
   let chain = Promise.resolve();
+  let qwenMayBeLoaded=false;
   let seq = 0;
   let idleTimer = null;
   let lastUsed = 0;
@@ -296,6 +299,7 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
     if (!c.enabled) throw new Error('ComfyUI 能力在插件设置里已关闭');
     const spec = c.workflows?.[kind];
     if (!spec) throw new Error('没有登记名为 ' + kind + ' 的工作流');
+    if(kind==='chat'||spec.output?.kind==='text')args=bindChatWorkflowContext(spec,args);
     const signal = options.signal;
     if (signal?.aborted) throw abortError();
     const job = {id: 'cm' + (++seq), kind, at: Date.now(), promptId: ''};
@@ -306,6 +310,13 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
     const task = chain.then(async () => {
       if (signal?.aborted) throw abortError();
       const workflow = applyLocalGpuPolicy(prepareMediaWorkflow(apiWorkflow(spec, root),{kind:spec.output?.kind,hasImage:!!args.image,recompose:args.recomposeScene===true,outputNode:spec.output?.node}), {memoryProfile:c.memoryProfile || 'workflow',kind,vision:kind==='caption'||!!args.image||!!args.imageFiles?.length,fastDialogue:args.fastDialogue===true});
+      job.qwenFamily=Object.values(workflow).some(node=>/^QwenTE_/.test(node.class_type||''));
+      qwenMayBeLoaded=qwenMayBeLoaded||job.qwenFamily;
+      if(spec.output?.kind==='text'&&spec.output.node){
+        const reachable=new Set(),visit=id=>{id=String(id);if(reachable.has(id)||!workflow[id])return;reachable.add(id);for(const value of Object.values(workflow[id].inputs||{}))if(Array.isArray(value)&&value.length===2&&Number.isInteger(value[1]))visit(value[0]);};
+        visit(spec.output.node);if(!reachable.size)throw Error('聊天工作流中找不到选定的输出节点');
+        for(const id of Object.keys(workflow))if(!reachable.has(id))delete workflow[id];
+      }
       if(args.requirePersonaReference===true){
         const binding=spec.inputs?.image;
         if(!args.image||!binding?.node||!binding.field||!Object.hasOwn(workflow[binding.node]?.inputs||{},binding.field))throw Error('人设参考图或输入映射缺失，未提交纯文字生图');
@@ -344,7 +355,7 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
         const mapped=Object.fromEntries(Object.entries(spec.inputs||{}).map(([key,binding])=>[key,{node:String(binding.node||''),field:binding.field,value:workflow[binding.node]?.inputs?.[binding.field]}]));
         options.onInvocation?.({status:'submitted',kind:spec.output.kind,workflow:kind,workflowDetails:describeLocalWorkflow(workflow,spec,kind),submittedArguments:{prompt:args.prompt,negativePrompt:args.negativePrompt||'',fixedPrompts:args.fixedPrompts||[],seed:args.seed,referenceImage:!!args.image,sceneRecompose:args.recomposeScene===true,submittedNodes:mapped}});
       }
-      const stream=args.streamText&&options.onText&&(await streamStatus()).available?{requestId:args.requestId,onText:options.onText}:{};
+      const stream=args.streamText&&spec.inputs?.requestId?.node&&options.onText&&(await streamStatus()).available?{requestId:args.requestId,onText:options.onText}:{};
       const submitted = await callJson(c.baseUrl, '/prompt', {
         method: 'POST',
         headers: {'content-type': 'application/json'},
@@ -363,8 +374,8 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
         }
         throw error;
       }
-      const mediaDir = resolve(String(c.mediaDir || process.env.LOCAL_MEDIA_DIR || resolve(process.cwd(), 'outputs', 'local-media')));
-      const mediaEntry = ['image','video'].includes(spec.output?.kind) && spec.output?.node ? {outputs:{[spec.output.node]:entry.outputs?.[spec.output.node]||{}}} : entry;
+      const mediaDir = resolve(String(c.mediaDir || process.env.LOCAL_MEDIA_DIR || 'D:/CodexData/workspaces/2026-11-04/qq/outputs/local-media'));
+      const mediaEntry = ['image','video','text'].includes(spec.output?.kind) && spec.output?.node ? {outputs:{[spec.output.node]:entry.outputs?.[spec.output.node]||{}}} : entry;
       const {media, collected} = await downloadMedia(c.baseUrl, mediaEntry, mediaDir, submitted.prompt_id, signal, spec.maxBytes || c.maxBytes);
       const expectedKind = spec.output?.kind || (['image', 'video'].includes(kind) ? kind : '');
       const selectedMedia = ['image', 'video'].includes(expectedKind) ? media.filter(item => item.kind === expectedKind) : media;
@@ -372,7 +383,8 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
       if (['image', 'video'].includes(expectedKind) && !selectedMedia.length) {
         throw new Error(`工作流没有返回 ${expectedKind === 'image' ? '图片' : '视频'} 产物，未将预览图当作最终结果`);
       }
-      const text = readTextOutput(entry, spec.output) || collected.text[0] || '';
+      const text = readTextOutput(entry, spec.output) || (spec.output?.kind==='text'?'':collected.text[0]) || '';
+      if(spec.output?.kind==='text'&&!text)throw Error('所选聊天输出节点 '+spec.output.node+' 没有回传文本字段 '+spec.output.field+'；请核对输出映射或添加文本显示节点，未把其他节点内容当作回答');
       if (!text && !media.length) throw new Error('ComfyUI 已结束，但没有返回文字、图片、视频或音频产物');
       return {
         ok: true,
@@ -416,7 +428,11 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
     try {
       const queue=await callJson(c.baseUrl,'/queue',{},signal);
       if (queue?.queue_running?.length || queue?.queue_pending?.length) return {ok:false,freed:false,busy:true,error:'ComfyUI 有正在运行或排队的任务，保留任务及模型，稍后再释放'};
-      const workflow = c.unloadWorkflow || UNLOAD_WORKFLOW;
+      let genericChat=false;
+      if(c.workflows?.chat?.output?.kind==='text')try{genericChat=!Object.values(apiWorkflow(c.workflows.chat,root)).some(node=>/^QwenTE_/.test(node.class_type||''));}catch{}
+      const sinceUnload=recent.slice(recent.map(x=>x.kind).lastIndexOf('unload')+1);
+      const workflow = c.unloadWorkflow || (genericChat&&!qwenMayBeLoaded&&!sinceUnload.some(row=>row.qwenFamily)?null:UNLOAD_WORKFLOW);
+      if(workflow){
       const submitted = await callJson(c.baseUrl, '/prompt', {
         method: 'POST',
         headers: {'content-type': 'application/json'},
@@ -424,9 +440,11 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
       }, signal);
       if (!submitted?.prompt_id) throw new Error('ComfyUI 未确认模型卸载任务，未将显存视为已释放');
       await waitFor(c.baseUrl, submitted.prompt_id, 30000, signal);
+      }
       const after=await callJson(c.baseUrl,'/queue',{},signal);
       if (after?.queue_running?.length || after?.queue_pending?.length) return {ok:false,freed:false,busy:true,error:'卸载后有新的 ComfyUI 任务，保留运行，暂不叠加其他 GPU 模型'};
       await callJson(c.baseUrl, '/free', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({unload_models: true, free_memory: true})}, signal);
+      qwenMayBeLoaded=false;
       recent.push({id: 'unload', kind: 'unload', ok: true, at: Date.now()});
       return {ok: true, freed: true};
     } catch (error) {

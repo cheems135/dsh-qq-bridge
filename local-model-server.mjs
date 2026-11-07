@@ -285,7 +285,7 @@ export function createLocalModelServer({
       })().finally(()=>{queueCheck=null;});
     }
     if(queueCheck)await queueCheck;
-    return {ok:true,version:'1.52.1',execution:execution.snapshot(),priority:priority.snapshot(),comfyQueue:queueStatus,model:config.backend==='comfyui'?config.chatWorkflow:config.modelId,backend:config.backend};
+    return {ok:true,version:'1.58.5',execution:execution.snapshot(),priority:priority.snapshot(),comfyQueue:queueStatus,model:config.backend==='comfyui'?config.chatWorkflow:config.modelId,backend:config.backend};
   }
 
   async function analyzeWorkflow(body) {
@@ -300,15 +300,15 @@ export function createLocalModelServer({
     if (typeof raw === 'string') { try {raw = JSON.parse(raw.replace(/^\uFEFF/,''));} catch {throw new Error('请选择有效的 JSON 工作流文件');} }
     const ui = Array.isArray(raw?.nodes) || Array.isArray(raw?.workflow?.nodes);
     let objectInfo = {};
-    if (ui) {
+    if (ui || body.kind==='chat') {
       if (!nodeInfoCache || nodeInfoCache.url!==config.comfyUrl || Date.now()-nodeInfoCache.at>120000) {
-        const response = await fetchImpl(config.comfyUrl.replace(/\/+$/,'')+'/object_info',{signal:AbortSignal.timeout(20000)});
+        try{const response = await fetchImpl(config.comfyUrl.replace(/\/+$/,'')+'/object_info',{signal:AbortSignal.timeout(20000)});
         if (!response.ok) throw new Error('读取 ComfyUI 节点定义失败，请确认 ComfyUI 正在运行');
-        nodeInfoCache = {url:config.comfyUrl,at:Date.now(),data:await response.json()};
+        nodeInfoCache = {url:config.comfyUrl,at:Date.now(),data:await response.json()};}catch(error){if(ui)throw error;nodeInfoCache={url:config.comfyUrl,at:Date.now(),data:{}};}
       }
       objectInfo = nodeInfoCache.data;
     }
-    const result = inspectWorkflow(raw,objectInfo,{filename});
+    const result = inspectWorkflow(raw,objectInfo,{filename,preferredKind:body.kind});
     for (const [id,item] of inspections) if(Date.now()-item.at>15*60000)inspections.delete(id);
     while(inspections.size>=8)inspections.delete(inspections.keys().next().value);
     const token=randomUUID(); inspections.set(token,{...result,at:Date.now(),workflowId:body.workflowId||''});
@@ -323,7 +323,8 @@ export function createLocalModelServer({
     const kind=String(body.kind||inspected.kind),inputs=body.inputs||inspected.inputs;
     const output=body.output||inspected.outputs.filter(item=>item.kind===kind)[0];
     if(!['image','video','chat'].includes(kind)||!output||output.kind!==kind)throw new Error('请选择正确的生成类型与输出节点');
-    if(!inspected.outputs.some(item=>item.node===output.node&&item.field===output.field&&item.kind===kind))throw new Error('所选输出不在识别结果中');
+    const manual=kind==='chat'&&output.manual===true&&Object.hasOwn(inspected.api,String(output.node))&&/^[\p{L}\p{N}_ .-]{1,80}$/u.test(String(output.field))&&!['__proto__','constructor','prototype'].includes(output.field);
+    if(!manual&&!inspected.outputs.some(item=>item.node===output.node&&item.field===output.field&&item.kind===kind))throw new Error('所选输出不在识别结果中');
     const selectedNodes = new Set();
     const visit = id=>{id=String(id);if(selectedNodes.has(id)||!inspected.api[id])return;selectedNodes.add(id);for(const value of Object.values(inspected.api[id].inputs))if(Array.isArray(value)&&value.length===2&&Number.isInteger(value[1]))visit(value[0]);};
     visit(output.node);
@@ -342,7 +343,7 @@ export function createLocalModelServer({
     const autoDetection={format:inspected.format,candidates:inspected.candidates,outputs:inspected.outputs,warnings:inspected.warnings};
     const entry={id,name:String(body.name||inspected.name),kind,description:String(body.description||''),file,inputs,output:{...output,kind:kind==='chat'?'text':kind},timeoutMs:600000,autoDetection};
     const library=config.workflowLibrary.filter(item=>item.id!==id).concat(entry);
-    try{const next=normalizeLocalConfig({workflowLibrary:library},config);saveConfig(configPath,next);config=next;}catch(error){try{rmSync(file);}catch{}throw error;}
+    try{const next=normalizeLocalConfig({workflowLibrary:library,...(body.activateChat===true&&kind==='chat'?{backend:'comfyui',chatWorkflow:id}:{})},config);saveConfig(configPath,next);config=next;}catch(error){try{rmSync(file);}catch{}throw error;}
     inspections.delete(String(body.token));
     return {ok:true,entry:config.workflowLibrary.find(item=>item.id===id),config:publicLocalConfig(config)};
   }
@@ -866,12 +867,13 @@ export function createLocalModelServer({
     return {
       ok: true,
       service: 'local-ai',
-      version: '1.58.3',
+      version: '1.58.5',
       execution:execution.snapshot(),
       config: publicLocalConfig(config),
       chat: {backend: config.backend, model: config.modelId, chatWorkflow: config.chatWorkflow, comfy: comfy.reachable === true, workflows: comfy.workflows || []},
       voice: {enabled: config.voiceEnabled, engine: voiceService().type, baseUrl:voiceService().baseUrl, device:voiceService().device, directory:voiceService().directory, statusPath:voiceService().statusPath, alive: config.voiceEnabled ? await voiceAlive() : false},
       capabilities: {
+        chatWorkflowManagement:true,
         detection:await capabilityDetector.snapshot(),
         streaming: {enabled:config.streamDialogue,available:config.backend==='comfyui'?(await runtime.streamStatus?.())?.available===true:null,backend:config.backend},
         speech: config.voiceEnabled,
@@ -947,7 +949,8 @@ export function createLocalModelServer({
         config: publicLocalConfig(config),
         options: {
           backends: ['comfyui', 'openai'],
-          chatWorkflows: Object.keys(CHAT_WORKFLOWS),
+          chatWorkflows: [...new Set([...config.workflowLibrary.filter(x=>x.kind==='chat').map(x=>x.id),...Object.keys(CHAT_WORKFLOWS)])],
+          chatWorkflowManagement:true,
           workflowLibrary: mediaWorkflowSpecs(config),
           defaultWorkflows: config.defaultWorkflows,
           imageConfigured: mediaWorkflowSpecs(config).some(item => item.kind === 'image'),
@@ -984,7 +987,8 @@ export function createLocalModelServer({
     if (req.method === 'GET' && url.pathname === '/v1/models') {
       const data = [{id: config.modelId, object: 'model', owned_by: 'local-gateway'}];
       if (config.voiceEnabled) data.push({id: 'local-tts', object: 'model', owned_by: 'local-'+voiceService().type});
-      for (const workflow of mediaWorkflowSpecs(config)) {
+      for (const workflow of config.workflowLibrary||[]) {
+        if(data.some(row=>row.id===workflow.id))continue;
         data.push({id: workflow.id, object: 'model', owned_by: 'local-comfyui', name: workflow.name, kind: workflow.kind});
       }
       sendJson(res, 200, {object: 'list', data});

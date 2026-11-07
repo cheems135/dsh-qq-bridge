@@ -1318,8 +1318,8 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
   var localModels = [];
 
   function localChatOptions(selected) {
-    var entries = [{id:'chat-4b',name:'预设 4B'},{id:'chat-35b',name:'预设 35B-A3B'},{id:'chat-27b',name:'预设 27B'}]
-      .concat((localWorkflowDraft || []).filter(function(x){return x.kind==='chat';}));
+    var custom=(localWorkflowDraft||[]).filter(function(x){return x.kind==='chat';});
+    var entries=custom.concat([{id:'chat-4b',name:'预设 4B'},{id:'chat-35b',name:'预设 35B-A3B'},{id:'chat-27b',name:'预设 27B'}].filter(function(x){return !custom.some(function(c){return c.id===x.id;});}));
     if(selected && !entries.some(function(x){return x.id===selected;})) entries.push({id:selected,name:selected});
     return entries.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===selected?' selected':'')+'>'+esc(x.name||x.id)+'</option>';}).join('');
   }
@@ -1332,6 +1332,16 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       return '<option value="'+esc(candidate)+'"'+(candidate===value?' selected':'')+'>'+esc(x.label||x.field)+(x.reason?' · '+esc(x.reason):'')+'</option>';
     }).join('')+'</select>';
   }
+  function localImportOutputs(a,kind) {
+    var outputs=(a.outputs||[]).filter(function(x){return x.kind===kind;});
+    if(kind==='chat')outputs=outputs.concat((a.manualOutputs||[]).filter(function(x){return !outputs.some(function(o){return o.node===x.node&&o.field===x.field;});}));
+    return outputs;
+  }
+  async function applyLocalChatWorkflow(id) {
+    var config=Object.assign({},captureLocalForm(),{backend:'comfyui',chatWorkflow:id}),result=await localPost({action:'save',gatewayUrl:$('localGatewayUrl').value.trim(),config:config});
+    if(result.config?.chatWorkflow!==id)throw Error('网关未确认选中的聊天工作流，请检查运行版本');
+    localConfigDraft=null;localDraftEditing=false;await localRefresh();renderPane();toast('已用于本地聊天，下一轮按所选工作流执行');
+  }
   function localImportMarkup() {
     var s=localImportState;
     var out='<div id="localWorkflowDrop" class="banner" style="margin:14px 0"><b>导入工作流，自动识别节点</b><p>选择或拖入 ComfyUI JSON 文件，普通工作流和 API 格式都可以。普通工作流需要连接 ComfyUI 读取节点定义。</p><input id="localWorkflowFile" type="file" accept=".json,application/json"></div>';
@@ -1340,7 +1350,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     if(s.busy)return out+'<p role="status">正在读取工作流并识别节点…</p></div>';
     if(s.error)return out+'<p role="alert">'+esc(s.error)+'</p><button id="localImportCancel">关闭</button></div>';
     var a=s.analysis;
-    out+='<h3>确认导入</h3><div class="form-two"><label class="field">名称<input id="localImportName" value="'+esc(s.name)+'"></label><label class="field">类型<select id="localImportKind">'+['image','video','chat'].filter(function(kind){return a.outputs.some(function(x){return x.kind===kind;});}).map(function(kind){return '<option value="'+kind+'"'+(s.kind===kind?' selected':'')+'>'+({image:'图片',video:'视频',chat:'聊天模型'})[kind]+'</option>';}).join('')+'</select></label></div>';
+    out+='<h3>确认导入</h3><div class="form-two"><label class="field">名称<input id="localImportName" value="'+esc(s.name)+'"></label><label class="field">类型<select id="localImportKind">'+['image','video','chat'].filter(function(kind){return localImportOutputs(a,kind).length>0;}).map(function(kind){return '<option value="'+kind+'"'+(s.kind===kind?' selected':'')+'>'+({image:'图片',video:'视频',chat:'聊天模型'})[kind]+'</option>';}).join('')+'</select></label></div>';
     out+='<label class="field">用途（选填，帮助模型选择）<input id="localImportDescription" value="'+esc(s.description||'')+'" placeholder="例如：水彩插画、角色自拍、图生视频"></label>';
     (a.errors||[]).forEach(function(x){out+='<p role="alert">'+esc(x)+'</p>';});
     (a.warnings||[]).forEach(function(x){out+='<p class="muted">'+esc(x)+'</p>';});
@@ -1350,7 +1360,8 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       out+='<label class="field">'+pair[1]+localCandidateSelect(key,s.inputs[key],a.candidates[key],'data-import-input="'+key+'"')+'</label>';
     });
     var selected=s.output?JSON.stringify(s.output):'';
-    out+='<label class="field">返回哪个结果<select id="localImportOutput"><option value="">请选择输出结果</option>'+a.outputs.filter(function(x){return x.kind===s.kind;}).map(function(x){var v=JSON.stringify(x);return '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(x.label)+'</option>';}).join('')+'</select></label>';
+    out+='<label class="field">返回哪个结果<select id="localImportOutput"><option value="">请选择输出结果</option>'+localImportOutputs(a,s.kind).map(function(x){var v=JSON.stringify(x);return '<option value="'+esc(v)+'"'+(v===selected?' selected':'')+'>'+esc(x.label)+'</option>';}).join('')+'</select></label>';
+    if(s.kind==='chat')out+='<label class="field">文本回执字段<input id="localImportTextField" value="'+esc(s.output?.field||'text')+'"><small class="muted">填写实际回传文本的字段，如 text、string、助手回复。自动识别不准确时，可手动选择节点并修改字段。</small></label><label class="check-field"><input id="localImportActivateChat" type="checkbox"'+(s.activateChat?' checked':'')+'>导入后用于本地聊天</label>';
     out+='<div class="btnrow"><button class="primary" id="localImportConfirm"'+((a.errors||[]).length||!s.inputs.prompt?.node||!s.output?' disabled':'')+'>导入并保存</button><button id="localImportCancel">取消</button></div></div>';
     return out;
   }
@@ -1360,19 +1371,21 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     if($('localImportDescription'))s.description=$('localImportDescription').value.trim();
     document.querySelectorAll('[data-import-input]').forEach(function(el){s.inputs[el.dataset.importInput]=el.value?JSON.parse(el.value):{node:'',field:''};});
     if($('localImportOutput'))s.output=$('localImportOutput').value?JSON.parse($('localImportOutput').value):null;
+    if(s.kind==='chat'&&s.output&&$('localImportTextField')){var field=$('localImportTextField').value.trim();if(field!==s.output.field)s.output={...s.output,field:field,manual:true};}
+    if($('localImportActivateChat'))s.activateChat=$('localImportActivateChat').checked;
   }
   function analyzeLocalWorkflow(payload) {
     captureLocalForm();localDraftEditing=true;
     localImportState={busy:true};renderPane();
     localPost(Object.assign({action:'inspect-workflow'},payload)).then(function(result){
       var a=result.analysis,outputs=a.outputs.filter(function(x){return x.kind===a.kind;});
-      localImportState={token:result.token,analysis:a,name:a.name,kind:a.kind,inputs:a.inputs,output:outputs.length===1?outputs[0]:null,description:''};
+      localImportState={token:result.token,analysis:a,name:a.name,kind:a.kind,inputs:a.inputs,output:outputs.length===1?outputs[0]:null,description:'',activateChat:payload.kind==='chat'};
       renderPane();
     }).catch(function(error){localImportState={error:error.message};renderPane();});
   }
-  function readLocalWorkflow(file) {
-    if(!file)return;if(file.size>20*1024*1024){toast('工作流超过 20MB，请精简后再导入');return;}
-    file.text().then(function(raw){analyzeLocalWorkflow({workflow:raw,filename:file.name});}).catch(function(error){toast('读取文件失败：'+error.message);});
+  function readLocalWorkflow(file,kind) {
+    if(!file)return;if(kind==='chat'&&localGateway?.chatWorkflowManagement!==true){toast('聊天工作流自由导入需要新版后台；请先自行重启 DSH 和本地网关，原设置会保留。');return;}if(file.size>20*1024*1024){toast('工作流超过 20MB，请精简后再导入');return;}
+    file.text().then(function(raw){analyzeLocalWorkflow({workflow:raw,filename:file.name,kind:kind});}).catch(function(error){toast('读取文件失败：'+error.message);});
   }
 
   function localLibrary() {
@@ -1482,15 +1495,16 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     draft.forEach(function (item, index) {
       out += '<div class="card" data-local-workflow="' + index + '" style="margin:12px 0;background:var(--bg)"><label class="field">名称<input data-wf="name" value="' + esc(item.name || '') + '" maxlength="100"></label>' +
         '<p class="muted">'+({image:'图片工作流',video:'视频工作流',chat:'聊天模型工作流'})[item.kind]+' · '+(item.autoDetection?'已自动识别节点':'可点“重新识别”自动填写')+'</p>'+
-        '<div class="btnrow"><button data-local-workflow-inspect="'+index+'">重新识别</button></div>'+
+        '<div class="btnrow"><button data-local-workflow-inspect="'+index+'">重新识别</button>'+(item.kind==='chat'?'<button data-local-use-chat="'+esc(item.id)+'">用于本地聊天</button>':'')+'</div>'+
         '<details><summary>高级：节点映射、文件和等待时间</summary><label class="field">内部 ID<input data-wf="id" value="'+esc(item.id||'')+'"></label>'+
         '<div class="form-two"><label class="field">类型<select data-wf="kind"><option value="image"' + (item.kind === 'image' ? ' selected' : '') + '>图片</option><option value="video"' + (item.kind === 'video' ? ' selected' : '') + '>视频</option><option value="chat"'+(item.kind==='chat'?' selected':'')+'>聊天模型</option></select></label><label class="field">已导入的文件<input data-wf="file" value="' + esc(item.file || '') + '" placeholder="assets/comfyui/...json"></label></div>' +
         '<label class="field">用途 / 自动选择说明<textarea data-wf="description" maxlength="800" rows="2" placeholder="例如：日常角色自拍、柔和插画；不适合写实风景">' + esc(item.description || '') + '</textarea></label>' +
         '<p class="muted">填写 API JSON 中需要替换的节点编号和字段名。提示词必填；反向提示词、随机种子和输入图片可以留空，表示这个工作流不使用对应输入。</p>';
-      [['prompt','提示词'],['negativePrompt','反向提示词'],['seed','随机种子'],['image','输入图片']].forEach(function (pair) {
+      [['prompt',item.kind==='chat'?'用户输入':'提示词'],['negativePrompt','反向提示词'],['seed','随机种子'],['image','输入图片']].concat(item.kind==='chat'?[['system','人设 / 系统'],['history','对话历史'],['requestId','请求编号'],['images','多模态图片列表'],['temperature','温度'],['maxTokens','回复长度']]:[]).forEach(function (pair) {
         var key = pair[0];
         out += '<div class="form-two"><label class="field">' + pair[1] + '节点<input data-map="' + key + '.node" value="' + localMapValue(item, key, 'node') + '" placeholder="例如 6"></label><label class="field">' + pair[1] + '字段<input data-map="' + key + '.field" value="' + localMapValue(item, key, 'field') + '" placeholder="例如 text"></label></div>';
       });
+      out += '<div class="form-two"><label class="field">输出节点<input data-wf="outputNode" value="'+esc(item.output?.node||'')+'"></label><label class="field">输出字段<input data-wf="outputField" value="'+esc(item.output?.field||'')+'"></label></div>';
       out += '<label class="field">等待上限（毫秒，5000–3600000）<input data-wf="timeoutMs" type="number" min="5000" max="3600000" step="1000" value="' + Number(item.timeoutMs || 600000) + '"></label></details>';
       out += '<div class="btnrow"><button class="danger" data-local-workflow-delete="' + index + '">删除这条工作流</button></div></div>';
     });
@@ -1510,9 +1524,9 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
       var previous = localWorkflowDraft[index] || {};
       return {
         id: value('id'), name: value('name'), kind: value('kind'), description: value('description'), file: value('file'),
-        inputs: Object.assign({},previous.inputs||{},{ prompt: mapped('prompt'), negativePrompt: mapped('negativePrompt'), seed: mapped('seed'), image: mapped('image') }),
+        inputs: Object.fromEntries(['prompt','negativePrompt','seed','image','system','history','requestId','images','temperature','maxTokens'].map(function(key){return [key,row.querySelector('[data-map="'+key+'.node"]')?mapped(key):(previous.inputs?.[key]||{node:'',field:''})];})),
         autoDetection: previous.autoDetection,
-        output: previous.output || {kind: value('kind')},
+        output:{kind:value('kind')==='chat'?'text':value('kind'),node:value('outputNode'),field:value('outputField')},
         timeoutMs: Number(value('timeoutMs') || previous.timeoutMs || 600000),
       };
     });
@@ -1700,7 +1714,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     out += '<p class="muted">让本地语言模型理解你的要求，选择工作流生成语音、图片或视频。这里试聊只生成本地文件，不发 QQ。</p>';
     out += '<p class="muted">运行模式与 API 补全统一在“连接与搭配”管理。保存本页只更新本地模型与工作流参数。</p><button data-go="services">管理运行来源</button>';
     out += '<div class="form-two"><label class="field">回复由谁生成<select id="localBackend"><option value="comfyui"' + (backend === 'comfyui' ? ' selected' : '') + '>本机 ComfyUI 聊天工作流</option><option value="openai"' + (backend === 'openai' ? ' selected' : '') + '>本机 OpenAI 兼容服务</option></select></label><label class="field">OpenAI 兼容服务地址<input id="localModelBaseUrl" value="' + esc(form.modelBaseUrl || 'http://127.0.0.1:8000/v1') + '" placeholder="http://127.0.0.1:8000/v1"></label></div>';
-    out += '<div class="form-two"><label class="field">服务中的模型（可任选或手填）<input id="localModelId" list="localModelList" value="' + esc(form.modelId || '') + '" placeholder="填写服务实际提供的模型名"><datalist id="localModelList">'+localModels.map(function(x){return '<option value="'+esc(x.id)+'">';}).join('')+'</datalist></label><label class="field">ComfyUI 聊天工作流<select id="localChatWorkflow">'+localChatOptions(form.chatWorkflow || 'chat-35b')+'</select></label></div><div class="btnrow"><button id="localModelsRefresh">读取本机服务的模型列表</button></div><p class="muted" id="localModelsHint">可连接任意本机 OpenAI 兼容服务；ComfyUI 聊天工作流也可以在下方导入，预设只是快捷选项。</p>';
+    out += '<div class="form-two"><label class="field">服务中的模型（可任选或手填）<input id="localModelId" list="localModelList" value="' + esc(form.modelId || '') + '" placeholder="填写服务实际提供的模型名"><datalist id="localModelList">'+localModels.map(function(x){return '<option value="'+esc(x.id)+'">';}).join('')+'</datalist></label><label class="field">ComfyUI 聊天工作流<select id="localChatWorkflow">'+localChatOptions(form.chatWorkflow || 'chat-35b')+'</select></label></div><div class="btnrow"><button id="localImportChat">导入自己的聊天工作流</button><input id="localChatWorkflowFile" type="file" accept=".json,application/json" hidden><button id="localApplyChat">使用选中的聊天工作流</button><button id="localModelsRefresh">读取本机服务的模型列表</button></div><p class="muted" id="localModelsHint">可连接任意本机 OpenAI 兼容服务；ComfyUI 聊天工作流也可以在下方导入，预设只是快捷选项。</p>';
     out += '<div class="form-two"><label class="field">回答随机度（0 稳定，数值越高越发散）<input id="localTemperature" type="number" min="0" max="3" step="0.1" value="' + Number(form.temperature == null ? 0.7 : form.temperature) + '"></label><label class="field">单次回复上限（token）<input id="localMaxTokens" type="number" min="32" max="32768" step="1" value="' + Number(form.maxTokens || 512) + '"></label></div>';
     out += '<div class="form-two"><label class="field">最多携带多少历史文字<input id="localHistoryChars" type="number" min="512" max="100000" step="128" value="' + Number(form.historyChars || 12000) + '"></label><label class="check-field"><input id="localVoiceEnabled" type="checkbox"' + (form.voiceEnabled !== false ? ' checked' : '') + '>允许本轮使用本地语音工具</label></div>';
     out += '<label class="check-field"><input id="localFastDialogue" type="checkbox"'+(form.fastDialogue!==false?' checked':'')+'>普通闲聊加速：按需减少工具说明，控制冗长回复</label><label class="check-field"><input id="localStreamDialogue" type="checkbox"'+(form.streamDialogue!==false?' checked':'')+'>逐句回传普通文字（ComfyUI 需加载流式适配）</label>';
@@ -3179,6 +3193,10 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     bindBiliPanel();
     bindRoutes();
     var el;
+    if($('localImportChat'))$('localImportChat').onclick=function(){$('localChatWorkflowFile').click();};
+    if($('localChatWorkflowFile'))$('localChatWorkflowFile').onchange=function(){readLocalWorkflow(this.files[0],'chat');this.value='';};
+    if($('localApplyChat'))$('localApplyChat').onclick=async function(){this.disabled=true;try{await applyLocalChatWorkflow($('localChatWorkflow').value);}catch(error){toast(error.message);}finally{if(this.isConnected)this.disabled=false;}};
+    document.querySelectorAll('[data-local-use-chat]').forEach(function(button){button.onclick=async function(){try{await applyLocalChatWorkflow(this.dataset.localUseChat);}catch(error){toast(error.message);}};});
     if((el=$('localWorkflowFile')))el.onchange=function(){readLocalWorkflow(this.files[0]);};
     if((el=$('localWorkflowDrop'))){
       el.ondragover=function(event){event.preventDefault();};
@@ -3186,19 +3204,20 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
     }
     if((el=$('localImportCancel')))el.onclick=function(){captureLocalForm();localImportState=null;renderPane();};
     if((el=$('localImportKind')))el.onchange=function(){captureLocalImport();localImportState.kind=this.value;var outputs=localImportState.analysis.outputs.filter(function(x){return x.kind===localImportState.kind;});localImportState.output=outputs.length===1?outputs[0]:null;renderPane();};
-    document.querySelectorAll('[data-import-input],#localImportOutput').forEach(function(select){select.onchange=function(){captureLocalImport();renderPane();};});
+    document.querySelectorAll('[data-import-input],#localImportOutput,#localImportTextField,#localImportActivateChat').forEach(function(select){select.onchange=function(){captureLocalImport();renderPane();};});
     if((el=$('localImportConfirm')))el.onclick=function(){
       var button=this;captureLocalForm();captureLocalImport();var s=localImportState;button.disabled=true;
-      localPost({action:'import-workflow',token:s.token,name:s.name,description:s.description,kind:s.kind,inputs:s.inputs,output:s.output}).then(function(result){
+      localPost({action:'import-workflow',token:s.token,name:s.name,description:s.description,kind:s.kind,inputs:s.inputs,output:s.output,activateChat:s.activateChat===true}).then(function(result){
         localWorkflowDraft=localWorkflowDraft.filter(function(x){return x.id!==result.entry.id;}).concat(result.entry);
         if(result.entry.kind!=='chat'&&!localDefaultsDraft[result.entry.kind])localDefaultsDraft[result.entry.kind]=result.entry.id;
         localConfigDraft.workflowLibrary=localWorkflowDraft;
+        if(s.activateChat&&result.entry.kind==='chat'){localConfigDraft.backend='comfyui';localConfigDraft.chatWorkflow=result.config.chatWorkflow;}
         localImportState=null;localDraftEditing=true;
         if(localGateway){localGateway.config=result.config;}
-        renderPane();toast('工作流已导入并保存'+(result.entry.kind==='chat'?'，可在上方选择用于聊天':''));
+        renderPane();toast(s.activateChat&&result.entry.kind==='chat'?(result.config.chatWorkflow===result.entry.id?'已导入并用于本地聊天，下一轮生效':'已导入，但旧网关未确认聊天选择；请重启网关后再应用'):'工作流已导入并保存');
       }).catch(function(error){button.disabled=false;toast('导入失败：'+error.message);});
     };
-    document.querySelectorAll('[data-local-workflow-inspect]').forEach(function(button){button.onclick=function(){var item=localWorkflowDraft[Number(this.dataset.localWorkflowInspect)];if(item?.id)analyzeLocalWorkflow({workflowId:item.id});};});
+    document.querySelectorAll('[data-local-workflow-inspect]').forEach(function(button){button.onclick=function(){var item=localWorkflowDraft[Number(this.dataset.localWorkflowInspect)];if(item?.id)analyzeLocalWorkflow({workflowId:item.id,kind:item.kind});};});
     if((el=$('localModelsRefresh')))el.onclick=function(){
       var button=this;button.disabled=true;$('localModelsHint').textContent='正在读取模型列表…';
       localPost({action:'list-models',baseUrl:$('localModelBaseUrl').value.trim()}).then(function(result){
@@ -3279,12 +3298,13 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
           rememberLocalEdit();
           var current = localWorkflowDraft[index] || {};
           if (field.getAttribute('data-wf') === 'id' && oldId && current.id !== oldId) {
+            if(localConfigDraft.chatWorkflow===oldId){localConfigDraft.chatWorkflow=current.id;var chatSelect=$('localChatWorkflow');if(chatSelect){chatSelect.innerHTML=localChatOptions(current.id);chatSelect.value=current.id;}}
             if (localDefaultsDraft.image === oldId) localDefaultsDraft.image = current.id;
             if (localDefaultsDraft.video === oldId) localDefaultsDraft.video = current.id;
             field.dataset.localPreviousId = current.id;
           }
           localConfigDraft.defaultWorkflows = Object.assign({}, localDefaultsDraft);
-          if (['id','name','kind'].includes(field.getAttribute('data-wf'))) refreshLocalDefaultOptions();
+          if (['id','name','kind'].includes(field.getAttribute('data-wf'))) {refreshLocalDefaultOptions();var select=$('localChatWorkflow');if(select)select.innerHTML=localChatOptions(localConfigDraft.chatWorkflow);}
         });
       });
     });
@@ -4400,6 +4420,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
   var floatingSaveBusy=false, floatingSaveCapture=null;
   function floatingSaveTargets() {
     var dirty=pageDrafts[tab]||{},buttons=new Set();
+    if(tab==='local'&&localDraftEditing&&$('localSave')&&!$('localSave').disabled)buttons.add('localSave');
     var allowed=new Set(['agSave','phSave','grSave','shSave','soulSave','vgSave','igSave','mSave','memSave','memDirSave','ownerSave','groupSave','baseSave','autoSave','vSave','vSaveEngine','vsSave','voiceStudioSave','searxSave','pickApply','mfSave','pfSave','dlSave','connectionModeSave','connectionRoutesSave','connectionSave','localSave','localInitiativeSave','cacheSave','pSave','careSave','learnSave','pcSave','wSave','accSave','lifeSave','profileSave','rlSave','rhSave']);
     var fields=Array.from($('pane')?.querySelectorAll('input,textarea,select')||[]);
     Object.keys(dirty).forEach(function(key){
@@ -4425,7 +4446,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
   }
   function syncFloatingSave(message,state) {
     var button=$('saveCurrentPage'),status=$('saveDockStatus'),dock=$('saveDock');if(!button||!status)return;
-    var count=Object.keys(pageDrafts[tab]||{}).length,targets=floatingSaveTargets();
+    var count=Object.keys(pageDrafts[tab]||{}).length,targets=floatingSaveTargets();if(tab==='local'&&localDraftEditing&&!count)count=1;
     button.disabled=floatingSaveBusy||!targets.length;button.textContent=floatingSaveBusy?'正在保存…':'一键保存';
     if(message)status.textContent=message;else if(floatingSaveBusy)status.textContent='正在提交当前页设置…';else status.textContent=count?'本页 '+count+' 项未保存修改':'当前页没有未保存的设置';
     dock.dataset.state=state||(count?'dirty':'saved');
@@ -4445,7 +4466,7 @@ html[data-skin="purple"] .tab.on{background:var(--accent-weak)!important;color:v
         if(failure)break;
       }
     }finally{floatingSaveCapture=null;floatingSaveBusy=false;rememberDraft(tab);
-      var remaining=Object.keys(pageDrafts[tab]||{}).length;
+      var remaining=Object.keys(pageDrafts[tab]||{}).length;if(tab==='local'&&localDraftEditing&&!remaining)remaining=1;
       syncFloatingSave(failure?'未保存成功：'+failure:remaining?'部分修改尚未保存，请检查本页对应设置。':'当前页设置已保存',failure?'failed':remaining?'dirty':'saved');
     }
   }
@@ -5089,14 +5110,3 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-

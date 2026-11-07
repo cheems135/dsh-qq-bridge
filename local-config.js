@@ -303,6 +303,15 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
   };
 }
 
+export function bindChatWorkflowContext(spec,args={}){
+ const keys=['text','system','history'],used=new Set();
+ for(const key of keys){const map=spec.inputs?.[key];if(!map?.node)continue;const slot=String(map.node)+':'+map.field;if(used.has(slot))throw Error('聊天的用户输入、人设与历史映射不能指向同一个字段，请分别设置或留空以合并输入');used.add(slot);}
+ const parts=[];
+ if(!spec.inputs?.system?.node&&args.system)parts.push('【系统与人设】\n'+args.system);
+ if(!spec.inputs?.history?.node&&args.history&&(typeof args.history==='string'?args.history!=='[]':args.history.length))parts.push('【历史对话 JSON】\n'+(typeof args.history==='string'?args.history:JSON.stringify(args.history)));
+ return parts.length?{...args,text:[...parts,'【本轮用户】\n'+String(args.text||'')].join('\n\n')}:args;
+}
+
 export function chatWorkflowSpec(config, kind = 'chat') {
   if (kind === 'chat') {
     const custom = config.workflowLibrary?.find(item=>item.id===config.chatWorkflow&&item.kind==='chat');

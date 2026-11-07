@@ -73,3 +73,24 @@ test('choosing one output imports only its ancestors, avoiding unintended extra 
   assert.equal(imported.status,200,JSON.stringify(imported.data));
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(imported.data.entry.file,'utf8'))),['10','20']);
 }));
+
+test('an arbitrary chat workflow can use a manually confirmed text receipt and become the active chat atomically',()=>fixture(async({post,service,calls})=>{
+ const graph={'71':{class_type:'MyLocalLanguageEngine',inputs:{question:'原问题',model:'any-local-model.gguf'}}};
+ const inspected=await post('/v1/local/workflow/inspect',{workflow:graph,kind:'chat',filename:'自选聊天.json'});
+ assert.equal(inspected.status,200);assert.equal(inspected.data.analysis.errors.length,0);assert.equal(inspected.data.analysis.inputs.prompt.field,'question');assert.equal(inspected.data.analysis.manualOutputs.length,1);
+ const result=await post('/v1/local/workflow/import',{token:inspected.data.token,kind:'chat',name:'自定义语言模型',inputs:inspected.data.analysis.inputs,output:{node:'71',field:'answer',kind:'chat',manual:true},activateChat:true});
+ assert.equal(result.status,200,JSON.stringify(result.data));assert.equal(service.config.chatWorkflow,result.data.entry.id);assert.equal(service.config.modelId,result.data.entry.id);assert.equal(result.data.config.backend,'comfyui');assert.equal(calls.length,0);
+ const r=await fetch('http://127.0.0.1:'+service.server.address().port+'/config'),config=await r.json();assert.ok(config.options.chatWorkflows.includes(result.data.entry.id));assert.equal(config.options.chatWorkflowManagement,true);
+}));
+
+test('chat import in a mixed workflow chooses text ancestors instead of the default image branch',()=>fixture(async({post,calls})=>{
+ const mixed={...graph,'51':{class_type:'MyLanguageNode',inputs:{user_message:'你好'}},'52':{class_type:'ShowText',inputs:{text:['51',0]}}};
+ const r=await post('/v1/local/workflow/inspect',{workflow:mixed,kind:'chat'});assert.equal(r.data.analysis.kind,'chat');assert.equal(r.data.analysis.inputs.prompt.node,'51');
+ const imported=await post('/v1/local/workflow/import',{token:r.data.token,kind:'chat',inputs:r.data.analysis.inputs,output:r.data.analysis.outputs.find(x=>x.node==='52'),activateChat:true});
+ assert.equal(imported.status,200,JSON.stringify(imported.data));assert.deepEqual(Object.keys(JSON.parse(readFileSync(imported.data.entry.file,'utf8'))),['51','52']);assert.equal(calls.length,0);
+}));
+
+test('manual chat output still rejects missing nodes and unsafe field names',()=>fixture(async({post})=>{
+ const inspected=await post('/v1/local/workflow/inspect',{workflow:{'7':{class_type:'MyLanguageNode',inputs:{question:'hi'}}},kind:'chat'});
+ for(const output of [{node:'missing',field:'answer'},{node:'7',field:'__proto__'}])assert.equal((await post('/v1/local/workflow/import',{token:inspected.data.token,kind:'chat',output:{...output,kind:'chat',manual:true},inputs:inspected.data.analysis.inputs})).status,400);
+}));

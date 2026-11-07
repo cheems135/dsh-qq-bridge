@@ -91,7 +91,7 @@ export function convertUiWorkflow(graph, objectInfo = {}) {
   return {api, errors:[...new Set(errors)], warnings};
 }
 
-export function inspectWorkflow(raw, objectInfo = {}, {filename = ''} = {}) {
+export function inspectWorkflow(raw, objectInfo = {}, {filename = '',preferredKind=''} = {}) {
   let graph;
   try { graph = typeof raw === 'string' ? JSON.parse(raw.replace(/^\uFEFF/, '')) : clone(raw); }
   catch { throw Error('文件不是有效的 JSON 工作流'); }
@@ -118,7 +118,7 @@ export function inspectWorkflow(raw, objectInfo = {}, {filename = ''} = {}) {
       if (kind) outputs.push({node:id,field:kind==='chat'?'text':kind==='image'?'images':'videos',kind,label});
     }
   }
-  const kind = outputs.some(output=>output.kind==='video') ? 'video' : outputs.some(output=>output.kind==='image') ? 'image' : 'chat';
+  const kind = ['chat','image','video'].includes(preferredKind)?preferredKind:outputs.some(output=>output.kind==='video') ? 'video' : outputs.some(output=>output.kind==='image') ? 'image' : 'chat';
   const selectedOutputs = outputs.filter(output=>output.kind===kind);
   const ancestors = new Set();
   function visit(id) {
@@ -126,7 +126,9 @@ export function inspectWorkflow(raw, objectInfo = {}, {filename = ''} = {}) {
     for(const value of Object.values(api[id].inputs))if(linked(value))visit(value[0]);
   }
   for(const output of selectedOutputs)visit(output.node);
-  if(!selectedOutputs.length) { errors.push('没有找到可返回图片、视频或文本的输出节点'); for(const id of Object.keys(api))ancestors.add(id); }
+  if(!selectedOutputs.length) { if(preferredKind==='chat')warnings.push('没有自动识别到文本输出，请手动选择实际回传文本的节点和字段；必要时在工作流添加文本显示节点');else errors.push('没有找到可返回图片、视频或文本的输出节点'); for(const id of Object.keys(api))ancestors.add(id); }
+  // Mixed graphs need all text branches available when the user changes output type.
+  if(preferredKind==='chat')for(const output of outputs.filter(x=>x.kind==='chat'))visit(output.node);
   const candidates = Object.fromEntries(KEYS.map(key=>[key,[]]));
   function add(key,id,field,score,reason) {
     if(!api[id]||!ancestors.has(String(id)))return;
@@ -161,13 +163,16 @@ export function inspectWorkflow(raw, objectInfo = {}, {filename = ''} = {}) {
     if(/^(?:system|system_prompt|系统提示词)$/i.test(field))add('system',id,field,100,'系统提示词');
     else if(/history|历史/i.test(field))add('history',id,field,95,'对话历史');
     else if(/^(?:request_id|requestId|请求ID)$/i.test(field))add('requestId',id,field,100,'每轮请求标识');
-    else if(/^(?:user_message|用户消息)$/i.test(field))add('prompt',id,field,110,'本轮用户输入');
+    else if(/^(?:user_message|user_prompt|question|message|input_text|用户消息|用户输入|问题)$/i.test(field))add('prompt',id,field,110,'本轮用户输入');
     else if(/^(?:text|text_g|text_l|prompt|positive_prompt|negative_prompt|提示词|文本|value|值)$/i.test(field)&&!/file|filename|model|prefix|系统|system/i.test(label+' '+field)){
       const negative=/negative|反向|负面|负向/i.test(label+' '+field), positive=/positive|正向|正面/i.test(label+' '+field);
       const usable=/encode|prompt|string|text|chat|caption|文本|提示|对话/i.test(label)||/prompt|提示词/.test(field);
       if(usable)add(negative?'negativePrompt':'prompt',id,field,negative||positive?95:/prompt|提示词/.test(field)?75:55,negative?'标记为反向提示词':positive?'标记为正向提示词':'文本输入候选');
     }
     if(/^(?:temperature|温度)$/i.test(field))add('temperature',id,field,100,'生成温度');
+  }
+  if(preferredKind==='chat')for(const [id,node]of Object.entries(api))if(ancestors.has(id))for(const [field,value]of Object.entries(node.inputs)){
+    if(typeof value==='string'&&!/file|model|prefix|path|system|history|request|api.?key|token|url|路径|系统|历史/i.test(field))add('prompt',id,field,20,'手动确认文本输入');
   }
   // Numeric chat settings are not prompt text.
   for(const [id,node]of Object.entries(api))if(ancestors.has(id))for(const [field,value]of Object.entries(node.inputs)){
@@ -184,5 +189,6 @@ export function inspectWorkflow(raw, objectInfo = {}, {filename = ''} = {}) {
   if(inputs.prompt.node&&inputs.prompt.node===inputs.negativePrompt.node&&inputs.prompt.field===inputs.negativePrompt.field){inputs.prompt=empty();inputs.negativePrompt=empty();warnings.push('正向和反向条件共用了同一个文本输入，需要选择要替换的位置');}
   if(!inputs.prompt.node)warnings.push('请确认用于接收本轮提示词的输入');
   if(selectedOutputs.length>1)warnings.push('存在多个输出节点，请选择要返回的结果');
-  return {api,format,name:String(filename||'新工作流').replace(/^.*[\\/]/,'').replace(/\.json$/i,''),kind,inputs,candidates,outputs,warnings:[...new Set(warnings)],errors:[...new Set(errors)],ready:!errors.length&&!!inputs.prompt.node&&selectedOutputs.length===1};
+  const manualOutputs=preferredKind==='chat'?Object.entries(api).map(([id,node])=>({node:id,field:'text',kind:'chat',manual:true,label:title(node,id)+' · 手动指定文本回执'})):[];
+  return {api,format,name:String(filename||'新工作流').replace(/^.*[\\/]/,'').replace(/\.json$/i,''),kind,inputs,candidates,outputs,manualOutputs,warnings:[...new Set(warnings)],errors:[...new Set(errors)],ready:!errors.length&&!!inputs.prompt.node&&selectedOutputs.length===1};
 }
