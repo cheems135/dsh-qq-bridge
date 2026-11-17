@@ -19,12 +19,22 @@ export function selectInitiative(candidates,state,config,{now=Date.now(),manual=
 export function noteInitiative(state,action,{now=Date.now(),sent=false,reason=''}={}){
  state.actions||={};const previous=state.actions[action]||{};state.actions[action]={...previous,consideredAt:now,reason:String(reason).slice(0,180),...(sent?{lastAt:now}:{})};
 }
-// Keep public and prepared media payloads separate from private interests.
+// Keep every already-admitted option available to the one model decision.
+// The caller still checks the selected option's scope before executing it.
 export function initiativeOptions(candidates,state,config,pick,options={}){
  if(!pick)return [];
- const privateKinds=new Set(['chat','explore','phone','webshare']);
- if(!pick.target||!privateKinds.has(pick.action))return [pick];
- return [pick,...candidates.filter(c=>c!==pick&&c.target===pick.target&&privateKinds.has(c.action)&&selectInitiative([c],state,config,options))];
+ return [pick,...candidates.filter(c=>c!==pick&&selectInitiative([c],state,config,options))];
+}
+export function initiativeChoiceId(candidate){
+ const action=String(candidate?.action||'');
+ const target=String(candidate?.key||(candidate?.target?'private:'+candidate.target:''));
+ const variant=String(candidate?.kind||candidate?.comment?.id||'');
+ return [action,target,variant].filter(Boolean).join('@');
+}
+export function initiativeDecisionRealm(candidate,fallbackKey=''){
+ const action=String(candidate?.action||'');
+ if(['qzone','qzoneReply','signature'].includes(action))return 'public:'+action+':'+String(candidate?.comment?.id||'');
+ return String(candidate?.key||(candidate?.target?'private:'+candidate.target:fallbackKey));
 }
 export function initiativeCadence(record,base,now,{commit=false}={}){
  const prior=record?.base===base?record:{base,fired:[]};

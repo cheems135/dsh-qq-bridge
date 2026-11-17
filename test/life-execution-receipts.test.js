@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createAgentCapabilities} from '../agent-capabilities.js';
 import {createExecutionRuntime,operationEffect} from '../execution-runtime.js';
-import {reconcileDeliveredLifeShares} from '../life-execution.js';
+import {createLifeExecution,reconcileDeliveredLifeShares,reconcileVerifiedLifeOperations} from '../life-execution.js';
 
 test('the same host execution finishes QQ sends and browser observations',async()=>{
  const definitions=new Map(),journal=[],steps=[];
@@ -50,7 +50,7 @@ test('daily accounting failure still closes the actual tool receipt',async()=>{
  const start=source.indexOf('      afterTool:async(args,context,outcome)=>{'),end=source.indexOf('      operationRequest:',start);
  assert(start>0&&end>start);
  const finished=[];
- const after=Function('commitmentLedger','gameSessions','executionRuntime',`return ({${source.slice(start,end)}}).afterTool;`)({receipt:()=>{throw Error('accounting failed');}},{record:()=>{}},{finish:(...args)=>finished.push(args)});
+ const after=Function('commitmentLedger','commitmentJobContext','gameSessions','executionRuntime',`return ({${source.slice(start,end)}}).afterTool;`)({receipt:()=>{throw Error('accounting failed');}},(_id,context)=>context,{record:()=>{}},{finish:(...args)=>finished.push(args)});
  await assert.rejects(after({toolName:'bridge_life_qq'},{meta:{commitmentId:'c'}},{exec:{name:'bridge_life_qq'},result:{ok:true,queued:true,deliveryId:'d'}}),/accounting failed/);
  assert.equal(finished.length,1);
  assert.equal(finished[0][2].deliveryId,'d');
@@ -58,7 +58,7 @@ test('daily accounting failure still closes the actual tool receipt',async()=>{
 
 test('legacy started send is repaired only by a unique same-job QQ readback',()=>{
  const meta={accountId:'a',personaId:'p'},at=Date.parse('2026-11-17T10:00:00+08:00');
- const make=()=>({jobs:[{id:'job',meta,scene:{date:'2026-11-17',end:'11:00'},status:'needs_reconcile',steps:[{id:'step',key:'op',tool:'bridge_life_qq',effect:'send',target:'private:12345',status:'started',idempotent:false,at}],shares:[{target:'private:12345',at:at+300,deliveryId:'delivery'}]}]});
+ const make=()=>({jobs:[{id:'job',meta,scene:{date:'2026-11-17',start:'10:00',end:'11:00'},status:'needs_reconcile',steps:[{id:'step',key:'op',tool:'bridge_life_qq',effect:'send',target:'private:12345',status:'started',idempotent:false,at}],shares:[{target:'private:12345',at:at+300,deliveryId:'delivery'}]}]});
  const op=()=>[{id:'op',tool:'bridge_life_qq',status:'started',target:'private:12345',...meta}];
  const delivered=()=>[{id:'delivery',chat:'private:12345',status:'sent',messageId:'123',verification:{state:'observed'},...meta}];
  for(const changed of [row=>{row.verification.state='pending';},row=>{row.accountId='other';},row=>{delete row.messageId;}]){
@@ -76,4 +76,39 @@ test('legacy started send is repaired only by a unique same-job QQ readback',()=
  assert.equal(reconcileDeliveredLifeShares(state,operations,delivered(),at+500),0);
  const ambiguous=make();ambiguous.jobs[0].shares.push({...ambiguous.jobs[0].shares[0],at:at+400});
  assert.equal(reconcileDeliveredLifeShares(ambiguous,op(),delivered(),at+500),0);
+});
+
+test('an exact verified host receipt recovers one unfinished step without trusting a queued send',()=>{
+ const at=Date.parse('2026-11-17T10:10:00+08:00'),meta={accountId:'a',personaId:'p'};
+ const make=(effect='local')=>({jobs:[{id:'job',meta,scene:{date:'2026-11-17',start:'10:00',end:'11:00'},status:'needs_reconcile',steps:[{id:'step',key:'op',tool:effect==='send'?'bridge_life_qq':'bridge_drawing',effect,target:effect==='send'?'private:123':'file.png',status:'unknown',idempotent:false,evidence:{operationId:'op'}}]}]});
+ const local={id:'op',...meta,tool:'bridge_drawing',effect:'local',target:'file.png',status:'confirmed',verified:true};
+ for(const change of [r=>r.verified=false,r=>r.personaId='wrong',r=>r.target='other']){
+  const state=make(),operation={...local};change(operation);
+  assert.equal(reconcileVerifiedLifeOperations(state,[operation],[],at),0);
+  assert.equal(state.jobs[0].status,'needs_reconcile');
+ }
+ const state=make();assert.equal(reconcileVerifiedLifeOperations(state,[local],[],at),1);
+ assert.equal(state.jobs[0].status,'paused');assert.equal(state.jobs[0].resumeOnIdle,true);
+ assert.equal(state.jobs[0].steps[0].status,'confirmed');
+ assert.equal(reconcileVerifiedLifeOperations(state,[local],[],at),0);
+ const sendState=make('send'),send={...local,tool:'bridge_life_qq',effect:'send',target:'private:123',status:'unknown',verified:false,deliveryIds:['d']};
+ const delivered={id:'d',...meta,chat:'private:123',status:'sent',messageId:'123',verification:{state:'observed'}};
+ assert.equal(reconcileVerifiedLifeOperations(sendState,[send],[{...delivered,verification:{state:'pending'}}],at),0);
+ assert.equal(reconcileVerifiedLifeOperations(sendState,[send],[delivered],at),1);
+ assert.equal(sendState.jobs[0].steps[0].evidence.deliveryStates.d.messageId,'123');
+ const old=make();assert.equal(reconcileVerifiedLifeOperations(old,[local],[],at+2*3600000),1);
+ assert.equal(old.jobs[0].resumeOnIdle,false);
+});
+
+test('a late verified receipt is recovered by the next idle check without model polling',async()=>{
+ const at=Date.parse('2026-11-17T10:10:00+08:00'),meta={accountId:'a',personaId:'p'},scene={date:'2026-11-17',start:'10:00',end:'11:00',activity:'画一张图',taskKind:'create'};
+ let calls=0,operation=[];const engine=createLifeExecution({storage:{read:()=>({jobs:[]}),write:()=>{}},config:()=>({execute:true}),roles:()=>[{meta}],allowed:()=>true,sceneFor:()=>scene,now:()=>at,operationJournal:()=>operation,dispatch:async()=>{calls++;return 'session';}});
+ await engine.tick();const id=engine.snapshot(meta).jobs[0].id;
+ const step=engine.beginStep(id,meta,{key:'op',tool:'bridge_drawing',effect:'local',target:'file.png',details:{tool:'bridge_drawing'}}).step;
+ engine.settleStep(id,meta,step.id,{status:'unknown',evidence:{operationId:'op'}});
+ engine.ended(id,meta,'completed');await engine.tick();assert.equal(calls,1);
+ operation=[{id:'op',...meta,tool:'bridge_drawing',effect:'local',target:'file.png',status:'confirmed',verified:true}];
+ await engine.tick();assert.equal(calls,2);
+ assert.equal(engine.snapshot(meta).jobs[0].steps[0].status,'confirmed');
+ await engine.close();
 });

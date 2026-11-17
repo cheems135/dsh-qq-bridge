@@ -5,7 +5,7 @@ import {selectInitiative} from '../api-initiative.js';
 import {readFileSync} from 'node:fs';
 import {initiativeEvent} from '../initiative-events.js';
 const now=1800000000000,statement='鲸鲸也没意思了，那我就去找我爸撒娇，你自己玩去吧';
-const sent={accountId:'a',personaId:'p',chat:'group:99',dir:'out',delivery:'sent',time:now-1000,messageId:'42',text:statement};
+const sent={accountId:'a',personaId:'p',chat:'group:99',dir:'out',delivery:'sent',verification:{state:'observed'},time:now-1000,messageId:'42',text:statement};
 const input={messages:[{...sent,dir:'in',text:'群里正在聊鲸鱼'},sent],accountId:'a',personaId:'p',ownerId:'123',ownerIds:['123'],groups:['99'],now};
 test('real group statement becomes scoped private opportunity with conversational context',()=>{
  const event=groupPrivateOpportunity(input);assert.equal(event.kind,'social-followup');assert.equal(event.summary.said,statement);assert.equal(event.summary.sourceChat,'group:99');assert.equal(event.summary.context.length,2);
@@ -14,11 +14,20 @@ test('real group statement becomes scoped private opportunity with conversationa
  const committed=eventInitiativeCadence({},now-2000,now,{event,commit:true}).record;assert.equal(eventInitiativeCadence(committed,now-2000,now+1000,{event}).event,null);
 });
 test('incoming text, drafts, failed sends and other identities cannot trigger a private followup',()=>{
- for(const patch of [{dir:'in'},{delivery:'queued'},{delivery:'failed'},{delivery:'unknown'},{accountId:'b'},{personaId:'other'},{chat:'group:other'}])assert.equal(groupPrivateOpportunity({...input,messages:[{...sent,...patch}]}),null);
+ for(const patch of [{dir:'in'},{delivery:'queued'},{delivery:'failed'},{delivery:'unknown'},{verification:{state:'pending'}},{accountId:'b'},{personaId:'other'},{chat:'group:other'}])assert.equal(groupPrivateOpportunity({...input,messages:[{...sent,...patch}]}),null);
  assert.equal(groupPrivateOpportunity({...input,ownerIds:['123','456']}),null);
 });
 test('quotes, hypotheticals, refusals and completed past actions are not fresh intentions',()=>{
  for(const text of ['她说“我就去找我爸撒娇”','如果没意思我就去找我爸撒娇','我不去找我爸撒娇了','我刚才去找我爸撒娇了','鲸鱼真有意思'])assert.equal(groupPrivateOpportunity({...input,messages:[{...sent,text}]}),null,text);
+});
+test('confirmed first-person plans to contact the owner are not limited to one wording',()=>{
+ for(const text of ['我想给爸爸发条消息说说这事','我有话想跟爸爸说','我待会儿私信我爸','我准备和主人单独聊聊','我现在去找号主','我待会儿私聊@123']){
+  const event=groupPrivateOpportunity({...input,messages:[{...sent,text}]});
+  assert.equal(event?.kind,'social-followup',text);
+ }
+ for(const text of ['我朋友准备去找我爸','我爸说要私聊我','她想跟爸爸说说','我可能会找爸爸聊','我想跟群友聊聊','我待会儿私聊@456','我昨天给爸爸发了消息','我想跟爸爸说，不过先别吧']){
+  assert.equal(groupPrivateOpportunity({...input,messages:[{...sent,text}]}),null,text);
+ }
 });
 test('a later real private exchange resolves opportunity but drafts do not',()=>{
  for(const message of [{dir:'in'},{dir:'out',delivery:'sent'}])assert.equal(groupPrivateOpportunity({...input,messages:[sent,{...sent,chat:'private:123',time:now,...message}]}),null);

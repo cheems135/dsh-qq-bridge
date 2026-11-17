@@ -34,11 +34,12 @@ test('permissions, busy service, lack of history, hourly gap and daily cap do no
  }
 });
 
-test('a new schedule is an event after 20 idle minutes; clock changes alone are not events',async()=>{
+test('schedule and clock changes alone are context; a real progress event can prompt a decision',async()=>{
  const h=setup();h.ctx={...h.ctx,lastIncoming:h.clock-25*60000};await h.engine.tick();assert.equal(h.calls.length,0);
  h.ctx={...h.ctx,scene:{...h.ctx.scene,now:'10:05'}};await h.engine.tick();assert.equal(h.calls.length,0);
- h.ctx={...h.ctx,scene:{...h.ctx.scene,start:'10:00',activity:'整理另一幅画布'}};assert.equal((await h.engine.tick()).status,'queued');
- assert.equal(h.records[0].arguments.trigger,'schedule');assert.match(h.calls[0].messages.at(-1).content,/新的活动线索或实际进展/);
+ h.ctx={...h.ctx,scene:{...h.ctx.scene,start:'10:00',activity:'整理另一幅画布'}};assert.equal((await h.engine.tick()).status,'waiting');
+ h.ctx={...h.ctx,event:{id:'actual-progress-1',kind:'progress',at:h.clock,summary:{activity:'完成画布第一稿'}}};assert.equal((await h.engine.tick()).status,'queued');
+ assert.equal(h.records[0].arguments.trigger,'progress');assert.match(h.calls[0].messages.at(-1).content,/新的活动线索或实际进展/);
 });
 
 test('incoming QQ cancellation interrupts a pending initiative and suppresses even a late model result',async()=>{

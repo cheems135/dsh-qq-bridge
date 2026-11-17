@@ -63,10 +63,48 @@ export function reconcileDeliveredLifeShares(state,operations=[],outbox=[],now=D
   }
   if(jobRepaired&&job.status==='needs_reconcile'&&!(job.steps||[]).some(step=>!step.idempotent&&['started','unknown'].includes(step.status))){
    job.status='paused';job.resume=false;
-   const current=calendarNow(now),sameSlot=job.scene?.date===current.day&&job.scene?.end>current.clock;
+   const current=calendarNow(now),sameSlot=job.scene?.date===current.day&&job.scene?.start<=current.clock&&job.scene?.end>current.clock;
    job.resumeOnIdle=!!sameSlot;job.closeoutAttempted=!!sameSlot;
    job.continuation={...job.continuation,closeoutOnly:!!sameSlot};
    job.reason=sameSlot?'QQ实际送达已核对；本时段核对目标并收尾，不重复发送':'QQ实际送达已核对；旧时段不重启发送';
+  }
+ }
+ return repaired;
+}
+// A host operation can finish after the model turn (or after the bridge has
+// restarted). Recover only the exact operation that started this step. A queued
+// send is never proof of delivery: its QQ message must also be read back.
+export function reconcileVerifiedLifeOperations(state,operations=[],outbox=[],now=Date.now()){
+ const terminal=new Map(),deliveries=new Map(outbox.map(row=>[row.id,row]));
+ for(const row of operations)if(row?.id&&row.status!=='started')terminal.set(row.id,row);
+ let repaired=0;
+ for(const job of state.jobs||[]){
+  let changed=false;
+  for(const step of job.steps||[]){
+   if(step.idempotent||!['started','unknown'].includes(step.status))continue;
+   const id=step.evidence?.operationId||step.key,op=terminal.get(id);
+   if(!op||op.accountId!==job.meta?.accountId||op.personaId!==job.meta?.personaId||op.tool!==step.tool||op.target!==step.target||op.effect&&op.effect!==step.effect)continue;
+   let status='';
+   if(op.status==='not_applied')status='not_applied';
+   else if(step.effect==='send'){
+    const ids=[...new Set([...(step.evidence?.deliveryIds||[]),...(op.deliveryIds||[]),step.evidence?.deliveryId].filter(Boolean))];
+    if(ids.length&&ids.every(deliveryId=>{
+     const row=deliveries.get(deliveryId);
+     return row?.accountId===job.meta?.accountId&&row.personaId===job.meta?.personaId&&row.chat===step.target&&row.status==='sent'&&row.verification?.state==='observed'&&!!row.messageId;
+    })){
+     status='confirmed';step.evidence={...step.evidence,deliveryIds:ids,deliveryStates:Object.fromEntries(ids.map(deliveryId=>{const row=deliveries.get(deliveryId);return [deliveryId,{status:row.status,messageId:row.messageId,verification:row.verification,at:row.updatedAt||now}];}))};
+    }
+   }else if(op.status==='confirmed'&&op.verified===true)status='confirmed';
+   if(!status)continue;
+   step.status=status;step.checkedAt=now;step.evidence={...step.evidence,operationId:op.id,verified:status==='confirmed',recovery:{at:now,reason:status==='confirmed'?'原操作及实际结果已核对':'原操作明确未执行，保留任务进度'}};
+   changed=true;repaired++;
+  }
+  if(changed&&job.status==='needs_reconcile'&&!(job.steps||[]).some(step=>!step.idempotent&&['started','unknown'].includes(step.status))){
+   const current=calendarNow(now),sameSlot=job.scene?.date===current.day&&job.scene?.start<=current.clock&&job.scene?.end>current.clock;
+   job.status='paused';job.resume=false;job.resumeOnIdle=!!sameSlot;
+   job.closeoutAttempted=!!sameSlot;
+   job.continuation={...job.continuation,closeoutOnly:!!sameSlot};
+   job.reason=sameSlot?'实际回执已核对；本时段重新观察并收尾，不重复已确认的操作':'实际回执已核对；旧时段不重放原操作';
   }
  }
  return repaired;
@@ -93,6 +131,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  }
  reconcileArtifactRejections(state,operationJournal(),now());
  if(reconcileDeliveredLifeShares(state,operationJournal(),deliveryJournal(),now()))try{onReconcile();}catch{}
+ reconcileVerifiedLifeOperations(state,operationJournal(),deliveryJournal(),now());
  save();
  const liveRole=meta=>meta?roles().find(r=>scope(r.meta)===scope(meta)):undefined;
  const sceneStamp=(meta,sc)=>hash([meta.accountId||'',meta.personaId,sc?.date,sc?.start,sc?.activity]);
@@ -206,6 +245,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  async function tick(){
   if(closed||busy)return;await enforceExecution();if(!cfg().enabled)return;busy=true;
   try{
+   if(reconcileVerifiedLifeOperations(state,operationJournal(),deliveryJournal(),now()))save();
    // A closed gate or a switched account must not leave a stale participation window.
    for(const j of state.jobs)if(j.meta&&j.group?.open&&!allowed(j.meta))await closeGroupWindow(j.meta,j,'当前不允许执行日程，结束群参与');
    for(const role of roles()){
@@ -339,7 +379,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
   return {removed,left:state.jobs.length};
  }
  function snapshot(meta){return {config:cfg(),sleeping:asleep(meta),wake:state.wake[scope(meta)]?{...state.wake[scope(meta)],held:(awakeHolds.get(scope(meta))||0)>0}:null,scene:asleep(meta)?sleepScene(meta):activityFor(liveRole(meta)||{meta}),plan:current(meta),frequency:{checkEveryMs:60000,emptyRetryBackoffMs:[60000,120000,240000],servicePollMinMs:60000},jobs:jobs(meta).slice(-25).reverse().map(j=>({...j,...taskCompletion(j),details:scheduleJobDetails({...j,...taskCompletion(j)})})),pending:question(meta),waiting:jobs(meta).filter(j=>j.status==='waiting_user'),recoverable:jobs(meta).filter(j=>['paused','needs_reconcile','interrupted','incomplete'].includes(j.status)).map(j=>({id:j.id,status:j.status,activity:j.scene?.activity,checkpoint:j.checkpoint,reason:j.reason}))};}
- return {compact,evidenceJobs:meta=>jobs(meta).map(j=>({...j,...taskCompletion(j)})),tick,enforceExecution,syncState,reserveFinalReply,asleep,wake,touchAwake,holdAwake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};retireOrdinaryQuestions();reconcileArtifactRejections(state,operationJournal(),now());if(reconcileDeliveredLifeShares(state,operationJournal(),deliveryJournal(),now()))try{onReconcile();}catch{}save();}catch{}}};
+ return {compact,evidenceJobs:meta=>jobs(meta).map(j=>({...j,...taskCompletion(j)})),tick,enforceExecution,syncState,reserveFinalReply,asleep,wake,touchAwake,holdAwake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};retireOrdinaryQuestions();reconcileArtifactRejections(state,operationJournal(),now());if(reconcileDeliveredLifeShares(state,operationJournal(),deliveryJournal(),now()))try{onReconcile();}catch{}reconcileVerifiedLifeOperations(state,operationJournal(),deliveryJournal(),now());save();}catch{}}};
 }
 
 

@@ -47,7 +47,7 @@ export function createLocalInitiative({context,probe,infer,deliver,act,readConte
    if(decision.target!=='local')return update('waiting',decision.reason);
    state.cadence=eventInitiativeCadence(state.cadence,c.lastIncoming,stamp,{event:evidence,commit:true}).record;
    state.lastAttempt=stamp;save(c.id,state);started=true;update('thinking','空闲中，正在考虑有没有想说的话');
-   record({...invocation,status:'started',arguments:{trigger:event?cadence.event?.kind==='mood'?'mood':'schedule':'idle',messages,maxTokens:outputTokens}});
+   record({...invocation,status:'started',arguments:{trigger:event?cadence.event?.kind||'event':'idle',messages,maxTokens:outputTokens}});
    let raw=await infer({messages,maxTokens:outputTokens,signal:controller.signal});
    if(!current()){record({...invocation,status:'cancelled',result:{reason:'QQ 消息或运行状态已改变'}});return update('cancelled','已让 QQ 请求优先');}
    const parseDecision=value=>{const result=JSON.parse(String(value).trim().replace(/^```(?:json)?\s*|\s*```$/g,''));if(!result||typeof result!=='object'||Array.isArray(result)||typeof result.speak!=='boolean')throw Error('主动聊天决策缺少 speak 布尔值');return result;};
