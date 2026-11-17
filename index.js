@@ -11987,10 +11987,20 @@ export function apply(ctx, rawConfig) {
   const sensationTimer=setInterval(()=>{if(!stopped)consolidateSensations();},60000);sensationTimer.unref?.();ctx.effect(()=>()=>clearInterval(sensationTimer));
 
 
+  function readCalendarDocument(file){
+    const path=join(calendarDir(),file);
+    try{return JSON.parse(readFileSync(path,'utf8'));}
+    catch(error){
+      if(!(error instanceof SyntaxError))throw error;
+      try{renameSync(path,path+'.corrupt-'+Date.now());log(`损坏的日程记忆已隔离：${file}`);}
+      catch(moveError){log(`日程记忆无法隔离：${file}: ${moveError?.message||moveError}`);}
+      const skipped=new Error(`损坏的日程记忆已跳过：${file}`);skipped.code='MEMORY_CORRUPT';throw skipped;
+    }
+  }
   lifeMemory=createLifeMemory({conversationActive:conversationActiveFor,online:()=>!stopped&&!accountPaused&&socket?.ready===true,emotionContext:recentMoodForPlan,
     sourceBatchBudget:()=>settings.localChat?.enabled?1800:14000,
     taskEvidence:(meta,date)=>lifeExecution?.evidenceJobs(meta).filter(j=>j.scene?.date===date)||[],
-    storage:{read:file=>JSON.parse(readFileSync(join(calendarDir(),file),'utf8')),write:(file,data)=>writeAtomic(join(calendarDir(),file),data),list:()=>existsSync(calendarDir())?readdirSync(calendarDir()):[],remove:file=>{if(existsSync(join(calendarDir(),file)))unlinkSync(join(calendarDir(),file));}},
+    storage:{read:readCalendarDocument,write:(file,data)=>writeAtomic(join(calendarDir(),file),data),list:()=>existsSync(calendarDir())?readdirSync(calendarDir()):[],remove:file=>{if(existsSync(join(calendarDir(),file)))unlinkSync(join(calendarDir(),file));}},
     now:()=>Date.now(),timeZone:'Asia/Shanghai',config:()=>({life:{...settings.life,enabled:settings.life.enabled&&!accountPaused},memory:settings.memory}),
     allowed:meta=>!!meta&&!stopped&&meta.accountId===(settings.activeAccountId||'')&&(meta.kind==='life'||recordsAllowed(meta.key)),
     capabilities:()=>({drawing:settings.imagegen.enabled!==false,browser:browserController.status(),phone:phoneLastStatus,desktop:desktopController.status(),audio:audioAnalysis.status(),qq:{available:true,scope:'仅已允许且允许主动联系的对象'},groups:effectiveGroups(),digitalIdentity:'non-embodied',nativeDigitalTasks:true}),onArchive:(meta,record)=>personaGrowth.observe(meta,record),roles:calendarRoles,signature:meta=>textHash(JSON.stringify([calendarDir(),meta.accountId,meta.personaId,calendarRole(meta.personaId).prompt,settings.life,settings.memory,featureState.generation||0,featureState.revisions[meta.key]||0])),

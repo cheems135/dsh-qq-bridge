@@ -85,7 +85,7 @@ export function createLifeMemory({storage,now=()=>Date.now(),timeZone='Asia/Shan
   const current=()=>calendarNow(now(),timeZone);
   function get(meta){
     const name=filename(meta);if(cache.has(name))return cache.get(name);
-    let doc;try{doc=storage.read(name);}catch(error){if(error?.code!=='ENOENT')throw error;}
+    let doc;try{doc=storage.read(name);}catch(error){if(error?.code!=='ENOENT'&&error?.code!=='MEMORY_CORRUPT')throw error;}
     if(doc&&hash(doc.meta)!==hash(meta))throw Error('memory scope mismatch');
     doc=doc||fresh(meta);if(doc.status?.state==='running')doc.status={...doc.status,state:'pending',reason:'上次处理未完成，等待补处理'};
     cache.set(name,doc);return doc;
@@ -93,7 +93,7 @@ export function createLifeMemory({storage,now=()=>Date.now(),timeZone='Asia/Shan
   const save=doc=>storage.write(filename(doc.meta),doc);
   function all(){
     const names=new Set([...storage.list(),...cache.keys()]);const docs=[];
-    for(const name of names){if(!/^[a-f0-9]{64}\.json$/.test(name))continue;let doc=cache.get(name);if(!doc){doc=storage.read(name);if(!doc?.meta||filename(doc.meta)!==name)throw Error('invalid memory scope');cache.set(name,doc);}docs.push(doc);}return docs;
+    for(const name of names){if(!/^[a-f0-9]{64}\.json$/.test(name))continue;let doc=cache.get(name);if(!doc){try{doc=storage.read(name);}catch(error){if(error?.code==='ENOENT'||error?.code==='MEMORY_CORRUPT')continue;throw error;}if(!doc?.meta||filename(doc.meta)!==name)throw Error('invalid memory scope');cache.set(name,doc);}docs.push(doc);}return docs;
   }
   const permitted=meta=>!closed&&allowed(meta);
   function record(meta,entry,{partial=false}={}){
