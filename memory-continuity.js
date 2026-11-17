@@ -23,6 +23,10 @@ export function disclosureProjection(row,sourceMeta,targetMeta,{privateNames=[]}
   if(sourceMeta.key===targetMeta.key)return {...row,originKey:sourceMeta.key,disclosure:'source'};
   if(row.privacy==='private')return null;
   const own=row.personaId===targetMeta.personaId&&row.personaVersion===(targetMeta.personaVersion||'legacy');
+  // The owner can ask her about public groups she actually participated in.
+  // Keep speakers intact: other group members' words are not her own experience.
+  if(own&&sourceMeta.key.startsWith('group:')&&targetMeta.isOwner===true&&targetMeta.key.startsWith('private:'))
+    return {...row,originKey:sourceMeta.key,disclosure:'owner-group-history'};
   const namesLeak=text=>privateNames.some(name=>name.length>=2&&String(text).includes(name));
   if(own&&row.role==='activity'&&row.actual===true&&row.publicSummary&&!sensitive.test(row.publicSummary)&&!privateRelation.test(row.publicSummary)&&!unsafeOperation.test(row.publicSummary)&&!namesLeak(row.publicSummary))
     return {...row,text:row.publicSummary,originKey:sourceMeta.key,disclosure:'own-verified-activity'};
@@ -38,6 +42,11 @@ export function disclosureProjection(row,sourceMeta,targetMeta,{privateNames=[]}
   // Same QQ identity can connect public statements across groups. Private
   // preferences may follow their own speaker only, never another user's query.
   const samePerson=/^\d{5,20}$/.test(String(targetMeta.speakerId||''))&&String(row.speakerId)===String(targetMeta.speakerId);
+  // The actual current speaker can explicitly refer to their own earlier
+  // private words. The host sets this flag from the real incoming QQ message,
+  // never from a model-generated retrieval query or another member's request.
+  if(own&&targetMeta.shareOwnPrivate===true&&targetMeta.key.startsWith('group:')&&sourceMeta.key==='private:'+targetMeta.speakerId&&!sensitive.test(row.text)&&!unsafeOperation.test(row.text))
+    return {...row,originKey:sourceMeta.key,disclosure:'requested-own-private-continuity'};
   if(samePerson&&row.role==='user'&&sourceMeta.key.startsWith('group:')&&!sensitive.test(row.text)&&!unsafeOperation.test(row.text))
     return {...row,originKey:sourceMeta.key,disclosure:'same-person-public-statement'};
   if(samePerson&&row.role==='user'&&sourceMeta.key==='private:'+targetMeta.speakerId&&targetMeta.key.startsWith('group:')){
@@ -53,6 +62,9 @@ export function disclosureProjection(row,sourceMeta,targetMeta,{privateNames=[]}
 }
 
 const aliases=[
+ ['mem-color',/颜色|配色|色调|蓝色|红色|绿色|黄色|粉色|紫色|黑色|白色|橙色|灰色|青色|棕色|colour|color/i],
+ ['mem-games',/游戏|打游戏|玩游戏|电玩|game|gaming/i],
+ ['mem-food',/口味|饮食|食物|爱吃|喜欢吃|不吃|忌口|辣味|甜食|甜点|零食|food|diet/i],
  ['mem-sleep',/失眠|睡不着|睡不著|熬夜|入睡|没睡|睡觉|睡眠|醒着|sleep|insomnia/i],
  ['mem-music',/歌曲|音乐|歌词|唱歌|旋律|节拍|曲子|听歌|music|song|lyrics/i],
  ['mem-art',/画画|绘画|速写|插画|画册|画作|草稿|涂鸦|draw|paint|sketch/i],
@@ -60,7 +72,7 @@ const aliases=[
  ['mem-meeting',/见面|相遇|认识|初次|第一次|meet/i],
  ['mem-promise',/答应|约定|承诺|说好|约好|promise/i],
 ];
-const stop=new Set(['聊天','群聊','群友','角色','人设','消息','回复','继续','你好','我们','你们','记忆','之前','现在','一个','时候','第一','第二','第三','接着','招呼','一段','一下','昨天','前天','今天','上周','上个月','最近']);
+const stop=new Set(['聊天','群聊','群友','角色','人设','消息','回复','继续','你好','我们','你们','记忆','之前','现在','一个','时候','第一','第二','第三','接着','招呼','一段','一下','昨天','前天','今天','上周','上个月','最近','上次','上回','那次','说过','什么','哪种','哪个']);
 export function continuityTokens(value){
   const raw=String(value||'').normalize('NFKC').toLowerCase().replace(/【[^】\n]*(?:关注|群友|聊天背景|想接|说话者)[^】\n]*】/g,' ');
   const terms=memoryTokens(raw).filter(t=>!stop.has(t));

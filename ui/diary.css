@@ -1,0 +1,39 @@
+/* Blue gingham, warm paper and a few original whale doodles. */
+.whale-journal{--journal-blue:#3f6f9e;--journal-line:#d8e8f8;--journal-paper:#ffffff;max-width:1080px;margin:22px auto 30px;padding:22px;border:2px solid #cfe2f5;border-radius:26px;background:repeating-linear-gradient(0deg,#ffffff80 0 16px,transparent 16px 32px),repeating-linear-gradient(90deg,#f2f8ff 0 16px,#e7f1fc 16px 32px);box-shadow:0 12px 36px #426f9a15,0 3px 0 #acc5de;color:#22456e}
+.journal-masthead{position:relative;display:flex;align-items:center;justify-content:center;gap:18px;padding:24px 12px 20px;text-align:center;background:#fffffff0;border-radius:17px 17px 0 0;border-bottom:1px dashed #d3e5f7}
+.journal-masthead h2{font:400 clamp(23px,3vw,36px)/1.5 'Xiaolai SC','Diary Handwriting','KaiTi',serif;letter-spacing:.13em;margin:0;color:#27507c}
+.journal-masthead p{font-size:12px;letter-spacing:.1em;margin:5px 0 0;color:#5a7c9d}
+.journal-whale{display:block;width:94px;height:72px;flex:0 0 auto;overflow:visible;color:#86aed3}
+.journal-bow{position:absolute;top:-17px;left:50%;transform:translateX(-50%);width:70px;height:34px;color:#7fa6cc}
+.journal-spread{position:relative;display:grid;grid-template-columns:minmax(190px,.65fr) minmax(0,1.6fr);background:var(--journal-paper);border-radius:0 0 17px 17px;overflow:hidden}
+.journal-aside{padding:28px 21px;background:linear-gradient(90deg,#f7fbff80,#fffdf8);border-right:1px solid #d6e6f6;min-width:0}
+.journal-aside h3{font:400 21px/1.6 'Xiaolai SC','Diary Handwriting','KaiTi',serif;color:#2c5583;margin:0 0 13px}
+.journal-card{position:relative;border:1.5px solid #d5e6f7;border-radius:18px;padding:20px 15px;margin:0 0 24px;background:#ffffff;overflow-wrap:anywhere}
+.journal-card::before{content:'';position:absolute;top:-9px;left:24px;width:62px;height:17px;transform:rotate(-6deg);background:repeating-linear-gradient(90deg,#b7d5f066 0 7px,#ffffffa6 7px 14px);border:1px solid #d6e6f6}
+.journal-card p{font-size:13px;line-height:1.9;margin:8px 0;color:#3a5f86}
+.journal-card small{color:#6a8aa9;font-size:11px;line-height:1.8}
+.journal-record{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.9;padding:9px 0;border-bottom:1px dashed #dbe9f7}
+.journal-record::before{content:'♡';color:#7da2c6;flex:0 0 auto}
+.journal-note{background:radial-gradient(#bdd2e9 .7px,transparent 1px) 0 0/14px 14px,#ffffff;min-height:130px}
+.journal-note p{background:#ffffffd9;padding:4px;border-radius:7px}
+html[data-device-ui] .page-diary .whale-journal .diary-sheet{position:relative;border:0!important;border-radius:0!important;padding:28px 34px 20px!important;margin:0!important;min-width:0;background:linear-gradient(90deg,transparent 0 22px,#dcebf94d 22px 23px,transparent 23px),var(--journal-paper)!important;box-shadow:inset 8px 0 14px #6c93b60a!important}
+.journal-pageheading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:13px;border-bottom:1px dashed #bdd5ed}
+html[data-device-ui] .page-diary .whale-journal .diary-date{display:flex;align-items:center;gap:8px;background:#f2f8ff!important;border:1px solid #c6dbef;border-radius:18px;padding:8px 14px;letter-spacing:.03em}
+html[data-device-ui] .page-diary .whale-journal .diary-date b{font:400 30px/1 'Xiaolai SC','Diary Handwriting',cursive;color:#2b5583!important}
+.journal-daymark{font:400 24px/1 'Xiaolai SC','Diary Handwriting','KaiTi',serif;color:#9dbdd8;white-space:nowrap}
+html[data-device-ui] .page-diary .whale-journal .diary-title{font:400 24px/1.65 'Xiaolai SC','Diary Handwriting','KaiTi',serif;color:#274d74!important;margin:20px 0 8px;background:transparent!important}
+html[data-device-ui] .page-diary .whale-journal .diary-text{font:400 18px/30px 'Xiaolai SC','Diary Handwriting','KaiTi','STKaiti',serif;color:#26476b!important;white-space:pre-wrap;overflow-wrap:anywhere;max-width:none;margin:12px 0 22px;min-height:260px;padding:0 0 2px;background:repeating-linear-gradient(transparent 0 32px,#d4e6f866 33px 34px)!important;letter-spacing:.035em}
+.journal-pagefooter{display:flex;align-items:end;justify-content:space-between;gap:10px;padding:8px 0 5px}
+.journal-pagefooter .journal-whale{width:114px;height:84px;opacity:.88}
+.journal-footer-caption{font:17px/1.8 'Xiaolai SC','Diary Handwriting','KaiTi',serif;color:#6b8fb2}
+.whale-journal .diary-actions{margin:10px 0 0;border-top:1px dashed #dbe9f7;padding-top:14px;font-size:11px}
+.whale-journal .diary-page-number{position:static;display:block;text-align:center;color:#a9c1d6;font-size:11px;margin-top:18px}
+.journal-empty{padding:45px 25px;text-align:center;background:#ffffff;border-radius:0 0 16px 16px;color:#5f7f9e;font:20px/2 'Xiaolai SC','Diary Handwriting','KaiTi',serif}
+.journal-empty .journal-whale{margin:auto;width:150px;height:110px}
+@media(max-width:700px){.whale-journal{padding:10px;border-radius:19px;margin:15px auto 24px}.journal-masthead{padding:22px 10px 16px;gap:10px}.journal-masthead>.journal-whale{width:66px;height:56px}.journal-masthead p{font-size:10px;letter-spacing:0}.journal-spread{display:flex;flex-direction:column}.journal-aside{order:2;border:0;border-top:1px dashed #bfd6ed;padding:21px 15px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.journal-card{padding:17px 12px;margin:0}.journal-aside h3{font-size:18px}.journal-card p,.journal-record{font-size:12px}.journal-note{min-height:0}html[data-device-ui] .page-diary .whale-journal .diary-sheet{padding:22px 19px 16px!important}html[data-device-ui] .page-diary .whale-journal .diary-text{font-size:17px;line-height:30px;min-height:220px}.journal-daymark{font-size:19px}.journal-pagefooter .journal-whale{width:85px;height:65px}.journal-footer-caption{font-size:15px}}
+@media(max-width:360px){.journal-aside{grid-template-columns:1fr}.journal-masthead>.journal-whale{width:48px}.journal-masthead h2{font-size:22px}}
+html[data-theme="dark"] .whale-journal{--journal-paper:#293746;background:repeating-linear-gradient(90deg,#334b63 0 16px,#2c4055 16px 32px);border-color:#526e89;color:#c1d4e5}
+html[data-theme="dark"] .journal-masthead,html[data-theme="dark"] .journal-card,html[data-theme="dark"] .journal-aside,html[data-theme="dark"] .journal-empty{background:#293746;color:#c1d4e5}
+html[data-theme="dark"] .journal-card p,html[data-theme="dark"] .journal-masthead h2,html[data-theme="dark"] .journal-aside h3{color:#c1d4e5}
+html[data-theme="dark"][data-device-ui] .page-diary .whale-journal .diary-text,html[data-theme="dark"][data-device-ui] .page-diary .whale-journal .diary-title{color:#d2dfeb!important}
+html[data-theme="dark"] .journal-note p{background:#293746ed}

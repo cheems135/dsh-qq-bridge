@@ -20,7 +20,7 @@ export function groupTurnHint(plan={}){
  const depth=plan.depth||'brief';
  return ['【本轮群聊分寸】'+(plan.respond===false?'先理解背景，看懂即可；没有新的想法就 [skip]。':'读完再决定是否开口，无话可接就 [skip]。')+(depth==='detailed'?'若回应，围绕当前话题给足必要细节。':depth==='normal'?'若回应，接一个想聊的重点。':'若回应，自然短话即可。'),
  plan.images==='detail'?'图片：围绕被问到或想聊的细节看。':plan.images==='glance'?'图片：理解气氛即可，不自动接梗或描述。':'图片：无需分析或解释没看图。',
- plan.reason?'【你刚才想接的话】'+plan.reason+'；要么顺着它说下去，要么 [skip]，不要换一个泛泛的接法。':''].filter(Boolean).join('\n');
+ plan.reason?'【接话参考，可能判断有误】'+plan.reason+'；只作话题线索，身份以真实QQ号为准，不沿用误认；无话可接就 [skip]。':''].filter(Boolean).join('\n');
 }
 
 export function mergeGroupWindow(batch,plan){
@@ -31,22 +31,31 @@ export function mergeGroupWindow(batch,plan){
    : batch.at(-1);
  const selected=focused.length?focused:[fallback];const primary=selected.at(-1),message=[];
  const selectedIds=new Set(selected.map(p=>String(p.message_id??'')));let pictures=0;
- const selectedPictures=selected.flatMap(p=>Array.isArray(p.message)?p.message:[]).filter(s=>s?.type==='image');
+ // A burst such as image -> "@bot look at this" is one sender's request.
+ // Retain its adjacent messages rather than selecting only the final sentence.
+ for(const pick of selected){const at=batch.indexOf(pick);for(const step of [-1,1])for(let i=at+step;i>=0&&i<batch.length&&String(batch[i].user_id)===String(pick.user_id);i+=step)selectedIds.add(String(batch[i].message_id??''));}
+ const chosen=batch.filter(p=>selectedIds.has(String(p.message_id??'')));
+ const selectedPictures=chosen.flatMap(p=>Array.isArray(p.message)?p.message:[]).filter(s=>['image','mface'].includes(s?.type));
+ const primaryDirect=selected.some(p=>String(p.user_id)===String(primary.user_id)&&Array.isArray(p.message)&&p.message.some(s=>s.type==='at'&&String(s.data?.qq)===String(p.self_id)));
  const glance=selectedPictures.at(-1);
- for(const payload of batch){const id=String(payload.message_id??''),speaker=String(payload.sender?.card||payload.sender?.nickname||payload.user_id||'群友').slice(0,36),segments=Array.isArray(payload.message)?payload.message:[{type:'text',data:{text:String(payload.raw_message||payload.message||'')}}];
+ for(const payload of batch){const id=String(payload.message_id??''),speaker=String(payload.sender?.card||payload.sender?.nickname||payload.user_id||'群友').replace(/[\r\n【】]/g,' ').slice(0,36)+'（QQ='+String(payload.user_id||'未知')+'）',segments=Array.isArray(payload.message)?payload.message:[{type:'text',data:{text:String(payload.raw_message||payload.message||'')}}];
   const relevant=selectedIds.has(id);
   message.push({type:'text',data:{text:(message.length?'\n':'')+'【'+speaker+(relevant?'（当前关注）':'（聊天背景）')+'】'}});
   for(const segment of segments){
-   if(segment?.type==='image'){
-    if(relevant&&plan.images!=='none'&&(plan.images==='detail'||segment===glance)){message.push(segment);pictures++;}
+   if(['image','mface'].includes(segment?.type)){
+    const direct=primaryDirect&&String(payload.user_id)===String(primary.user_id)||(Array.isArray(payload.message)?payload.message:[]).some(s=>s.type==='at'&&String(s.data?.qq)===String(payload.self_id));
+    if(relevant&&(direct||plan.images!=='none')&&(direct||plan.images==='detail'||segment===glance)){message.push(segment);pictures++;}
     else message.push({type:'text',data:{text:'（群友发了一张图片/表情，仅作聊天背景）'}});
    }else if(segment?.type==='at'){continue;}
    else if(segment?.type==='reply'&&!relevant){continue;}
    else if(relevant||['text','face','mface'].includes(segment?.type))message.push(segment);
   }
  }
- const mediaWords=selected.map(p=>Array.isArray(p.message)?p.message.filter(s=>s.type==='text'&&!s.data?._bridgeEvent).map(s=>String(s.data?.text||'')).join('\n'):String(p.raw_message||p.message||'')).join('\n');
- return{...primary,message,_bridgeMediaUserText:mediaWords,_groupAttentionApproved:true,_groupPlan:plan,_bridgeReceivedIds:ids,_bridgeGroupSpeakers:batch.map(p=>({id:String(p.user_id||''),name:String(p.sender?.card||p.sender?.nickname||'')}))};
+ // Other speakers remain readable context, but cannot supply this sender's
+ // operation instructions, media request or personal-memory evidence.
+ const mediaWords=chosen.filter(p=>String(p.user_id)===String(primary.user_id)).map(p=>Array.isArray(p.message)?p.message.filter(s=>s.type==='text'&&!s.data?._bridgeEvent).map(s=>String(s.data?.text||'')).join('\n'):String(p.raw_message||p.message||'')).join('\n');
+ if(pictures&&plan.images==='none')plan={...plan,images:'detail'};
+ return{...primary,message,_bridgeGroupReplySource:{message_type:'group',user_id:primary.user_id,message_id:primary.message_id,sender:primary.sender,message:primary.message},_bridgeMediaUserText:mediaWords,_groupAttentionApproved:true,_groupPlan:plan,_bridgeReceivedIds:ids,_bridgeGroupSpeakers:batch.map(p=>({id:String(p.user_id||''),name:String(p.sender?.card||p.sender?.nickname||'')}))};
 }
 
 export function visibleAssistantText(turn={}){

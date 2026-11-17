@@ -13,8 +13,8 @@ export function createVideoTasks({jobs,save,prepare,generate,deliver,authorize,r
    if(job.stamp!==c.stamp)throw Error('该视频任务的账号、人设或视频连接已改变，请先核对旧任务');
   }else{
    if(!String(args.prompt||'').trim())throw Error('请描述想生成的视频');
-   const key=hash([c.scope,c.auditId||c.callId,args,c.stamp]);job=jobs().find(j=>j.key===key);
-   if(!job){job={id:randomUUID(),key,scope:c.scope,stamp:c.stamp,args:{...args},status:'preparing',at:now()};jobs().push(job);save();}
+   const key=hash([c.scope,c.auditId||c.callId,args,c.stamp,c.generationOnly===true]);job=jobs().find(j=>j.key===key);
+   if(!job){job={id:randomUUID(),key,scope:c.scope,stamp:c.stamp,auditId:c.auditId||'',args:{...args},status:'preparing',at:now()};jobs().push(job);save();}
   }
   c={...c,recordId:job.id};
   if(pending.has(job.id))return pending.get(job.id);
@@ -29,6 +29,7 @@ export function createVideoTasks({jobs,save,prepare,generate,deliver,authorize,r
     }
     check();
     job.error='';
+    if(c.generationOnly===true)return {ok:true,...summary(job),queued:false,coverage:'视频文件已生成，交由本地对话的可靠发送队列发送；此处没有重复入队'};
     if(!job.deliveryId){const id=await deliver(job,c);if(!id)throw Error('视频已生成，但没有进入QQ发送队列；可恢复此任务，不必重新生成');job.deliveryId=id;job.status='queued';save();record(job,'queued');}
     return {ok:true,...summary(job),coverage:'视频文件已实际生成并排入QQ持久发送队列；是否送达以发送记录的平台回执为准，不要再次发送同一文件'};
    }catch(error){job.status=job.file?'delivery_pending':job.remote?'pending_check':'failed';job.error=String(error.message||error);save();record(job,'failed');throw error;}

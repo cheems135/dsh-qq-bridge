@@ -10,9 +10,13 @@ html[data-device-ui="phone"] .nav .tab.on{color:var(--accent-ink)!important;back
 html[data-device-ui="phone"] .tab>svg{width:22px;height:22px;margin:0}
 html[data-device-ui="phone"] .tab b{font-size:11px;line-height:1.4;font-weight:600}
 html[data-device-ui="phone"] .tab small,html[data-device-ui="phone"] .nav-arrow{display:none}
-html[data-device-ui="phone"] .mobile-returnbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 16px;border:0;background:var(--panel);font-size:12px}
+html[data-device-ui="phone"] .mobile-returnbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;border:0;background:var(--panel);font-size:12px}
+html[data-device-ui="phone"] .mobile-returnbar #returnOverview{grid-column:3;justify-self:end}
+html[data-device-ui="phone"] .mobile-returnbar #returnDsh{grid-column:2;justify-self:center}
 html[data-device-ui="phone"] .mobile-returnbar button{min-height:32px;padding:4px 10px;font-size:12px}
-html[data-device-ui="phone"] #boxHomeHelp{display:none}
+html[data-device-ui="phone"] #boxHomeHelp{display:block;flex:0 0 auto}
+html[data-device-ui="phone"] .device-ui-title{min-width:0;flex:1}
+html[data-device-ui="phone"] #boxHomeHelp summary{min-height:36px;padding:6px 10px;white-space:nowrap}
 html[data-device-ui="phone"] .device-ui-bar{display:flex;gap:10px;align-items:center;justify-content:space-between;max-width:760px;margin:auto;padding:15px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
 html[data-device-ui="phone"] .device-ui-title b{display:block;font-size:20px;letter-spacing:-.035em}
 html[data-device-ui="phone"] .device-ui-title small{display:block;color:var(--ink2);font-size:11px;margin-top:2px}
@@ -73,3 +77,4 @@ html[data-device-ui="phone"] [data-desktop-only]{display:none!important}
 html[data-device-ui="phone"] .modalbox{width:calc(100vw - 24px);max-height:85dvh;overflow:auto}
 html[data-device-ui="phone"][data-theme="dark"]{color-scheme:dark;--bg:#1a1e24;--panel:#232831;--panel-2:#2b313c;--ink:#e5e9ef;--ink2:#b0b8c4;--ink3:#a1adbd;--line:#353d48;--line2:#454e5c;--soft:#2b313b;--soft2:#333c49;--accent:#4b75a3;--accent-ink:#bad1ef;--accent-weak:#303e52;--hero:#2b3543;--hero-ink:#c4d7ef;--ok:#a2cdb5;--warn:#d6b77d;--danger:#eca0a0;--paper:#292d34;--paper-rule:#383e47}
 html[data-device-ui="phone"][data-theme="dark"] button.primary:hover:not(:disabled){background:#3b628e!important}
+

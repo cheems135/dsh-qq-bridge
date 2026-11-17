@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createLocalModelServer} from '../local-model-server.mjs';
@@ -93,4 +93,37 @@ test('chat import in a mixed workflow chooses text ancestors instead of the defa
 test('manual chat output still rejects missing nodes and unsafe field names',()=>fixture(async({post})=>{
  const inspected=await post('/v1/local/workflow/inspect',{workflow:{'7':{class_type:'MyLanguageNode',inputs:{question:'hi'}}},kind:'chat'});
  for(const output of [{node:'missing',field:'answer'},{node:'7',field:'__proto__'}])assert.equal((await post('/v1/local/workflow/import',{token:inspected.data.token,kind:'chat',output:{...output,kind:'chat',manual:true},inputs:inspected.data.analysis.inputs})).status,400);
+}));
+
+test('the reported three-node local chat imports with vision, preserves the source model, and can be deleted while active',()=>fixture(async({post,service,calls})=>{
+ const graph={
+  '1':{class_type:'CustomLocalChat',inputs:{system_prompt:'original persona',question:'original question',server_url:'http://127.0.0.1:9999',max_tokens:4000,temperature:0.6,seed:0,use_image:false,image:['3',0]}},
+  '2':{class_type:'ShowText|pysssss',inputs:{text:['1',0]}},
+  '3':{class_type:'LoadImage',inputs:{image:'original.png'}}
+ };
+ const inspected=await post('/v1/local/workflow/inspect',{workflow:graph,kind:'chat',filename:'my-model.json'});
+ assert.equal(inspected.status,200);assert.equal(inspected.data.analysis.ready,true);
+ assert.equal(inspected.data.analysis.inputs.prompt.field,'question');assert.equal(inspected.data.analysis.inputs.imageEnabled.field,'use_image');
+ const imported=await post('/v1/local/workflow/import',{token:inspected.data.token,kind:'chat',inputs:inspected.data.analysis.inputs,output:inspected.data.analysis.outputs[0],activateChat:true});
+ assert.equal(imported.status,200,JSON.stringify(imported.data));
+ const entry=imported.data.entry;
+ assert.equal(JSON.parse(readFileSync(entry.file))['1'].inputs.server_url,graph['1'].inputs.server_url);
+ assert.equal(service.config.chatWorkflow,entry.id);
+ const deleted=await post('/v1/local/workflow/delete',{workflowId:entry.id});
+ assert.equal(deleted.status,200,JSON.stringify(deleted.data));assert.equal(deleted.data.deleted,true);
+ assert.equal(deleted.data.config.chatWorkflow,'');assert.equal(deleted.data.config.modelId,'');
+ assert.deepEqual(deleted.data.config.workflowLibrary,[]);assert.equal(existsSync(entry.file),true);
+ const repeated=await post('/v1/local/workflow/delete',{workflowId:entry.id});assert.equal(repeated.status,200);assert.equal(repeated.data.deleted,false);
+ assert.equal(calls.length,0);
+}));
+
+test('deleting a default image workflow persists and does not resurrect a legacy registration',()=>fixture(async({post,service})=>{
+ const inspected=await post('/v1/local/workflow/inspect',{workflow:graph});
+ const imported=await post('/v1/local/workflow/import',{token:inspected.data.token});
+ const id=imported.data.entry.id;
+ await post('/config',{defaultWorkflows:{image:id,video:''}});
+ const removed=await post('/v1/local/workflow/delete',{workflowId:id});assert.equal(removed.status,200);
+ assert.equal(removed.data.config.defaultWorkflows.image,'');assert.deepEqual(removed.data.config.workflowLibrary,[]);
+ assert.equal(service.config.workflows.image.file,'');
+ assert.equal((await post('/config',{temperature:0.8})).data.config.workflowLibrary.length,0);
 }));

@@ -1,3 +1,4 @@
+import {groupSpeakerLabel} from './group-identity.js';
 import {estimateTokens} from './local-context.js';
 
 // Participation decisions have their own budget; ordinary chat history is untouched.
@@ -14,15 +15,15 @@ function recentLines(value,budget){
  for(const row of rows.reverse()){const next=[row,...kept].join('\n');if(estimateTokens(next)>budget){if(!kept.length)kept.push(excerpt(row,budget));break;}kept.unshift(row);}
  return kept.join('\n');
 }
-export function localGroupAttentionInput({snapshot={},identity='',leaving='',rows=[],background='',recent=''}={}){
+export function localGroupAttentionInput({snapshot={},identity='',owners=[],leaving='',rows=[],background='',recent=''}={}){
  const maxTokens=Math.max(1,Math.min(280,Number(snapshot.maxOutputTokens)||512));
  const capacity=Math.max(512,(Number(snapshot.contextWindow)||4096)-(Number(snapshot.maxOutputTokens)||512)-256);
  const budget=Math.max(320,Math.floor(capacity*.86)-32);
- const system=rules+'\n角色：'+excerpt(identity,Math.max(24,Math.min(240,Math.floor(budget*.12))))+(leaving?'\n离开条件：'+excerpt(leaving,80):'');
+ const system=rules+'\n按真实QQ号认人；owner=true才是人设号主，其他群友不用号主专属称呼。号主QQ='+JSON.stringify(owners)+'。\n角色：'+excerpt(identity,Math.max(24,Math.min(240,Math.floor(budget*.12))))+(leaving?'\n离开条件：'+excerpt(leaving,80):'');
  const room=Math.max(64,budget-estimateTokens(system)-50),batchRoom=Math.floor(room*.72);
  const ranked=rows.map((r,index)=>({...r,index})).sort((a,b)=>Number(!!b.direct)-Number(!!a.direct)||b.index-a.index),selected=[];
  let headerCost=0;
- for(const row of ranked){const header='['+String(row.id)+'] '+String(row.speaker||'群友').slice(0,16)+(row.direct?'（@你）':'')+'：';const cost=estimateTokens(header)+22;if(headerCost+cost>batchRoom&&selected.length)continue;selected.push({...row,header});headerCost+=cost;}
+ for(const row of ranked){const header='['+String(row.id)+'] '+groupSpeakerLabel(row.speakerId,String(row.speaker||'群友').slice(0,16),{owners})+(row.direct?'（@你）':'')+'：';const cost=estimateTokens(header)+22;if(headerCost+cost>batchRoom&&selected.length)continue;selected.push({...row,header});headerCost+=cost;}
  const each=Math.max(16,Math.floor((batchRoom-headerCost)/Math.max(1,selected.length))+22);
  const lines=selected.sort((a,b)=>a.index-b.index).map(row=>row.header+excerpt(String(row.text||'')+(row.images?'（'+row.images+'张图片/表情）':''),each)).join('\n');
  let user='【本批新消息'+(selected.length<rows.length?'，另有'+(rows.length-selected.length)+'条未展示':'')+'】\n'+lines;

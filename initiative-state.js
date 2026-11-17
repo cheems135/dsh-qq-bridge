@@ -11,6 +11,7 @@ export function initiativeWindow(config,now=Date.now()){
 export function initiativeAllowed(config,state,{kind='chats',now=Date.now(),manual=false,quiet=false}={}){
   if(manual)return true;
   if(!config.enabled||quiet||!initiativeWindow(config,now))return false;
+  if(config.unrestricted)return true;
   if((state.counts[kind]||0)>=integer(config.maxPerDay?.[kind],0,0,1000))return false;
   const times=Object.entries(state.actions||{}).filter(([action])=>kind==='chats'?!['qzone','qzoneReply','signature'].includes(action):action===(kind==='qzoneReplies'?'qzoneReply':kind)).map(([,row])=>Number(row.lastAt)||0);
   const lastAt=Object.keys(state.actions||{}).length?Math.max(0,...times):state.lastActionAt;

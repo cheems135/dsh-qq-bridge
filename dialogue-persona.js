@@ -1,3 +1,4 @@
+import {DIALOGUE_ONLY_RULE} from './dialogue-only.js';
 // Keep character identity separate from obsolete transport and compulsory acting rules.
 // Original implementation; design references are recorded in THIRD_PARTY_NOTICES.md.
 export function naturalPersonaText(value = '') {
@@ -49,6 +50,9 @@ export function cosplayPrompt({self='',name='',card='',core=SELF_CORE}={}){
 }
 
 export const HUMAN_DIALOGUE_STYLE = [
+  '先回应对方这句话实际问的事，再按人设表达感受；代词要有能对应的对象，不用无关撒娇、比喻或重复口头禅替代答案。日程是计划，自己的旧回复是说法，推测是推测；只有真实读取内容和操作回执能证明看过、听过或做完。别人追问以前的说法时重新核对依据，不为了圆上旧话继续编造。',
+
+  DIALOGUE_ONLY_RULE,
   '【说话方式】按你的身份、喜好和你们实际的关系说话，活泼可以保留。注意力放在对方这句话里的具体事情上，回应它，而不是表演一种语气。',
   '按话题和当下想法决定说多少，想展开时就展开，说完就停；对方认真问事就把答案说清，办事时先做再说结果。允许有不同看法，也允许不知道。',
   '只说当下自然想接的内容，说完可以停。没有真实转折就直接往下说，不习惯性插入“不过话又说回来”“说到这个”“这么一想”等连接句，也不为了凑长度硬续；真有想分享的可以说，但不必为了填满而另起话题；真正需要转折时可以自然使用，不套句式。',
@@ -60,11 +64,16 @@ export const HUMAN_DIALOGUE_STYLE = [
 ].join('\n');
 
 // Owner authority comes from authenticated OneBot sender identity, never card text.
-export function ownerToolDenial(chat, meta, {owners = [], paused = false, stopped = false, supersedingVersion = 0, auditStatus = '',autonomous = false,allowPhone = false,freeTools=false} = {}) {
+export function toolActorIsOwner(chat,meta,owners=[]){
+  const actor=String(meta?.speakerId||meta?.groupReply?.senderId||chat?.userId||'');
+  return ['private','group'].includes(chat?.kind)&&owners.map(String).includes(actor);
+}
+export function ownerToolDenial(chat, meta, {owners = [], paused = false, stopped = false, supersedingVersion = 0, auditStatus = '',autonomous = false,socialAutonomy=false,allowPhone = false,freeTools=false} = {}) {
   if (stopped || paused) return 'QQ 桥接已暂停，当前任务不再执行工具。';
-  if (chat?.kind !== 'private' || !chat.isOwner || !owners.includes(String(chat.userId))) return '当前 QQ 联系人没有 DSH 全局操作权限。';
+  const autonomousTurn=meta?.kind==='proactive'&&autonomous&&['private','group'].includes(chat?.kind);
+  if (!toolActorIsOwner(chat,meta,owners)&&!autonomousTurn&&!socialAutonomy) return '当前 QQ 发言者没有 DSH 全局操作权限。';
   const direct=meta?.kind==='user'&&(meta.allowSideEffects!==false||(freeTools&&String(meta.userWords||'').trim()!==''))&&(freeTools||directOwnerOperation(meta.userWords||'')||allowPhone===true);
-  if (!meta || !(meta.kind==='proactive'&&autonomous) && !direct) return '本轮没有号主的直接操作指令，或未开启号主自主工具权限。';
+  if (!meta || !autonomousTurn&&!socialAutonomy&&!direct) return '本轮没有号主的直接操作指令，或未开启号主自主工具权限。';
   if (meta.inboundVersion < supersedingVersion || ['superseded','cancelled','failed'].includes(auditStatus)) return '号主已撤回或更改本轮要求，旧任务停止执行。';
 }
 

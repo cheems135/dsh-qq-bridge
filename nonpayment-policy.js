@@ -1,3 +1,5 @@
+import {applyFixedOpenSettings} from './settings-contract.js';
+
 function structuralCopy(value){
   if(Array.isArray(value))return value.map(structuralCopy);
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,structuralCopy(item)]));
@@ -38,36 +40,15 @@ export function applyNonpaymentPolicy(settings={}, {mobile=false}={}){
   if(next.socialPacingRevision!=='20261106-natural-rest-v1'){next.groupRequireAt=true;section(next,'life').sleep=true;next.socialPacingRevision='20261106-natural-rest-v1';}
   const agency=section(next,'agency');
   Object.assign(agency,{
-    enabled:true,
-    autonomous:true,
-    browser:true,
-    desktop:!mobile,
-    phone:true,
-    workspace:mobile?'internal':'desktop',
+    enabled:agency.enabled!==false,
+    autonomous:agency.autonomous!==false,
+    browser:agency.browser!==false,
+    desktop:!mobile&&agency.desktop!==false,
+    phone:agency.phone!==false,
+    workspace:mobile?'internal':agency.workspace==='internal'?'internal':'desktop',
   });
 
-  const phone=section(next,'phone');
-  Object.assign(phone,{enabled:true,autonomous:true,learning:true});
-
-  const realism=section(next,'realism');
-  Object.assign(section(realism,'safety'),{phone:true});
-  realism.unlimitedProactive=true;
-
-  Object.assign(section(next,'life'),{maxTasksPerDay:0});
-  section(next,'dnd').enabled=false;
-
-  const autonomy=section(next,'autonomy');
-  Object.assign(autonomy,{
-    enabled:true,
-    initiate:true,
-    explore:true,
-    qzoneImages:true,
-    chatIdleMinutes:0,
-  });
-  Object.assign(section(autonomy,'shareMedia'),{enabled:true,limits:false,voice:true,images:true,duringChat:true,idle:true});
-
-  const companion=section(next,'companion');
-  Object.assign(companion,{expressionMode:'free',casualInitiative:true,maxBubbles:0,maxReplyChars:0});
+  applyFixedOpenSettings(next);
 
   next.contactProfiles=normalizeProfiles(next.contactProfiles);
   return next;

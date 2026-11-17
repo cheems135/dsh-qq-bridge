@@ -1,5 +1,8 @@
 import {qzoneDay,dailySpaceOffer} from './qzone-policy.js';
-export const PROACTIVE_GAP_MS=30*60000;
+const CONTACT_HISTORY_MS=7*86400000;
+const normalize=value=>String(value||'').normalize('NFKC').replace(/[\p{P}\p{S}\s]/gu,'').toLowerCase();
+const sameScope=(r,j)=>r.accountId===j.accountId&&r.chat===j.chat&&(r.personaId||'')===(j.personaId||'');
+const contactText=job=>normalize((job.segments||[]).filter(s=>s.type==='text').map(s=>s.data?.text||'').join(''));
 export function signatureAvailable(rows,accountId,now=Date.now()){return !rows.some(r=>r.accountId===accountId&&r.day===qzoneDay(now));}
 export function claimSignature(rows,accountId,now=Date.now()){
  if(!signatureAvailable(rows,accountId,now))throw Error('今天已尝试自动修改签名，明天再考虑；本人明确要求修改不受此限制');
@@ -14,18 +17,24 @@ export function claimSpaceComment(offers,c,row,now=Date.now()){
 }
 export function proactiveDenial(job,rows,lastIncoming,now=Date.now()){
  if(!job.initiative||job.manualInitiative)return '';
- const account=rows.filter(r=>r.accountId===job.accountId),own=account.find(r=>r.chat===job.chat);
- if(own&&job.proactiveEpisode&&own.episode===job.proactiveEpisode)return '';
- if(own&&Number(lastIncoming||0)<=own.at)return '等对话里有新消息再主动开口，不连续催回复';
- const latest=Math.max(0,...account.map(r=>Number(r.at)||0));
- if(latest&&now-latest<PROACTIVE_GAP_MS)return '距离上次主动联系不足30分钟，暂时保持安静';
+ const own=rows.filter(r=>sameScope(r,job)&&now-r.at<CONTACT_HISTORY_MS);
+ if(job.proactiveEpisode&&own.some(r=>r.episode===job.proactiveEpisode))return '';
+ const text=contactText(job);
+ // Decision probes have no payload. Check content when it actually reaches the outbox.
+ if(!job.segments)return '';
+ if(own.some(r=>now-r.at<6*3600000&&(text&&(r.texts||[]).includes(text)||!text&&job.fingerprint&&(r.fingerprints||[]).includes(job.fingerprint))))return '最近已经主动说过相同内容，不重复发送';
+ const latest=Math.max(0,...own.map(r=>Number(r.at)||0));
+ if(latest&&Number(lastIncoming||0)<=latest&&/^(?:你)?(?:在吗|在不在|怎么不回(?:我|消息)?|怎么还不回(?:我|消息)?|回我(?:一下)?|理理我|看到(?:了)?(?:就)?回(?:我)?(?:一下)?)(?:呀|啊|呢|嘛|哦|吧|啦)*$/.test(text))return '不重复追问在不在或催促回复';
  return '';
 }
 export function reserveProactive(job,rows,lastIncoming,now=Date.now()){
  const denial=proactiveDenial(job,rows,lastIncoming,now);if(denial)throw Error(denial);
  if(!job.initiative||job.manualInitiative)return false;
- const own=rows.find(r=>r.accountId===job.accountId&&r.chat===job.chat);
- if(own?.episode===job.proactiveEpisode)return false;
- const value={accountId:job.accountId,chat:job.chat,episode:job.proactiveEpisode,at:now,lastIncoming:Number(lastIncoming)||0};
- if(own)Object.assign(own,value);else rows.push(value);return true;
+ const own=rows.find(r=>sameScope(r,job)&&r.episode===job.proactiveEpisode),text=contactText(job);
+ if(own){own.texts||=[];own.fingerprints||=[];if(text&&!own.texts.includes(text))own.texts.push(text);if(job.fingerprint&&!own.fingerprints.includes(job.fingerprint))own.fingerprints.push(job.fingerprint);return false;}
+ const value={accountId:job.accountId,personaId:job.personaId||'',chat:job.chat,episode:job.proactiveEpisode,at:now,lastIncoming:Number(lastIncoming)||0,texts:text?[text]:[],fingerprints:job.fingerprint?[job.fingerprint]:[]};
+ rows.push(value);
+ for(let i=rows.length-1;i>=0;i--)if(now-rows[i].at>=CONTACT_HISTORY_MS)rows.splice(i,1);
+ const scoped=rows.filter(r=>sameScope(r,job));for(const old of scoped.slice(0,-32)){const i=rows.indexOf(old);if(i>=0)rows.splice(i,1);}
+ return true;
 }

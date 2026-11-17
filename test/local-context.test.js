@@ -37,9 +37,9 @@ test('deduplication and tool receipts never truncate the current user request',(
  const huge=buildPromptContext([{role:'system',content:'角色。'},{role:'user',content:'不要截断'.repeat(2000)}],{withSections:true});const blocked=optimizeLocalContext(huge,{window:2048});assert.equal(blocked.context.requiredTooLarge,true);assert.ok(blocked.user===huge.user);
 });
 
-test('compact protocols retain custom schemas and selectable workflows and leave repair instructions intact',()=>{
+test('compact protocols retain custom schemas and the manually selected workflow rule',()=>{
  const protocol=strictActionProtocol({image:{execute:()=>{},workflows:[{id:'draw-cat',name:'画猫工作流'}]},bridge_custom:{kind:'data',description:'自定义工具',parameters:{type:'object',properties:{requiredSpecial:{type:'string'}},required:['requiredSpecial']},execute:()=>{}}});
- const compact=compactLocalProtocol(protocol);assert.match(compact,/requiredSpecial/);assert.match(compact,/draw-cat/);assert.match(compact,/workflowId/);assert.doesNotMatch(compact,/bridge_tools 参数/);
+ const compact=compactLocalProtocol(protocol);assert.match(compact,/requiredSpecial/);assert.match(compact,/面板手动选中的当前工作流/);assert.doesNotMatch(compact,/draw-cat|workflowId|bridge_tools 参数/);
  assert.equal(compactLocalProtocol('只输出修正后的正文，不能调用工具。'),'只输出修正后的正文，不能调用工具。');
  assert.deepEqual(contextLimitFeedback('当前系统提示词、Skill reference 和用户消息约需 3555 tokens，超过可用输入上下文 3456。'),{required:3555,budget:3456});
  assert.ok(estimateTokens('中文 English')>0);

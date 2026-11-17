@@ -1,3 +1,4 @@
+import {readConsoleSource} from './console-source.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
@@ -10,7 +11,7 @@ import {listenLocalServer} from './local-server-listen.js';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
 
 test('the records panel distinguishes selected references, verified workflow bindings and subject clarification',()=>{
- const html=readFileSync(new URL('../console.html',import.meta.url),'utf8'),start=html.indexOf('  function invocationExtraDetails(row)'),end=html.indexOf('  function paintInvocations(',start);
+ const html=readConsoleSource(),start=html.indexOf('  function invocationExtraDetails(row)'),end=html.indexOf('  function paintInvocations(',start);
  const c=vm.createContext({esc:s=>String(s??'').replace(/[&<>"']/g,'_')});vm.runInContext(html.slice(start,end)+'\nthis.render=invocationExtraDetails;',c);
  assert.match(c.render({tool:'image',reference:{selected:true,used:false}}),/已选中，尚未确认上传绑定/);
  const bound=c.render({tool:'image',reference:{selected:true,used:true,verified:true,uploadedImage:'reference.png',onOutputPath:true,reason:'persona_reference_bound_to_submitted_workflow'}});assert.match(bound,/已上传并连接到输出分支/);assert.match(bound,/输出分支连通：是/);assert.match(bound,/不代表最终画面必然保持身份/);
@@ -21,7 +22,7 @@ test('the actual gateway blocks a missing required persona image and records bin
  for(const withImage of [false,true]){
   const dir=mkdtempSync(join(tmpdir(),'gateway-reference-')),configFile=join(dir,'config.json'),workflow=join(dir,'image.json'),resultFile=join(dir,'result.png');writeFileSync(resultFile,png);
   writeFileSync(workflow,JSON.stringify({'1':{class_type:'LoadImage',inputs:{image:''}},'2':{class_type:'SaveImage',inputs:{images:['1',0]}},'3':{class_type:'PrimitiveString',inputs:{value:''}}}));
-  writeFileSync(configFile,JSON.stringify({backend:'openai',modelId:'test-local-service',voiceEnabled:false,memoryProfile:'workflow',workflowLibrary:[{id:'portrait-workflow',name:'角色图片',kind:'image',file:workflow,inputs:{image:{node:'1',field:'image'},prompt:{node:'3',field:'value'}},output:{node:'2',field:'images',kind:'image'}}]}));
+  writeFileSync(configFile,JSON.stringify({backend:'openai',modelId:'isolated-test-model',voiceEnabled:false,memoryProfile:'workflow',workflowLibrary:[{id:'portrait-workflow',name:'角色图片',kind:'image',file:workflow,inputs:{image:{node:'1',field:'image'},prompt:{node:'3',field:'value'}},output:{node:'2',field:'images',kind:'image'}}]}));
   let mediaCalls=0;
   const runtime={queue:async()=>({running:0,pending:0}),release:async()=>({freed:true}),close:()=>{},run:async(_kind,args,options)=>{mediaCalls++;assert.equal(args.requirePersonaReference,true);assert.ok(args.image);options.onInvocation({status:'submitted',workflowDetails:{imageBinding:{value:'bridge/identity.png',onOutputPath:true}}});options.onInvocation({status:'submitted',promptId:'our-prompt'});return {ok:true,media:[{kind:'image',file:resultFile}]};}};
   const service=createLocalModelServer({configFile,env:{LOCAL_AI_WORK_DIR:dir},runtime,logger:()=>{},model:async()=> '先等我一下。',fetchImpl:async()=>Response.json({queue_running:[],queue_pending:[]})});const base=await listenLocalServer(service);
@@ -56,7 +57,7 @@ test('missing references, absent mappings and disconnected image nodes cannot fa
 });
 
 test('ambiguous photo subjects ask naturally without submitting any media workflow and record why',async()=>{
- const dir=mkdtempSync(join(tmpdir(),'subject-clarify-')),configFile=join(dir,'config.json');writeFileSync(configFile,JSON.stringify({backend:'openai',modelId:'test-local-model',voiceEnabled:false,dialoguePriority:'speed'}));let mediaCalls=0;
+ const dir=mkdtempSync(join(tmpdir(),'subject-clarify-')),configFile=join(dir,'config.json');writeFileSync(configFile,JSON.stringify({backend:'openai',modelId:'isolated-test-model',voiceEnabled:false,dialoguePriority:'speed'}));let mediaCalls=0;
  const service=createLocalModelServer({configFile,env:{LOCAL_AI_WORK_DIR:dir},logger:()=>{},runtime:{queue:async()=>({running:0,pending:0}),release:async()=>({ok:true}),close:()=>{}},model:async({messages})=>{assert.match(JSON.stringify(messages),/拍摄主体还未明确/);return '你想看我，还是拍窗外给你看呀？';},tools:{image:{execute:async()=>{mediaCalls++;throw Error('no media permitted');}}}});
  const base=await listenLocalServer(service);
  try{for(const legacyHost of [false,true]){const response=await fetch(base+'/v1/local/turn',{method:'POST',body:JSON.stringify({messages:[{role:'user',content:'拍一张给我看看'}],turnContext:{imagePlan:legacyHost?{ownPortrait:false}:{subjectResolution:{source:'needs-subject',ambiguous:true}},personaReferenceDiagnostics:{configured:true,prepared:false}}})});const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));assert.equal(mediaCalls,0);assert.equal(body.attachments.length,0);assert.match(body.text,/想看我/);assert.ok(body.invocations.some(r=>r.reference?.reason==='subject_needs_clarification'));}}

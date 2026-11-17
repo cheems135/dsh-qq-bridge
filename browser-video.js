@@ -1,17 +1,21 @@
+import {visualObservationPolicy} from './visual-observation.js';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {browserUrl,sameBrowserDestination} from './browser-controller.js';
 
+const recentByBrowser=new WeakMap();
 // Desktop watching always opens the configured browser through the common
 // controller. There is deliberately no decoder or alternate-browser fallback.
 export async function readBrowserVideo({browser,args={},context={},scope='',previous,authorize=()=>true,readFile=readFileSync,sleep=ms=>delay(ms,undefined,{signal:context.signal})}={}){
  const check=()=>{context.signal?.throwIfAborted();if(!authorize(context))throw Error('视频观察期间会话或浏览器权限已改变');};
+ const policy=visualObservationPolicy(context);
  check();const url=browserUrl(args.url);
  const before=await browser.peekVideo(context);
  const continuing=before&&previous?.mode==='browser'&&previous.scope===scope&&
   (sameBrowserDestination(before.url,url)||sameBrowserDestination(previous.url,url)&&sameBrowserDestination(before.url,previous.finalUrl||previous.url));
- const opened=await browser.act({action:'navigate',url},context);check();
+ const samePage=before&&sameBrowserDestination(before.url,url);
+ const opened=samePage?{url:before.url}:await browser.act({action:'navigate',url},context);check();
  let player=null;
  for(let i=0;i<9;i++){
   check();player=await browser.peekVideo(context);
@@ -22,29 +26,39 @@ export async function readBrowserVideo({browser,args={},context={},scope='',prev
  const pageUrl=opened.url||player.url;
  if(!sameBrowserDestination(player.url,pageUrl))throw Error('浏览器已切换页面，本轮停止旧视频观察');
  if(args.at!==undefined){await browser.act({action:'seek',at:args.at},context);check();}
- if(!continuing||args.action==='start'){
+ if(player.paused&&(!continuing||args.action==='start')){
   await browser.act({action:'play'},context);check();player=await browser.peekVideo(context);
  }
  const frames=[];let state=player;
- for(let i=0;i<3;i++){
+ {
   check();state=await browser.peekVideo(context);
   if(!state||!sameBrowserDestination(state.url,pageUrl))throw Error('浏览器已切换视频，本轮停止旧视频观察');
   const at=Number(state.currentTime);
   if(!Number.isFinite(at)||at<0)throw Error('浏览器没有返回有效播放位置');
-  if(i&&at===frames.at(-1).at)break;
-  const shot=await browser.act({action:'screenshot'},context);check();
+  const shot=browser.captureVideo?await browser.captureVideo(context):await browser.act({action:'screenshot'},context);check();
   if(shot.url&&!sameBrowserDestination(shot.url,pageUrl))throw Error('截图时浏览器已切换视频，未采用旧视频画面');
-  const bytes=readFile(shot.file);
-  if(bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('浏览器未返回有效视频截图');
-  frames.push({at,part:{type:'image',mediaType:'image/png',name:'live-player-'+i,data:bytes.toString('base64')}});
-  if(state.paused||state.ended)break;
-  if(i<2)await sleep(500);
+  const bytes=shot.data?Buffer.from(shot.data,'base64'):readFile(shot.file);
+  const png=bytes.subarray(0,8).toString('hex')==='89504e470d0a1a0a',jpeg=bytes[0]===255&&bytes[1]===216;
+  if(!png&&!jpeg)throw Error('浏览器未返回有效视频截图');
+  if(bytes.length>policy.maxBytes)throw Error('当前视频画面超过本轮图像预算');
+  frames.push({at:shot.at??at,capturedAt:shot.capturedAt??Date.now(),part:{type:'image',mediaType:png?'image/png':'image/jpeg',name:'live-player-current',data:bytes.toString('base64')}});
+
  }
  check();if(!frames.length)throw Error('指定浏览器没有返回实际画面');
+ // A model can take seconds to answer. Capture NOW on every request; an older
+ // frame is optional motion context, never a queued task to catch up with.
+ let cache=recentByBrowser.get(browser);if(!cache){cache=new Map();recentByBrowser.set(browser,cache);}
+ const identity=JSON.stringify([scope,context.accountId,context.personaId,context.key,context.generation,policy.backend]);
+ const fresh=frames[0],old=cache.get(identity),now=Date.now();
+ for(const [key,row] of cache)if(now-row.savedAt>2500)cache.delete(key);
+ if(policy.maxFrames>1&&args.at===undefined&&args.action!=='start'&&old&&sameBrowserDestination(old.url,pageUrl)&&now-old.savedAt<=2500&&fresh.at>old.frame.at&&fresh.at-old.frame.at<=2.5&&fresh.part.data!==old.frame.part.data)frames.unshift(old.frame);
+ cache.delete(identity);cache.set(identity,{url:pageUrl,frame:fresh,savedAt:now});
+ while(cache.size>8)cache.delete(cache.keys().next().value);
+
  const from=frames[0].at,to=frames.at(-1).at,status=state.ended?'ended':state.paused?'paused':'streaming';
  const sessionId='browser'+createHash('sha256').update(scope+'\n'+url).digest('hex').slice(0,32);
  const executable=browser.status?.().executablePath||'';
- return {ok:true,url,finalUrl:pageUrl,status,mode:'browser',backend:'configured-browser',browserExecutable:executable,sessionId,continuous:true,substantive:true,cursor:to,duration:state.duration,
+ return {ok:true,observationMode:'latest-frame',visualRevision:'20261111-latest-on-demand-v1',visualBudget:policy,url,finalUrl:pageUrl,status,mode:'browser',backend:'configured-browser',browserExecutable:executable,sessionId,continuous:false,realtimeCapture:true,requiresNext:status!=='ended',reactionMode:'on-demand',substantive:true,cursor:to,duration:state.duration,
   coverage:'通过设置中的浏览器观察真实播放器，当前画面 '+from.toFixed(1)+'–'+to.toFixed(1)+' 秒；不代表看过未观察的时间段或已听音轨。',
   observed:{deliveredFrom:from,deliveredTo:to,gap:!!previous&&previous.scope===scope&&Number(previous.at)<from-2,complete:false},
   position:{at:to,source:'configured-browser'},window:{start:from,end:to,requested:true},frames,audioDecoded:false,next:status==='ended'?null:{action:'next',url,sessionId}};

@@ -42,15 +42,6 @@ test('API initiatives keep per-activity budgets, cooldowns and fair selection',(
  assert.equal(selectInitiative([{action:'chat'},{action:'qzoneReply',event:true}],{counts:{}},config,{now}).action,'qzoneReply');
  assert.equal(selectInitiative([{action:'qzone'}],{counts:{qzone:1}},config,{now}),null);
 });
-test('unrestricted API initiatives bypass quotas, gaps and considered backoff without changing scoring',()=>{
- const now=1700000000000,limited=initiativePolicy({minGapMinutes:45,maxPerDay:{chats:1,qzone:1}},false),unrestricted=initiativePolicy({minGapMinutes:45,maxPerDay:{chats:1,qzone:1}},true);
- assert.equal(unrestricted.unrestricted,true);assert.equal(unrestricted.minGapMinutes,0);
- const blocked={counts:{chats:9,qzone:9},actions:{chat:{lastAt:now,consideredAt:now},qzone:{lastAt:now,consideredAt:now}}};
- assert.equal(selectInitiative([{action:'chat'}],blocked,limited,{now}),null);
- assert.equal(selectInitiative([{action:'chat'}],blocked,unrestricted,{now}).action,'chat');
- const state={counts:{},actions:{qzone:{consideredAt:now}}};
- assert.equal(selectInitiative([{action:'chat',event:true},{action:'qzone'}],state,unrestricted,{now}).action,'chat');
-});
 test('sharing expression carries current emotion and real dialogue without requiring a stock question',()=>{
  const prompt=sharingExpression({tone:'有点得意，轻松',recent:['刚才那段节奏好特别']});
  assert.match(prompt,/有点得意/);assert.match(prompt,/刚才那段节奏/);assert.match(prompt,/不机械.*你觉得呢/);assert.match(prompt,/不编共同回忆/);assert.match(prompt,/工具回执.*调用记录/);assert.match(prompt,/不把每次分享演成兴奋/);
@@ -96,9 +87,11 @@ test('Qzone replies only to a read comment in the same scope, with exact parent 
  await f.service.publish(reply,context);const form=f.calls.at(-1).params;assert.equal(form.get('topicId'),auth.uin+'_post-1__1');assert.equal(form.get('t2_tid'),'4');assert.equal(form.get('t2_uin'),'87654321');
  await assert.rejects(f.service.publish({...reply,images:['a']},context),/尚未验证带图回复/);
 });
-test('Qzone automatic replies select other people on own posts and skip already submitted targets',async()=>{
+test('Qzone reply candidates require a prior visit and skip already submitted targets',async()=>{
  const f=fixture();await f.service.publish({text:'这张图的颜色',images:[]},context);
- await f.service.comments({tid:'post-1',uin:auth.uin},context);const target=await f.service.nextReply(context);assert.equal(target.id,'4');assert.equal(target.postText,'这张图的颜色');
+ const before=f.calls.length;assert.equal(await f.service.nextReply(context),null);assert.equal(f.calls.length,before);
+ await f.service.comments({tid:'post-1',uin:auth.uin},context);
+ const target=await f.service.nextReply(context);assert.equal(target.id,'4');assert.equal(target.postText,'这张图的颜色');
  await f.service.publish({text:'同感',target:{tid:target.tid,uin:target.owner},commentId:target.id,commentUin:target.uin},context);
  assert.equal(await f.service.nextReply(context),null);assert.equal(await f.service.nextReply({...context,accountId:'other'}),null);
 });

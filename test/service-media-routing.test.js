@@ -17,7 +17,7 @@ test('media-only local image runs once through its real workflow selector withou
   imageFile=join(s.dir,'picture.png');writeFileSync(imageFile,Buffer.from('89504e470d0a1a0a','hex'));const base=await listen(s.service);let promptRequests=0;
   try{
     const response=await runWithHostTools({baseUrl:base,messages:[{role:'user',content:'窗边的木桌和一本书'}],turnContext:{mediaOnly:{kind:'image',prompt:'窗边的木桌和一本书'}},tools:{bridge_model_complete:{parameters:{type:'object',properties:{messages:{type:'array'},protocol:{type:'string'},outputTokens:{type:'integer'},purpose:{type:'string'}},required:['messages']},execute:async()=>{promptRequests++;return '等我整理好画面。';}}}});
-    assert.equal(response.ok,true,JSON.stringify(response.body));assert.equal(images,1);assert.equal(otherRuns,0);assert.equal(promptRequests,1);assert.equal(response.body.attachments[0].kind,'image');assert.equal(response.body.attachments[0].file,imageFile);
+    assert.equal(response.ok,true,JSON.stringify(response.body));assert.equal(images,1);assert.equal(otherRuns,0);assert.equal(promptRequests,0);assert.equal(response.body.attachments[0].kind,'image');assert.equal(response.body.attachments[0].file,imageFile);
   }finally{await s.service.close();}
 });
 test('local chat speech action goes through the selected host API callback, not the local voice engine',async()=>{
@@ -34,4 +34,24 @@ test('local chat image action honors a selected API callback and hides internal 
     assert.equal(Object.keys(withoutInternalMediaTools({...tools,bridge_tools:{}})).join(','),'bridge_tools');
     const response=await runWithHostTools({baseUrl:base,messages:[{role:'user',content:'生成图片'}],tools});assert.equal(response.ok,true,JSON.stringify(response.body));assert.equal(images,1);assert.equal(response.body.attachments[0].kind,'image');assert.equal(response.body.attachments[0].file,file);
   }finally{await s.service.close();}
+});
+
+
+test('local chat video action uses the selected API callback without a local video workflow',async()=>{
+ let generated=0;const s=setup({model:async()=>({content:JSON.stringify({action:'video',arguments:{prompt:'天空中的云朵缓慢移动'}})})});
+ const file=join(s.dir,'api-video.mp4'),bytes=Buffer.alloc(32);bytes.write('ftyp',4);writeFileSync(file,bytes);const base=await listen(s.service);
+ try{
+  const tools=mixedHostMediaTools({video:async()=>{generated++;return {ok:true,attachments:[{kind:'video',file}]};}});
+  const response=await runWithHostTools({baseUrl:base,messages:[{role:'user',content:'生成天空云朵移动的视频'}],tools});
+  assert.equal(response.ok,true,JSON.stringify(response.body));assert.equal(generated,1);assert.equal(response.body.attachments[0].kind,'video');assert.equal(response.body.attachments[0].file,file);
+ }finally{await s.service.close();}
+});
+
+
+test('media-only local video runs its workflow without invoking the chat model',async()=>{
+ let generated=0;let file;
+ const s=setup({workflows:[{id:'local-video',kind:'video',name:'视频工作流',file:'mock.json',inputs:{prompt:{node:'1',field:'text'}},output:{node:'2',field:'videos',kind:'video'}}],runtime:{status:async()=>({reachable:true,workflows:[]}),release:async()=>({freed:true}),run:async(id)=>{assert.equal(id,'local-video');generated++;return {file,files:[{kind:'video',file}]};}}});
+ file=join(s.dir,'local-video.mp4');const bytes=Buffer.alloc(32);bytes.write('ftyp',4);writeFileSync(file,bytes);const base=await listen(s.service);
+ try{const response=await runWithHostTools({baseUrl:base,messages:[{role:'user',content:'生成天空云朵缓慢移动的视频'}],turnContext:{mediaOnly:{kind:'video',prompt:'天空云朵缓慢移动'}}});assert.equal(response.ok,true,JSON.stringify(response.body));assert.equal(generated,1);assert.equal(response.body.attachments[0].kind,'video');}
+ finally{await s.service.close();}
 });

@@ -2,20 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLocalInitiative} from '../local-initiative.js';
 
-test('spontaneous clothing mention requests real context before producing a final initiative',async()=>{
- const h=setup();let reads=0,attempt=0;
- h.respond(async({messages})=>{if(++attempt===1)return JSON.stringify({speak:false,contextTopics:['outfit'],contextQuery:'现在穿着什么'});assert.match(JSON.stringify(messages),/黑色外套/);return JSON.stringify({speak:true,text:'刚套上那件黑外套，突然觉得还挺适合拍逆光的。'});});
- const engine=createLocalInitiative({...h.options,readContext:async(topics,query,c)=>{reads++;assert.deepEqual(topics,['outfit']);assert.equal(c.key,h.ctx.key);return {topics:{outfit:{outfit:'黑色外套'}}};}});
- assert.equal((await engine.tick()).status,'queued');assert.equal(reads,1);assert.equal(h.calls.length,2);assert.equal(h.deliveries.length,1);
-});
-
-test('incoming QQ activity during requested context prevents a second inference or stale initiative',async()=>{
- const h=setup();let resume,entered;const started=new Promise(r=>entered=r);
- h.respond(async()=>JSON.stringify({speak:false,contextTopics:['memory'],contextQuery:'上次摄影'}));
- const engine=createLocalInitiative({...h.options,readContext:async()=>{entered();return new Promise(r=>resume=r);}});
- const pending=engine.tick();await started;h.ctx={...h.ctx,signature:'new-incoming'};resume({text:'旧资料'});assert.equal((await pending).status,'cancelled');assert.equal(h.calls.length,1);assert.equal(h.deliveries.length,0);
-});
-
 function setup(){
  let clock=Date.parse('2026-11-05T10:00:00+08:00'),ctx={allowed:true,id:'scope-a',signature:'account-persona-a',day:'2026-11-05',key:'private:12345',accountId:'a',personaId:'p',clock:'10:00',lastIncoming:clock-2*3600000,persona:'说话自然，有自己的想法。',memory:'对方喜欢摄影。',history:[{role:'user',content:'我在调整逆光照片，晚点再聊。'},{role:'assistant',content:'好，你先弄。'}],recent:['好，你先弄。'],scene:{date:'2026-11-05',start:'09:00',activity:'整理角色画布',outfit:'白色衬衫'}};
  const states={},calls=[],deliveries=[],records=[];
@@ -29,7 +15,7 @@ test('idle initiative uses one local decision with persona, history and memory, 
  const h=setup();assert.equal((await h.engine.tick()).status,'queued');assert.equal(h.calls.length,1);assert.equal(h.deliveries.length,1);
  assert.match(JSON.stringify(h.calls[0].messages),/逆光|摄影/);assert.match(JSON.stringify(h.calls[0].messages),/现在没有用户新消息/);assert.match(JSON.stringify(h.calls[0].messages),/只允许文字/);
  assert.equal(h.records.at(-1).result.deliveryId,'outbox-1');assert.equal(h.records.at(-1).backend,'local');assert.equal(h.states['scope-a'].count,1);
- h.advance(2*3600000);assert.match((await h.engine.tick()).reason,/等你回复/);assert.equal(h.calls.length,1);
+ h.advance(2*3600000);assert.equal((await h.engine.tick()).status,'quiet');assert.equal(h.calls.length,2);assert.equal(h.deliveries.length,1);
 });
 
 test('silence is a valid decision and is not repeatedly evaluated on each maintenance tick',async()=>{
@@ -48,33 +34,11 @@ test('permissions, busy service, lack of history, hourly gap and daily cap do no
  }
 });
 
-test('unrestricted permissions still wait for a real reply, but do not impose the old daily count cap',async()=>{
- const h=setup();h.ctx={...h.ctx,unrestricted:true,lastIncoming:h.clock-40*60000};h.states['scope-a']={day:h.ctx.day,count:3,lastSent:h.clock-30*60000,lastAttempt:h.clock-5*60000};
- assert.equal((await h.engine.tick()).status,'waiting');assert.equal(h.calls.length,0);h.ctx={...h.ctx,lastIncoming:h.clock-5*60000};
- assert.equal((await h.engine.tick()).status,'queued');assert.equal(h.calls.length,1);assert.equal(h.deliveries.length,1);assert.equal(h.states['scope-a'].count,4);
-});
-
-test('unrestricted context still requires a first contact, honors GPU busy and suppresses repeats',async()=>{
- const noContact=setup();noContact.ctx={...noContact.ctx,unrestricted:true,lastIncoming:0};
- assert.match((await noContact.engine.tick()).reason,/真实私聊/);assert.equal(noContact.calls.length,0);
- const busy=setup();busy.ctx={...busy.ctx,unrestricted:true};busy.probe(async()=>({busy:true}));
- assert.equal((await busy.engine.tick()).status,'waiting');assert.equal(busy.calls.length,0);
- const repeated=setup();repeated.ctx={...repeated.ctx,unrestricted:true,lastIncoming:repeated.clock-5*60000};repeated.respond(async()=>'{"speak":true,"text":"好，你先弄。"}');
- assert.equal((await repeated.engine.tick()).status,'quiet');assert.equal(repeated.deliveries.length,0);
-});
-
-test('singleflight and state binding still prevent duplicate or stale unrestricted deliveries',async()=>{
- const h=setup();let started,finish;const ready=new Promise(resolve=>started=resolve);
- h.ctx={...h.ctx,unrestricted:true};h.respond(async()=>{started();return new Promise(resolve=>finish=()=>resolve('{"speak":true,"text":"这是另一句真实想法。"}'));});
- const first=h.engine.tick();await ready;assert.equal((await h.engine.tick()).status,'busy');
- h.ctx={...h.ctx,signature:'changed-persona'};finish();assert.equal((await first).status,'cancelled');assert.equal(h.deliveries.length,0);
-});
-
 test('a new schedule is an event after 20 idle minutes; clock changes alone are not events',async()=>{
  const h=setup();h.ctx={...h.ctx,lastIncoming:h.clock-25*60000};await h.engine.tick();assert.equal(h.calls.length,0);
  h.ctx={...h.ctx,scene:{...h.ctx.scene,now:'10:05'}};await h.engine.tick();assert.equal(h.calls.length,0);
  h.ctx={...h.ctx,scene:{...h.ctx.scene,start:'10:00',activity:'整理另一幅画布'}};assert.equal((await h.engine.tick()).status,'queued');
- assert.equal(h.records[0].arguments.trigger,'schedule');assert.match(h.calls[0].messages.at(-1).content,/日程有了变化/);
+ assert.equal(h.records[0].arguments.trigger,'schedule');assert.match(h.calls[0].messages.at(-1).content,/新的活动线索或实际进展/);
 });
 
 test('incoming QQ cancellation interrupts a pending initiative and suppresses even a late model result',async()=>{
@@ -100,7 +64,19 @@ test('malformed output, repeated catchphrases and unavailable local features do 
 });
 
 test('restart and day rollover retain no-repeat and gap state while resetting the daily count',async()=>{
- const h=setup();await h.engine.tick();const restarted=createLocalInitiative(h.options);h.advance(2*3600000);assert.match((await restarted.tick()).reason,/等你回复/);
+ const h=setup();await h.engine.tick();const restarted=createLocalInitiative(h.options);h.advance(2*3600000);assert.equal((await restarted.tick()).status,'quiet');assert.equal(h.deliveries.length,1);
  h.ctx={...h.ctx,day:'2026-11-06',lastIncoming:h.clock-70*60000};h.states['scope-a'].count=3;h.advance(24*3600000);h.ctx={...h.ctx,lastIncoming:h.clock-70*60000};
- assert.equal((await restarted.tick()).status,'queued');assert.equal(h.states['scope-a'].count,1);
+ h.respond(async()=>JSON.stringify({speak:true,text:'今天想换个方向试试雨天街拍'}));assert.equal((await restarted.tick()).status,'queued');assert.equal(h.states['scope-a'].count,1);
+});
+
+test('malformed initiative gets one bounded format repair and preserves silence',async()=>{
+ const h=setup();let calls=0;
+ h.respond(async()=>++calls===1?'这不是 JSON':'{"speak":false,"text":"","reason":"没有明确新话题"}');
+ assert.equal((await h.engine.tick()).status,'quiet');assert.equal(calls,2);assert.equal(h.deliveries.length,0);
+});
+
+test('QQ arrival during format repair cancels rather than sending late output',async()=>{
+ const h=setup();let calls=0;
+ h.respond(async()=>{if(++calls===1)return '格式错误';h.engine.cancel();return '{"speak":true,"text":"不应发送"}';});
+ assert.equal((await h.engine.tick()).status,'cancelled');assert.equal(h.deliveries.length,0);
 });

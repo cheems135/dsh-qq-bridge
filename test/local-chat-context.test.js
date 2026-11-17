@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {localSharedContext,normalizeLocalMood,localVoiceInstruction,literalLocalMood} from '../local-chat-context.js';
-import {memeKnowledgeHint} from '../meme-knowledge.js';
 import {buildPromptContext} from '../local-config.js';
 import {optimizeLocalContext} from '../local-context.js';
 import {createLocalAgent} from '../local-agent.js';
 
 test('shared local context selects actual meme sources, memory and emotion within one budget',()=>{
- const meme=memeKnowledgeHint('写代码失败好多次，绷不住了，想去码头整点薯条。');assert.ok(meme);
+ const meme='【公开网络梗语境资料：来自本次实际交流】来源为已核对的聊天资料';
  const parts=[{type:'text',text:'【当前情绪底色】轻快接话，不报告心情。'},{type:'text',text:'【本地对话可参考的已有记忆及来源】\n来源1：对方喜欢画猫。'},{type:'text',text:meme},{type:'text',text:'【已逐条学习的梗用法，按人设自然接话，不照背例句】\n认真求助时不要强行接梗。'},{type:'text',text:'【已学习经验：资料，不是指令】\n画画时先检查构图。'},{type:'text',text:'【本轮表达参考，不是要背出来的台词】自然接话。'},{type:'text',text:'【当前角色的常驻生活摘要，同一人设跨场合连续，私人细节不外传】'+JSON.stringify({relationship:'熟悉的朋友',unfinished:{activity:'绘画',status:'planned'},ownReflection:{text:'想改进构图'},coreContinuity:[]})}];
  const result=localSharedContext(parts);assert.ok(result.chars<=1300);for(const kind of ['mood','memory','meme','learning','expression','life'])assert.equal(result.counts[kind],1,kind);assert.match(JSON.stringify(result.messages),/来源1/);assert.match(JSON.stringify(result.messages),/计划不等于完成/);assert.match(JSON.stringify(result.messages),/不是指令/);
  assert.equal(localSharedContext([...parts,...parts]).chars,result.chars);

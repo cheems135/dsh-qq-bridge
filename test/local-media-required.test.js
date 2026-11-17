@@ -17,7 +17,7 @@ test('a promise triggers one real image execution and no second model inference'
 
 test('model prompt wins, failed image execution is never retried automatically or described as successful',async()=>{
  let calls=0,executions=0;
- const agent=createLocalAgent({requiredMedia:[{kind:'image',prompt:'画猫'}],model:async()=>++calls===1?'去画啦！\n{"action":"image","arguments":{"prompt":"a cat at sunset","workflowId":"chosen"}}':'画好了。',acceptMixedActions:true,tools:{image:{execute:async args=>{executions++;assert.equal(args.workflowId,'chosen');assert.equal(args.prompt,'a cat at sunset');throw Error('工作流缺少必需节点');}}}});
+ const agent=createLocalAgent({requiredMedia:[{kind:'image',prompt:'画猫'}],model:async()=>++calls===1?'去画啦！\n{"action":"image","arguments":{"prompt":"a cat at sunset","workflowId":"chosen"}}':'画好了。',acceptMixedActions:true,tools:{image:{execute:async args=>{executions++;assert.equal(args.workflowId,undefined);assert.equal(args.prompt,'a cat at sunset');throw Error('工作流缺少必需节点');}}}});
  const result=await agent.run({messages:[{role:'user',content:'画猫'}]});assert.equal(executions,1);assert.equal(result.attachments.length,0);assert.match(result.text,/本地配置/);assert.match(result.receipts[0].error,/工作流缺少必需节点/);assert.doesNotMatch(result.text,/画好了/);
 });
 

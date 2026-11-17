@@ -6,7 +6,7 @@ function toolResult(kind, file) {
   return {ok: true, kind, file, media: [{kind, file}], text: `${kind} completed`};
 }
 
-test('tool schema lists workflow ids and optional source image', () => {
+test('tool schema keeps workflow selection in the panel and offers an optional source image', () => {
   const tools = toOpenAITools({
     image: {
       execute() {},
@@ -15,8 +15,8 @@ test('tool schema lists workflow ids and optional source image', () => {
     video: {execute() {}, workflows: [{id: 'motion', name: '动态'}]},
   });
   const image = tools.find(item => item.function.name === 'image');
-  assert.ok(image.function.parameters.properties.workflowId);
-  assert.match(image.function.parameters.properties.workflowId.description, /soft/);
+  assert.equal(image.function.parameters.properties.workflowId, undefined);
+  assert.equal(tools.find(item => item.function.name === 'video').function.parameters.properties.workflowId, undefined);
   assert.ok(image.function.parameters.properties.image);
   assert.deepEqual(image.function.parameters.required, ['prompt']);
 });
@@ -64,7 +64,7 @@ test('failed tools yield failure receipts without pretending files exist', async
   });
   const result = await agent.run({messages: [{role: 'user', content: '画图'}]});
   assert.equal(result.attachments.length, 0);
-  assert.match(result.text, /这张图.*没能完整接上/);
+  assert.match(result.text, /这张图.*没做成/);
   assert.equal(result.receipts[0].ok, false);
   assert.match(result.receipts[0].error, /失败/);
 });
@@ -111,7 +111,7 @@ test('failed speech is reported to the model instead of terminal success',async(
   let calls=0;
   const agent=createLocalAgent({model:async()=>++calls===1?'{"action":"speech","arguments":{"text":"你好","final":true}}':'语音没有生成成功。',tools:{speech:{execute:async()=>{throw Error('TTS unavailable');}}}});
   const result=await agent.run({messages:[{role:'user',content:'语音'}]});
-  assert.equal(calls,2);assert.equal(result.attachments.length,0);assert.equal(result.receipts[0].ok,false);assert.match(result.text,/这段语音.*没能完整接上/);
+  assert.equal(calls,2);assert.equal(result.attachments.length,0);assert.equal(result.receipts[0].ok,false);assert.match(result.text,/这段语音.*没做成/);
 });
 
 test('nonterminal speech can continue and changing final flag cannot repeat the audio',async()=>{
@@ -122,3 +122,20 @@ test('nonterminal speech can continue and changing final flag cannot repeat the 
   assert.equal(calls,3);assert.equal(speech,1);assert.equal(result.text,'完成');assert.ok(result.receipts.some(r=>r.duplicate));
 });
 
+
+
+test('autonomous action correction executes one checked tool without sending a promise',async()=>{
+ let modelCalls=0,toolCalls=0;const agent=createLocalAgent({expectAction:true,maxToolRounds:4,model:async()=>({content:++modelCalls===1?'我现在去读一下':modelCalls===2?JSON.stringify({action:'bridge_read',arguments:{url:'https://example.org'}}):'[skip]'}),tools:{bridge_read:{kind:'data',parameters:{type:'object',properties:{url:{type:'string'}},required:['url']},execute:async()=>{toolCalls++;return {ok:true,text:'真实内容'};}}}});
+ const result=await agent.run({messages:[{role:'user',content:'读一篇文章'}]});assert.equal(toolCalls,1);assert.equal(result.text,'[skip]');assert.equal(modelCalls,3);
+});
+
+test('autonomous action repair is bounded and quiet skips remain allowed',async()=>{
+ let calls=0;const agent=createLocalAgent({expectAction:true,maxToolRounds:6,model:async()=>{calls++;return {content:'我准备开始了'};},tools:{bridge_read:{execute:async()=>{throw Error('must not execute');}}}});
+ await assert.rejects(agent.run({messages:[{role:'user',content:'自己选一个目标'}]}),error=>error.code==='LOCAL_ACTION_MISSING');assert.equal(calls,2);
+ const quiet=createLocalAgent({expectAction:true,model:async()=>({content:'[skip]'})});assert.equal((await quiet.run({messages:[{role:'user',content:'自主活动'}]})).text,'[skip]');
+});
+
+test('an actual failed action is not replayed by the autonomous missing-action correction',async()=>{
+ let calls=0;const agent=createLocalAgent({expectAction:true,maxToolRounds:4,model:async()=>({content:calls===0?JSON.stringify({action:'bridge_read',arguments:{url:'https://example.org'}}):'现在读不了'}),tools:{bridge_read:{kind:'data',parameters:{type:'object',properties:{url:{type:'string'}},required:['url']},execute:async()=>{calls++;return {ok:false,error:'offline'};}}}});
+ const result=await agent.run({messages:[{role:'user',content:'阅读'}]});assert.equal(calls,1);assert.equal(result.receipts[0].ok,false);
+});

@@ -1,0 +1,18 @@
+/* Requested palette: pale blue and white, including diary paper. */
+html:root[data-device-ui]{--bg:#f4f9ff;--panel:#fff;--panel-2:#edf5ff;--ink:#30435d;--ink2:#607993;--ink3:#839bb3;--line:#dceafa;--line2:#c8ddf3;--soft:#eff6ff;--soft2:#e4f0fd;--accent:#4c8ed5;--accent-ink:#316cae;--accent-weak:#e4f1ff;--hero:#eaf4ff;--hero-ink:#4c729b}
+html:root[data-device-ui][data-theme="dark"]{--bg:#19232f;--panel:#233142;--panel-2:#2a3b50;--ink:#e4effb;--ink2:#b4c9df;--ink3:#91aac4;--line:#354c65;--line2:#46617c;--soft:#2b3e54;--soft2:#334d67;--accent:#9ac6f2;--accent-ink:#d2e7ff;--accent-weak:#2c4966}
+html .life-hero{background:linear-gradient(120deg,#e5f1ff,#f6fbff);border-color:#d5e6f8}
+html[data-theme="dark"] .life-hero{background:linear-gradient(120deg,#2a415b,#26374c);border-color:#3b5876}
+html .tile-icon,html .graph-selection{background:#eaf4ff;color:#527fae}
+html .diary-intro h2,html .diary-date,html .diary-doodle,html .diary-kaomoji{color:#547fa8}
+html[data-device-ui] .page-diary .diary-shelf{background:#f1f7ff!important;border-color:#cee2f7!important;box-shadow:0 5px 20px #7ba0c714!important}
+html[data-device-ui] .page-diary .diary-sheet,html[data-device-ui] .page-diary .diary-sheet:nth-child(2n){background-color:#fff!important;background-image:conic-gradient(#deedfc 25%,#fff 0 50%,#deedfc 0 75%,#fff 0)!important;background-size:28px 28px!important;background-position:0 0!important;border:1px solid #c6def6!important;color:#365575!important}
+html[data-device-ui] .page-diary .diary-sheet .diary-text,html[data-device-ui] .page-diary .diary-sheet .diary-title{background:transparent!important;color:#365575!important}
+html[data-device-ui] .page-diary .diary-sheet .diary-date{background:#ffffffd9!important;color:#4b739c!important}
+html[data-device-ui] .page-diary .diary-sheet :is(.diary-date b,.diary-date span,.diary-date small,.diary-doodle,.diary-kaomoji,summary){color:#4b739c!important}
+html[data-device-ui] .page-diary .diary-sheet .diary-actions button{background:#ffffffd9!important;color:#4b739c!important;border-color:#bfd8f1!important}
+html #panelDock{background:#f9fcff;border-color:#cfe2f6;border-radius:12px;box-shadow:0 3px 14px #497bad17}
+html #panelDock #saveCurrentPage{background:#548fce!important;color:#fff;border:0;border-radius:9px}
+html #panelDock small{color:#617d9b}
+html #panelDock[data-state="failed"] small{color:var(--danger)}
+html[data-theme="dark"] #panelDock{background:#233142;border-color:#405d7b}

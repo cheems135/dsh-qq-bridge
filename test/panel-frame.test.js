@@ -12,9 +12,10 @@ test('embedded panel uses remaining viewport height and responds to its parent a
  vm.runInNewContext(code,{window,ResizeObserver});const plugin=factory(()=>React);
  plugin.apply({slots:{inject:(_name,fn)=>fn(),register:(_descriptor,render)=>{Panel=render().type;}}});
  const view=Panel(),iframe=view.children.find(child=>child.type==='iframe');
- assert.equal(view.props.style.minWidth,0);assert.equal(iframe.props.style.maxWidth,'100%');assert.equal(iframe.props.style.display,'block');
+ assert.equal(iframe.props.style.boxSizing,'border-box');assert.equal(view.props.style.minWidth,0);assert.equal(iframe.props.style.maxWidth,'100%');assert.equal(iframe.props.style.display,'block');
  const parent={};iframe.props.ref.current={parentElement:parent,getBoundingClientRect:()=>({top:190})};cleanup=effect();assert.equal(heights.at(-1),494);assert.equal(observed,parent);
  window.visualViewport.height=500;visualListeners.get('resize')();assert.equal(heights.at(-1),294);
- window.visualViewport.height=250;observerCallback();assert.equal(heights.at(-1),240);
+ window.visualViewport.height=250;observerCallback();assert.equal(heights.at(-1),48);
+ iframe.props.ref.current.getBoundingClientRect=()=>({top:80});listeners.get('scroll')();assert.equal(heights.at(-1),154);
  cleanup();assert.equal(listeners.size,0);assert.equal(visualListeners.size,0);assert.equal(disconnected,true);
 });

@@ -27,17 +27,18 @@ window.__ModuleLoader__.load({
           try {
             const viewport = window.visualViewport?.height || window.innerHeight || 900;
             const top = Math.max(0, frame.current?.getBoundingClientRect().top || 90);
-            setHeight(Math.max(240, Math.floor(viewport - top - 16)));
+            setHeight(Math.max(48, Math.floor(viewport - top - 16)));
           } catch {
             /* keep the default */
           }
         };
         measure();
         window.addEventListener('resize', measure);
+        window.addEventListener('scroll', measure, true);
         window.visualViewport?.addEventListener('resize', measure);
         const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
         if (frame.current?.parentElement) observer?.observe(frame.current.parentElement);
-        return () => {window.removeEventListener('resize', measure);window.visualViewport?.removeEventListener('resize', measure);observer?.disconnect();};
+        return () => {window.removeEventListener('resize', measure);window.removeEventListener('scroll', measure, true);window.visualViewport?.removeEventListener('resize', measure);observer?.disconnect();};
       }, []);
 
       return h('div', { style: { width: '100%', maxWidth: '100%', minWidth: 0 } }, [
@@ -56,6 +57,7 @@ window.__ModuleLoader__.load({
             maxWidth: '100%',
             minWidth: 0,
             display: 'block',
+            boxSizing: 'border-box',
             height,
             border: '1px solid rgba(128,128,128,.18)',
             borderRadius: 12,

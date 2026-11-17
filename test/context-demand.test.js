@@ -1,3 +1,8 @@
+import {toolActorIsOwner} from '../dialogue-persona.js';
+import {qqTurnMeta} from '../qq-turn-context.js';
+import {scheduleJobDetails} from '../schedule-continuity.js';
+import {QQ_FILE_DESCRIPTION,QQ_FILE_PARAMETERS} from '../qq-file-transfer.js';
+import {qqTaskEvidence} from '../qq-task-evidence.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -12,7 +17,7 @@ function extract(name,deps){const start=source.search(new RegExp('^  (?:async )?
 function fixture(kind='private'){
  const chat={key:kind+':11111111',kind,isOwner:kind==='private',userId:'11111111',sessionId:'session',inboundVersion:1,turns:new Map([['turn',{meta:{kind:'user',inboundVersion:1,auditId:'audit',speakerId:'speaker'}}]])};
  const calls=[],journal=[];
- const deps={rememberContextUsage:()=>{},CONTEXT_TOPICS,CONTEXT_PARAMETERS,CONTEXT_RULES,randomUUID,stopped:false,accountPaused:false,
+ const deps={observeSleepState:()=>({mode:'awake',lastRest:{reason:'PRIVATE_SLEEP_DETAIL'}}),toolActorIsOwner,scheduleJobDetails,qqTaskEvidence,effectiveGroups:()=>[],promptPreferences:{snapshot:()=>({values:{}})},rememberContextUsage:()=>{},CONTEXT_TOPICS,CONTEXT_PARAMETERS,CONTEXT_RULES,randomUUID,stopped:false,accountPaused:false,
   settings:{activeAccountId:'a',memory:{enabled:true,maxChars:1000},learning:{enabled:true},voice:{enabled:true},imagegen:{enabled:true},realism:{}},featureState:{generation:1,floors:{}},
   qqReadScope:key=>({key,accountId:deps.settings.activeAccountId,personaId:'p',personaVersion:'v1'}),recordsAllowed:()=>true,groupStopped:()=>false,
   recordInvocation:(event,scope)=>journal.push({...event,scope}),calendarRole:()=>({meta:{accountId:'a',personaId:'p',kind:'life'}}),activePersona:()=>({id:'p'}),
@@ -26,11 +31,12 @@ function fixture(kind='private'){
   expressionLearning:{hintDetailed:()=>({text:'表达经验',ids:['expression-1']})},sensationBlock:()=> 'PRIVATE_FEELING',detailedContextGuide:(_chat,topic)=>'GUIDE:'+topic,
  };
  deps.conversationContextStamp=extract('conversationContextStamp',deps);
+ deps.groupTaskContext=extract('groupTaskContext',deps);
  const read=extract('readConversationContext',deps);
  return {chat,deps,read,calls,journal};
 }
 test('ordinary dialogue does not fetch wardrobe, schedule, memory or periodically inject optional context',async()=>{
- const h=fixture();const prepare=extract('prepareCalendarContext',{contextTopicsFor,operationContext:()=>[],readConversationContext:(...args)=>{h.calls.push(args);throw Error('must not read');},log:()=>{}});
+ const h=fixture();const prepare=extract('prepareCalendarContext',{syncConversationState:()=>{},lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),contextTopicsFor,operationContext:()=>[],readConversationContext:(...args)=>{h.calls.push(args);throw Error('must not read');},log:()=>{}});
  for(const text of ['你好呀','今天好累','哈哈哈','谢谢你','这个网页很有意思']){const content=[];await prepare(h.chat,{},content,text);assert.equal(content.length,0);}
  assert.equal(h.calls.length,0);
  const enrich=source.slice(source.indexOf('  function enrichConversation('),source.indexOf('\n  let installedMediaRuntime='));
@@ -56,11 +62,11 @@ test('known topics can be fetched directly and list is data-free; model queries 
 });
 test('assistant can spontaneously read outfit and manuals through native and local tools',async()=>{
  const h=fixture('group'),definitions=[];let ownerContext=0;
- const register=extract('registerContextTool',{...h.deps,contextToolRegistered:false,ctx:{get:()=>({register:def=>{definitions.push(def);return()=>{};}}),effect:()=>{}},chats:new Map([['session',h.chat]]),qqReadToolDenial:()=>undefined,readConversationContext:h.read});
+ const register=extract('registerContextTool',{qqTurnMeta,...h.deps,contextToolRegistered:false,ctx:{get:()=>({register:def=>{definitions.push(def);return()=>{};}}),effect:()=>{}},chats:new Map([['session',h.chat]]),qqReadToolDenial:()=>undefined,readConversationContext:h.read});
  assert.equal(register(),true);assert.equal(definitions[0].name,'bridge_context');
  const got=await definitions[0].execute({action:'get',topics:['outfit','image']},{agent:{id:'session'},signal:new AbortController().signal});
  assert.match(got.topics.outfit.outfit,/黑色/);assert.equal(got.topics.image.guide,'GUIDE:image');assert.equal(ownerContext,0);
- const active={controller:new AbortController()};const make=extract('localQqTools',{...h.deps,localTurns:new Map([[h.chat.key,active]]),qqNativeParameters:{},executeNativeQq:()=>{},readConversationContext:h.read});
+ const active={controller:new AbortController()};const make=extract('localQqTools',{QQ_FILE_DESCRIPTION,QQ_FILE_PARAMETERS,...h.deps,localTurns:new Map([[h.chat.key,active]]),qqNativeParameters:{},executeNativeQq:()=>{},readConversationContext:h.read});
  const local=make(h.chat,active);const other=await local.bridge_context.execute({action:'get',topics:['outfit']});assert.deepEqual(other.topics.outfit,got.topics.outfit);
 });
 test('group and nonowner reads cannot reveal private schedule, device or sensation details',async()=>{
@@ -88,7 +94,7 @@ test('image backend continues reading scene/reference regardless of model contex
 
 test('actual photo plan uses the retrieved shared outfit, retains scenery and respects explicit image-only outfit changes',()=>{
  let wardrobeReads=0;
- const deps={...imagePersona,normalizePromptLanguage,imagePromptText:String,activePersona:()=>({id:'p',name:'角色',prompt:''}),settings:{presetPrompts:{},imagegen:{},activeAccountId:'a'},readPresetPrompt:()=>'',auditById:()=>({userWords:'给我一张自拍'}),operationText:String,
+ const deps={qqTaskEvidence,effectiveGroups:()=>[],promptPreferences:{snapshot:()=>({values:{}})},...imagePersona,normalizePromptLanguage,imagePromptText:String,activePersona:()=>({id:'p',name:'角色',prompt:''}),settings:{presetPrompts:{},imagegen:{},activeAccountId:'a'},readPresetPrompt:()=>'',auditById:()=>({userWords:'给我一张自拍'}),operationText:String,
   lifeMemory:{lifeScene:()=>({location:'书房窗边',outfit:'白色衬衫',activity:'看书'})},calendarRole:()=>({meta:{}}),personaVisualDescription:()=>({look:'角色本人',visual:[]}),personaImageInfo:()=>null,featureState:{photoCompositions:[],audits:[],floors:{}},memories:{},imageVisualStyle:()=>[],localCurrentPersonaState:()=>{wardrobeReads++;return {outfit:'黑色外套，银色发夹'};}};
  const plan=extract('photoPromptPlan',deps)('角色的自拍',{key:'private:11111111',auditId:'audit'});
  assert.equal(wardrobeReads,1);assert.equal(plan.lifeContext.outfit,'黑色外套，银色发夹');assert.equal(plan.lifeContext.location,'书房窗边');assert.match(plan.prompt,/银色发夹/);assert.match(plan.prompt,/书房窗边/);

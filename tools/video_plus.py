@@ -33,25 +33,42 @@ def normalize(text):
 
 
 def verified_segments(segments, duration, voice_input=False):
-    rows, suspicious = [], []
-    for s in segments:
-        value = {"start": round(float(s.start), 2), "end": round(float(s.end), 2),
-                 "text": str(s.text).strip(), "noSpeech": float(s.no_speech_prob)}
-        # VAD has already selected speech. Short voiced messages sometimes
-        # receive a high no-speech score despite good decoder confidence.
-        confident_voice = (voice_input and value["noSpeech"] < .9
-                           and float(getattr(s, 'avg_logprob', -math.inf)) > -.6
-                           and 0 < float(getattr(s, 'compression_ratio', math.inf)) < 2.0)
-        if not value["text"] or value["start"] < 0 or value["end"] <= value["start"] or value["end"] > duration + 1 or (value["noSpeech"] >= .6 and not confident_voice):
+    # VAD-selected text is still a candidate. Repetition alone is not proof of
+    # hallucination: real speakers repeat themselves, too.
+    rows, rejected = [], 0
+    for segment in segments:
+        try:
+            start, end, no_speech = float(segment.start), float(segment.end), float(segment.no_speech_prob)
+            text = str(segment.text).strip()
+            logprob = float(getattr(segment, "avg_logprob", -math.inf))
+            compression = float(getattr(segment, "compression_ratio", math.inf))
+        except (TypeError, ValueError, AttributeError):
+            rejected += 1
             continue
-        duplicate = next((r for r in rows if normalize(r["text"]) == normalize(value["text"])
-                          and r["end"] <= value["start"]), None)
-        if duplicate:
-            suspicious.append(value)
-            suspicious.append(duplicate)
-        rows.append(value)
-    bad = {(r["start"], r["end"]) for r in suspicious}
-    return [r for r in rows if (r["start"], r["end"]) not in bad], len(bad)
+        confident = logprob > -.6 and 0 < compression < 2.0
+        threshold = .9 if voice_input and confident else .6
+        if (not text or not all(math.isfinite(v) for v in [start, end, no_speech])
+                or not 0 <= no_speech < threshold or start < 0 or end <= start or end > duration + 1):
+            rejected += 1
+            continue
+        rows.append({"start": round(start, 2), "end": round(end, 2), "text": text,
+                     "noSpeech": no_speech, "_strong": no_speech < .45 and confident})
+    weak_repeats = set()
+    for i, row in enumerate(rows):
+        for j, other in enumerate(rows[:i]):
+            if normalize(row["text"]) == normalize(other["text"]) and other["end"] <= row["start"]:
+                if not row["_strong"] and not other["_strong"]:
+                    weak_repeats.update([i, j])
+    result = [{k: v for k, v in row.items() if k != "_strong"}
+              for i, row in enumerate(rows) if i not in weak_repeats]
+    return result, rejected + len(weak_repeats)
+
+
+def speech_cross_check(acoustic, segments):
+    # Keep acoustic heuristics as independent evidence, never a veto on VAD/ASR.
+    return {"basis": "vad-asr-and-acoustic" if segments else "acoustic-without-verified-transcript",
+            "speechCandidateCount": len(segments), "rawAcoustic": acoustic,
+            "note": "声学判型只是候选；转写也是机器候选，冲突时保留两者，不据此断言无人说话或已准确听懂。"}
 
 
 def main(req):
@@ -142,27 +159,25 @@ def main(req):
             verdict = acoustic.verdict(features)
             audio = {"status": "unknown", "acoustic": verdict, "segments": [],
                      "coveredSeconds": round(covered, 2), "partial": audio_start + covered < duration - .5, "start": round(audio_start, 2), "suspiciousSegments": 0}
-            if "静音" in verdict["kind"] or "纯音" in verdict["kind"] or "器乐/音乐为主" in verdict["kind"]:
-                audio["status"] = "no_verified_speech"
-            else:
-                try:
-                    if runtime.get("mobile") is True or runtime.get("allowWhisper") is False:
-                        raise RuntimeError("Local speech inference is disabled for this device")
-                    if not runtime.get("whisperModelPath"):
-                        raise RuntimeError("Local speech inference is disabled for this device")
-                    from faster_whisper import WhisperModel
-                    model = WhisperModel(runtime["whisperModelPath"], device="cpu", compute_type="int8", cpu_threads=int(runtime.get("whisperThreads", 2)),
-                                         local_files_only=True)
-                    segments, _ = model.transcribe(str(wav), language="zh", beam_size=3, vad_filter=True,
-                                                   condition_on_previous_text=False)
-                    rows, suspect = verified_segments(segments, covered)
-                    for row in rows:
-                        row["start"] = round(row["start"] + audio_start, 2)
-                        row["end"] = round(row["end"] + audio_start, 2)
-                    audio.update(status="transcribed" if rows else "no_verified_speech", segments=rows,
-                                 suspiciousSegments=suspect)
-                except Exception:
-                    audio.update(status="unavailable", error="本地语音转写未成功，不代表音轨无人说话")
+            try:
+                if runtime.get("mobile") is True or runtime.get("allowWhisper") is False:
+                    raise RuntimeError("Local speech inference is disabled for this device")
+                if not runtime.get("whisperModelPath"):
+                    raise RuntimeError("Local speech inference is disabled for this device")
+                from faster_whisper import WhisperModel
+                model = WhisperModel(runtime["whisperModelPath"], device="cpu", compute_type="int8", cpu_threads=int(runtime.get("whisperThreads", 2)),
+                                     local_files_only=True)
+                segments, _ = model.transcribe(str(wav), language="zh", beam_size=3, vad_filter=True,
+                                               condition_on_previous_text=False)
+                rows, suspect = verified_segments(segments, covered)
+                for row in rows:
+                    row["start"] = round(row["start"] + audio_start, 2)
+                    row["end"] = round(row["end"] + audio_start, 2)
+                audio.update(status="transcribed" if rows else "no_verified_speech", segments=rows,
+                             suspiciousSegments=suspect)
+            except Exception:
+                audio.update(status="unavailable", error="本地语音转写未成功，不代表音轨无人说话")
+            audio["crossCheck"] = speech_cross_check(verdict, audio["segments"])
         except Exception:
             # Video frames remain valid evidence even when optional audio decoding
             # or speech analysis is unavailable. Do not expose codec details.

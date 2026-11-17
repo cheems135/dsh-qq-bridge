@@ -1,0 +1,72 @@
+{
+  "data": {
+    "nodeInfoList": [
+      {
+        "nodeId": "470",
+        "nodeName": "LoadImage",
+        "fieldName": "image",
+        "fieldValue": "2ed79dd61615dc9063c5129e13b89b1a432ebd005ba25647ae2bc03bbcecda62.jpg",
+        "fieldData": "[[\"example.png\", \"None\", \"example.png\", \"keep_this_dic\"], {\"image_upload\": true}]",
+        "fieldType": "IMAGE",
+        "description": "image1",
+        "descriptionCn": null,
+        "descriptionEn": null
+      },
+      {
+        "nodeId": "475",
+        "nodeName": "LoadImage",
+        "fieldName": "image",
+        "fieldValue": "991dc80dde31b47d691c2c20a93d50098f848dae2df698c0db5fdf7c786144d7.png",
+        "fieldData": "[[\"example.png\", \"None\", \"example.png\", \"keep_this_dic\"], {\"image_upload\": true}]",
+        "fieldType": "IMAGE",
+        "description": "image2",
+        "descriptionCn": null,
+        "descriptionEn": null
+      },
+      {
+        "nodeId": "489",
+        "nodeName": "PrimitiveStringMultiline",
+        "fieldName": "value",
+        "fieldValue": "图1人物的衣服换成图2的衣服",
+        "fieldData": "[\"STRING\", {\"multiline\": true}]",
+        "fieldType": "STRING",
+        "description": "value",
+        "descriptionCn": null,
+        "descriptionEn": null
+      },
+      {
+        "nodeId": "480",
+        "nodeName": "EmptyLatentImage",
+        "fieldName": "batch_size",
+        "fieldValue": "1",
+        "fieldData": "[\"INT\", {\"max\": 4096, \"min\": 1, \"default\": 1, \"tooltip\": \"The number of latent images in the batch.\"}]",
+        "fieldType": "INT",
+        "description": "batch_size",
+        "descriptionCn": null,
+        "descriptionEn": null
+      },
+      {
+        "nodeId": "13",
+        "nodeName": "ResolutionSelector",
+        "fieldName": "aspect_ratio",
+        "fieldValue": "9:16 (Portrait Widescreen)",
+        "fieldData": "[\"COMBO\", {\"default\": \"1:1 (Square)\", \"options\": [\"1:1 (Square)\", \"2:3 (Portrait Photo)\", \"3:2 (Photo)\", \"3:4 (Portrait Standard)\", \"4:3 (Standard)\", \"9:16 (Portrait Widescreen)\", \"16:9 (Widescreen)\", \"21:9 (Ultrawide)\"], \"tooltip\": \"The aspect ratio for the output dimensions.\", \"multiselect\": false}]",
+        "fieldType": "LIST",
+        "description": "aspect_ratio",
+        "descriptionCn": null,
+        "descriptionEn": null
+      },
+      {
+        "nodeId": "13",
+        "nodeName": "ResolutionSelector",
+        "fieldName": "megapixels",
+        "fieldValue": "2",
+        "fieldData": "[\"FLOAT\", {\"max\": 16, \"min\": 0.1, \"step\": 0.1, \"default\": 1, \"tooltip\": \"Target total megapixels. 1.0 MP ≈ 1024x1024 for square.\"}]",
+        "fieldType": "FLOAT",
+        "description": "megapixels",
+        "descriptionCn": null,
+        "descriptionEn": null
+      }
+    ]
+  }
+}

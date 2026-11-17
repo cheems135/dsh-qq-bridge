@@ -1,3 +1,4 @@
+import {redactInvocation} from './invocation-journal.js';
 export async function localVoices({url,fetchImpl=fetch,signal}={}){
  const response=await fetchImpl(url+'/api/presets',{signal});
  if(!response.ok)throw Error('读取本地音色失败（HTTP '+response.status+'）');
@@ -23,7 +24,9 @@ export function normalizeVoiceService(input={},base={}){
  if(!['voicelab','openai','json'].includes(type))throw Error('请选择有效的本地语音协议');
  const baseUrl=String(v.baseUrl||'http://127.0.0.1:7870').replace(/\/+$/,'');
  voiceEndpoint(baseUrl,'');
- const out={type,baseUrl,model:String(v.model||'').trim(),device:v.device==='cpu'?'cpu':'gpu',
+ const timeoutMs=Number(v.timeoutMs??600000);
+ if(!Number.isFinite(timeoutMs)||timeoutMs<30000||timeoutMs>1800000)throw Error('语音等待上限应为30到1800秒');
+ const out={type,baseUrl,timeoutMs,model:String(v.model||'').trim(),device:v.device==='cpu'?'cpu':'gpu',
   apiKey:input.clearApiKey===true?'':String(input.apiKey||(base.baseUrl&&new URL(base.baseUrl).origin===new URL(baseUrl).origin?base.apiKey:'')||''),
   responseMode:v.responseMode||'audio',responseField:String(v.responseField||'audio'),
   bodyTemplate:typeof v.bodyTemplate==='string'?v.bodyTemplate:JSON.stringify(v.bodyTemplate||{text:'{{text}}',voice:'{{voice}}'}),
@@ -60,7 +63,7 @@ export async function voiceServiceState(service,{fetchImpl=fetch,signal}={}){
  try{
   const r=await fetchImpl(voiceEndpoint(service.baseUrl,path),{headers:voiceHeaders(service),redirect:'error',signal});
   if(!r.ok)return {alive:false,busy:false,detail:'状态接口 HTTP '+r.status};
-  const data=await r.json();return {alive:true,busy:data.busy===true,loaded:data.loaded};
+  const data=await r.json();return {alive:true,busy:data.busy===true,loaded:data.loaded,phase:data.phase,error:typeof data.error==='string'?redactInvocation(data.error):''};
  }catch(error){if(signal?.aborted)throw error;return {alive:false,busy:false,detail:'状态接口暂不可达'};}
 }
 
@@ -94,7 +97,10 @@ export async function requestLocalSpeech(service,{text,voice='',instruction='',f
   body=JSON.stringify(service.type==='openai'?{model:service.model,input:text,voice,response_format:'wav',...(instruction?{instructions:instruction}:{})}:fillVoiceTemplate(JSON.parse(service.bodyTemplate),vars));
  }
  const r=await fetchImpl(voiceEndpoint(service.baseUrl,voiceServicePath(service,'tts')),{method:'POST',headers,body,redirect:'error',signal});
- if(!r.ok)throw Error('本地语音合成失败：HTTP '+r.status);
+ if(!r.ok){
+  let detail='';try{const raw=(await r.text()).slice(0,8000);let value;try{value=JSON.parse(raw);}catch{}detail=String(value?.detail||value?.error?.message||value?.error||value?.message||raw).slice(0,1200);}catch{}
+  throw Error('本地语音合成失败：HTTP '+r.status+(detail?'；'+redactInvocation(detail):''));
+ }
  const mode=service.type==='json'?service.responseMode:'audio';let bytes,finalHeaders=r.headers;
  if(mode==='audio')bytes=Buffer.from(await r.arrayBuffer());
  else{

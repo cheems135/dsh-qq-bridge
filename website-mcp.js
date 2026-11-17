@@ -72,7 +72,9 @@ export function createWebsiteMcp({storage,request=requestWebsite,onRecord=()=>{}
       if(page.status<200||page.status>=300)throw Error('网站返回 HTTP '+page.status+'，可能需要登录或接口已改变');
       if(!preview){const current=selected(site.id,scope);if(current.revision!==site.revision)throw Error('网站配置已改变，已丢弃旧调用结果');}
       let data;try{data=JSON.parse(page.text);}catch{}
-      let content=data===undefined?{text:websiteText(page.text),links:discoverHtmlTools(page.text,page.url||url).links.slice(0,30)}:{text:JSON.stringify(data).slice(0,16000),partial:JSON.stringify(data).length>16000};
+      /* 正文截断：整页 60 万字节全塞进上下文，一次就能烧掉几块钱。压到 2 万字符、链接 20 条。 */
+      const fullText=websiteText(page.text);
+      let content=data===undefined?{text:fullText.slice(0,20000),partial:fullText.length>20000,links:discoverHtmlTools(page.text,page.url||url).links.slice(0,20)}:{text:JSON.stringify(data).slice(0,16000),partial:JSON.stringify(data).length>16000};
       const searchValues=tool.name.startsWith('search_')?Object.values(args).filter(v=>typeof v==='string'&&v.trim().length>1):[];
       const missingResults=()=>searchValues.length>0&&!searchValues.some(v=>content.text.toLowerCase().includes(v.trim().toLowerCase()));
       if(missingResults()&&render){

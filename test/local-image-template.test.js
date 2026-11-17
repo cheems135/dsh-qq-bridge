@@ -12,7 +12,7 @@ import {createComfyRuntime} from '../comfyui-runtime.js';
 import {probeColorPng} from '../local-probe-image.js';
 const graph=()=>({'1':{class_type:'PrimitiveString',inputs:{value:'old scene'}},'2':{class_type:'JoinString',inputs:{text_a:'(@artist), highres\nDescription:\n',text_b:['1',0]}},'3':{class_type:'Encode',inputs:{text:['2',0],image:['6',0]}},'4':{class_type:'SaveImage',inputs:{images:['3',0]}},'6':{class_type:'LoadImage',inputs:{image:'reference.png'}},'5':{class_type:'UNETLoader',inputs:{unet_name:'anima_base.safetensors'}},'99':{class_type:'UnusedJoin',inputs:{text_a:'unused\nDescription:\n',text_b:['1',0]}}});
 const spec={id:'image-fixture',name:'Fixture',kind:'image',file:'fixture.json',inputs:{prompt:{node:'1',field:'value'},image:{node:'6',field:'image'}},output:{node:'4',field:'images',kind:'image'},promptModel:'anima-base',promptLanguage:'en',fixedPromptMode:'preserve',triggerWords:'frame_trigger',note:'Keep a soft hand-drawn look.'};
-const plan={prompt:'窗边阅读，蓝色居家服，背景有书架与窗帘',humanRequest:'发一张你在窗边看书的自拍',characterName:'测试角色',promptLanguage:'zh',ownPortrait:true,camera:'front',framing:'upper',cameraEnglish:'Front-facing selfie, camera outside the frame.',cameraChinese:'前置自拍，拍摄设备在画外。',look:'blue hair and cat ears',styleTags:['anime'],lifeContext:{activity:'阅读',location:'客厅窗边',outfit:'蓝色居家服'},appearanceContext:[]};
+const plan={timeContext:{timestamp:'2026-11-07T10:00:00.000Z',date:'2026-11-07',clock:'18:00',timeZone:'Asia/Shanghai'},prompt:'窗边阅读，蓝色居家服，背景有书架与窗帘',humanRequest:'发一张你在窗边看书的自拍',characterName:'测试角色',promptLanguage:'zh',ownPortrait:true,camera:'front',framing:'upper',cameraEnglish:'Front-facing selfie, camera outside the frame.',cameraChinese:'前置自拍，拍摄设备在画外。',look:'blue hair and cat ears',styleTags:['anime'],lifeContext:{activity:'阅读',location:'客厅窗边',outfit:'蓝色居家服'},appearanceContext:[]};
 const prose='She sits by the living room window reading an open book, wearing blue loungewear. Bookshelves and curtains fill the background, while warm window light falls on her face. Front-facing selfie, camera outside the frame.';
 const drafted={prompt:prose,style:'Two-dimensional anime illustration.',referenceIdentity:'blue hair and cat ears',negativePrompt:''};
 test('local library retains the API director metadata instead of dropping it during normalization',()=>{
@@ -23,7 +23,8 @@ test('only the connected separate prefix is detected; variable scene and unused 
  const template=localImageTemplate(spec,graph(),{language:'zh',usesReference:true});assert.deepEqual(template.discovery.prefixTargets,[{nodeId:'2',fieldName:'text_a'}]);assert.equal(template.promptLanguage,'en');assert.equal(template.personaReference,true);assert.ok(template.discovery.fields.some(f=>f.fieldName==='unet_name'));assert.match(template.discovery.reference,/@artist/);
  assert.throws(()=>localImageTemplate({...spec,discovery:{prefixTargets:[{nodeId:'1',fieldName:'value'}]}},graph()),/不能绑定同一字段/);
 });
-test('same API and local director receive identical system and brief: model, prefix, current request, schedule and eight recent messages',async()=>{
+test('same API and local director receive identical system and brief: model, prefix, current request, schedule and eight recent messages',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:1794045600000});
  const dir=mkdtempSync(join(tmpdir(),'template-parity-'));writeFileSync(join(dir,'fixture.json'),JSON.stringify(graph()));
  const conversation=Array.from({length:8},(_,i)=>({role:i%2?'assistant':'user',content:'本轮相关对话 '+i})),operationReview={intent:'角色阅读自拍',resolvedRequest:plan.humanRequest},localCalls=[],apiCalls=[],evidence=[];
  const answer=(system,user,calls)=>{calls.push({system,brief:JSON.parse(user)});return system.startsWith('【图像细节核对】')?'{"ok":true,"missing":[]}':JSON.stringify(drafted);};
@@ -32,6 +33,7 @@ test('same API and local director receive identical system and brief: model, pre
   const workflow=localImageTemplate(spec,graph(),{usesReference:true}),director=createImageStudio({getConfig:()=>({promptLanguage:'en'}),visualPlan:()=>plan,ask:async(s,u)=>answer(s,u,apiCalls)});
   const api=await director.prepare(plan.humanRequest,{chat:{characterName:plan.characterName,operationContext:conversation.map(r=>({role:r.role,text:r.content})),operationReview},workflow});
   assert.deepEqual(localCalls,apiCalls);assert.equal(localCalls[0].brief.recentConversation.length,8);assert.equal(localCalls[0].brief.modelStrategy.id,'anima-base');assert.equal(localCalls[0].brief.fixedPromptPlan.length,1);assert.equal(localCalls[0].brief.lifeContext.outfit,'蓝色居家服');
+  assert.match(local.prompt,/frame_trigger/);
   assert.equal(local.prompt,referencePromptPrefix('en',drafted.referenceIdentity,false,plan.characterName)+' '+api.prompt);assert.equal(local.negativePrompt,api.negativePrompt);assert.deepEqual(local.fixedPrompts,api.fixedPrompts);assert.ok(local.prompt.endsWith(drafted.style));assert.equal(evidence.at(-1).template.source,'shared-api-image-director');assert.match(evidence.at(-1).template.system,/MODEL-SPECIFIC RULES/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

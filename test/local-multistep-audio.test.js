@@ -23,7 +23,7 @@ test('failed prerequisite stops dependent requirement without inventing or openi
  const result=await agent.run({messages:[{role:'user',content:'搜索后读文档'}]});assert.equal(executions,1);assert.equal(result.receipts.length,1);assert.equal(result.receipts[0].ok,false);
 });
 test('schema-only activity cannot satisfy the required page read',async()=>{
- let round=0;const agent=createLocalAgent({maxToolRounds:5,requiredDataTools:['bridge_search','bridge_read'],tools:{bridge_tools:{...definitions.bridge_tools,execute:async()=>({ok:true})}},model:async()=>[call('bridge_search'),JSON.stringify({action:'bridge_tools',arguments:{action:'schema',name:'bridge_read'}}),'已经阅读。','已经阅读。'][round++]});
+ let round=0;const agent=createLocalAgent({maxToolRounds:8,requiredDataTools:['bridge_search','bridge_read'],tools:{bridge_tools:{...definitions.bridge_tools,execute:async()=>({ok:true})}},model:async()=>[call('bridge_search'),JSON.stringify({action:'bridge_tools',arguments:{action:'schema',name:'bridge_read'}}),'已经阅读。','已经阅读。'][Math.min(round++,3)]});
  await assert.rejects(agent.run({messages:[{role:'user',content:'搜索后读文档'}]}),/没有实际网页读取调用记录/);
 });
 const audio=()=>({ok:true,duration:2.64,start:0,end:2.64,acoustic:{kind:'纯音/提示音（非语音、非音乐）',confidence:'medium',reasons:['单音集中度0.308']},transcription:{status:'candidate',segments:[{start:0,end:2.76,text:'本地功能 检查完成',noSpeech:.26}]},coverage:'仅本机测量'});

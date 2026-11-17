@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 
 const phases=new Set(['preparing','waiting_gpu','waiting_comfy','model','understanding','vision','image_prompt','speech','tool','tool_done','repair','repaired','context','complete']);
-const origins=new Set(['qq','preview','api','speech','analysis']);
+const origins=new Set(['qq','preview','api','speech','analysis','initiative','initiative-helper']);
 
 // Transient metadata only: no prompts, chat text, account IDs or tool arguments.
 export function createLocalRunStatus({now=Date.now,limit=12}={}) {

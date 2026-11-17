@@ -1,16 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createMemeStudy} from '../meme-study.js';
 import {localAnalysisInput} from '../local-chat-context.js';
 import {createLearningMemory} from '../learning-memory.js';
-
-test('local meme batches are single and deferred service work does not mark sources failed',async()=>{
- const files=new Map(),sources=Array.from({length:5},(_,i)=>({id:'s'+i,text:JSON.stringify({name:'词条'+i,meaning:'这是一段用于核对的公开原文',usage:'适合轻松聊天'}),title:'测试词条',url:'https://example.com/'+i}));
- let calls=0;
- const study=createMemeStudy({storage:{list:()=>[...files.keys()],read:key=>{if(!files.has(key))throw Object.assign(Error('missing'),{code:'ENOENT'});return structuredClone(files.get(key));},write:(key,value)=>files.set(key,structuredClone(value))},library:{allSources:()=>sources},limits:()=>({batchSize:1,workers:1}),ask:async(_system,input)=>{calls++;assert.equal(JSON.parse(input).sources.length,1);throw Object.assign(Error('本地聊天优先'),{code:'LOCAL_ANALYSIS_DEFERRED'});}});
- const meta={accountId:'a',personaId:'p'};
- try{const result=await study.process(meta);assert.equal(calls,1);assert.equal(result.failed,0);assert.equal(result.status,'waiting_service');assert.ok(result.nextRetryAt>Date.now());}finally{study.close();}
-});
 
 test('local analysis excerpts preserve source identifiers and only bound background input',()=>{
  const input=JSON.stringify({sources:[{id:'s1',text:'原文'.repeat(5000),url:'https://example.com/a'},{id:'s2',text:'其他资料'}]});

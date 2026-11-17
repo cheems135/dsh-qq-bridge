@@ -20,7 +20,7 @@ export async function prepareLocalImagePrompt({args,plan,workflow,reference,root
  const effectivePlan=usesReference?{...plan,look:String(plan.look||reference.description||'').trim()||(language==='en'?'Identity is supplied by the attached reference image.':'角色身份由实际提供的人设参考图确定。')}:plan;
  const attempts=[];let languageRepaired=false,terminalError,directorTemplate=null,lastStyle='';
  const evidence=(entry)=>{attempts.push(entry);onProgress({phase:'image_prompt',promptPreparation:{language,template:directorTemplate,attempts:[...attempts]}});};
- const director=createImageStudio({getConfig:()=>({promptLanguage:language}),visualPlan:()=>effectivePlan,
+ const director=createImageStudio({getConfig:()=>({promptLanguage:language,promptPreferences:plan.promptPreferences}),visualPlan:()=>effectivePlan,
   fetchImpl:()=>{throw Error('本地提示词准备不会连接云端生图服务');},
   ask:async(system,user,tokens)=>{
    signal?.throwIfAborted();if(terminalError)throw terminalError;

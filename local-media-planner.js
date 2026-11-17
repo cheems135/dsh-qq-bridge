@@ -1,11 +1,21 @@
+import {imageExecutionInquiry} from './media-intent.js';
 import {localMediaText,localMediaCancelled} from './local-media-task.js';
 const content=value=>typeof value==='string'?value:Array.isArray(value)?value.filter(p=>p.type==='text').map(p=>p.text||'').join('\n'):'';
+export function localVideoObservationRequest(request=''){
+ const text=localMediaText(request);
+ const video=/视频|短片|影片|https?:\/\/\S+\.(?:mp4|webm)|bilibili\.com\/video|b23\.tv/i.test(text);
+ const observe=/(?:打开|观看|看看|看一下|看下|播放|观察|分析|总结|概括|解读|讲了什么|看到什么|看到了什么|刷)/.test(text);
+ const create=/(?:生成|制作|拍摄|创作|合成|剪辑|做)(?:一[段个条部]|个|段|条|部|新的|新)?(?:视频|短片|影片)|(?:视频|短片|影片)(?:给我|帮我)?(?:生成|制作|拍摄|创作|合成)/.test(text);
+ return video&&observe&&!create;
+}
 export function localMediaPlanningCandidate(request=''){
  const raw=String(request).trim(),text=localMediaText(raw);
+ if(localVideoObservationRequest(raw)||imageExecutionInquiry(raw))return false;
  if(/(?:屏幕|截图|桌面|终端|命令|文件|浏览器|搜索|网页|B站)/.test(text)&&!/(?:生成|制作|发给我|发张|拍张|用语音|说给我听)/.test(text))return false;
  return /(?:瞅|瞧|照片|图片|相片|自拍|语音|声音|听|视频|短片|拍|发|再来|再做|看下|看一下|给我看|让我看)/.test(text)&&! /^(?:他说|她说|引用|转发|例如|假如|教程)/.test(raw)&&!/(?:为什么|报错|提示词|怎么写|教程|代码|原理)/.test(text)&&!['image','speech','video'].some(kind=>localMediaCancelled(text,kind));
 }
 export async function planLocalMediaTask(initial,{request='',history=[],model,signal,onProgress=()=>{}}={}){
+ if(localVideoObservationRequest(request))return {...initial,image:false,speech:false,video:false,source:'observation',ambiguous:false,effectiveRequest:request,semanticChecked:true};
  if(initial.image||initial.speech||initial.video||typeof model!=='function')return initial;
  const raw=String(request).trim(),unquoted=localMediaText(raw);
  if(!localMediaPlanningCandidate(raw))return initial;

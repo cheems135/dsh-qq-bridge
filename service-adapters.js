@@ -2,7 +2,7 @@ import {connectionRequestUrl,connectionHeaders,readConnectionText,cleanConnectio
 import {requestWebsite} from './website-mcp-http.js';
 export function providerForConnection(id){return 'qq-connection-'+id;}
 export function connectionModelGroups(profiles=[]){
-  return profiles.filter(p=>['openai','anthropic','responses'].includes(p.type)&&p.chatModel).map(p=>({id:providerForConnection(p.id),name:p.name,models:[...new Set([p.chatModel,...(p.models||[])].filter(Boolean))].map(id=>({id,name:id,efforts:['off'],defaultEffort:'off'}))}));
+  return profiles.filter(p=>['openai','anthropic','responses'].includes(p.type)&&p.chatModel).map(p=>({id:providerForConnection(p.id),name:p.name,models:[p.chatModel].map(id=>({id,name:id,efforts:['off'],defaultEffort:'off'}))}));
 }
 export function mergeConnectionModelGroups(groups=[],profiles=[]){
   const merged=new Map(groups.map(g=>[g.id,g]));
@@ -69,7 +69,7 @@ export function createConnectionAdapter({connections,attachments,fetchImpl=fetch
   return {
     providerInfo:provider=>({id:provider,name:connections.profile(provider.replace(/^qq-connection-/, '')).name}),
     providerRetryPolicy:()=>({mode:'normal',maxRetries:0,retryableCodes:[],initialDelayMs:1000,maxDelayMs:1000,jitterRatio:0}),
-    async listModels(provider){const p=connections.profile(provider.replace(/^qq-connection-/,''));return [...new Set([p.chatModel,...p.models].filter(Boolean))].map(id=>({id,provider,name:id}));},
+    async listModels(provider){const p=connections.profile(provider.replace(/^qq-connection-/,''));return [p.chatModel].filter(Boolean).map(id=>({id,provider,name:id}));},
     async resolveModel(provider,model){return {provider,id:model,name:model,reasoning:{efforts:[{id:'off',name:'由接口默认处理'}],defaultEffort:'off'}};},
     async *stream(options){
       const p=connections.profile(options.provider.replace(/^qq-connection-/,'')),messages=await encodeHostMessages(options,attachments);
@@ -81,11 +81,11 @@ export function createConnectionAdapter({connections,attachments,fetchImpl=fetch
     },
   };
 }
-export async function connectionMedia(profile,kind,{prompt,text,reference,signal}={},fetchImpl=fetch){
+export async function connectionMedia(profile,kind,{prompt,text,instructions,reference,signal}={},fetchImpl=fetch){
   if(profile.type!=='openai')throw Error('此连接的图片/语音暂不支持通用执行，请选择 OpenAI 兼容接口或原有服务');
   let body,endpoint,headers=connectionHeaders(profile);
   if(kind==='speech'){
-    if(!profile.speechModel||!profile.voice)throw Error('请先为语音连接选择模型和音色');endpoint='audio/speech';headers['content-type']='application/json';body=JSON.stringify({model:profile.speechModel,input:text,voice:profile.voice,response_format:profile.audioFormat==='mp3'?'mp3':'wav'});
+    if(!profile.speechModel||!profile.voice)throw Error('请先为语音连接选择模型和音色');endpoint='audio/speech';headers['content-type']='application/json';body=JSON.stringify({model:profile.speechModel,input:text,voice:profile.voice,...(instructions?{instructions}:{}),response_format:profile.audioFormat==='mp3'?'mp3':'wav'});
   }else{
     if(!profile.imageModel)throw Error('请先为图片连接选择模型');
     if(reference&&profile.imageMode!=='edits')throw Error('这个图片连接目前只配置了文生图，无法传入人设图。请改用支持参考图的编辑接口或本地工作流');

@@ -21,6 +21,8 @@ export const QQ_NATIVE_CATALOG = Object.freeze([
   {action: 'get_group_file_system_info', title: '获取群文件系统信息', scope: 'group', write: false, required: ['group_id']},
   {action: 'get_group_root_files', title: '获取群根目录文件', scope: 'group', write: false, required: ['group_id']},
   {action: 'get_group_files_by_folder', title: '获取群文件夹文件', scope: 'group', write: false, required: ['group_id', 'folder_id']},
+  {action: 'upload_private_file', title: '上传私聊作品文件', scope: 'private', write: true, required: ['user_id','file','name']},
+  {action: 'upload_group_file', title: '上传群作品文件', scope: 'group', write: true, required: ['group_id','file','name']},
   {action: 'get_group_file_url', title: '获取群文件地址', scope: 'group', write: false, required: ['group_id', 'file_id']},
   {action: 'group_poke', title: '群聊戳一戳', scope: 'group', write: true, required: ['group_id', 'user_id']},
   {action: 'set_group_card', title: '设置群名片', scope: 'group', write: true, required: ['group_id', 'user_id', 'card']},
@@ -57,6 +59,8 @@ const SCHEMAS = new Map([
   ['get_group_file_system_info', schema(['group_id'], {group_id: 'group_id'})],
   ['get_group_root_files', schema(['group_id'], {group_id: 'group_id'})],
   ['get_group_files_by_folder', schema(['group_id', 'folder_id'], {group_id: 'group_id', folder_id: 'file_id'})],
+  ['upload_private_file', schema(['user_id','file','name'], {user_id:'user_id',file:'upload_file',name:'upload_name'})],
+  ['upload_group_file', schema(['group_id','file','name'], {group_id:'group_id',file:'upload_file',name:'upload_name'})],
   ['get_group_file_url', schema(['group_id', 'file_id'], {group_id: 'group_id', file_id: 'file_id', busid: 'unsigned_integer'})],
   ['group_poke', schema(['group_id', 'user_id'], {group_id: 'group_id', user_id: 'user_id'})],
   ['set_group_card', schema(['group_id', 'user_id', 'card'], {group_id: 'group_id', user_id: 'user_id', card: 'card'})],
@@ -161,6 +165,8 @@ function validateValue(kind, value) {
     case 'group_id':
     case 'user_id':
       return numericId(value);
+    case 'upload_file':return typeof value==='string'&&value.length>0&&value.length<2000&&!/^(?:https?:|base64:)/i.test(value)&&!/[\x00-\x1f]/.test(value)?value:null;
+    case 'upload_name':return typeof value==='string'&&value.length>0&&value.length<=255&&!/[\\/\x00-\x1f]/.test(value)?value:null;
     case 'file_id':
       if (!boundedText(value, 512)) return null;
       return String(value);
@@ -329,6 +335,7 @@ export function createQqNativeCapabilities({
   allowedUsers = () => [],
   allowedGroups = () => [],
   isOwner = () => false,
+  allowCrossConversation = () => false,
   now = Date.now,
 } = {}) {
   const statuses = new Map();
@@ -382,6 +389,7 @@ export function createQqNativeCapabilities({
 
       let owner = await callbackValue(isOwner, context, false);
       owner = owner === true;
+      const cross=owner||await callbackValue(allowCrossConversation,context,false)===true;
 
       if (OWNER_ONLY.has(action) && !owner) return safeFailure(action, 'denied');
 
@@ -391,7 +399,7 @@ export function createQqNativeCapabilities({
 
         const origin = contextScope(context);
         if (origin === 'group') {
-          if (currentGroupId(context) !== groupId) return safeFailure(action, 'denied');
+          if (currentGroupId(context) !== groupId&&!cross) return safeFailure(action, 'denied');
         } else if (origin === 'private') {
           if (!owner) return safeFailure(action, 'denied');
         } else {
@@ -403,8 +411,8 @@ export function createQqNativeCapabilities({
         const userId = normalized.user_id;
         if (!users.has(userId)) return safeFailure(action, 'denied');
         const origin = contextScope(context);
-        if (origin === 'group') return safeFailure(action, 'denied');
-        if (origin !== 'private') return safeFailure(action, 'denied');
+        if (origin === 'group'&&!cross) return safeFailure(action, 'denied');
+        if (origin !== 'private'&&origin !== 'group') return safeFailure(action, 'denied');
         if (!owner && currentPrivateUserId(context) !== userId) return safeFailure(action, 'denied');
       }
 
@@ -429,7 +437,7 @@ export function createQqNativeCapabilities({
         return safeFailure(action, 'failed');
       }
 
-      setStatus(context, action, 'supported');
+      setStatus(context, action, response?.data?.queued?'unknown':'supported');
       let result = resultData(response);
       if (action === 'get_friend_list') result = filterList(action, result, users);
       if (action === 'get_group_list') result = filterList(action, result, groups);
@@ -441,7 +449,7 @@ export function createQqNativeCapabilities({
           action,
           result,
           verified: false,
-          coverage: '平台已接收普通操作，未作读回',
+          coverage: response?.data?.queued?'操作已进入持久队列，平台支持及送达尚未核对':'平台已接收普通操作，未作读回',
         };
       }
       return {

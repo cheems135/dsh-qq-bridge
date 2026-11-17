@@ -5,7 +5,7 @@ import {StringDecoder} from 'node:string_decoder';
 /** Long local generations use one connection and one explicit total deadline.
  * No implicit fetch headers timeout, connection reuse, or automatic POST retry.
  */
-export function requestLocalJson(address, {method = 'GET', body, signal, timeoutMs = 900000, maxBytes = 16 * 1024 * 1024,onEvent} = {}) {
+export function requestLocalJson(address, {method = 'GET', body, signal, headers = {}, timeoutMs = 900000, maxBytes = 16 * 1024 * 1024,onEvent} = {}) {
   const url = new URL(address);
   if (!['http:', 'https:'].includes(url.protocol) || !['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname.toLowerCase()) || url.username || url.password) {
     return Promise.reject(new Error('本地请求只允许本机回环地址'));
@@ -29,7 +29,7 @@ export function requestLocalJson(address, {method = 'GET', body, signal, timeout
     signal?.addEventListener('abort', abort, {once: true});
     request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
       method, agent: false,
-      headers: data ? {'content-type': 'application/json', 'content-length': data.length} : {},
+      headers: {...headers,...(data ? {'content-type': 'application/json', 'content-length': data.length} : {})},
     }, response => {
       const chunks = [];
       const streaming=String(response.headers['content-type']||'').includes('application/x-ndjson');

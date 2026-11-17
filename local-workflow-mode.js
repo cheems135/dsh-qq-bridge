@@ -1,5 +1,12 @@
 // Recognize the explicit text/edit selector in a Qwen Image 2.1 template.
 // Unknown graphs retain their authored semantics. Changes affect a copy only.
+export function appendWorkflowTriggerWords(prompt, value) {
+ const scene=String(prompt||'').trim();
+ const triggers=[...new Set(String(value||'').slice(0,4000).split(/\r?\n/).map(word=>word.trim()).filter(Boolean))]
+  .filter(word=>!scene.includes(word));
+ return triggers.length?[scene,triggers.join(', ')].filter(Boolean).join('\n'):scene;
+}
+
 export function prepareMediaWorkflow(graph,{kind,hasImage=false,recompose=false,outputNode=''}={}){
  if(kind!=='image'||hasImage&&!recompose)return graph;
  const encoders=Object.values(graph).filter(node=>node.class_type==='TextEncodeQwenImage21');

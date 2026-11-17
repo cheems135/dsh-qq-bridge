@@ -10,6 +10,32 @@ const mixin=[46,47,18,2,53,8,23,32,15,50,10,31,58,3,45,35,27,43,5,49,33,9,42,19,
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const text=value=>String(value??'').replace(/<[^>]*>/g,'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim();
 const bound=(value,min,max,fallback)=>Number.isInteger(Number(value))?Math.max(min,Math.min(max,Number(value))):fallback;
+/* 工具返回值必须是无损 JSON：NaN/Infinity、undefined、稀疏数组、Buffer/Map/Set 和循环引用都会让宿主拒收整份结果。
+   抽帧窗口里偶尔会带上 NaN 时长或没有实际取到的字段，这里统一清洗，避免整个 read/frames 变成无效输出。 */
+function plainValue(value,seen=new Set()){
+  if(value===null)return null;
+  const type=typeof value;
+  if(type==='string'||type==='boolean')return value;
+  if(type==='number')return Number.isFinite(value)?value:null;
+  if(type!=='object')return undefined;
+  if(seen.has(value))return null;
+  const tag=Object.prototype.toString.call(value);
+  if(tag==='[object Date]')return Number.isFinite(value.getTime())?value.toISOString():null;
+  if(Buffer.isBuffer(value)||ArrayBuffer.isView(value)||tag==='[object Map]'||tag==='[object Set]')return null;
+  seen.add(value);
+  let out;
+  if(Array.isArray(value))out=Array.from(value,item=>{let next;try{next=plainValue(item,seen);}catch{next=undefined;}return next===undefined?null:next;});
+  else{
+    out={};
+    for(const key of Object.keys(value)){
+      let next;try{next=plainValue(value[key],seen);}catch{next=undefined;}
+      if(next!==undefined)out[key]=next;
+    }
+  }
+  seen.delete(value);
+  return out;
+}
+function losslessValue(value){const clean=plainValue(value);return clean===undefined?null:clean;}
 function biliMediaUrl(value){
   try{
     const url=new URL(value);
@@ -182,7 +208,7 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     const row={id:prior?.id||randomUUID(),bvid,page,title:material.video?.title||bvid,url:material.url,at:now(),coverage:material.coverage,subtitleSegments:material.segments.length,comments:material.comments.length};
     s.state.history=s.state.history.filter(h=>h.id!==row.id).concat(row).slice(-100);save(s);return {ok:true,...material};
   }
-  async function act(args,context){
+  async function runAct(args,context){
     const s=slot(context),action=String(args.action||'status'),page=bound(args.page,1,100,1);
     if(action==='status')return state(s);
     if(action==='preview-image'){const draft=s.state.drafts.find(d=>d.id===args.draftId),image=draft?.images?.find(i=>i.id===args.imageId);if(!image)throw Error('找不到这条草稿的配图');const bytes=readFileSync(join(s.dir,'draft-images',image.file)),actual=imageBytes(bytes);if(actual.hash!==image.hash)throw Error('配图已改变，请重新保存草稿');return {ok:true,image:'data:'+actual.mime+';base64,'+bytes.toString('base64')};}
@@ -309,6 +335,7 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     if(action==='read')return read(s,context,bvid,page);
     throw Error('未知 B站操作');
   }
+  async function act(args,context){return losslessValue(await runAct(args,context));}
   return {act,close(){closed=true;slots.clear();}};
 }
 

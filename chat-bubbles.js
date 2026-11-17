@@ -7,7 +7,7 @@ export function naturalBubbleParts(value,{maxBubbles=0,richInput=false,automatic
   // sentence-based splitting is disabled. Keep lists, code, URLs and media
   // commands intact.
   parts=parts.flatMap(part=>{
-    const protectedPart=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(part)||/https?:\/\/|\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(part);
+    const protectedPart=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(part)||/https?:\/\/|\[(?:发送|群发|定时|语音)[:：\]]|\uE200PIC/.test(part);
     return protectedPart?[part]:part.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   });
   const commands=/\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(text);

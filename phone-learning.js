@@ -1,4 +1,4 @@
-// Bounded phone-app learning through the DSHBox Pilot accessibility tree.
+// Bounded phone-app learning through the DSH Go 原生手机工具 accessibility tree.
 // It reads what is actually on screen, never invents a watched video, and never
 // captures pixels (screen capture needs a separate system consent and is not
 // needed to read titles, descriptions and comments).
@@ -28,7 +28,7 @@ function pilotFailure(error){
   if(code==='UNEXPECTED_PACKAGE')return failure(code,text,'请先解锁手机并停在目标应用首页，处理掉登录/更新/系统弹窗后再试。');
   if(code==='E_LAUNCH_NOT_LANDED')return failure(code,'应用启动被接受，但前台仍然不是目标应用。','请先手动点开一次目标应用（或把它从最近任务里关掉重开），再让她学习。');
   if(code==='E_TASK_SUSPENDED_BY_HOST')return failure(code,'DSH 界面挡在最前面，手机点击被暂停了。','请先把手机切到桌面或目标应用（或锁屏后再解锁），再重新发起学习；读操作不受影响，但点按需要 DSH 不在前台。');
-  if(/E_GATE_NO_FOREGROUND|E_NO_EDITABLE_TARGET|E_SURFACE|E_BACKEND|E_TRANSPORT|E_QUEUE_FULL/i.test(code))return failure(code,text,'请确认手机已解锁，并在 DSHBox 的 Pilot 里开启无障碍与相应能力。');
+  if(/E_GATE_NO_FOREGROUND|E_NO_EDITABLE_TARGET|E_SURFACE|E_BACKEND|E_TRANSPORT|E_QUEUE_FULL/i.test(code))return failure(code,text,'请确认手机已解锁，并在 DSH Go 的 Pilot 里开启无障碍与相应能力。');
   return failure(code,text);
 }
 function chromeLine(text){

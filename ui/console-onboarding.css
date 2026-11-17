@@ -1,0 +1,39 @@
+.onb-layer{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;background:#12243e80}
+.onb-layer[hidden]{display:none!important}
+.onb-dialog{box-sizing:border-box;width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;background:var(--panel);color:var(--ink);padding:24px;border:1px solid var(--line);border-radius:22px;box-shadow:0 20px 70px #0003;font-size:15px;line-height:1.8}
+.onb-heading,.onb-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.onb-heading{font-size:12px;color:var(--ink2)}
+.onb-heading button{border:0;background:transparent;flex:none;padding:6px}
+.onb-dialog h2{font-size:25px;line-height:1.5;margin:20px 0 10px;letter-spacing:-.02em}
+.onb-dialog p{margin:12px 0}
+.onb-dialog .field{font-size:14px;margin:16px 0}
+.onb-dialog input,.onb-dialog select{box-sizing:border-box;width:100%;min-height:48px;font-size:16px;margin-top:7px}
+.onb-dialog button,.onb-coach button{min-height:44px;cursor:pointer;white-space:normal;line-height:1.5}
+.onb-dialog button:disabled{opacity:.6;cursor:wait}
+.onb-stage{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:14px;font-size:11px;color:var(--ink2)}
+.onb-stage span{padding:8px 3px;border-bottom:3px solid var(--line);text-align:center}
+.onb-media-progress{grid-column:1 / -1;text-align:left!important;color:var(--accent-ink)}
+.onb-site-link{width:100%;box-sizing:border-box;margin:8px 0;font-weight:600}
+.onb-help-entry{display:grid;gap:6px}
+.onb-stage [aria-current]{color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.onb-simple-actions{display:grid;gap:10px;margin-top:18px}
+.onb-simple-actions>button{width:100%;font-size:15px;padding:12px}
+.onb-simple-actions>.primary{min-height:50px}
+.onb-footer{flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px;margin-top:18px;font-size:11px;color:var(--ink2)}
+.onb-footer button{padding:8px;font-size:12px}
+.onb-note{font-size:12px;color:var(--ink2);line-height:1.8}
+.onb-help{border-top:1px solid var(--line);padding:10px 0;font-size:13px;color:var(--ink2)}
+.onb-help summary{cursor:pointer;min-height:32px;display:flex;align-items:center;color:var(--accent-ink)}
+.onb-help p{padding:8px 0 0}
+.onb-example,.onb-status{background:var(--accent-weak);color:var(--accent-ink);padding:14px;border-radius:14px}
+.onb-account-example{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 10px;background:var(--accent-weak);border-radius:14px;font-size:13px;text-align:center}
+.onb-account-example b{color:var(--accent-ink)}
+.onb-chat-example{padding:18px;margin:18px 0;border-radius:18px 18px 4px 18px;background:var(--accent-weak);font-size:24px;text-align:center;color:var(--accent-ink)}
+.onb-trouble-options{display:grid;gap:10px}.onb-trouble-options button{text-align:left;padding:12px}
+#onbMessage:empty{display:none}#onbMessage{font-size:13px;color:var(--accent-ink);background:var(--accent-weak);padding:12px;border-radius:10px}#onbMessage[data-error="true"]{color:var(--danger)}
+.onb-target{outline:3px solid var(--accent)!important;outline-offset:5px;scroll-margin-top:100px;scroll-margin-bottom:260px;box-shadow:0 0 0 8px var(--accent-weak)!important}
+.onb-coach{box-sizing:border-box;position:fixed;left:max(12px,calc((100vw - 700px)/2));right:max(12px,calc((100vw - 700px)/2));bottom:calc(12px + env(safe-area-inset-bottom));z-index:2999;padding:14px 16px;background:var(--panel);color:var(--ink);border:2px solid var(--accent);border-radius:16px;box-shadow:0 6px 32px #0002;font-size:13px;max-height:40dvh;overflow:auto}
+.onb-coach p{margin:6px 0 12px;line-height:1.7}.onb-coach-actions{display:flex;flex-wrap:wrap;gap:8px}.onb-coach-actions button{font-size:12px;padding:8px 10px}
+body.onb-guiding{padding-bottom:calc(var(--panel-bottom-space,90px) + 250px)!important}
+body.onb-guiding #panelDock,body.onb-guiding #scheduleLocator{visibility:hidden}
+@media(max-width:600px){.onb-layer{padding:10px;align-items:flex-end}.onb-dialog{padding:18px;max-height:calc(100dvh - 20px);border-radius:20px}.onb-dialog h2{font-size:23px}.onb-coach{bottom:calc(86px + env(safe-area-inset-bottom));max-height:35dvh}.onb-account-example{font-size:12px}}

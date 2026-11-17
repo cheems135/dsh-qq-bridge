@@ -1,3 +1,6 @@
+import {toolActorIsOwner} from '../dialogue-persona.js';
+import {qqTurnMeta} from '../qq-turn-context.js';
+import {QQ_FILE_DESCRIPTION,QQ_FILE_PARAMETERS} from '../qq-file-transfer.js';
 import {CONTEXT_RULES,CONTEXT_PARAMETERS} from '../context-demand.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -95,7 +98,7 @@ function makeHistoryHarness({
     personaVersion: state.personaVersion,
     key,
   });
-  const readQqHistory = functionFromIndex('readQqHistory', {
+  const readQqHistory = functionFromIndex('readQqHistory', {toolActorIsOwner,
     request,
     recordsAllowed: key => allowed.has(key),
     groupStopped: () => false,
@@ -202,7 +205,7 @@ test('group cross-read is rejected even when the other group is allowlisted', as
       {action: 'history', target: otherGroup},
       harness.qqReadScope(ownGroup),
     ),
-    /群聊不能读取其他会话/,
+    /其他群友只能读取本群/,
   );
   assert.deepEqual(harness.requestCalls, []);
 });
@@ -514,7 +517,7 @@ test('recipient reply quotes are conservative for both private and group jobs', 
 test('real host tool middleware admits group QQ reads without invoking owner-only device context',async()=>{
  const marker="ctx.on('tools/execute',",start=indexSource.indexOf(marker)+marker.length;
  assert.ok(start>=marker.length);
- const dependencies={chats:new Map(),randomUUID:()=> 'invocation',invocationScope:()=>({}),recordInvocation:()=>{},invocationKind:()=> 'tool',settings:{activeAccountId:'account-a',localChat:{enabled:false}},currentOwnerToolDenial:()=>undefined,qqReadScope:()=>({accountId:'account-a',personaId:'persona-a'}),agencyContext:()=>{throw Error('owner device context must not run');},executionRuntime:{beginHost:()=>{throw Error('device operation runtime must not begin');},finish:()=>{}},apiModelScope:{run:(_scope,fn)=>fn()}};
+ const dependencies={qqTurnMeta,runScheduledTool:(_key,_name,_args,execute)=>execute(),chats:new Map(),randomUUID:()=> 'invocation',invocationScope:()=>({}),recordInvocation:()=>{},invocationKind:()=> 'tool',settings:{activeAccountId:'account-a',localChat:{enabled:false}},currentOwnerToolDenial:()=>undefined,qqReadScope:()=>({accountId:'account-a',personaId:'persona-a'}),agencyContext:()=>{throw Error('owner device context must not run');},executionRuntime:{beginHost:()=>{throw Error('device operation runtime must not begin');},finish:()=>{}},apiModelScope:{run:(_scope,fn)=>fn()}};
  const chat={sessionId:'group-session',key:'group:77777777',turns:new Map()};dependencies.chats.set(chat.sessionId,chat);
  let factory;for(let end=indexSource.indexOf('}',start);end>=0;end=indexSource.indexOf('}',end+1))try{factory=Function(...Object.keys(dependencies),'return ('+indexSource.slice(start,end+1)+');');break;}catch(error){if(!(error instanceof SyntaxError))throw error;}
  const middleware=factory(...Object.values(dependencies));
@@ -523,6 +526,6 @@ test('real host tool middleware admits group QQ reads without invoking owner-onl
 
 test('local QQ pack returns actual history image observations and has an explicit native capability tool',async()=>{
  const chat={key:'group:77777777',kind:'group',chatId:'77777777'},active={controller:new AbortController()},localTurns=new Map([[chat.key,active]]),scope={key:chat.key,accountId:'account-a',personaId:'persona-a',personaVersion:'v1'};
- const create=functionFromIndex('localQqTools',{CONTEXT_RULES,CONTEXT_PARAMETERS,qqReadScope:()=>scope,stopped:false,accountPaused:false,localTurns,recordsAllowed:()=>true,groupStopped:()=>false,randomUUID:()=> 'invocation',recordInvocation:()=>{},qqNativeParameters:{type:'object'},executeNativeQq:async()=>({ok:true}),readQqHistory:async()=>({ok:true,parts:[{type:'image',mediaType:'image/png',data:PNG_BASE64[0]}],records:[]})});
+ const create=functionFromIndex('localQqTools',{QQ_FILE_DESCRIPTION,QQ_FILE_PARAMETERS,CONTEXT_RULES,CONTEXT_PARAMETERS,qqReadScope:()=>scope,stopped:false,accountPaused:false,localTurns,recordsAllowed:()=>true,groupStopped:()=>false,randomUUID:()=> 'invocation',recordInvocation:()=>{},qqNativeParameters:{type:'object'},executeNativeQq:async()=>({ok:true}),readQqHistory:async()=>({ok:true,parts:[{type:'image',mediaType:'image/png',data:PNG_BASE64[0]}],records:[]})});
  const tools=create(chat,active);assert.ok(tools.bridge_qq_api);const result=await tools.bridge_qq_read.execute({action:'history'});assert.equal(result.localObservations[0].url,'data:image/png;base64,'+PNG_BASE64[0]);assert.equal(result.parts,undefined);active.controller.abort();await assert.rejects(tools.bridge_qq_read.execute({action:'history'}),/会话已变化/);
 });

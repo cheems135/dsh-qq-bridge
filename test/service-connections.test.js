@@ -10,6 +10,12 @@ import {installServiceConnections} from '../service-connections-plugin.js';
 const key='test-key-never-return-in-ui';
 function store(){let state=null;const changes=[];const c=createServiceConnections({storage:{read:()=>structuredClone(state),write:s=>state=structuredClone(s)},onChange:s=>changes.push(s),getLegacyMode:()=>true});return {c,changes};}
 const profile=(extra={})=>({name:'自定义服务',baseUrl:'https://example.com/v1',type:'openai',apiKey:key,chatModel:'custom-chat',imageModel:'custom-image',speechModel:'custom-tts',voice:'voice-1',...extra});
+test('disabling mixed routing keeps the current chat mode without reviving an old complement flag',()=>{
+ let state=null,local=true,complement=true;
+ const c=createServiceConnections({storage:{read:()=>structuredClone(state),write:s=>state=structuredClone(s)},getLegacyMode:()=>local,getLegacyComplement:()=>complement,onChange:s=>{local=s.routes.enabled?s.routes.chat==='local':s.legacyLocalEnabled;complement=s.routes.enabled?false:s.legacyApiComplement;}});
+ c.saveRoutes({enabled:true,chat:'host',image:'local',speech:'legacy'});assert.equal(local,false);
+ c.saveRoutes({enabled:false,chat:'host',image:'local',speech:'legacy'});assert.equal(local,false);assert.equal(complement,false);
+});
 test('connection addresses normalize pasted endpoints without dropping a deployment prefix',()=>{
   assert.equal(connectionUrl('https://example.com/custom/v1/chat/completions'),'https://example.com/custom/v1');assert.equal(connectionUrl('http://127.0.0.1:8000/v1/audio/speech'),'http://127.0.0.1:8000/v1');
   for(const value of ['file:///a','https://user:password@example.com','https://example.com/?key=x'])assert.throws(()=>connectionUrl(value));

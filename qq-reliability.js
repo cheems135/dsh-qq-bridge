@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 
 // Only internal delivery syntax is removed. Ordinary links, numbers and short
 // acknowledgements remain intact; private diagnostics never become chat prose.
-export function cleanOutgoingText(value='') {
+export function cleanOutgoingText(value='',{chatStyle=false}={}) {
   if(/"nodeInfoList"\s*:|"generation_job_id"\s*:/.test(String(value)))return '';
   let text=String(value).replace(/(?:\[|【)(?:语音|声音)(?:[:：\]】]|$)[\s\S]*/g,'')
     .replace(/\[(?:图|图片|照片)[:：][^\]]*\]/g,'')
@@ -15,7 +15,7 @@ export function cleanOutgoingText(value='') {
     // text voice; kaomoji and ordinary punctuation are untouched.
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,'');
   text=text.split(/\r?\n/).filter(line=>!/^\s*(?:\{?\s*"(?:nodeInfoList|fieldName|fieldValue|apiKey|authorization|generation_job_id)"\s*:|(?:file:\/\/\/)?[A-Z]:[\\/].*(?:photos[\\/](?:gen|requests)|voice[\\/]|speech[\\/]))/i.test(line)).join('\n');
-  return text.replace(/\n{3,}/g,'\n\n').trim();
+  return (chatStyle?formatQqChatText(text):text).replace(/\n{3,}/g,'\n\n').trim();
 }
 
 export function deliveryFingerprint(segments=[]) {
@@ -59,4 +59,36 @@ export function qqActionTarget(params={}) {
 export function qqActionResult(name,result) {
   if(/^send_(?:msg|private_msg|group_msg)$/.test(name)){const id=String(result?.message_id??''),valid=/^-?\d{1,24}$/.test(id)&&!/^-?0+$/.test(id);return {status:valid?'accepted':'unknown',messageId:valid?id:'',verified:false,transportAccepted:valid,recipient:'unknown',read:'unknown'};}
   return {status:/^(?:get_|can_|check_)/.test(name)?'completed':'accepted',verified:/^(?:get_|can_|check_)/.test(name)};
+}
+
+// Applied only to outgoing QQ text, never to model prompts or spoken audio.
+export function formatQqChatText(value=''){
+ const protectedParts=[];
+ let text=String(value).replace(/```[\s\S]*?(?:```|$)|`[^`\n]+`|https?:\/\/[^\s<>]+|(?:[A-Za-z]:[\\/])[^\n]+/g,part=>{protectedParts.push(part);return '\uE130'+(protectedParts.length-1)+'\uE131';});
+ // JSON and other structured payloads retain literal punctuation.
+ if(/^\s*[{[]/.test(text)){try{JSON.parse(text);return String(value);}catch{}}
+ text=text.replace(/\\r\\n|\\n|\\r/g,'\n').replace(/\r\n?/g,'\n');
+ text=text.split('\n').map(line=>{
+  if(/^\s*(?:[-*•]\s|\d+[.)、]\s|#{1,6}\s)/.test(line))return line.replace(/。/g,'');
+  let count=0;
+  return line.replace(/。|(?<![\p{L}\p{N}.])\.(?![\p{L}\p{N}.])|(?<=[\p{L}\p{N}])\.(?=\s|$)|[，,；;！？!?～~]/gu,(mark,offset)=>{
+   const prior=line.slice(count,offset),length=prior.trim().length;
+   const period=mark==='。'||mark==='.';
+   if(length>=32&&line.slice(offset+mark.length).trim().length>=12){count=offset+mark.length;return (period?'':mark)+'\n';}
+   return period?'':mark;
+  });
+ }).join('\n');
+ return text.replace(/\uE130(\d+)\uE131/g,(_m,i)=>protectedParts[Number(i)]).replace(/\n[ \t]+/g,'\n').split('\n').map(line=>line.trimEnd().replace(/[，,]+(?=[”」』"]?$)/g,'')).join('\n').trim();
+}
+
+// Split pure text/mention messages at the final delivery boundary. Keep code,
+// JSON, lists and media batches in their original structure.
+export function qqParagraphGroups(segments=[]){
+ if(!segments.length||segments.some(s=>!['text','at','reply'].includes(s.type)))return [segments];
+ const text=segments.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('');
+ if(/```|^\s*(?:[{[]|#{1,6}\s|[-*•]\s|\d+[.)、]\s)/m.test(text))return [segments];
+ const lines=text.split(/\r\n?|\n/).map(line=>line.trim().replace(/[，,]+(?=[”」』"]?$)/g,'')).filter(Boolean);
+ if(!lines.length)return [];
+ const mentions=segments.filter(s=>s.type==='at'||s.type==='reply');
+ return lines.map((line,index)=>[...(index===0?mentions:[]),{type:'text',data:{text:line}}]);
 }

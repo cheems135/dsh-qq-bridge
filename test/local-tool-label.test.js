@@ -34,7 +34,7 @@ test('owner tool broker and actual gateway require a real search instead of acce
  let models=0,searches=0,schemas=0;const events=[];
  const service=createLocalModelServer({configFile,env:{LOCAL_AI_WORK_DIR:dir,LOCAL_AI_LOG_FILE:join(dir,'log')},logger:()=>{},runtime:{status:async()=>({reachable:true}),release:async()=>({freed:true})},fetchImpl:async()=>Response.json({queue_running:[],queue_pending:[]}),model:async options=>{
   models++;if(models===1)return '绿萝应该按盆土干湿浇水。';
-  if(models===2){assert.match(options.messages.at(-1).content,/搜索执行核对/);return JSON.stringify({action:'bridge_tools',arguments:{action:'schema',name:'bridge_search'}});}
+  if(models===2){assert.match(options.protocol,/执行纠正/);assert.doesNotMatch(JSON.stringify(options.messages),/绿萝应该按盆土干湿浇水/);return JSON.stringify({action:'bridge_tools',arguments:{action:'schema',name:'bridge_search'}});}
   if(models===3)return JSON.stringify({action:'bridge_tools',arguments:{action:'call',name:'bridge_search',arguments:{query:'绿萝浇水频率'}}});
   assert.ok(options.messages.some(row=>String(row.content).includes('测试资料：按盆土干湿浇水')));return '查到的资料建议按盆土干湿浇水。';
  }});

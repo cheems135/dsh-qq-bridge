@@ -1,4 +1,8 @@
+import {qqTaskEvidence} from '../qq-task-evidence.js';
+import {foldAuxiliaryUsage} from '../usage-accounting.js';
+import {groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply} from '../group-identity.js';
 import {CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor} from '../context-demand.js';
+import {defaultPromptPreferences,promptPreferenceRule} from '../prompt-preferences.js';
 import {applyNonpaymentPolicy,nonpaymentOpen} from '../nonpayment-policy.js';
 import {applyLocalPortraitPlan,resolveLocalPhotoSubject} from '../local-portrait-plan.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -29,7 +33,6 @@ import {personaWaitStyle,cleanWaitNotice,fallbackWaitNotice} from '../local-wait
 import {localSharedContext,localAnalysisInput} from '../local-chat-context.js';
 import {moodState,moodDelivery,shouldJudgeMood,applyMood,consumeMoodHint} from '../companion-mood.js';
 import {conversationStep,conversationHint} from '../conversation-care.js';
-import {memeKnowledgeHint} from '../meme-knowledge.js';
 import {localMediaPlanningCandidate} from '../local-media-planner.js';
 import {resolveLocalMediaTask} from '../local-media-task.js';
 import {localRequirements,chooseLocalRoute,waitForLocalRoute} from '../local-routing.js';
@@ -41,12 +44,12 @@ assert.ok(localSource.length>1000&&inboundSource.length>1000);
 
 function setup(){
   const queued=[],logged=[],calls=[],issues=[];
-  const sandbox={CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
-    splitBursts:(value,limit,options)=>naturalBubbleParts(value,options),replyCharLimit:()=>2000,
+  const sandbox={voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
+    foldAuxiliaryUsage,usage:{},invocationCost:()=>0,saveUsage:()=>{},splitBursts:(value,limit,options)=>naturalBubbleParts(value,options),replyCharLimit:()=>2000,
     settings:{activeAccountId:'a',presetPrompts:{p:'角色设定'},basePersona:'完整系统提示词',memory:{enabled:false},localChat:{enabled:true,baseUrl:'http://127.0.0.1:8777'},owners:['12345'],reliability:{}},
     persona:{id:'p'},version:'v1',featureState:{floors:{},inbox:[],outbox:[],audits:[]},memories:{},messages:[],memoryHub:null,localTurns:new Map(),stopped:false,accountPaused:false,
-    state:{chats:{}},ctx:{sessionController:{cancel:()=>{}}},
-    soul:{mood:moodState()},soulFor:()=>sandbox.soul,
+    state:{chats:{}},ctx:{get:()=>undefined,effect:()=>{},sessionController:{cancel:()=>{}}},
+    soul:{mood:moodState()},soulFor:()=>sandbox.soul,currentPersonaMood:()=>sandbox.soul.mood,
     enrichConversation:()=>{},prepareCalendarContext:async()=>{},
     segmentsOf:parts=>Array.isArray(parts)?parts:[],transcribeRecord:async()=>'',
     auditForTurn:()=>{const audit={id:randomUUID(),accountId:'a',persona:'p'};sandbox.featureState.audits||=[];sandbox.featureState.audits.push(audit);return audit;},auditAnswerCap:()=>20000,
@@ -65,7 +68,8 @@ function setup(){
   sandbox.invocationJournal=createInvocationJournal({getRows:()=>sandbox.featureState.invocations||[],setRows:rows=>sandbox.featureState.invocations=rows});
   vm.createContext(sandbox);
   const invocationSource=source.slice(source.indexOf('  function recordInvocation(event,scope)'),source.indexOf('\n  function invocationScope('));
-  vm.runInContext(localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
+  const identitySource=source.slice(source.indexOf('  function groupBindingFor(chat)'),source.indexOf('  function sendText(chat,text)'));
+  vm.runInContext(identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
   sandbox.getLocalCapabilities=async()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:Object.fromEntries(['text','json','tools','vision','asr','speech','image','video'].map(key=>[key,{supported:true}]))});
   return {sandbox,queued,logged,calls,issues,...sandbox.review,chat:{key:'private:12345',kind:'private',isOwner:true,chatId:'12345',userId:'12345',incomingImages:[]}};
 }
@@ -81,6 +85,7 @@ test('actual bridge function preserves account/persona/chat scope and current in
   const rows=h.calls[0].body.messages;
   assert.equal(rows.filter(r=>r.content==='本条请求').length,1);
   assert.ok(rows.some(r=>r.content==='有效历史'));
+  assert.ok(rows.some(r=>String(r.content).includes('【本轮真实时间】')&&String(r.content).includes('有效历史')));
   assert.ok(!rows.some(r=>/其他账号|其他人设|其他联系人/.test(r.content)));
   assert.equal(h.logged.filter(r=>r.text==='本条请求').length,1);
   assert.equal(h.queued.length,1);
@@ -155,7 +160,7 @@ test('actual local group routing pauses the activation clock across capability c
 });
 test('unavailable local tools and media return an explanation without submitting an API turn',async()=>{
  const h=setup();const capabilities=await h.sandbox.getLocalCapabilities();capabilities.features.image={supported:false,reason:'尚未登记图片工作流'};h.sandbox.getLocalCapabilities=async()=>capabilities;
- assert.equal(await h.routeLocalTurn(h.chat,'生成一张图片',false,{message_id:501}),true);assert.equal(h.calls.length,0);assert.equal(h.queued.length,0);assert.match(h.issues[0].message,/尚未登记图片工作流/);
+ assert.equal(await h.routeLocalTurn(h.chat,'生成一张图片',false,{message_id:501}),true);assert.equal(h.calls.length,0);assert.equal(h.queued.length,1);assert.match(h.issues[0].message,/尚未登记图片工作流/);
  assert.equal(await h.routeLocalTurn({...h.chat,isOwner:false},'搜索一下B站',false,{message_id:502}),true);assert.equal(h.calls.length,0);
  h.sandbox.settings.localChat.enabled=false;assert.equal(await h.routeLocalTurn(h.chat,'你好',false,{}),false);assert.equal(h.calls.length,0);
 });
@@ -167,13 +172,15 @@ test('foreground complement hands unsupported requests to the existing API route
  const h=setup(),capabilities=await h.sandbox.getLocalCapabilities();capabilities.features.native={supported:false,reason:'本地未接入终端'};h.sandbox.getLocalCapabilities=async()=>capabilities;h.sandbox.settings.localChat.apiComplement=true;const payload={message_id:504};assert.equal(await h.routeLocalTurn(h.chat,'用终端执行命令',false,payload),false);assert.equal(payload._bridgeApiComplement,true);assert.equal(h.calls.length,0);assert.equal(h.queued.length,0);
 });
 
-test('foreground busy admission waits with one scoped notice and then dispatches once locally',async()=>{
+test('foreground admission waits silently below 180 seconds, then emits at most one scoped queue notice',async()=>{
+ for(const busyChecks of [10,181]){
  const h=setup(),s=h.sandbox;let checks=0,time=0;
  const capabilities=await s.getLocalCapabilities();s.settings.localChat.apiComplement=true;
- s.getLocalCapabilities=async()=>{checks++;assert.equal(h.calls.length,0);return {...capabilities,busy:checks<=10};};
+ s.getLocalCapabilities=async()=>{checks++;assert.equal(h.calls.length,0);return {...capabilities,busy:checks<=busyChecks};};
  s.waitForLocalRoute=options=>waitForLocalRoute({...options,now:()=>time,sleep:async ms=>time+=ms});
  await h.routeLocalTurn(h.chat,'今天有什么想聊的',false,{message_id:505});
- assert.equal(checks,11);assert.equal(h.calls.length,1);assert.equal(h.queued.length,2);assert.match(h.queued[0].chat.deliveryKey,/local:queue:/);assert.match(h.queued[0].segments[0].data.text,/任务/);assert.equal(s.localTurns.size,0);assert.equal(s.featureState.localWaitNotices.length,1);
+ const notice=busyChecks>180;assert.equal(checks,busyChecks+1);assert.equal(h.calls.length,1);assert.equal(h.queued.length,notice?2:1);if(notice){assert.match(h.queued[0].chat.deliveryKey,/local:queue:/);assert.match(h.queued[0].segments[0].data.text,/任务/);}assert.equal(s.localTurns.size,0);assert.equal(s.featureState.localWaitNotices?.length||0,notice?1:0);
+ }
 });
 
 test('in-flight cancellation suppresses final output even when backend resolves late',async()=>{
@@ -244,16 +251,16 @@ test('terminal voice queues audio once and keeps its transcript out of the QQ pa
   }finally{rmSync(directory,{recursive:true,force:true});}
 });
 
-test('local runtime and media errors stay in the bridge panel with no technical QQ reply',async()=>{
+test('local runtime and media errors explain failure naturally in QQ and keep technical details in the panel',async()=>{
  const h=setup();h.sandbox.fetch=async()=>Response.json({error:{message:'VoiceLab synthesis interrupted'}},{status:500});
- await h.handleLocalChatTurn(h.chat,'语音说句话',false,{message_id:401});assert.equal(h.queued.length,0);assert.equal(h.issues.length,1);assert.match(h.issues[0].message,/VoiceLab synthesis interrupted/);
+ await h.handleLocalChatTurn(h.chat,'语音说句话',false,{message_id:401});assert.equal(h.queued.length,1);assert.doesNotMatch(h.queued[0].segments[0].data.text,/VoiceLab|synthesis interrupted/);assert.equal(h.issues.length,1);assert.match(h.issues[0].message,/VoiceLab synthesis interrupted/);
  const media=setup();media.sandbox.fetch=async()=>Response.json({text:'这是模型生成的技术报错',attachments:[],receipts:[{invocationId:'failed-speech',tool:'speech',ok:false,error:'VoiceLab incomplete'}]});
- await media.handleLocalChatTurn(media.chat,'语音说句话',false,{message_id:402});assert.equal(media.queued.length,0);assert.equal(media.issues.length,1);assert.match(media.issues[0].message,/VoiceLab incomplete/);
+ await media.handleLocalChatTurn(media.chat,'语音说句话',false,{message_id:402});assert.equal(media.queued.length,1);assert.doesNotMatch(media.queued[0].segments[0].data.text,/VoiceLab|incomplete|技术报错/);assert.equal(media.issues.length,1);assert.match(media.issues[0].message,/VoiceLab incomplete/);
 });
 
-test('a partial media failure preserves the successful attachment and reports only to the panel',async()=>{
+test('a partial media failure preserves the successful attachment and explains the remaining failure',async()=>{
  const directory=mkdtempSync(new URL('./bridge-partial-',import.meta.url).pathname.replace(/^\/(\w:)/,'$1'));
- try{const image=join(directory,'image.png');writeFileSync(image,Buffer.from('89504e470d0a1a0a','hex'));const h=setup();h.sandbox.fetch=async()=>Response.json({text:'语音合成失败',attachments:[{kind:'image',file:image}],receipts:[{tool:'image',ok:true},{tool:'speech',ok:false,error:'incomplete voice',invocationId:'speech-1'}]});await h.handleLocalChatTurn(h.chat,'画图并用语音介绍',false,{message_id:403});assert.equal(h.queued.length,1);assert.equal(h.queued[0].segments[0].type,'image');assert.equal(h.issues.length,1);assert.equal(h.issues[0].id,'local:speech-1');}finally{rmSync(directory,{recursive:true,force:true});}
+ try{const image=join(directory,'image.png');writeFileSync(image,Buffer.from('89504e470d0a1a0a','hex'));const h=setup();h.sandbox.fetch=async()=>Response.json({text:'语音合成失败',attachments:[{kind:'image',file:image}],receipts:[{tool:'image',ok:true},{tool:'speech',ok:false,error:'incomplete voice',invocationId:'speech-1'}]});await h.handleLocalChatTurn(h.chat,'画图并用语音介绍',false,{message_id:403});assert.equal(h.queued.length,2);assert.equal(h.queued[1].segments[0].type,'text');assert.equal(h.queued[0].segments[0].type,'image');assert.equal(h.issues.length,1);assert.equal(h.issues[0].id,'local:speech-1');}finally{rmSync(directory,{recursive:true,force:true});}
 });
 
 test('owner local turn binds existing host tools to its exact account and persona turn',async()=>{
@@ -316,15 +323,15 @@ test('automatic local context resets preserve records and resume from the curren
  const rows=h.calls.at(-1).body.messages;assert.ok(!rows.some(row=>row.content==='应退出上下文的旧消息'));assert.ok(rows.some(row=>row.content==='当前保留问题'));
 });
 
-test('real shared API enrichment, recall and mood feedback run through the local bridge with one gateway request',async()=>{
+test('real shared API enrichment stays on demand while mood feedback uses one local gateway request',async()=>{
  const h=setup(),s=h.sandbox,usage=[],outcomes=[],observed=[];let recalls=0,cloudCalls=0;
  h.chat.isOwner=true;s.settings.learning={enabled:true};Object.assign(s.settings,{memory:{enabled:true,maxChars:500},companion:{enabled:true},websites:{learning:true},mood:{enabled:true},realism:{enabled:false}});
- Object.assign(s,{conversationStep,conversationHint,consumeMoodHint,memeKnowledgeHint,
+ Object.assign(s,{conversationStep,conversationHint,consumeMoodHint,commitmentContext:key=>({key}),commitmentLedger:{hint:()=>'',event:()=>{}},
   chats:new Map(),recordsAllowed:()=>true,conversationStates:()=>s.featureState.conversation||=( {} ),conversationScope:()=>JSON.stringify([s.settings.activeAccountId,s.persona.id]),
   companionSettings:()=>({expressionMode:'relaxed'}),operationContext:()=>[],operationText:(text,limit)=>String(text).slice(0,limit),personaMood:(_core,_meta,value)=>value,
   hubMeta:key=>({key,accountId:s.settings.activeAccountId,personaId:s.persona.id}),calendarMeta:()=>({accountId:'a',personaId:'p'}),calendarRole:()=>({meta:{}}),insightHint:()=>'',sensationBlock:()=>'',
   qqReadScope:key=>({key,accountId:s.settings.activeAccountId,personaId:s.persona.id,personaVersion:s.version}),groupStopped:()=>false,
-  lifeExecution:{snapshot:()=>({jobs:[]}),question:()=>null},lifeMemory:null,featureProfile:()=>({notes:'熟悉的朋友'}),effectiveModel:()=> 'api-model',memoryFor:()=>({items:[]}),segmentsOf:value=>value||[],
+  lifeExecution:{snapshot:()=>({jobs:[]}),question:()=>null},lifeMemory:null,observeSleepState:()=>({sleeping:false}),groupTaskContext:()=>null,featureProfile:()=>({notes:'熟悉的朋友'}),effectiveModel:()=> 'api-model',memoryFor:()=>({items:[]}),segmentsOf:value=>value||[],
   memoryHub:{recall:async(_meta,_text,options)=>{recalls++;assert.equal(options.expand,false);return {text:'来源1：喜欢画猫。',ids:['memory-1']};},desktop:()=> '【当前角色的常驻生活摘要，同一人设跨场合连续，私人细节不外传】'+JSON.stringify({relationship:'熟悉的朋友',unfinished:null,coreContinuity:[]})},
   learningMemory:{recall:()=>({text:'画猫先检查构图。',ids:['learn-1'],sources:[{id:'learn-1'}]}),recordUsage:(_meta,value)=>usage.push(['learning',value]),recordOutcome:(_meta,value)=>outcomes.push(['learning',value]),observe:(_meta,value)=>{observed.push(value);return {queued:true};},process:()=>{throw Error('no foreground learning inference');}},
   memeStudy:{blocked:()=>[],hint:()=>({text:'这是语境玩笑，认真求助时先回答问题。',ids:['meme-1']}),recordUsage:(_meta,value)=>usage.push(['meme',value]),recordOutcome:(_meta,value)=>outcomes.push(['meme',value])},
@@ -333,18 +340,20 @@ test('real shared API enrichment, recall and mood feedback run through the local
  });
  s.soul.mood=moodState({dims:{calm:3}});
  const enrich=source.slice(source.indexOf('  function enrichConversation('),source.indexOf('\n  let installedMediaRuntime='));
- const calendar=source.slice(source.indexOf('  async function prepareCalendarContext('),source.indexOf('\n  function calendarSnapshot('));
+ const calendar=source.slice(source.indexOf('  function conversationActiveFor('),source.indexOf('\n  function calendarSnapshot('));
  const audit=source.slice(source.indexOf('  function auditForTurn('),source.indexOf('\n  function auditAnswerCap('));
  const reflect=source.slice(source.indexOf('  async function reflectOnTurn('),source.indexOf('\n  // Optional self-chosen expression marker'));
  const reader=source.slice(source.indexOf('  function conversationContextStamp('),source.indexOf('  let contextToolRegistered='));
- Object.assign(s,{CONTEXT_TOPICS:(await import('../context-demand.js')).CONTEXT_TOPICS});
+ Object.assign(s,{CONTEXT_TOPICS:(await import('../context-demand.js')).CONTEXT_TOPICS,
+  serviceSourceOverview:(await import('../service-source-overview.js')).serviceSourceOverview,
+  serviceConnections:null,serviceSource:()=> 'local',normalizeVoiceEngine:value=>value||'none',isDesktop:true});
  vm.runInContext(reader+'\n'+enrich+'\n'+calendar+'\n'+audit+'\n'+reflect,s);
  s.fetch=async(url,options)=>{h.calls.push({body:JSON.parse(options.body)});return Response.json({text:'先看猫在画面的位置和留白，画累了就歇一会儿。',attachments:[],mood:{confidence:85,evidenceQuote:'谢谢你',reason:'对方表达感谢',moodDelta:2,dims:{happy:3}}});};
  await h.handleLocalChatTurn(h.chat,'谢谢你，还记得上次画猫吗？你学到了什么，这个梗是什么，怎么表达，今天日程如何？',false,{user_id:'12345',message_id:101,message:[]});
  assert.equal(recalls,1);assert.equal(cloudCalls,0);assert.equal(h.calls.length,1);const body=h.calls[0].body;
  for(const kind of ['memory','meme','learning','expression','mood','life'])assert.equal(body.turnContext.features[kind],1,kind);
  assert.match(JSON.stringify(body.messages),/喜欢画猫/);assert.equal(body.messages.filter(row=>row.content==='谢谢你，还记得上次画猫吗？你学到了什么，这个梗是什么，怎么表达，今天日程如何？').length,1);
- assert.equal(h.queued.length,1);const receipt=s.featureState.audits[0];assert.equal(h.queued[0].chat.auditId,receipt.id);assert.equal(receipt.local,true);assert.equal(receipt.status,'completed');assert.equal(usage.length,3);assert.equal(outcomes.length,3);assert.equal(observed.length,1);assert.equal(s.soul.lastAnalysis.moodAccepted,true);assert.ok(s.soul.mood.dims.happy>=3);assert.equal(s.state.turns[h.chat.key],1);
+ assert.equal(h.queued.length,1);const receipt=s.featureState.audits[0];assert.equal(h.queued[0].chat.auditId,receipt.id);assert.equal(receipt.local,true);assert.equal(receipt.status,'completed');assert.equal(usage.length,2);assert.equal(outcomes.length,2);assert.equal(observed.length,1);assert.equal(s.soul.lastAnalysis.moodAccepted,true);assert.ok(s.soul.mood.dims.happy>=3);assert.equal(s.state.turns[h.chat.key],1);
 });
 
 test('account switches during shared recall cannot submit context or queue old feedback',async()=>{
@@ -424,4 +433,13 @@ test('local merged-forward input includes actual image URLs and directory before
  s.sharedContext=async(payload,key)=>{assert.equal(key,h.chat.key);assert.equal(payload.message[0].type,'forward');return {images:[{type:'image',mediaType:'image/png',data:'aW1hZ2U='}],text:'转发真实目录，图片0:1已附上，其他未读'};};
  await h.routeLocalTurn(h.chat,'看看转发里的图',false,{message_id:99001,message:[{type:'forward',data:{id:'real-observed-id'}}]});
  const current=h.calls[0].body.messages.at(-1).content;assert(Array.isArray(current));assert.equal(current.filter(p=>p.type==='image_url').length,1);assert.equal(current.find(p=>p.type==='image_url').image_url.url,'data:image/png;base64,aW1hZ2U=');assert(current.some(p=>p.type==='text'&&p.text.includes('其他未读')));
+});
+
+test('actual local routing releases its wake hold once after success and capability rejection',async()=>{
+ for(const unavailable of [false,true]){const h=setup();let held=0,released=0;
+  h.sandbox.lifeExecution={holdAwake:()=>{held++;return()=>released++;},snapshot:()=>({sleeping:false})};
+  if(unavailable)h.sandbox.getLocalCapabilities=async()=>null;
+  await h.routeLocalTurn(h.chat,'你好',false,{message_id:998});
+  assert.equal(held,1);assert.equal(released,1);assert.equal(h.calls.length,unavailable?0:1);
+ }
 });

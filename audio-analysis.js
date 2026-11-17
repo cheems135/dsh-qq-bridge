@@ -1,3 +1,4 @@
+import {reconcileLocalAudioEvidence} from './local-audio-evidence.js';
 import {spawn} from 'node:child_process';
 import {existsSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
@@ -17,7 +18,7 @@ export function createAudioAnalysis({getRuntime,getCacheDir,authorize=()=>true,s
    child.on('close',()=>{context.signal?.removeEventListener('abort',abort);if(done)return;done=true;clearTimeout(timer);try{const v=JSON.parse(out);if(!v.ok)throw Error(v.error||'音频分析失败');resolve(v);}catch(e){reject(e);}});
    child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify({...args,transcribe:args.transcribe===true&&!apiOnly,runtime:{...getRuntime(),...(apiOnly?{whisperModelPath:''}:{})},cacheDir}));
   });
-  if(!authorize(context))throw Error('音频处理期间权限或账号已改变，旧结果未提交');if(apiOnly&&args.transcribe)value.transcription={status:'unavailable',segments:[],note:'手机版使用 API 语音识别；这里仅完成音频测量，没有运行本地听写模型。'};return value;
+  if(!authorize(context))throw Error('音频处理期间权限或账号已改变，旧结果未提交');if(apiOnly&&args.transcribe)value.transcription={status:'unavailable',segments:[],note:'手机版使用 API 语音识别；这里仅完成音频测量，没有运行本地听写模型。'};return reconcileLocalAudioEvidence(value);
  }
  return {analyze,status};
 }

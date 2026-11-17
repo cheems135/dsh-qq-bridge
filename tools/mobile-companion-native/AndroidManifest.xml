@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.dsh.companion.overlay" android:versionCode="4" android:versionName="0.1.3">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <application android:label="屏幕陪伴组件" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/network_security_config" android:icon="@drawable/companion_icon" android:supportsRtl="true">
+    <activity android:name=".ConnectActivity" android:exported="true">
+      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+      <intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="dshcompanion" android:host="connect" /></intent-filter>
+    </activity>
+    <activity android:name=".InputActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+    <service android:name=".CompanionService" android:exported="false" android:foregroundServiceType="mediaProjection" android:stopWithTask="false" />
+  </application>
+</manifest>

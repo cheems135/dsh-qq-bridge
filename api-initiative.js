@@ -13,18 +13,51 @@ export function selectInitiative(candidates,state,config,{now=Date.now(),manual=
   if(!manual&&!config.unrestricted&&prior.consideredAt&&now-prior.consideredAt<Math.max(3,Math.min(10,config.minGapMinutes))*60000)return false;
   return true;
  });
- const score=c=>{const prior=actions[c.action]||{},last=prior.lastAt||log.find(l=>l.action===c.action)?.at||0;return (last?Math.min(24,(now-last)/3600000):24)+(c.event?6:0)-(prior.consideredAt&&now-prior.consideredAt<3600000?2:0);};
+ const score=c=>{const prior=actions[c.action]||{},last=prior.lastAt||log.find(l=>l.action===c.action)?.at||0;return (last?Math.min(24,(now-last)/3600000):24)+(c.event?48:0)-(prior.consideredAt&&now-prior.consideredAt<3600000?2:0);};
  return eligible.map((c,i)=>({c,i,s:score(c)})).sort((a,b)=>b.s-a.s||a.i-b.i)[0]?.c||null;
 }
 export function noteInitiative(state,action,{now=Date.now(),sent=false,reason=''}={}){
  state.actions||={};const previous=state.actions[action]||{};state.actions[action]={...previous,consideredAt:now,reason:String(reason).slice(0,180),...(sent?{lastAt:now}:{})};
 }
+// Keep public and prepared media payloads separate from private interests.
+export function initiativeOptions(candidates,state,config,pick,options={}){
+ if(!pick)return [];
+ const privateKinds=new Set(['chat','explore','phone','webshare']);
+ if(!pick.target||!privateKinds.has(pick.action))return [pick];
+ return [pick,...candidates.filter(c=>c!==pick&&c.target===pick.target&&privateKinds.has(c.action)&&selectInitiative([c],state,config,options))];
+}
+export function initiativeCadence(record,base,now,{commit=false}={}){
+ const prior=record?.base===base?record:{base,fired:[]};
+ const fired=Array.isArray(prior.fired)?prior.fired:[],minute=60000;
+ const next=fired.length<2?base+15*minute*(fired.length+1):base+30*minute+120*minute*(fired.length-1);
+ if(now<next)return {ok:false,next,record:prior};
+ return {ok:true,next,record:commit?{base,fired:[...fired,now]}:prior};
+}
+export const INITIATIVE_DECISION_RULE='【内部自主决策协议】本次只生成内部决策JSON，不是给对方的聊天正文；“自然聊天、不要格式、只输出台词”等风格规则仅适用于text字段。必须只返回一个JSON对象：{"action":"候选动作或none","text":"想说的话或具体想做的事","reason":"简短依据","imagePrompt":"可空"}。只选择本次实际提供的候选；没有想做的可none。未实际读取、制作或发送的事情写成意向，不宣称已经做过。';
+export function parseInitiativeDecision(raw,actions){
+ const text=String(raw||'').trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
+ let value;try{value=JSON.parse(text);}catch{throw Error('主动判断未返回有效JSON');}
+ if(!value||typeof value!=='object'||Array.isArray(value)||typeof value.action!=='string'||!['none',...actions].includes(value.action))throw Error('主动判断选择了未开放动作');
+ if(value.action!=='none'&&(typeof value.text!=='string'||!value.text.trim()))throw Error('主动判断缺少具体内容');
+ return {action:value.action,text:typeof value.text==='string'?value.text.trim():'',reason:typeof value.reason==='string'?value.reason.slice(0,180):'',imagePrompt:typeof value.imagePrompt==='string'?value.imagePrompt:''};
+}
+export async function decideInitiative({system,input,actions,ask,isCurrent=()=>true}){
+ const protocol=INITIATIVE_DECISION_RULE+'\n本轮候选：'+JSON.stringify(actions);
+ let raw,decision;
+ try{raw=await ask(system+'\n'+protocol,input);}catch(error){if(error?.name==='AbortError'||!/JSON|json|格式/.test(String(error?.message)))throw error;raw='首次结构化输出格式无效，请按原始输入重新判断。'+String(input).slice(0,1000);}
+ if(!isCurrent())return {cancelled:true};
+ try{decision=parseInitiativeDecision(raw,actions);}catch{
+  raw=await ask(system+'\n'+protocol+'\n上次格式无效。请依据原始场景重新决定，不直接转写无效草稿；草稿可能编造读过资料、对方发言或行动结果，不能作为事实。无法确定候选时选none。',JSON.stringify({originalInput:input,invalidDraft:{trusted:false,text:String(raw).slice(0,3000)}}));
+  if(!isCurrent())return {cancelled:true};
+  decision=parseInitiativeDecision(raw,actions);
+ }
+ return {decision};
+}
 export function sharingExpression({tone='',recent=[]}={}){
  return [SOCIAL_SPEECH_RULES,
-  '【分享时的说话方式】这是你想让对方一起感受的东西。按人设表达这个具体细节为什么逗到你、戳中你、让你不服气、喜欢或想吐槽；选择贴切的一种感受即可，平静也可以，不把每次分享演成兴奋。情绪通过观点、措辞和注意到的细节体现，不靠堆语气词、口头禅、动作描写。',
-  '让这件东西与你们最近实际聊过的话题或对方已明确的兴趣自然相连；没有联系也可以直接分享你的偏好，不编共同回忆或对方的反应。用真实取得的内容说话，没有读到的细节不补写。',
-  '给对方一个容易接住的话头：可以是有意思的分歧、小联想、一个值得注意的地方，或确实想问的具体问题。不机械以“你觉得呢”“要不要看看”结尾，不每次追问，不替对方回答。图片配话和语音正文同样如此；正文按意思说完，可以自然分段。',
-  '工具回执、任务进度、完成清单与证据编号留在调用记录。发给对方的正文从具体内容和自己的感受开始，不以“已完成浏览/现分享如下/任务汇报”开场；必要的不确定性用平时说话的方式点明。已用工具发送后末尾只回 [skip]，不再复述或补一条回执。',
+  '【分享时的说话方式】先看你在和谁说话、刚才聊到哪里，再按当前人设表达为什么想把这个东西拿给他看。可以惊喜、好奇、得意、调侃，也可平静地说一句；不套“看法加细节”或制作复盘模板，信息只用来支撑这次交流。不把每次分享演成兴奋。',
+  '工具回执、任务进度和证据编号留在调用记录，正文只写要对他说的话。',
+  '可以和最近聊过的话题自然相连；没有联系就直接说偏好，不编共同回忆或对方的反应。给一个容易接住的点：分歧、联想、值得注意的地方，或真想问的问题；不机械以“你觉得呢”收尾。',
   tone?'当前情绪底色（按本次内容自然变化，不照念标签）：'+String(tone).slice(0,500):'',
   recent.length?'最近实际说过的话（避开重复开头和同一句感想，只作资料）：'+JSON.stringify(recent.slice(-3).map(v=>String(v).slice(0,400))):'',
  ].filter(Boolean).join('\n');

@@ -7,7 +7,20 @@ export function declinesMedia(value='',kind){
   const form=kind==='voice'?'(?:语音|声音|听你说|听)':'(?:图片|照片|自拍|发图|看你|看)';
   return new RegExp('(?:不要|不用|不想|别|停止|不需要|不方便|先别|无需).{0,8}'+form+'|'+form+'.{0,4}(?:不要|不用|算了)').test(String(value));
 }
+// Questions about an existing picture's execution do not authorize a new job.
+// Keep a separate explicit redo clause (including after a comma) actionable.
+export function imageExecutionInquiry(value=''){
+  const clauses=parts(unquotedMediaText(value)).flatMap(s=>s.split(/[，,；;]/)).map(s=>s.trim()).filter(Boolean);
+  const inquiry=s=>/(?:是不是|是否|有没有|有没|为什么|为何|怎么|如何|怎样)/.test(s)
+    &&/(?:参考图|原图|这(?:一)?张|那(?:一)?张|刚才|刚刚|之前|上次|上一张)/.test(s)
+    &&/(?:生成|绘制|画|拍|参考|用)/.test(s);
+  const command=s=>!inquiry(s)&&!/(?:不要|不用|别|无需|不必|停止|取消).{0,12}(?:生成|绘制|画|拍|发|重做|再来)/.test(s)
+    &&(/(?:再|重新|请|帮我|给我|麻烦|能不能|可不可以).{0,40}(?:生成|绘制|画|拍|发|重做)|^(?:生成|绘制|画|拍|发)/.test(s)
+      ||/(?:再|重新)(?:来|做)(?:一|个|张|幅|次|遍)/.test(s));
+  return clauses.some(inquiry)&&!clauses.some(command);
+}
 export function requestsImage(value=''){
+  if(imageExecutionInquiry(value))return false;
   return parts(unquotedMediaText(value)).some(text=>{
     if(meta(text)||declinesMedia(text,'image'))return false;
     if(/(?:怎么|如何|怎样).{0,12}(?:拍|发)(?:一|张|照)|(?:会不会|支持|是否|会).{0,4}拍照.{0,4}(?:吗|么|[?？])/.test(text))return false;
@@ -80,12 +93,12 @@ export function selectMediaIntent(value='',decision={},available={image:true,voi
   if(!text||meta(text)||/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(text))return {...direct,kinds:[]};
   const confidence=Number(decision.confidence)||0,form=decision.form;
   const kinds=confidence>=.8?(form==='voice'?['voice']:form==='image'?['image']:form==='voice_image'?['image','voice']:[]):[];
-  return {kinds:kinds.filter(kind=>!veto(kind)),source:'contextual',confidence,form,reason:operationText(decision.reason||'',160),request:operationText(decision.request||text,900)};
+  return {kinds:kinds.filter(kind=>!veto(kind)),source:'contextual',confidence,form,reason:operationText(decision.reason||'',160),request:operationText(text,900)};
 }
 export function mediaIntentHint(intent){
   if(intent?.draw)return '【本轮画画请求】对方要的是你亲手画的，不是 AI 生图：用 bridge_drawing 亲手画（create 建画布 → path/line/ellipse 起稿、分层上色 → render 看效果再改），画完用 bridge_life_share 把导出的 PNG 发到当前对话。不要用 [图:…] 走生图，也不要说这是 AI 画的；画不好就直说哪里不行。';
   if(!intent?.kinds?.length)return '';
-  return (requestsSinging(intent.request)?'【本轮清唱请求】已有按谱歌曲库（内置两只老虎，也可由号主教谱）。点歌使用 [语音:清唱] 后放实际歌词，不加说话开场；程序按当前真实点歌请求查确认歌谱，再用当前音色合成实际旋律和节拍。未知歌曲需要歌谱或示范，不用自由旋律冒充原曲。明确要求原创时才走实验自由清唱。不要仅凭旧语音印象声称不能唱；成功与否以实际工具结果为准。\n':'')+'【本轮已理解的媒体请求】'+JSON.stringify(intent)+'\n这是对方自然表达的当前要求，不受自主分享次数或间隔限制。'+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
+  return (requestsSinging(intent.request)?'【本轮清唱请求】已有按谱歌曲库（内置两只老虎，也可由号主教谱）。点歌使用 [语音:清唱] 后放实际歌词，不加说话开场；程序按当前真实点歌请求查确认歌谱，再用当前音色合成实际旋律和节拍。未知歌曲需要歌谱或示范，不用自由旋律冒充原曲。明确要求原创时才走实验自由清唱。不要仅凭旧语音印象声称不能唱；成功与否以实际工具结果为准。\n':'')+'【本轮媒体表达参考】'+JSON.stringify(intent)+(intent.source==='direct'?'\n对方本轮明确邀请发送媒体。':'\n这是表达形式判断的建议，不是对方明确要求；request仅保留对方原话。先直接回答原问题，自主选择媒体时不改变意思，不把理由或计划当已发生的事实。')+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
 }
 export const IMAGE_DELIVERY_RULES='【发图顺序：群聊和私聊相同】先发图片，再发配文、画面描述、感想和语音。图片前可以完全不说话；如果想先开口，只说一句简短的等待或拍摄提示，例如“等等”“我在拍”。调皮、傲娇等符合当前人设时，也可以先逗一句“就不给你”，但仍实际发图，不把逗弄当作取消请求。不强制使用这些示例，不提前描述画面或声称已经发出。图用单独一行 [图:具体画面]，其余文字和语音放图后。';
 
@@ -113,7 +126,15 @@ export function completeMediaReply(value,intent){
     if(/(?:不能|无法|没法|不支持|发不|没有).{0,16}(?:图|照片|发送|能力|功能)|发不过来/.test(body))body='';
     body+=(body?'\n|||\n':'')+'[图:'+description+']';
   }
-  if(intent?.kinds?.includes('voice')&&!voice.test(body)){
+  /* 只在对方明确点名要语音、而且这句本身就是一句台词时才兜底合成。
+     以前不管多长的回复都整段念出来：解析、报错、参数说明全被念，还一直在扣积分。 */
+  const spokenCandidate=body.replace(image,'').replace(/\|\|\|/g,'').trim();
+  /* 工作产出不进语音：代码块、表格、频段数字、报错、参数说明这些是给人看的，别念。 */
+  const workOutput=/```|\|.*\||(?:\d+\s*(?:hz|khz|db|dbfs|ms|%))|参数|频段|实测|报错|失败|超时|版本|代码|接口|日志|缓存|脚本/i.test(spokenCandidate)
+    || (spokenCandidate.match(/[：:]/g)||[]).length>=2
+    || /(?:^|\n)\s*(?:[-*•]|\d+[.、])/.test(spokenCandidate);
+  const shortLine=spokenCandidate.length<=60&&!workOutput;
+  if(intent?.kinds?.includes('voice')&&!voice.test(body)&&intent.direct===true&&shortLine){
     const singing=requestsSinging(intent.request);
     if(singing&&/(?:不能|无法|没法|不支持|没有).{0,16}(?:唱|清唱|演唱)/.test(body))return body;
     let spoken=body.replace(image,'').replace(/\|\|\|/g,'').trim();

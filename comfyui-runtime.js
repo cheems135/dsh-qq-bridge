@@ -6,7 +6,8 @@ import {createHash, randomUUID} from 'node:crypto';
 import {existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync} from 'node:fs';
 import {extname, isAbsolute, join, resolve} from 'node:path';
 import {applyLocalGpuPolicy} from './local-gpu-policy.js';
-import {prepareMediaWorkflow} from './local-workflow-mode.js';
+import {applyWorkflowParameters} from './workflow-parameters.js';
+import {appendWorkflowTriggerWords,prepareMediaWorkflow} from './local-workflow-mode.js';
 import {readComfyContext} from './local-context.js';
 import {describeLocalWorkflow} from './local-workflow-diagnostics.js';
 
@@ -360,12 +361,15 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
       let imageName = '';
       if (args.image) imageName = await uploadImage(c.baseUrl, String(args.image), fetchImpl, signal);
       if (imageName) setField(workflow, spec.inputs, 'image', imageName);
+      if(spec.output?.kind==='video'&&String(args.prompt||'').trim())args={...args,prompt:appendWorkflowTriggerWords(args.prompt,spec.triggerWords)};
       for (const key of ['text', 'history', 'system', 'requestId', 'temperature', 'maxTokens', 'seed', 'prompt', 'negativePrompt']) {
         let value = args[key];
         if (key === 'history' && value !== undefined) value = typeof value === 'string' ? value : JSON.stringify(value || []);
         setField(workflow, spec.inputs, key, value);
       }
       for (const [key, value] of Object.entries(args.params || {})) setField(workflow, spec.inputs, key, value);
+      applyWorkflowParameters(workflow,spec);
+      applyLocalGpuPolicy(workflow,{memoryProfile:c.memoryProfile||'workflow',kind,vision:kind==='caption'||!!args.image||!!args.imageFiles?.length,fastDialogue:args.fastDialogue===true});
       if(args.requirePersonaReference===true){
         const bound=describeLocalWorkflow(workflow,spec,kind).imageBinding;
         if(!imageName||bound.value!==imageName||!bound.onOutputPath)throw Error('人设图上传后未正确绑定到工作流，未提交生成任务');

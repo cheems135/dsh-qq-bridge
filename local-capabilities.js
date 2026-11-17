@@ -1,3 +1,4 @@
+import {workflowContextWindow} from './local-gpu-policy.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {readFileSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
 import {join,resolve} from 'node:path';
@@ -9,15 +10,14 @@ export function createCapabilityDetector({getConfig,root,workDir,probe,services=
  let cached=null,running=null;
  const file=join(workDir,'model-capabilities-'+createHash('sha256').update(String(root)).digest('hex').slice(0,12)+'.json');
  function safeChat(){try{return chatWorkflowSpec(getConfig(),'chat');}catch{return null;}}
- function identity(){const c=getConfig(),files=[safeChat(),c.workflows?.caption,...mediaWorkflowSpecs(c)].filter(Boolean).map(spec=>{try{return createHash('sha256').update(readFileSync(resolve(root,spec.file))).digest('hex');}catch{return 'missing';}});return createHash('sha256').update(JSON.stringify([c.backend,c.modelBaseUrl,c.modelId,c.comfyUrl,c.chatWorkflow,c.visionMode,c.voiceEnabled,c.memoryProfile,c.maxTokens,files])).digest('hex');}
+ function identity(){const c=getConfig(),specs=[safeChat(),c.workflows?.caption,...mediaWorkflowSpecs(c)].filter(Boolean),files=specs.map(spec=>{try{return createHash('sha256').update(readFileSync(resolve(root,spec.file))).digest('hex');}catch{return 'missing';}});return createHash('sha256').update(JSON.stringify([c.backend,c.modelBaseUrl,c.modelId,c.comfyUrl,c.chatWorkflow,c.visionMode,c.voiceEnabled,c.memoryProfile,c.maxTokens,files,specs.map(spec=>spec.parameterOverrides||[])])).digest('hex');}
  function load(){const id=identity();if(cached?.fingerprint===id&&now()-cached.checkedAt<86400000)return cached;try{const value=JSON.parse(readFileSync(file,'utf8'));if(value.fingerprint===id&&now()-value.checkedAt<86400000)return cached=value;}catch{}return null;}
  function save(value){cached=value;mkdirSync(workDir,{recursive:true});writeFileSync(file+'.tmp',JSON.stringify(value,null,2));renameSync(file+'.tmp',file);}
- function base(){const c=getConfig(),chat=safeChat();let contextWindow=4096;try{const graph=JSON.parse(readFileSync(resolve(root,chat.file)));const sizes=Object.values(graph).filter(n=>n.class_type==='QwenTE_ModelLoader').map(n=>Number(n.inputs?.['上下文长度'])).filter(n=>n>=1024);if(sizes.length)contextWindow=Math.min(...sizes);}catch{}
-  if(c.memoryProfile==='8gb')contextWindow=Math.min(4096,contextWindow);
+ function base(){const c=getConfig(),chat=safeChat();let contextWindow=4096;try{const graph=JSON.parse(readFileSync(resolve(root,chat.file)));contextWindow=workflowContextWindow(graph,chat,{memoryProfile:c.memoryProfile,kind:'chat'});}catch{}
   return {fingerprint:identity(),checkedAt:now(),model:c.backend==='comfyui'?c.chatWorkflow:c.modelId,backend:c.backend,status:'pending',contextWindow,maxOutputTokens:c.maxTokens,features:{text:state(null,'等待短文本实测','pending'),json:state(null,'等待结构化输出实测','pending'),tools:state(null,'等待工具协议实测','pending'),vision:state(c.visionMode==='off'?false:null,c.visionMode==='off'?'本地看图已关闭':'等待视觉实测','pending'),native:state(false,'本地尚未接入宿主原生工具流程'),special:state(false,'本地尚未接入此特殊流程')}};
  }
  async function snapshot(){const value=structuredClone(load()||base()),service=await services();value.busy=service.busy===true;value.serviceReachable=service.reachable!==false;if(service.reachable===false)value.status='unavailable';
-  for(const kind of ['image','video']){const specs=mediaWorkflowSpecs(getConfig()).filter(row=>row.kind===kind);const valid=specs.some(spec=>{try{const graph=JSON.parse(readFileSync(resolve(root,spec.file),'utf8'));return !!graph[spec.inputs?.prompt?.node]?.inputs&&spec.inputs.prompt.field in graph[spec.inputs.prompt.node].inputs&&!!graph[spec.output?.node];}catch{return false;}});value.features[kind]=state(service.reachable!==false&&valid,valid?'本地工作流文件及输入输出已登记；未进行媒体生成实测':'没有可用的本地'+(kind==='image'?'图片':'视频')+'工作流','workflow');}
+  for(const kind of ['image','video']){const config=getConfig(),label=kind==='image'?'图片':'视频',spec=mediaWorkflowSpecs(config).find(row=>row.kind===kind&&row.id===config.defaultWorkflows?.[kind]);let valid=false;if(spec)try{const graph=JSON.parse(readFileSync(resolve(root,spec.file),'utf8'));valid=!!graph[spec.inputs?.prompt?.node]?.inputs&&spec.inputs.prompt.field in graph[spec.inputs.prompt.node].inputs&&!!graph[spec.output?.node];}catch{}value.features[kind]=state(service.reachable!==false&&valid,valid?'当前'+label+'工作流文件及输入输出已登记；未进行媒体生成实测':spec?'当前'+label+'工作流文件或节点映射不可用':'未在本地连接页选择当前'+label+'工作流','workflow');}
   value.features.speech=state(getConfig().voiceEnabled&&service.voice===true,getConfig().voiceEnabled&&service.voice?(service.voiceReason||'本地语音服务可连接'):'本地语音服务未就绪','service');return value;
  }
  async function detect({vision=false,force=false}={}){
@@ -42,3 +42,4 @@ export function createCapabilityDetector({getConfig,root,workDir,probe,services=
  }
  return {snapshot,detect,invalidate(){cached=null;},identity};
 }
+

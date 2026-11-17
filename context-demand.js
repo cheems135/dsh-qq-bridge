@@ -18,7 +18,7 @@ export function contextTopicsFor(text='',{history=[],mediaKinds=[]}={}){
  if(/语音|听听.{0,3}(?:你|声音)|唱歌|清唱|晚安故事|voice|speech/i.test(s)||mediaKinds.includes('voice'))add('voice');
  if(/生图|生成.{0,8}(?:图|照片)|自拍|发.{0,4}(?:照片|图片)|拍.{0,3}(?:照|一张)|selfie|generate.{0,5}image/i.test(s)||mediaKinds.includes('image')){add('image');if(/自拍|你.{0,4}(?:样子|照片|图片)|给你.{0,4}(?:拍|换)|你的|自己|角色|人设|selfie/i.test(s))add('outfit','scene');}
  if(/(?:生成|拍|录|做|发).{0,16}(?:视频|短片)|generate.{0,8}video/i.test(s)||mediaKinds.includes('video'))add('video');
- if(/QQ空间|戳一戳|签名|联系人|白名单|代发|定时消息/.test(s))add('qq');
+ if(/QQ空间|戳一戳|签名|联系人|白名单|代发|定时消息|表情包|斗图|发表情/.test(s))add('qq');
  if(/操作(?:手机|电脑)|浏览器|桌面|Pilot|快捷方式|安装|运行.{0,4}(?:命令|程序)/i.test(s))add('devices');
  if(/你.{0,5}(?:感觉|感受)|摸摸|抱抱|戳戳|碰.{0,2}你/.test(s))add('sensation');
  if(!topics.size&&/^(?:那|这个|它|还是|换|改|不对|不是|颜色|再|继续)/.test(s.trim())&&s.length<80){const recent=history.slice(-2).map(r=>r.text||r.content||'').join('\n');if(/衣服|穿着|颜色|服装|outfit/i.test(recent)&&!userClothes)add('outfit');}

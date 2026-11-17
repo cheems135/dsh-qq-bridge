@@ -67,7 +67,7 @@ export function createLocalToolBroker({now=Date.now,ttlMs=20*60000,maxSessions=1
   return {create,claim,poll,result,done:auth=>access(auth).finished,close:auth=>close(access(auth)),dispose(){clearInterval(timer);for(const item of sessions.values())close(item);},size:()=>sessions.size};
 }
 
-export async function runWithHostTools({baseUrl,messages,tools,signal,turnContext,onEvent,origin='qq',request=requestLocalJson}){
+export async function runWithHostTools({baseUrl,messages,tools={},signal,turnContext,onEvent,origin='qq',request=requestLocalJson,guardTool}){
   const base=baseUrl.replace(/\/+$/,''),controller=new AbortController();
   const abort=()=>controller.abort(signal?.reason||cancelled());
   if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
@@ -75,7 +75,7 @@ export async function runWithHostTools({baseUrl,messages,tools,signal,turnContex
   let auth,pump,pumpError;
   async function call(route,body,options={}){
     const response=await request(base+route,{method:'POST',body,signal:controller.signal,...options});
-    if(!response.ok)throw Error(String(response.body?.error?.message||'本地工具请求失败'));
+    if(!response.ok)throw Object.assign(Error(String(response.body?.error?.message||'本地工具请求失败')),{name:response.status===499?'AbortError':'Error',code:String(response.body?.error?.code||''),status:response.status});
     return response.body;
   }
   try{
@@ -89,7 +89,8 @@ export async function runWithHostTools({baseUrl,messages,tools,signal,turnContex
           let result;
           try{
             if(!Object.hasOwn(tools,job.name))throw Error('本轮没有这个工具');
-            result=await tools[job.name].execute(job.arguments,{signal:controller.signal});
+            const execute=()=>tools[job.name].execute(job.arguments,{signal:controller.signal});
+            result=await (guardTool?guardTool(job.name,job.arguments,execute):execute());
           }catch(error){result={ok:false,error:String(error?.message||error).slice(0,1000)};}
           if(!controller.signal.aborted)await call('/v1/local/tools/result',{session:auth,callId:job.id,result});
         }

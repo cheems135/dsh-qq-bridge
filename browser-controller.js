@@ -1,3 +1,5 @@
+import {captureBrowserCompanion,stopBrowserCompanion} from './browser-companion.js';
+import {visualObservationPolicy} from './visual-observation.js';
 import {createRequire} from 'node:module';
 import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -17,9 +19,20 @@ export function sameBrowserDestination(current,target,previous){
  }catch{}
  return false;
 }
-export function createBrowserController({getDataDir,getCacheDir,authorize=()=>true,beforeAction=()=>{},chromium:injected,executablePath,getExecutablePath,headless=true,getHeadless,now=()=>Date.now()}={}){
+// Retry observations after a document redirect, never replay the action that led there.
+export async function stablePageRead(page,read){
+ for(let attempt=0;;attempt++){
+  try{return await read();}catch(error){
+   if(attempt>=2||!/Execution context was destroyed|Cannot find context with specified id|most likely because of a navigation/i.test(String(error?.message||error)))throw error;
+   try{await page.waitForLoadState?.('domcontentloaded',{timeout:5000});}catch{}
+   await page.waitForTimeout?.(250);
+  }
+ }
+}
+export function createBrowserController({getDataDir,getCacheDir,authorize=()=>true,beforeAction=()=>{},chromium:injected,executablePath,getExecutablePath,getEngine,headless=true,getHeadless,now=()=>Date.now()}={}){
  const sessions=new Map(),acquiring=new Map();let closed=false;const hidden=c=>getHeadless?getHeadless(c):headless;
- const configuredPath=()=>String(getExecutablePath?getExecutablePath():executablePath||process.env.QQ_BRIDGE_BROWSER_PATH||'').trim();
+ const selectedEngine=()=>getEngine?getEngine()==='dsh'?'dsh':'edge':process.platform==='win32'?'edge':'dsh';
+ const configuredPath=()=>selectedEngine()==='dsh'?'':String(getExecutablePath?getExecutablePath():executablePath||process.env.QQ_BRIDGE_BROWSER_PATH||'').trim();
  const identityKey=c=>c.accountId&&c.personaId?JSON.stringify([c.accountId,c.personaId,'desktop-browser']):String(c.scope||c.sessionId||'');
  const sessionKey=c=>identityKey(c)+(hidden(c)?'':':desktop');
  const check=context=>{if(closed||!authorize(context))throw Error('设备操作权限、账号或人设已变化，浏览器任务停止');context.signal?.throwIfAborted();};
@@ -33,7 +46,7 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
   // Only one managed context per identity is active across visibility modes.
   // Persist cookies before the handoff; never touch manually opened browsers.
   for(const [other,value]of sessions)if(other!==key&&value.identity===identity){await persist(value);await value.context.close();sessions.delete(other);}
-  let session=sessions.get(key);if(session){if(session.page.isClosed?.()){sessions.delete(key);session=null;}else if(session.configuredPath!==configuredPath()){await persist(session);await session.context.close();sessions.delete(key);session=null;}else{session.used=now();return session;}}
+  let session=sessions.get(key);if(session){if(session.page.isClosed?.()){sessions.delete(key);session=null;}else if(session.configuredPath!==configuredPath()||session.engine!==selectedEngine()){await persist(session);await session.context.close();sessions.delete(key);session=null;}else{session.used=now();return session;}}
   if(sessions.size>=3){const oldest=[...sessions.entries()].sort((a,b)=>a[1].used-b[1].used)[0];await persist(oldest[1]);await oldest[1].context.close();sessions.delete(oldest[0]);}
   const dir=join(getDataDir(),'browser-profiles',createHash('sha256').update(key).digest('hex').slice(0,24));mkdirSync(dir,{recursive:true});
   const runtime=join(getCacheDir(),'browser','runtime');mkdirSync(runtime,{recursive:true});const browser=engine(),launch={headless:hidden(context),viewport:{width:1280,height:900},acceptDownloads:false,env:{...process.env,TEMP:runtime,TMP:runtime},artifactsDir:runtime,args:['--disable-background-networking','--autoplay-policy=no-user-gesture-required','--disk-cache-dir='+join(runtime,'disk-cache')]};
@@ -41,21 +54,23 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
   let ctx,error;
   const selected=configuredPath();
   if(selected&&!existsSync(selected))throw Error('指定的浏览器程序不存在，请在设备设置修正路径：'+selected);
-  const paths=selected?[selected]:[process.platform==='win32'?'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe':'/usr/bin/chromium',process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'/usr/bin/chromium-browser'].filter(p=>p&&existsSync(p));
-  for(const options of [...paths.map(p=>({...launch,executablePath:p})),...(selected?[]:[launch])])try{ctx=await browser.launchPersistentContext(dir,options);break;}catch(e){error=e;}
-  if(!ctx)throw Error('没有可启动的浏览器，请安装Chrome/Edge或在设备设置填写浏览器路径；'+String(error?.message||'').split('\n')[0].slice(0,100));
+  if(selected&&!/(?:^|[\\/])(?:msedge(?:\.exe)?|microsoft-edge(?:-stable)?)$/i.test(selected))throw Error('仅支持 Edge 程序路径；使用内置浏览器请切换到 DSH 引擎');
+  const edgePaths=['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Microsoft/Edge/Application/msedge.exe',process.env.LOCALAPPDATA?join(process.env.LOCALAPPDATA,'Microsoft/Edge/Application/msedge.exe'):'','/usr/bin/microsoft-edge','/usr/bin/microsoft-edge-stable'].filter(p=>p&&existsSync(p));
+  const paths=selectedEngine()==='edge'?(selected?[selected]:edgePaths):[];
+  for(const options of [...paths.map(p=>({...launch,executablePath:p})),...(selectedEngine()==='dsh'?[launch]:[])])try{ctx=await browser.launchPersistentContext(dir,options);break;}catch(e){error=e;}
+  if(!ctx)throw Error('所选浏览器不可用；仅支持 DSH 内置浏览器和 Edge，请在设备设置检查；'+String(error?.message||'').split('\n')[0].slice(0,100));
   try{check(context);}catch(e){await ctx.close();throw e;}
   const stateDir=join(getDataDir(),'browser-profiles',createHash('sha256').update(identity).digest('hex').slice(0,24));mkdirSync(stateDir,{recursive:true});
   const profileState=join(stateDir,'bridge-session.json'),legacyState=join(dir,'bridge-session.json'),savedState=existsSync(profileState)?profileState:legacyState;
   if(existsSync(savedState))try{const saved=JSON.parse(readFileSync(savedState,'utf8'));if(Array.isArray(saved.cookies))await ctx.addCookies(saved.cookies);}catch{}
-  const page=ctx.pages().find(p=>p.url()!=='about:blank')||ctx.pages()[0]||await ctx.newPage();session={context:ctx,page,identity,profileState,configuredPath:selected,headless:launch.headless,used:now(),observations:0,captionResponses:[],requestPages:new WeakMap(),navigation:new WeakMap()};sessions.set(key,session);ctx.on?.('close',()=>{if(sessions.get(key)===session)sessions.delete(key);});page.on?.('framenavigated',()=>{void persist(session);});
+  const page=ctx.pages().find(p=>p.url()!=='about:blank')||ctx.pages()[0]||await ctx.newPage();session={context:ctx,page,identity,profileState,configuredPath:selected,engine:selectedEngine(),headless:launch.headless,used:now(),observations:0,captionResponses:[],requestPages:new WeakMap(),navigation:new WeakMap()};sessions.set(key,session);ctx.on?.('close',()=>{if(sessions.get(key)===session)sessions.delete(key);});page.on?.('framenavigated',()=>{void persist(session);});
   ctx.on?.('request',r=>session.requestPages.set(r,session.page.url()));
   ctx.on?.('response',r=>{void(async()=>{try{const url=new URL(r.url());if(!/subtitle|caption|\.vtt$|\.srt$|\.bcc$/i.test(url.pathname)||Number(r.headers()['content-length'])>2*1024*1024)return;const bytes=await r.body();if(bytes.length>2*1024*1024)return;session.captionResponses.push({page:session.requestPages.get(r.request())||'',source:url.origin+url.pathname,text:bytes.toString('utf8')});session.captionResponses=session.captionResponses.slice(-6);}catch{}})();});return session;
  }
  async function persist(session){try{const state=await session.context.storageState();writeFileSync(session.profileState,JSON.stringify({cookies:state.cookies}));}catch{}}
  async function snapshot(page){
   const nonce=randomUUID().slice(0,8);
-  const value=await page.evaluate(({nonce})=>{
+  const value=await stablePageRead(page,()=>page.evaluate(({nonce})=>{
    const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden';};
    const refs=globalThis.__qqBridgeRefs||(globalThis.__qqBridgeRefs={nonce,next:0,map:new WeakMap()});
    const elements=[],links=[];let n=0;
@@ -72,7 +87,7 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
    const text=String(document.body?.innerText||'').replace(/[ \t]+/g,' ').replace(/\n\s*\n/g,'\n').trim().slice(0,14000);
    const players=[...document.querySelectorAll('video')].filter(visible).slice(0,6).map(v=>({paused:v.paused,currentTime:Number(v.currentTime)||0,duration:Number.isFinite(v.duration)?v.duration:null}));
    return {url:location.href,title:document.title,text,elements,players,links:links.slice(0,100),coverage:players.length?'已取得页面文字和播放器状态；视频画面、音频未分析':'已取得当前页面文字',observedAt:Date.now()};
-  },{nonce});return value;
+  },{nonce}));return value;
  }
  async function act(args={},context={}){
   check(context);const session=await acquire(context),page=session.page,action=String(args.action||'snapshot');
@@ -84,7 +99,7 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
    let loginProof={};
    if(['click','fill','press'].includes(action))try{const inspect=e=>{if(!e)return {};const form=e.closest('form')||document,hasPassword=!!form.querySelector('input[type="password"]'),tag=e.tagName.toLowerCase(),type=e.getAttribute('type')||'text',name=[e.getAttribute('name'),e.getAttribute('autocomplete'),e.getAttribute('placeholder'),e.getAttribute('aria-label')].join(' '),label=(e.getAttribute('aria-label')||e.innerText||'').trim();return {loginPage:hasPassword,loginControl:hasPassword&&tag==='input'&&['password','text','email','tel'].includes(type)&&!/captcha|验证码|一次性|one.time|search|搜索/i.test(name)?'credential':hasPassword&&['button','input'].includes(tag)&&(/登录|登入|sign.?in|log.?in/i.test(label)||type==='submit')?'submit':'',password:type==='password',oauthConsent:/授权|授权访问|authorize|allow access/i.test(label),mediaControl:['video','audio'].includes(tag)||tag==='button'&&(!e.closest('form')||e.getAttribute('type')==='button')&&/^(?:播放|暂停|继续播放|静音|取消静音|play|pause|mute|unmute)(?:视频|video)?$/i.test(label)};};loginProof=args.ref?await target().evaluate(inspect):await page.evaluate('('+inspect.toString()+')(document.activeElement)');}catch{}
    if(action==='press'&&/Enter/i.test(String(args.key||''))&&loginProof.loginPage&&loginProof.loginControl==='credential')loginProof.loginControl='submit';
-   const mediaControl=['play','pause'].includes(action)||loginProof.mediaControl===true&&action==='click';
+   const mediaControl=['play','pause','seek'].includes(action)||loginProof.mediaControl===true&&action==='click';
    await beforeAction(args,context,{...loginProof,url:action==='navigate'?args.url:page.url(),label,password:password||loginProof.password===true,containsCredentials:loginProof.loginPage&&loginProof.loginControl==='submit',mediaControl,loginView:(['navigate','snapshot','screenshot','subtitles','wait','tabs','show','scroll','back','switch','close','play','pause'].includes(action)||action==='click'&&/登录|登入|sign.?in|log.?in/i.test(label)&&!contentText&&!loginProof.loginControl),contentText:contentText||undefined,observationId:args.ref||undefined});
    if(action==='navigate'||action==='open'){
     const url=browserUrl(args.url),previous=session.navigation.get(page);
@@ -116,12 +131,33 @@ export function createBrowserController({getDataDir,getCacheDir,authorize=()=>tr
   }catch(error){check(context);throw Error(String(error.message).split('\n')[0].slice(0,300));}finally{await persist(session);}
  }
  async function peekVideo(context={}){
- try{const key=sessionKey(context);const session=sessions.get(key);if(!session||session.page.isClosed?.())return null;return await session.page.evaluate(()=>{const videos=[...document.querySelectorAll("video")].filter(v=>v.readyState>0||v.currentTime>0||v.duration>0);const v=videos[0];if(!v)return null;return {url:location.href,title:document.title,currentTime:Number(v.currentTime)||0,duration:Number.isFinite(v.duration)?v.duration:null,paused:v.paused===true,ended:v.ended===true,at:Date.now()};});}catch{return null;}
+ try{const key=sessionKey(context);const session=sessions.get(key);if(!session||session.page.isClosed?.())return null;return await session.page.evaluate(()=>{const videos=[...document.querySelectorAll("video")].filter(v=>{const r=v.getBoundingClientRect();return r.width>0&&r.height>0&&(v.readyState>0||v.currentTime>0||v.duration>0);}).sort((a,b)=>{const x=a.getBoundingClientRect(),y=b.getBoundingClientRect();return y.width*y.height-x.width*x.height;});const v=videos[0];if(!v)return null;return {url:location.href,title:document.title,currentTime:Number(v.currentTime)||0,duration:Number.isFinite(v.duration)?v.duration:null,paused:v.paused===true,ended:v.ended===true,at:Date.now()};});}catch{return null;}
 }
-async function read(url,context={}){await act({action:'navigate',url},context);await act({action:'wait',milliseconds:1200},context);const result=await act({action:'snapshot'},context),video=!!(result.players?.length||/\/video\/|\/watch\b|\/bangumi\/play\/|douyin/.test(result.url));let subtitles;if(video)try{subtitles=(await act({action:'subtitles'},context)).subtitles;}catch{}
+async function captureVideo(context={}){
+  check(context);const session=await acquire(context),page=session.page,policy=visualObservationPolicy(context);
+  await beforeAction({action:'screenshot'},context,{url:page.url(),label:'当前播放器即时画面'});
+  const observed=await stablePageRead(page,()=>page.evaluate(()=>{
+    const videos=[...document.querySelectorAll('video')].map(v=>({v,r:v.getBoundingClientRect()})).filter(({v,r})=>r.width>0&&r.height>0&&v.readyState>=2).sort((a,b)=>b.r.width*b.r.height-a.r.width*a.r.height);
+    const item=videos[0];if(!item)return null;const {v,r}=item,x=Math.max(0,r.left),y=Math.max(0,r.top);
+    return {url:location.href,at:Number(v.currentTime)||0,x,y,width:Math.min(innerWidth,r.right)-x,height:Math.min(innerHeight,r.bottom)-y};
+  }));
+  if(!observed||observed.width<=0||observed.height<=0)throw Error('当前可见区域没有已就绪的视频画面，请先打开播放器');
+  if(session.videoCapture?.page!==page){try{await session.videoCapture?.cdp.detach();}catch{}session.videoCapture={page,cdp:await page.context().newCDPSession(page)};}
+  const cdp=session.videoCapture.cdp;
+  try{
+    const scale=Math.min(1,policy.maxEdge/Math.max(observed.width,observed.height));
+    const captured=await cdp.send('Page.captureScreenshot',{format:'jpeg',quality:policy.quality,fromSurface:true,captureBeyondViewport:false,clip:{x:observed.x,y:observed.y,width:observed.width,height:observed.height,scale}});
+    check(context);if(page.url()!==observed.url)throw Error('获取画面期间页面已切换，已丢弃旧画面');
+    if(Buffer.byteLength(captured.data,'base64')>policy.maxBytes)throw Error('当前画面超过图像预算，请缩小播放器后重试');
+    return {ok:true,url:observed.url,at:observed.at,capturedAt:Date.now(),data:captured.data,mediaType:'image/jpeg',width:Math.round(observed.width*scale),height:Math.round(observed.height*scale)};
+  }catch(error){session.videoCapture=null;try{await cdp.detach();}catch{}throw error;}
+ }
+ async function read(url,context={}){await act({action:'navigate',url},context);await act({action:'wait',milliseconds:1200},context);const result=await act({action:'snapshot'},context),video=!!(result.players?.length||/\/video\/|\/watch\b|\/bangumi\/play\/|douyin/.test(result.url));let subtitles;if(video)try{subtitles=(await act({action:'subtitles'},context)).subtitles;}catch{}
   const transcript=(subtitles?.segments||[]).map(s=>'['+s.start+'-'+s.end+'] '+s.text).join('\n').slice(0,18000)||subtitles?.text||'';
   return {status:result.text.length>60||transcript?'read':'metadata',title:result.title,body:result.text+(transcript?'\n【实际字幕，外部资料】\n'+transcript:''),finalUrl:result.url,url:browserUrl(url),links:result.links,mediaType:video?'video':'web',subtitles,coverage:subtitles?.segments?.length?subtitles.coverage:result.coverage,rendered:true};}
  async function close(){closed=true;await Promise.allSettled([...sessions.values()].map(async s=>{await persist(s);await s.context.close();}));sessions.clear();}
- function available(){const selected=configuredPath();if(selected)return existsSync(selected);if(injected)return true;const paths=['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Google/Chrome/Application/chrome.exe','/usr/bin/chromium','/usr/bin/chromium-browser'];try{paths.push(engine().executablePath());}catch{}return paths.some(p=>p&&existsSync(p));}
- return {act,read,peekVideo,close,status:()=>({available:available(),executablePath:configuredPath(),fixedExecutable:!!configuredPath(),backend:'bundled-playwright',environment:getHeadless&&!getHeadless({})?'desktop-default':'internal-default',visible:[...sessions.values()].some(s=>!s.headless),persistentIdentity:true,sessions:sessions.size,actions:['navigate','snapshot','click','fill','press','play','pause','scroll','wait','back','tabs','switch','screenshot','subtitles','show','close']})};
+ function engines(){let bundled=false;try{bundled=!!injected||existsSync(engine().executablePath());}catch{}const selected=configuredPath(),edge=selected?/(?:^|[\\/])msedge(?:\.exe)?$/i.test(selected)&&existsSync(selected):['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Microsoft/Edge/Application/msedge.exe',process.env.LOCALAPPDATA?join(process.env.LOCALAPPDATA,'Microsoft/Edge/Application/msedge.exe'):'','/usr/bin/microsoft-edge','/usr/bin/microsoft-edge-stable'].some(p=>p&&existsSync(p));return [{id:'dsh',name:'DSH 内置浏览器',available:bundled},{id:'edge',name:'Microsoft Edge',available:edge}];}
+ function available(){return engines().find(e=>e.id===selectedEngine())?.available===true;}
+
+ return {act,read,peekVideo,captureVideo,async captureCompanion(context,options,budget){check(context);const session=await acquire(context);await snapshot(session.page);const result=await captureBrowserCompanion(session.page,context,budget,options);check(context);return result;},async stopCompanion(context){const session=sessions.get(sessionKey(context));if(session)await stopBrowserCompanion(session.page,context.visualSessionId);},close,status:()=>({available:available(),engine:selectedEngine(),engines:engines(),executablePath:configuredPath(),fixedExecutable:!!configuredPath(),backend:'bundled-playwright',environment:getHeadless&&!getHeadless({})?'desktop-default':'internal-default',visible:[...sessions.values()].some(s=>!s.headless),persistentIdentity:true,sessions:sessions.size,actions:['navigate','snapshot','click','fill','press','play','pause','scroll','wait','back','tabs','switch','screenshot','subtitles','show','close']})};
 }

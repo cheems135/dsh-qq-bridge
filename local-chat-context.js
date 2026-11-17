@@ -1,7 +1,8 @@
 // Shared API context, selected for the small local window. No new facts are
 // generated here and no persisted memory/persona text is rewritten.
+import {MOOD_DIMS} from './companion-mood.js';
 const category=text=>/^【当前情绪|^【近期心情/.test(text)?'mood':/^【本轮相处|^【相处理解/.test(text)?'intent':/^【[^】]*(?:自然表达|表达用法|表达参考)/.test(text)?'expression':/^【[^】]*(?:梗语境|梗用法)/.test(text)?'meme':/^【[^】]*(?:已学习经验|实际作品中形成)/.test(text)?'learning':/常驻生活摘要|当前日程|模拟生活|生活状态|角色当前/.test(text)?'life':/记忆|用户事实/.test(text)?'memory':/待决定事项/.test(text)?'pending':'other';
-const limits={mood:160,intent:140,memory:360,meme:260,learning:200,expression:160,life:240,pending:160,other:100};
+const limits={mood:650,intent:140,memory:360,meme:260,learning:200,expression:160,life:240,pending:160,other:100};
 function excerpt(text,limit){
  if(text.length<=limit)return text;
  const cut=text.slice(0,Math.max(0,limit-10)),boundary=Math.max(cut.lastIndexOf('。'),cut.lastIndexOf('\n'));
@@ -40,14 +41,14 @@ export function localSharedContext(parts,{maxChars=1300}={}){
  return {messages,counts,chars:used,selectedKinds:Object.keys(counts)};
 }
 
-export function localMoodInstruction(){return '【本轮相处状态】最终文字用 JSON {"action":"final","text":"实际台词","mood":{"moodDelta":0,"dims":{"happy":0},"reason":"简短依据","evidenceQuote":"本轮原话摘录","confidence":0}}。只评估角色自己的小幅变化，维度 happy/calm/sweet/heartache/worry/sad/jealous，只写有变化的1～2项，增量 -5到5，置信度0到100；无依据可省略mood。工具仍按工具JSON，mood可放最外层，不能放arguments。mood不朗读、不发送、不授权。';}
+export function localMoodInstruction(){return '【本轮相处状态】最终文字用 JSON {"action":"final","text":"实际台词","mood":{"moodDelta":0,"dims":{"happy":0},"reason":"简短依据","evidenceQuote":"本轮原话摘录","confidence":0}}。只评估角色自己的小幅变化，维度 '+MOOD_DIMS.join('/')+'，只写有变化的1～2项，增量 -5到5，置信度0到100；无依据可省略mood。工具仍按工具JSON，mood可放最外层，不能放arguments。若本轮明确缓和某个已提供的旧事件，可在mood中添加eventRelation:"resolve"和relatedEventId:"对应事件id"；普通换话题不算解决。mood不朗读、不发送、不授权。';}
 
 export function normalizeLocalMood(value,request=''){
  if(!value||typeof value!=='object'||Array.isArray(value))return null;
  const quote=String(value.evidenceQuote||'').trim().slice(0,160),reason=String(value.reason||'').trim().slice(0,120),confidence=Number(value.confidence);
  if(quote.length<2||!String(request).includes(quote)||!reason||typeof value.confidence!=='number'||!Number.isFinite(confidence)||confidence<0||confidence>100)return null;
  const clamp=n=>Number.isFinite(Number(n))?Math.max(-5,Math.min(5,Number(n))):0;
- return {evidenceQuote:quote,reason,confidence,moodDelta:clamp(value.moodDelta),dims:Object.fromEntries(['happy','calm','sweet','heartache','worry','sad','jealous'].map(key=>[key,clamp(value.dims?.[key])]))};
+  return {evidenceQuote:quote,reason,confidence,...(value.eventRelation==='resolve'&&typeof value.relatedEventId==='string'?{eventRelation:'resolve',relatedEventId:value.relatedEventId.slice(0,240)}:{}),moodDelta:clamp(value.moodDelta),dims:Object.fromEntries(MOOD_DIMS.map(key=>[key,clamp(value.dims?.[key])]))};
 }
 
 // A small, explicit positive cue is a fallback when a local model omits its

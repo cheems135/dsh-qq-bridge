@@ -1,3 +1,4 @@
+import {recentRecords} from './log-retention.js';
 import {randomUUID} from 'node:crypto';
 
 const secretKey=/^(?:(?:x[-_])?api[-_]?key|authorization|cookie|set-cookie|password|passwd|secret|access[-_]?token|refresh[-_]?token|token|sessdata|bili_jct|csrf)$/i;
@@ -22,7 +23,7 @@ export function redactInvocation(value){
 export function createInvocationJournal({getRows=()=>[],setRows=()=>{},save=()=>{},now=Date.now,limit=240}={}){
  return {
   record(event={},scope={}){
-   const safe=redactInvocation({...event,...scope}),rows=Array.isArray(getRows())?getRows():[];
+   const safe=redactInvocation({...event,...scope}),rows=recentRecords(Array.isArray(getRows())?getRows():[],now());
    const id=String(safe.id||randomUUID()).slice(0,120);let row=rows.find(item=>item.id===id&&item.accountId===safe.accountId);
    if(row&&Number(safe.updatedAt)>0&&row.updatedAt>=safe.updatedAt)return row;
    if(!row){row={id,at:Number(safe.at)||now()};rows.push(row);}
@@ -31,7 +32,7 @@ export function createInvocationJournal({getRows=()=>[],setRows=()=>{},save=()=>
    setRows(rows.slice(-limit));save();return row;
   },
   list({accountId,backend='',kind='',limit:count=120}={}){
-   return (getRows()||[]).filter(row=>(accountId===undefined||row.accountId===accountId)&&(!backend||row.backend===backend)&&(!kind||row.kind===kind)).slice(-Math.max(1,Math.min(240,Number(count)||120))).reverse().map(row=>redactInvocation(row));
+   return recentRecords(getRows()||[],now()).filter(row=>(accountId===undefined||row.accountId===accountId)&&(!backend||row.backend===backend)&&(!kind||row.kind===kind)).slice(-Math.max(1,Math.min(240,Number(count)||120))).reverse().map(row=>redactInvocation(row));
   },
  };
 }

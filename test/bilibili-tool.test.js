@@ -24,7 +24,7 @@ test('Bilibili is registered for native API tools and discoverable through the l
     const router=capability.localTools({...apiContext,localTurn:true}).bridge_tools;
     assert.ok((await router.execute({action:'list'})).tools.some(t=>t.name==='bridge_bilibili'));
     await router.execute({action:'call',name:'bridge_bilibili',arguments:{action:'status'}});
-    assert.equal(calls[0],apiContext);assert.equal(calls[1].localTurn,true);assert.equal(calls[1].accountId,apiContext.accountId);
+    assert.equal(calls[0].accountId,apiContext.accountId);assert.equal(calls[0].key,apiContext.key);assert.equal(calls[0].toolName,'bridge_bilibili');assert.equal(calls[1].localTurn,true);assert.equal(calls[1].accountId,apiContext.accountId);
   }finally{capability.close();}
 });
 

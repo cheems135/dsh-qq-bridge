@@ -1,0 +1,51 @@
+.button-link{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:9px 15px;border:1px solid var(--line2);border-radius:var(--radius-sm);font-size:13px;overflow-wrap:anywhere}
+/* One measured bottom bar, shared by the desktop and phone shells. */
+:root{--panel-dock-height:72px;--panel-nav-height:0px;--panel-keyboard-inset:0px;--panel-locator-height:120px;--panel-bottom-space:calc(var(--panel-dock-height) + var(--panel-nav-height) + var(--panel-keyboard-inset) + 28px)}
+html{scroll-padding-bottom:var(--panel-bottom-space)}
+html body{padding-bottom:var(--panel-bottom-space)!important}
+#panelDock{position:fixed;left:var(--panel-content-left,12px);right:var(--panel-content-right,12px);bottom:calc(12px + var(--panel-nav-height) + var(--panel-keyboard-inset));z-index:90;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;min-width:0;max-height:min(45dvh,220px);padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 6px 28px #294e7824;overflow:auto;overscroll-behavior:contain}
+#panelDock .panel-dock-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;max-width:100%}
+#panelDock #bridgeIssueButton,#panelDock #skinToggle{position:static;inset:auto;z-index:auto;margin:0;min-height:36px;max-width:100%;padding:7px 10px;font-size:12px;white-space:normal;overflow-wrap:anywhere;box-shadow:none}
+#panelDock .save-dock{position:static;inset:auto;z-index:auto;display:flex;align-items:center;justify-content:flex-end;flex:1 1 250px;min-width:0;width:auto;max-width:100%;min-height:36px;padding:0;gap:10px;border:0;border-radius:0;background:transparent;box-shadow:none}
+#panelDock .save-dock small{flex:1;min-width:0;max-width:none;max-height:3.6em;overflow:auto;overflow-wrap:anywhere;overscroll-behavior:contain}
+#panelDock .save-dock button{flex:0 0 auto;min-width:104px;min-height:36px;max-width:100%;white-space:normal}
+html #scheduleLocator{right:12px;bottom:calc(var(--panel-bottom-space) - 4px);z-index:85;max-width:calc(100% - 24px);max-height:calc(100dvh - var(--panel-bottom-space) - 16px);overflow:auto;background:var(--panel);border-color:var(--line)}
+html .schedule-content{padding-bottom:calc(var(--panel-locator-height) + 16px)!important;scroll-margin-bottom:var(--panel-bottom-space)}
+html #modal{z-index:2000;inset:0;bottom:var(--panel-keyboard-inset);height:auto;max-height:none;padding:12px;overflow:auto;overscroll-behavior:contain}
+html #modal .modalbox{min-width:0;max-width:100%;max-height:calc(100dvh - var(--panel-keyboard-inset) - 24px);overflow:auto;overscroll-behavior:contain;overflow-wrap:anywhere}
+html .persona-drawer{z-index:1900;bottom:var(--panel-keyboard-inset)}
+html .drawer-header{flex-wrap:wrap;gap:8px;padding:16px;min-width:0}
+html .drawer-header>div{min-width:0;overflow-wrap:anywhere}
+html .drawer-content{padding:16px;overscroll-behavior:contain}
+html #bridgeIssuePanel{box-sizing:border-box;bottom:var(--panel-keyboard-inset);max-width:calc(100% - 24px);max-height:calc(100dvh - var(--panel-keyboard-inset) - 24px);padding:16px;overflow:auto;overscroll-behavior:contain;color:var(--ink);background:var(--panel)}
+html #bridgeIssueList{max-height:none;overflow:visible;overflow-wrap:anywhere}
+html #toast{z-index:2500;bottom:var(--panel-bottom-space);overflow-wrap:anywhere;max-height:25dvh;overflow:auto}
+html .top-actions{min-width:0;max-width:100%;flex-wrap:wrap}
+html .feature-search{min-width:0;max-width:100%;flex:1 1 160px}
+html[data-device-ui="phone"] #tabs{bottom:var(--panel-keyboard-inset);max-width:760px;left:0;right:0;margin-inline:auto}
+html[data-device-ui="phone"] #panelDock{max-width:none;margin-inline:0}
+html[data-device-ui="phone"] #panelDock .save-dock{flex-basis:160px}
+html[data-device-ui="phone"] .nav{max-width:760px;margin-inline:auto}
+html[data-device-ui="phone"] body{padding-bottom:var(--panel-bottom-space)!important}
+html[data-device-ui="phone"] :is(.row,.form-two,.field,.card,.top-actions)>*{min-width:0;max-width:100%}
+html[data-device-ui="phone"] :is(pre,table){max-width:100%;overflow:auto}
+html[data-device-ui="phone"] :is(.row,.section-heading){flex-wrap:wrap}
+html[data-device-ui="phone"] :is(img,video,canvas,iframe){max-width:100%}
+
+
+@media(max-width:900px){html[data-device-ui="desktop"] .topbar{position:static}}
+@media(max-width:600px),(max-height:480px){
+ html #scheduleLocator{left:12px;right:12px;width:auto;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;max-height:25dvh}
+ html #scheduleLocator>b{-webkit-line-clamp:1;min-width:0;font-size:12px}
+ html #scheduleLocator>span{font-size:11px}
+ html #scheduleLocator button{min-width:0;min-height:32px;padding:5px 8px;font-size:11px;white-space:normal;max-width:100%}
+ #panelDock{gap:6px 10px;padding:8px 10px}
+ #panelDock .save-dock small{font-size:11px}
+}
+@media(max-height:480px){
+ html[data-device-ui="phone"] .nav{padding-block:4px}
+ html[data-device-ui="phone"] .nav .tab{min-height:38px;padding:3px 0!important;gap:1px}
+ html[data-device-ui="phone"] .tab>svg{width:16px;height:16px}
+ html[data-device-ui="phone"] .tab b{font-size:10px}
+ html .modalbox{padding:16px;gap:12px}
+}

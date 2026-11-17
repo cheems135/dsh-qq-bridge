@@ -1,4 +1,5 @@
 import {randomBytes,createHmac,createHash} from 'node:crypto';
+import {scheduleReadingEvidence,schedulePromptEvidence} from './schedule-reading.js';
 export const BUDGET_MARKER='【QQ桥接精简输入 v1】';
 export const BRIEF_RULES={
  human:'【说话方式】按当前人设、情绪与刚才的话题自然接。长短由想法和内容决定，想展开可以展开，说完就停。分享具体细节、自己的偏好与感受，让对方有地方接话，不机械摘要或每次追问，不把工具回执当台词。',
@@ -13,7 +14,7 @@ export const BRIEF_RULES={
 export function briefExpression(config={},privateChat=false){const mode=config.expressionMode||'relaxed',b=privateChat?0:Number(config.maxBubbles)||0;return '【表达自由度：'+({free:'自然无滤镜',relaxed:'自然放开',reserved:'温和克制'}[mode]||'自然放开')+'】保留人设、身份和明确约定。'+(mode==='reserved'?'温和克制，少粗口挖苦。':'按关系自由吐槽、接梗、回嘴、撒娇和表达喜怒，不磨平成客服；情绪自然来，不强制表演，也不压成没反应。')+(privateChat?'【私聊自由表达】不固定三句或三段；说多少由想法和内容决定。':'')+(b>0?'普通回复最多'+b+'个气泡。':'气泡数不设上限，不凑多凑少。')+'换行是排版，确实另发一条才用|||。正常互怼不等于纠错，真纠错要改对；沉默不等于抛弃，不用威胁、自伤或内疚索取陪伴/口粮。比喻和情绪可自然表达，事实与实际操作仍须有据。';}
 export function stickerDigest(names,{groups={},notes={}}={}){const map=new Map();for(const name of names){const group=groups[name]||'其他';if(!map.has(group))map.set(group,[]);map.get(group).push(name);}return [...map].map(([group,items])=>group+'('+items.length+')'+(items[0]?' 如'+items[0].slice(0,44):'')).join('；');}
 export function uniqueRules(parts){return [...new Set(parts.filter(Boolean))].join('\n\n');}
-export function briefLifeJob(job={}){return {id:job.id,meta:job.meta,scene:job.scene,kind:job.kind,status:job.status,note:job.note,reason:job.reason,question:job.question,checkpoint:job.checkpoint,resume:job.resume,shares:job.shares,finalReply:job.finalReply,steps:(job.steps||[]).filter((s,i,a)=>['started','unknown'].includes(s.status)||i>=a.length-3),evidence:(job.evidence||[]).slice(-6).map(e=>({ok:e.ok,substantive:e.substantive,tool:e.tool,kind:e.kind,status:e.status,file:e.file,url:e.url,coverage:e.coverage,at:e.at}))};}
+export function briefLifeJob(job={}){return {id:job.id,meta:job.meta,scene:job.scene,kind:job.kind,status:job.status,continuation:job.continuation,waitingService:job.waitingService,readingEvidence:scheduleReadingEvidence(job),note:job.note,reason:job.reason,question:job.question,checkpoint:job.checkpoint,resume:job.resume,shares:job.shares,finalReply:job.finalReply,steps:(job.steps||[]).filter((s,i,a)=>['started','unknown'].includes(s.status)||i>=a.length-3),evidence:schedulePromptEvidence(job).map(e=>({ok:e.ok,substantive:e.substantive,tool:e.tool,kind:e.kind,status:e.status,complete:e.complete,fullViewed:e.fullViewed,partial:e.partial,file:e.file,url:e.url,coverage:e.coverage,at:e.at}))};}
 // Only bridge-generated transient context is signed. Human words, attachments,
 // tool calls/results and immutable history are never candidates for removal.
 export function createPromptBudget({secret}={}){
@@ -38,3 +39,4 @@ export function createPromptBudget({secret}={}){
  }
  return {pack,request,snapshot:()=>({...totals,mode:'deduplicate-and-prune-signed-transient-context',keptContextTurns:2,originalHistoryRetained:true})};
 }
+

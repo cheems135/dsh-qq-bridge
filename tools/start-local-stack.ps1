@@ -1,7 +1,8 @@
 param([switch]$PlanOnly)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'local-service-startup.ps1')
-$work = 'D:\CodexData\work\qq-local-background-services'
+$preferredWorkRoot = if ($env:CODEX_DATA_WORK_DIR) { $env:CODEX_DATA_WORK_DIR } else { 'D:\CodexData\work' }
+$work = if ($env:QQ_BRIDGE_SERVICE_WORK_DIR) { $env:QQ_BRIDGE_SERVICE_WORK_DIR } elseif (Test-Path -LiteralPath $preferredWorkRoot) { Join-Path $preferredWorkRoot 'qq-local-background-services' } else { Join-Path $env:LOCALAPPDATA 'DSH\qq-bridge\services' }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $mutex = New-Object System.Threading.Mutex($false, 'Local\QQBridgeLocalServiceStartup')
 $locked = $false
@@ -36,6 +37,11 @@ try {
                 $result = [pscustomobject]@{service=$kind;state='disabled';origin=$origin}
             } elseif (($kind -eq 'voice' -and (Test-ConfiguredVoiceReady $voiceConfig $origin)) -or ($kind -ne 'voice' -and (Test-LocalServiceReady $kind $origin))) {
                 $result = [pscustomobject]@{service=$kind;state='reused';origin=$origin}
+            } elseif ($kind -eq 'comfy') {
+                # Comfy Desktop owns this installation and database. Only connect
+                # to its running server; never launch a hidden Python duplicate.
+                $result = [pscustomobject]@{service=$kind;state='manual';origin=$origin}
+                Write-Host '请在原版 Comfy Desktop 中启动 ComfyUI；插件只连接现有服务。'
             } elseif ($kind -eq 'gateway') {
                 if ($PlanOnly) { $result = [pscustomobject]@{service=$kind;state='would-start';origin=$origin} }
                 else {
@@ -73,3 +79,4 @@ try {
     $mutex.Dispose()
 }
 if ($failed) { exit 1 }
+

@@ -1,5 +1,6 @@
 import {apiOnlySettings,apiOnlyConnections} from './mobile-api-policy.js';
 import {buildUnionPlan} from './sync-union.js';
+import {requestLocalJson} from './local-transport.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createServer} from 'node:http';
@@ -25,10 +26,21 @@ export function planSync(left,right,base={},prefer='phone'){
  }
  return{work,conflicts};
 }
+/** 只有持有运行权的设备才应该花模型与工具预算。
+ * other-device：另一台设备已被明确选为运行设备。
+ * no-qq：电脑版已配对手机，但本机 QQ 长时间连不上；手机很可能正在运行，
+ *        不能仅因为本机进程还活着就继续跑自主任务。 */
+export function standbyReason({own='desktop',selected='',paired=false,qqReady=true,since=0,now=Date.now(),graceMs=5*60*1000}={}){
+ if(selected&&selected!==own)return 'other-device';
+ if(own==='desktop'&&paired&&!qqReady&&since>0&&now-since>=graceMs)return 'no-qq';
+ return '';
+}
 export function createDeviceSync(options){
  const own=options.device||(process.platform==='win32'?'desktop':'phone'),dir=path.join(options.dataDir,'device-sync'),pairFile=path.join(dir,'pairing.json');
  fs.mkdirSync(dir,{recursive:true});let server=null,closed=false,busy=false,lastError='',forwardOrigin='',codeChanged=false,sending=null,usbTimer=null;
- const statusFile=path.join(dir,'last-sync.json');let runtimeIsolation=false;
+ const statusFile=path.join(dir,'last-sync.json');let runtimeIsolation=false;const phoneRequests=new Set(),snapshots=new Map();
+ const progressFile=path.join(dir,'transfer-state.json');let progress=readJSON(progressFile,null),progressSavedAt=0;
+ function updateProgress(values,force=false){progress={...progress,...values,updatedAt:Date.now()};if(force||Date.now()-progressSavedAt>500){atomic(progressFile,jsonBytes(progress));progressSavedAt=Date.now();}}
  const pairing=()=>readJSON(pairFile);
  const localSettings=()=>readJSON(path.join(options.dataDir,'settings.json'));
  function rootMap(){return{data:options.dataDir,...options.roots(),source:options.sourceDir,profiles:path.join(dir,'profiles')};}
@@ -72,34 +84,49 @@ export function createDeviceSync(options){
   if(key==='data/features.json')value.generation=0;
   return jsonBytes(value);
  }
- async function capture({flush=true,runtimeIsolation:isolate=false}={}){
+ async function capture({flush=true,runtimeIsolation:isolate=false,snapshot=false}={}){
   runtimeIsolation=isolate===true;
-  if(flush)await options.flush();atomic(path.join(dir,'profiles',own+'.json'),jsonBytes(deviceProfile()));
-  const manifest={};
-  const add=(key,file)=>{if(!validKey(key))return;const stat=fs.lstatSync(file);if(stat.isSymbolicLink()||!stat.isFile())return;const bytes=canonical(key,fs.readFileSync(file));manifest[key]={hash:digest(bytes),size:bytes.length,modifiedAt:stat.mtimeMs};};
+  if(flush){await options.flush();atomic(path.join(dir,'profiles',own+'.json'),jsonBytes(deviceProfile()));}
+  const manifest={},snapshotId=snapshot?randomUUID():null,snapshotRoot=snapshotId?path.join(dir,'snapshots',snapshotId):null;
+  if(snapshotRoot){fs.mkdirSync(snapshotRoot,{recursive:true});snapshots.set(snapshotId,{root:snapshotRoot,files:manifest});}
+  try{
+  const add=(key,file)=>{if(!validKey(key))return;const stat=fs.lstatSync(file);if(stat.isSymbolicLink()||!stat.isFile())return;const bytes=canonical(key,fs.readFileSync(file));manifest[key]={hash:digest(bytes),size:bytes.length,modifiedAt:stat.mtimeMs};if(snapshotRoot)fs.writeFileSync(path.join(snapshotRoot,digest(key)),bytes,{mode:0o600});};
   for(const name of DATA){const f=path.join(options.dataDir,name);if(fs.existsSync(f))add('data/'+name,f);}
-  const walk=(kind,root,relative='')=>{if(!fs.existsSync(root))return;for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){if(entry.isSymbolicLink()||['node_modules','.git','.runtime','__pycache__'].includes(entry.name))continue;const rel=(relative?relative+'/':'')+entry.name,key=kind+'/'+rel;if(kind==='cache'&&/^(?:device-sync|backups|maintenance-backups)(?:\/|$)/.test(rel))continue;if(kind==='source'&&(entry.name==='cordis.patch.yml'||/^media-runtime(?:-mobile|-desktop)?\.json$/.test(entry.name)||/\.(?:tgz|png\.bak|pyc)$/.test(entry.name)))continue;if(entry.isDirectory())walk(kind,root,rel);else add(key,path.join(root,rel));}};
+  const walk=(kind,root,relative='')=>{if(!fs.existsSync(root))return;for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){if(entry.isSymbolicLink()||['node_modules','.git','.runtime','__pycache__'].includes(entry.name))continue;const rel=(relative?relative+'/':'')+entry.name,key=kind+'/'+rel;if(kind==='cache'&&/^(?:device-sync|backups|maintenance-backups)(?:\/|$)/.test(rel))continue;if(kind==='source'&&((entry.isDirectory()&&(entry.name.startsWith('.')||/^(?:inquiry-regression|phone-cancel|sync-progress)-/.test(entry.name)))||/\.bak(?:[-.]|$)|\.tmp$/.test(entry.name)))continue;if(kind==='source'&&(entry.name==='cordis.patch.yml'||/^media-runtime(?:-mobile|-desktop)?\.json$/.test(entry.name)||/\.(?:tgz|png\.bak|pyc)$/.test(entry.name)))continue;if(entry.isDirectory())walk(kind,root,rel);else add(key,path.join(root,rel));}};
   for(const [kind,root]of Object.entries(rootMap()))if(kind!=='data')walk(kind,root);
-  const credential=await options.credential();if(credential){const b=jsonBytes({deepseekKey:credential});manifest['secrets/deepseek.json']={hash:digest(b),size:b.length};}
-  return{device:own,protocolVersion:2,version:readJSON(path.join(options.sourceDir,'package.json')).version||options.status().version,files:manifest};
+  const credential=await options.credential();if(credential){const b=jsonBytes({deepseekKey:credential});manifest['secrets/deepseek.json']={hash:digest(b),size:b.length};if(snapshotRoot)fs.writeFileSync(path.join(snapshotRoot,digest('secrets/deepseek.json')),b,{mode:0o600});}
+  return{device:own,protocolVersion:2,snapshotId,version:readJSON(path.join(options.sourceDir,'package.json')).version||options.status().version,files:manifest};
+  }catch(error){if(snapshotId)releaseSnapshot(snapshotId);throw error;}
  }
+ function releaseSnapshot(id){const saved=snapshots.get(id);if(!saved)return;snapshots.delete(id);if(sending?.snapshotId===id)sending=null;fs.rmSync(saved.root,{recursive:true,force:true});}
  async function read(key){if(key==='secrets/deepseek.json')return jsonBytes({deepseekKey:await options.credential()||''});return canonical(key,fs.readFileSync(resolveKey(key)));}
- async function rpc(origin,route,body){const p=pairing();if(!p.token||!origin)throw Error('请先通过数据线连接已配对设备');let response;try{response=await fetch(origin+route,{method:body===undefined?'GET':'POST',headers:{authorization:'Bearer '+p.token,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(120000)});}catch{throw Error('数据线连接中断，或另一端插件尚未启动');}let value;try{value=await response.json();}catch{throw Error('设备未返回有效同步结果');}if(!response.ok)throw Error(value.error||'设备同步请求失败');return value;}
+ async function rpc(origin,route,body,{signal}={}){
+  signal?.throwIfAborted();
+  const p=pairing();if(!p.token||!origin)throw Error('请先通过数据线连接已配对设备');
+  // File hashing blocks the event loop long enough for the peer to expire an
+  // idle keep-alive socket. Dedicated requests must not reuse that stale socket.
+  let response;
+  try{response=await requestLocalJson(origin+route,{method:body===undefined?'GET':'POST',body,signal,headers:{authorization:'Bearer '+p.token},timeoutMs:route==='/coordinate'?1800000:120000,maxBytes:64*1024*1024});}
+  catch(error){signal?.throwIfAborted();const detail=/超时|timeout/i.test(error?.message||'')?'请求超时':String(error?.cause?.code||error?.code||error?.message||'连接中断');throw Error('数据线同步 '+route.slice(1)+' 失败（'+detail+'）'+(body?.key?'：'+body.key:''));}
+  if(!response.ok)throw Error(response.body?.error||'设备同步请求失败：'+route.slice(1));return response.body;
+ }
+
  async function connect(){
   if(options.connectPeer){forwardOrigin=await options.connectPeer();return forwardOrigin;}
   const p=pairing();if(!p.token)throw Error('设备尚未配对');if(own==='phone')return'http://127.0.0.1:'+PORT_PC;
   const adb=p.adbPath;if(!adb||!p.serial)throw Error('电脑未配置配对手机');
   const call=async args=>(await execute(adb,['-s',p.serial,...args],{windowsHide:true,timeout:15000,maxBuffer:1024*1024})).stdout.trim();
-  try{if(await call(['get-state'])!=='device')throw Error();if(forwardOrigin){const list=await call(['forward','--list']),port=new URL(forwardOrigin).port;if(!list.split(/\r?\n/).some(line=>line.trim().split(/\s+/)[1]==='tcp:'+port))forwardOrigin='';}if(!forwardOrigin){const port=Number(await call(['forward','tcp:0','tcp:'+PORT_PHONE]));forwardOrigin='http://127.0.0.1:'+port;}await call(['reverse','tcp:'+PORT_PC,'tcp:'+PORT_PC]);return forwardOrigin;}catch{forwardOrigin='';throw Error('未检测到已授权的配对手机，请连接数据线并打开DSHBox');}
+  try{if(await call(['get-state'])!=='device')throw Error();if(forwardOrigin){const list=await call(['forward','--list']),port=new URL(forwardOrigin).port;if(!list.split(/\r?\n/).some(line=>line.trim().split(/\s+/)[1]==='tcp:'+port))forwardOrigin='';}if(!forwardOrigin){const port=Number(await call(['forward','tcp:0','tcp:'+PORT_PHONE]));forwardOrigin='http://127.0.0.1:'+port;}await call(['reverse','tcp:'+PORT_PC,'tcp:'+PORT_PC]);return forwardOrigin;}catch{forwardOrigin='';throw Error('未检测到已授权的配对手机，请连接数据线并打开DSH Go');}
  }
- async function peerCall(route,body){let origin=own==='desktop'?forwardOrigin:'http://127.0.0.1:'+PORT_PC;if(!origin)origin=await connect();try{return await rpc(origin,route,body);}catch(error){if(own==='desktop'){forwardOrigin='';throw error;}throw error;}}
+ async function peerCall(route,body,context={}){context.signal?.throwIfAborted();let origin=own==='desktop'?forwardOrigin:'http://127.0.0.1:'+PORT_PC;if(!origin)origin=await connect();try{return await rpc(origin,route,body,context);}catch(error){if(own==='desktop'){forwardOrigin='';throw error;}throw error;}}
  const local={
-  async status(){return{...options.status(),protocolVersion:2,runtimeIsolationVersion:1,paired:!!pairing().token,busy,lastSync:readJSON(statusFile,null),codeReloadRequired:codeChanged};},
+  async status(){return{...options.status(),protocolVersion:2,runtimeIsolationVersion:1,paired:!!pairing().token,busy,lastSync:readJSON(statusFile,null),progress:progress?{...progress,status:!busy&&progress.status==='running'?'interrupted':progress.status}:null,codeReloadRequired:codeChanged};},
   async pause(){await options.pause();await options.flush();return{paused:true};},
   async select(body){if(!['desktop','phone'].includes(body.device))throw Error('运行设备无效');atomic(path.join(dir,'active-device.json'),jsonBytes({device:body.device,at:Date.now()}));return{selected:body.device};},
   async resume(){if(!allowRun())throw Error('当前设备处于待机，请从设备与同步页切换运行设备');await options.resume();return{paused:false};},
-  async manifest(body={}){return capture({flush:body.flush!==false,runtimeIsolation:body.runtimeIsolation===true});},
-  async chunk(body){if(!Number.isSafeInteger(body.offset)||body.offset<0)throw Error('同步偏移无效');if(!sending||sending.key!==body.key||sending.hash!==body.hash){const bytes=await read(body.key);if(digest(bytes)!==body.hash)throw Error('数据在读取期间发生变化，请重新同步');sending={key:body.key,hash:body.hash,bytes};}const bytes=sending.bytes,data=bytes.subarray(body.offset,body.offset+CHUNK).toString('base64');if(body.offset+CHUNK>=bytes.length)sending=null;return{data};},
+  async manifest(body={}){return capture({flush:body.flush!==false,runtimeIsolation:body.runtimeIsolation===true,snapshot:body.snapshot===true});},
+  async chunk(body){if(!Number.isSafeInteger(body.offset)||body.offset<0)throw Error('同步偏移无效');if(!sending||sending.key!==body.key||sending.hash!==body.hash||sending.snapshotId!==body.snapshotId){let bytes;if(body.snapshotId){const saved=snapshots.get(body.snapshotId);if(!saved||saved.files[body.key]?.hash!==body.hash)throw Error('同步快照不存在或校验不匹配，请重新同步');bytes=fs.readFileSync(path.join(saved.root,digest(body.key)));}else bytes=await read(body.key);if(digest(bytes)!==body.hash)throw Error('数据在读取期间发生变化，请重新同步');sending={key:body.key,hash:body.hash,snapshotId:body.snapshotId,bytes};}const bytes=sending.bytes,data=bytes.subarray(body.offset,body.offset+CHUNK).toString('base64');if(body.offset+CHUNK>=bytes.length)sending=null;return{data};},
+  async release(body){releaseSnapshot(body.snapshotId);return{released:true};},
   async stage(body){if(!/^[a-f0-9-]{36}$/.test(body.id)||!validKey(body.key)||!Number.isSafeInteger(body.offset)||body.offset<0||body.offset>2**40)throw Error('同步分块参数无效');resolveKey(body.key==='secrets/deepseek.json'?'data/settings.json':body.key);const file=path.join(dir,'stage',body.id,digest(body.key));fs.mkdirSync(path.dirname(file),{recursive:true});const bytes=Buffer.from(body.data||'','base64');if(bytes.length>CHUNK)throw Error('分块过大');const size=fs.existsSync(file)?fs.statSync(file).size:0;if(size!==body.offset)throw Error('同步分块顺序无效');fs.appendFileSync(file,bytes,{mode:0o600});return{size:size+bytes.length};},
   async commit(body){
    if(!options.status().paused)throw Error('写入前必须暂停当前桥接');if(!/^[a-f0-9-]{36}$/.test(body.id)||!Array.isArray(body.items)||body.items.length>200000)throw Error('提交参数无效');
@@ -116,31 +143,45 @@ export function createDeviceSync(options){
  async function synchronize({activate}={}){
   if(activate!==undefined&&!['desktop','phone'].includes(activate))throw Error('运行设备无效');
   if(own!=='desktop')return peerCall('/coordinate',{activate});if(busy)throw Error('已有同步或切换正在进行');busy=true;lastError='';
+  const id=randomUUID(),snapshotRefs=[];progress=null;
   try{
+   updateProgress({id,status:'running',phase:'connecting',startedAt:Date.now(),filesDone:0,filesTotal:0,bytesDone:0,bytesTotal:0},true);
    await connect();const before={desktop:await local.status(),phone:await peerCall('/status')};
+   updateProgress({phase:'pausing'},true);
    await local.pause();await peerCall('/pause',{});
+   updateProgress({phase:'scanning'},true);
    const isolated=before.desktop.runtimeIsolationVersion===1&&before.phone.runtimeIsolationVersion===1;
-   const [a,b]=await Promise.all([local.manifest({runtimeIsolation:isolated}),peerCall('/manifest',{runtimeIsolation:isolated})]);
-   const readFrom=async(side,key,meta)=>{const chunks=[];for(let offset=0;offset<meta.size||offset===0;offset+=CHUNK){const part=await invoke(side,'chunk',{key,hash:meta.hash,offset});chunks.push(Buffer.from(part.data,'base64'));}const bytes=Buffer.concat(chunks);if(bytes.length!==meta.size||digest(bytes)!==meta.hash)throw Error('同步读取校验失败');return bytes;};
-   const plan=await buildUnionPlan(a,b,{read:readFrom}),id=randomUUID();
+   const a=await local.manifest({runtimeIsolation:isolated,snapshot:true});if(a.snapshotId)snapshotRefs.push(['desktop',a.snapshotId]);
+   const b=await peerCall('/manifest',{runtimeIsolation:isolated,snapshot:true});if(b.snapshotId)snapshotRefs.push(['phone',b.snapshotId]);
+   const snapshotIds={desktop:a.snapshotId,phone:b.snapshotId};
+   const readFrom=async(side,key,meta)=>{const chunks=[];for(let offset=0;offset<meta.size||offset===0;offset+=CHUNK){const part=await invoke(side,'chunk',{key,hash:meta.hash,offset,snapshotId:snapshotIds[side]});chunks.push(Buffer.from(part.data,'base64'));}const bytes=Buffer.concat(chunks);if(bytes.length!==meta.size||digest(bytes)!==meta.hash)throw Error('同步读取校验失败');return bytes;};
+   updateProgress({phase:'planning'},true);
+   const plan=await buildUnionPlan(a,b,{read:readFrom});
    const legacyPeer=before.phone.protocolVersion!==2||!isolated;
    const work=legacyPeer?plan.work.filter(x=>x.key.startsWith('source/')):plan.work;
    if(legacyPeer&&!work.length)throw Error('另一端仍在运行旧版同步，请先重载另一端插件，再使用一键合并同步');
    const codeReloadRequired=work.some(x=>x.key.startsWith('source/'));
-   for(const item of work){if(item.remove)continue;for(let offset=0;offset<item.size||offset===0;offset+=CHUNK){const data=item.bytes?item.bytes.subarray(offset,offset+CHUNK).toString('base64'):(await invoke(item.from,'chunk',{key:item.sourceKey||item.key,hash:item.hash,offset})).data;await invoke(item.to,'stage',{id,key:item.key,offset,data});}}
+   updateProgress({phase:'transferring',filesTotal:work.filter(x=>!x.remove).length,bytesTotal:work.reduce((n,x)=>n+x.size,0)},true);
+   for(const item of work){if(item.remove)continue;updateProgress({currentFile:item.key,target:item.to});for(let offset=0;offset<item.size||offset===0;offset+=CHUNK){const data=item.bytes?item.bytes.subarray(offset,offset+CHUNK).toString('base64'):(await invoke(item.from,'chunk',{key:item.sourceKey||item.key,hash:item.hash,offset,snapshotId:snapshotIds[item.from]})).data;await invoke(item.to,'stage',{id,key:item.key,offset,data});updateProgress({bytesDone:progress.bytesDone+Math.min(CHUNK,item.size-offset)});}updateProgress({filesDone:progress.filesDone+1});}
    // Both sides are fully staged before any local file is replaced.
-   for(const side of ['desktop','phone']){const items=work.filter(x=>x.to===side).map(({bytes,from,sourceKey,...item})=>item);if(items.length)await invoke(side,'commit',{id,items,deferReload:codeReloadRequired});}
-   const [afterA,afterB]=await Promise.all([local.manifest({flush:!codeReloadRequired,runtimeIsolation:isolated}),peerCall('/manifest',{flush:!codeReloadRequired,runtimeIsolation:isolated})]);const agreed={};for(const [key,value]of Object.entries(afterA.files))if(value.hash===afterB.files[key]?.hash)agreed[key]=value.hash;
+   updateProgress({phase:'applying'},true);
+   for(const side of ['desktop','phone']){const items=work.filter(x=>x.to===side).map(({bytes,from,sourceKey,...item})=>item);if(items.length)await invoke(side,'commit',{id,items,deferReload:true});}
+   updateProgress({phase:'verifying'},true);
+   const [afterA,afterB]=await Promise.all([local.manifest({flush:false,runtimeIsolation:isolated}),peerCall('/manifest',{flush:false,runtimeIsolation:isolated})]);const agreed={};for(const [key,value]of Object.entries(afterA.files))if(value.hash===afterB.files[key]?.hash)agreed[key]=value.hash;
    for(const item of work){const after=item.to==='desktop'?afterA:afterB;if(item.remove?!!after.files[item.key]:after.files[item.key]?.hash!==item.hash)throw Error('同步后校验未通过，保留两端暂停与恢复副本：'+item.key);}
    atomic(path.join(dir,'base.json'),jsonBytes({pairId:pairing().pairId,files:agreed}));
+   // Verify exact transferred bytes before runtime normalization can save state.
+   // An empty commit is the existing protocol's compatible reload operation;
+   // use a separate transaction so the transfer's recovery manifest stays intact.
+   if(!codeReloadRequired&&!legacyPeer){updateProgress({phase:'reloading'},true);for(const side of ['desktop','phone'])await invoke(side,'commit',{id:randomUUID(),items:[],deferReload:false});}
    const target=activate||(!before.phone.paused?'phone':!before.desktop.paused?'desktop':null);
    if(target){for(const side of ['desktop','phone'])await invoke(side,'select',{device:target});if(!codeReloadRequired&&!legacyPeer)await invoke(target,'resume',{});}
-   const report={ok:true,at:Date.now(),files:work.length,bytes:work.reduce((n,x)=>n+x.size,0),conflicts:plan.conflicts.length,conflictPolicy:'union',versionPolicy:'higher-version',sourceDevice:plan.sourceSide,selectedVersion:plan.version,dataMerged:!legacyPeer,activeDevice:codeReloadRequired?'paused':target||'paused',versions:{desktop:afterA.version,phone:afterB.version},verifiedFiles:Object.keys(agreed).length,backup:true,codeReloadRequired,needsReload:codeReloadRequired,legacyVersionUpgradeOnly:legacyPeer};atomic(statusFile,jsonBytes(report));return report;
-  }catch(error){lastError=error.message;throw error;}finally{busy=false;}
+   const report={ok:true,at:Date.now(),files:work.length,bytes:work.reduce((n,x)=>n+x.size,0),conflicts:plan.conflicts.length,conflictPolicy:'union',versionPolicy:'higher-version',sourceDevice:plan.sourceSide,selectedVersion:plan.version,dataMerged:!legacyPeer,activeDevice:codeReloadRequired?'paused':target||'paused',versions:{desktop:afterA.version,phone:afterB.version},verifiedFiles:Object.keys(agreed).length,backup:true,codeReloadRequired,needsReload:codeReloadRequired,legacyVersionUpgradeOnly:legacyPeer};atomic(statusFile,jsonBytes(report));updateProgress({phase:'completed',status:'completed',currentFile:'',endedAt:Date.now(),verifiedFiles:report.verifiedFiles},true);return report;
+  }catch(error){lastError=error.message;updateProgress({status:'failed',error:error.message,endedAt:Date.now()},true);throw error;}finally{for(const [side,snapshotId]of snapshotRefs)try{await invoke(side,'release',{snapshotId});}catch{}busy=false;}
  }
  async function summary(){
   const self=await local.status();let peer=null,connectionError='';try{if(own==='desktop')await connect();peer=await peerCall('/status');}catch(error){connectionError=error.message;}
-  return{self,peer,usbConnected:!!peer,busy:busy||peer?.busy,lastSync:self.lastSync||peer?.lastSync||null,error:lastError||connectionError,scope:'插件设置、密钥、支付保险箱、聊天记录、记忆、日程、学习、成长、图片、语音、附件与插件源码；设备自己的QQ连接及运行工具单独适配。'};
+  return{self,peer,usbConnected:!!peer,busy:busy||peer?.busy,lastSync:[self.lastSync,peer?.lastSync].filter(Boolean).sort((a,b)=>(b.at||0)-(a.at||0))[0]||null,progress:[self.progress,peer?.progress].filter(Boolean).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))[0]||null,error:lastError||connectionError,scope:'插件设置、密钥、支付保险箱、聊天记录、记忆、日程、学习、成长、图片、语音、附件与插件源码；设备自己的QQ连接及运行工具单独适配。'};
  }
  async function activateLocal(){
   if(busy)throw Error('已有同步或切换正在进行');busy=true;lastError='';
@@ -152,7 +193,7 @@ export function createDeviceSync(options){
   }catch(error){lastError=error.message;throw error;}finally{busy=false;}
  }
  async function coordinate(body){if(!['sync','switch','status','activate-local'].includes(body.action||'sync'))throw Error('不支持的设备操作');if(body.action==='status')return summary();if(body.action==='activate-local')return activateLocal();if(body.action==='switch'&&!['phone','desktop'].includes(body.device))throw Error('运行设备无效');return synchronize({activate:body.activate|| (body.action==='switch'?body.device:undefined)});}
- const reply=(res,code,v)=>{res.writeHead(code,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(v));};
+ const reply=(res,code,v)=>{if(res.destroyed)return;res.writeHead(code,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(v));};
  async function bodyOf(req){let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5*1024*1024)throw Error('同步请求过大');chunks.push(chunk);}return JSON.parse(Buffer.concat(chunks).toString()||'{}');}
  async function handle(req,res,authenticated=false){
   try{const route=new URL(req.url,'http://localhost').pathname;if(authenticated){const p=pairing(),a=Buffer.from(req.headers.authorization||''),b=Buffer.from('Bearer '+(p.token||''));if(!p.token||req.headers.origin||a.length!==b.length||!timingSafeEqual(a,b))return reply(res,401,{error:'设备配对验证失败'});}
@@ -163,13 +204,22 @@ export function createDeviceSync(options){
    if(route==='/status'&&req.method==='GET')return reply(res,200,await local.status());
    if(req.method!=='POST')return reply(res,405,{error:'需要POST'});const body=await bodyOf(req),method=route.slice(1);
    if(method==='coordinate')return reply(res,200,await coordinate(body));
-   if(method==='phone'){if(own!=='phone')throw Error('仅手机端提供手机操作');return reply(res,200,await options.phone(body));}
-   if(!['pause','resume','select','manifest','chunk','stage','commit'].includes(method))return reply(res,404,{error:'不支持的设备操作'});
+   if(method==='phone'){
+    if(own!=='phone')throw Error('仅手机端提供手机操作');
+    // Each RPC owns a dedicated socket. Disconnect/abort cancels only its native call.
+    const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort(Error('电脑手机操作连接已结束，停止本次任务'));};
+    phoneRequests.add(controller);res.once('close',disconnect);
+    try{if(res.destroyed)disconnect();controller.signal.throwIfAborted();const result=await options.phone(body,{signal:controller.signal});controller.signal.throwIfAborted();return reply(res,200,result);}
+    finally{res.removeListener('close',disconnect);phoneRequests.delete(controller);}
+   }
+   if(!['pause','resume','select','manifest','chunk','release','stage','commit'].includes(method))return reply(res,404,{error:'不支持的设备操作'});
    return reply(res,200,await local[method](body));
   }catch(error){return reply(res,400,{error:String(error.message||'设备操作失败').slice(0,300)});}
  }
  async function start(){options.register({kind:'exact',path:'/im-bridge/device-sync',handler:(req,res)=>void handle(req,res)});server=createServer((req,res)=>void handle(req,res,true));server.requestTimeout=120000;server.maxConnections=8;await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(own==='phone'?PORT_PHONE:PORT_PC,'127.0.0.1',resolve);});server.unref();if(own==='desktop'&&!options.connectPeer){void connect().catch(()=>{});usbTimer=setInterval(()=>{if(!closed&&!busy)void connect().catch(()=>{});},10000);usbTimer.unref();}}
- function close(){closed=true;if(usbTimer)clearInterval(usbTimer);server?.close();if(own==='desktop'&&forwardOrigin&&!options.connectPeer){const p=pairing(),port=new URL(forwardOrigin).port;void execute(p.adbPath,['-s',p.serial,'forward','--remove','tcp:'+port],{windowsHide:true}).catch(()=>{});}}
+ function close(){closed=true;for(const id of snapshots.keys())releaseSnapshot(id);for(const controller of phoneRequests)controller.abort(Error('设备同步服务已停止'));if(usbTimer)clearInterval(usbTimer);server?.close();if(own==='desktop'&&forwardOrigin&&!options.connectPeer){const p=pairing(),port=new URL(forwardOrigin).port;void execute(p.adbPath,['-s',p.serial,'forward','--remove','tcp:'+port],{windowsHide:true}).catch(()=>{});}}
  function allowRun(){const selected=readJSON(path.join(dir,'active-device.json'));return !selected.device||selected.device===own;}
- return{start,close,summary,synchronize,coordinate,activateLocal,local,resolveKey,canonical,allowRun,phoneRequest:body=>peerCall('/phone',body)};
+ function paired(){return !!pairing().token;}
+ function activeDevice(){return readJSON(path.join(dir,'active-device.json')).device||'';}
+ return{start,close,summary,synchronize,coordinate,activateLocal,local,resolveKey,canonical,allowRun,paired,activeDevice,phoneRequest:(body,context)=>peerCall('/phone',body,context)};
 }

@@ -1,4 +1,4 @@
-// Plugin-owned loopback IPC for its local CLI. DSHBox's web authentication stays intact.
+// Plugin-owned loopback IPC for its local CLI. DSH Go's web authentication stays intact.
 import {createServer} from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {mkdirSync,writeFileSync,readFileSync,unlinkSync} from 'node:fs';

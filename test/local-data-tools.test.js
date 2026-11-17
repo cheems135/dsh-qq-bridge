@@ -4,6 +4,15 @@ import {createLocalAgent,toOpenAITools} from '../local-agent.js';
 import {createAgentCapabilities} from '../agent-capabilities.js';
 
 const schema={type:'object',properties:{query:{type:'string',maxLength:100}},required:['query'],additionalProperties:false};
+test('API and local discover the same diary executor even without a browser or phone',async()=>{
+ const registered=new Map(),calls=[],context={key:'private:12345',accountId:'a',personaId:'p'};
+ const capabilities=createAgentCapabilities({ctx:{get:()=>({register:t=>{registered.set(t.name,t);return()=>{};}})},getConfig:()=>({enabled:true}),getContext:()=>context,authorize:()=>true,browser:{status:()=>({available:false}),close:async()=>{}},desktop:{status:()=>({available:false})},audio:{status:()=>({available:false})},getPhone:()=>({}),services:{diary:async(args,c)=>{calls.push({args,key:c.key});return {ok:true,changed:1,id:'stored-diary'};}}});
+ try{capabilities.start();assert(registered.has('bridge_diary'));await registered.get('bridge_diary').execute({action:'write',topic:'一个小实验'},{name:'bridge_diary'});
+  const router=capabilities.localTools({...context,localTurn:true}).bridge_tools;assert((await router.execute({action:'list'})).tools.some(t=>t.name==='bridge_diary'));
+  assert.equal((await router.execute({action:'call',name:'bridge_diary',arguments:{action:'write',topic:'一个小实验'}})).id,'stored-diary');
+  assert.equal(calls.length,2);assert.deepEqual(calls[0],calls[1]);
+ }finally{capabilities.close();}
+});
 test('data tools return actual structured information without requiring media',async()=>{
   let calls=0;
   const agent=createLocalAgent({model:async({messages,tools})=>{
@@ -44,7 +53,7 @@ test('failed tools cannot be followed by a fabricated successful answer',async()
   let round=0;
   const agent=createLocalAgent({model:async()=>++round===1?'{"action":"bridge_search","arguments":{"query":"x"}}':'第一条热门视频是一个模型编造的标题。',tools:{bridge_search:{kind:'data',parameters:schema,execute:async()=>({ok:false,error:'网络未连接'})}}});
   const result=await agent.run({messages:[{role:'user',content:'查热门'}]});
-  assert.match(result.text,/没能完整接上/);assert.doesNotMatch(result.text,/编造的标题/);
+  assert.match(result.text,/没做成/);assert.doesNotMatch(result.text,/编造的标题/);
 });
 
 test('local tool router executes the registered browser wrapper and preserves permission checks',async()=>{
@@ -67,3 +76,11 @@ test('verified local models discover registered drawing/game tools without nativ
  const schema=await router.execute({action:'schema',name:'bridge_drawing'});assert.ok(schema.parameters);allowed=false;await assert.rejects(router.execute({action:'schema',name:'bridge_drawing'}));assert.equal(draws,0);capabilities.close();
 });
 
+
+test('owner QQ sends remain available when native model tool capability is not yet verified, including group owners, while other private users are filtered by authorization',async()=>{
+ const capabilities=createAgentCapabilities({ctx:{get:()=>({register:()=>()=>{}})},getConfig:()=>({enabled:true,browser:true}),getContext:()=>({}),authorize:c=>c.toolName==='bridge_tools'||c.chat?.isOwner===true,browser:{status:()=>({}),close:async()=>{}},desktop:{status:()=>({})},audio:{status:()=>({})},getPhone:()=>({}),services:{lifeChat:async args=>({ok:true,targets:[],action:args.action})}});capabilities.start();
+ for(const [chat,expected]of [[{kind:'private',isOwner:true},true],[{kind:'group',isOwner:true},true],[{kind:'private',isOwner:false},false]]){
+  const router=capabilities.localTools({localTurn:true,chat,capabilities:{tools:false}}).bridge_tools,list=await router.execute({action:'list'});assert.equal(list.tools.some(t=>t.name==='bridge_life_qq'),expected);
+ }
+ capabilities.close();
+});

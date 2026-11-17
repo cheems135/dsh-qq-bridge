@@ -13,6 +13,7 @@ export async function performLocalLogin({action,qq,readStatus,napcat,client,getQ
   const current=await readStatus();check();
   if(current.qqLoggedIn===true)return{already:true,started:false,scheduled:false,message:'本机QQ已登录。'};
   if(!current.webuiReachable){if(!hasAccount)throw Error('请先在 NapCat 启动 QQ 登录窗口，或配置机器人账号后再启动');return napcat.start();}
+  if(current.coreReady===false||current.status==='core_not_ready')throw Error('QQ 登录内核尚未就绪，管理页面在线不代表可以登录；请点击“重启本机 QQ / NapCat”，不要反复刷新二维码。');
   let history=[];
   try{history=await client.getQuickLoginList();}catch(error){if(['WEBUI_2FA','WEBUI_AUTH','AUTH_EXPIRED'].includes(error.code))throw error;}
   check();
@@ -24,6 +25,6 @@ export async function performLocalLogin({action,qq,readStatus,napcat,client,getQ
   if(latest.qqLoggedIn===true)return{already:true,started:false,scheduled:false,message:'本机QQ已登录。'};
   if(latest.status==='qrcode_scanned')return{scheduled:true,started:false,message:'二维码已扫描，请在手机QQ完成登录确认。'};
   const qr=await getQr();check();
-  if(!qr.available){try{await refreshQr();check();}catch(error){if(error.code!=='QR_NOT_READY')throw error;}}
+  if(!qr.available){await refreshQr();check();const fresh=await getQr();if(!fresh.available)throw Error('QQ 尚未生成可用二维码，不能确认登录已准备好，请稍后检查或重启本机 QQ / NapCat。');}
   return{scheduled:true,started:false,message:'本机QQ登录服务正在运行，请扫描当前二维码并在手机确认。'};
 }

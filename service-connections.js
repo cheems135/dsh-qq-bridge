@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {normalizeBalanceConfig} from './service-balance.js';
 import {apiOnlyConnections,assertMobileConnection,mobileApiMessage} from './mobile-api-policy.js';
 export const CONNECTION_TYPES=['openai','anthropic','responses','comfyui','voicelab','runninghub'];
 export function connectionUrl(value){
@@ -71,29 +72,37 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
     if(!CONNECTION_TYPES.includes(type))throw Error('先识别或手动选择连接类型');
     if(old?.apiKey&&!input.apiKey&&!input.clearKey&&new URL(baseUrl).origin!==new URL(old.baseUrl).origin)throw Error('服务所属站点已改变，请重新填写该站点的密钥，旧密钥不会自动发送过去');
     const p={id,name:String(input.name??old?.name??'未命名连接').trim().slice(0,80),type,baseUrl,apiKey:input.clearKey?'':String(input.apiKey||old?.apiKey||'').trim().slice(0,4000),chatModel:String(input.chatModel??old?.chatModel??'').trim().slice(0,200),imageModel:String(input.imageModel??old?.imageModel??'').trim().slice(0,200),speechModel:String(input.speechModel??old?.speechModel??'').trim().slice(0,200),voice:String(input.voice??old?.voice??'').trim().slice(0,120),imageMode:(input.imageMode??old?.imageMode)==='edits'?'edits':'generations',models:Array.isArray(input.models)?input.models.filter(x=>typeof x==='string'&&x.length<=200).slice(0,300):old?.models||[],evidence:Array.isArray(input.evidence)?input.evidence.map(x=>String(x).slice(0,200)).slice(0,8):old?.evidence||[]};
+    p.balance=normalizeBalanceConfig(input.balance===undefined?old?.balance:input.balance,p.baseUrl);
     p.paths=normalizeConnectionPaths(input.paths===undefined?old?.paths:input.paths,p.baseUrl);
     p.videoModel=String(input.videoModel??old?.videoModel??'').trim().slice(0,200);
     p.videoMode=(input.videoMode||old?.videoMode)==='json'?'json':'multipart';
     p.audioFormat=(input.audioFormat||old?.audioFormat)==='mp3'?'mp3':'wav';
+    if(state.routes?.enabled)for(const kind of ['chat','image','speech','video'])if(state.routes[kind]==='profile:'+id){
+      const model=p[kind==='chat'?'chatModel':kind==='image'?'imageModel':kind==='video'?'videoModel':'speechModel'];
+      if(!model||(kind==='chat'?!['openai','anthropic','responses'].includes(p.type):p.type!=='openai'))throw Error('此连接仍用于'+kind+'，请先切换来源，再删除模型或更改协议');
+      if(kind==='speech'&&!p.voice)throw Error('此连接仍用于语音，请先切换来源，再清除音色');
+    }
     state.profiles=state.profiles.filter(x=>x.id!==id).concat(p);commit(state);return publicConnection(p);
   }
   function saveRoutes(input){
-    if(apiOnly&&['chat','image','speech'].some(kind=>input[kind]==='local'))throw Error(mobileApiMessage);
-    const state=load(),routes={enabled:input.enabled===true,chat:String(input.chat||'host'),image:String(input.image||'legacy'),speech:String(input.speech||'legacy')};
-    for(const kind of ['chat','image','speech']){
+    if(input.enabled===true&&['chat','image','speech','video'].some(kind=>Object.hasOwn(input,kind)&&!String(input[kind]||'').trim()))throw Error('有来源尚未选择，请重新选择后再应用');
+    if(apiOnly&&['chat','image','speech','video'].some(kind=>input[kind]==='local'))throw Error(mobileApiMessage);
+    const state=load(),routes={enabled:input.enabled===true,chat:String(input.chat||'host'),image:String(input.image||'legacy'),speech:String(input.speech||'legacy'),...(input.video!==undefined||state.routes?.video!==undefined?{video:String(input.video??state.routes.video??'legacy')}:{})};
+    for(const kind of ['chat','image','speech',...('video' in routes?['video']:[])]){
       const value=routes[kind];if(['local',kind==='chat'?'host':'legacy'].includes(value))continue;
       const p=state.profiles.find(x=>'profile:'+x.id===value);if(!p)throw Error('所选连接不存在：'+kind);
       if(!['openai','responses','anthropic'].includes(p.type)||kind!=='chat'&&p.type!=='openai')throw Error('该连接类型不能直接用于此项；ComfyUI 和 VoiceLab 请使用本地选项，RunningHub 沿用图片页');
-      if(!p[kind==='chat'?'chatModel':kind==='image'?'imageModel':'speechModel'])throw Error('请先为所选连接填写对应模型');
+      if(!p[kind==='chat'?'chatModel':kind==='image'?'imageModel':kind==='video'?'videoModel':'speechModel'])throw Error('请先为所选连接填写对应模型');
       if(kind==='speech'&&!p.voice)throw Error('请先为语音连接填写音色 ID');
     }
     if(routes.enabled&&!state.routes?.enabled){state.legacyLocalEnabled=getLegacyMode()===true;state.legacyApiComplement=getLegacyComplement()===true;}
+    if(!routes.enabled&&state.routes?.enabled){state.legacyLocalEnabled=getLegacyMode()===true;state.legacyApiComplement=getLegacyComplement()===true;}
     state.routes=routes;commit(state,{routes:true});
     return snapshot();
   }
   function remove(id){const state=load();if(Object.values(state.routes||{}).includes('profile:'+id)||isProfileInUse(id))throw Error('此连接仍在搭配或聊天模型中使用，请先切换来源');state.profiles=state.profiles.filter(x=>x.id!==id);commit(state);return snapshot();}
   function use(id,kind){
-    if(!['chat','image','speech'].includes(kind))throw Error('请选择聊天、图片或语音用途');
+    if(!['chat','image','speech','video'].includes(kind))throw Error('请选择聊天、图片、语音或视频用途');
     const p=profile(id),state=load(),local=getLegacyMode()===true;
     const routes=state.routes?.enabled?{...state.routes}:{enabled:true,chat:local?'local':'host',image:local?'local':'legacy',speech:local?'local':'legacy'};
     routes.enabled=true;routes[kind]='profile:'+p.id;return saveRoutes(routes);
@@ -111,5 +120,12 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
     if(state.routes?.enabled)state.routes={...state.routes,chat};
     commit(state,{routes:state.routes?.enabled===true});
   }
-  return {snapshot,save,saveRoutes,use,selectChatModel,remove,route,profile,raw:load};
+  function setMode(mode,{apiComplement=false}={}){
+    if(!['local','api'].includes(mode))throw Error('请选择纯本地或 API 模式');
+    if(apiOnly&&mode==='local')throw Error(mobileApiMessage);
+    const state=load();state.routes={enabled:false,chat:mode==='local'?'local':'host',image:mode==='local'?'local':'legacy',speech:mode==='local'?'local':'legacy',...('video' in (state.routes||{})?{video:mode==='local'?'local':'legacy'}:{})};
+    state.legacyLocalEnabled=mode==='local';state.legacyApiComplement=mode==='local'&&apiComplement===true;
+    commit(state,{routes:true,mode:true});return snapshot();
+  }
+  return {snapshot,save,saveRoutes,setMode,use,selectChatModel,remove,route,profile,raw:load};
 }

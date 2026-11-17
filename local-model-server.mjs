@@ -1,4 +1,12 @@
+import {breezeDelivery} from './voice-studio.js';
+import {composeDirection} from './voice-performance.js';
+import {imageExecutionInquiry} from './media-intent.js';
+import {localGroupSendRequest,executeLocalGroupSend} from './local-qq-task.js';
+import {localVideoObservationRequest} from './local-media-planner.js';
+import {pruneLogFile,recentRecords} from './log-retention.js';
+import {createScheduleToolBreaker} from './schedule-tool-breaker.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
+import {promptPreferenceRule,voicePromptInstructions} from './prompt-preferences.js';
 import {createForegroundPriority} from './local-foreground.js';
 import {personaStateHint,alignOutfitReply,asksOutfit} from './local-persona-state.js';
 import {resolveLocalPhotoSubject} from './local-portrait-plan.js';
@@ -24,7 +32,7 @@ import {createCapabilityDetector} from './local-capabilities.js';
 import {probeColorPng} from './local-probe-image.js';
 import {fastDialoguePlan,FAST_DIALOGUE_RULES,QUALITY_DIALOGUE_RULES,QUALITY_CONVERSATION_RULES,createDialogueStream} from './local-fast-chat.js';
 import {readOpenAIStream} from './local-openai-stream.js';
-import {createWaitNotice,WAIT_NOTICE_RULE} from './local-wait-notice.js';
+import {createTaskWaitMonitor,WAIT_NOTICE_RULE} from './local-wait-notice.js';
 import {localIssueReply} from './local-issue-reply.js';
 import {createLocalAgent} from './local-agent.js';
 import {resolveLocalMediaTask,unverifiedMediaProgress} from './local-media-task.js';
@@ -37,22 +45,27 @@ import {
   defaultLocalConfig,
   mediaWorkflowSpecs,
   normalizeLocalConfig,
+  removeLocalWorkflow,
   publicLocalConfig,
   resolveMediaWorkflow,
 } from './local-config.js';
 import {createComfyRuntime} from './comfyui-runtime.js';
 import {localRequiredDataTools} from './local-search-task.js';
 import {reconcileLocalToolAudio} from './local-audio-evidence.js';
-import {cleanLocalReply,latestUserText,localDialogueInstruction,needsDialogueRepair,requestedFormatting} from './local-reply.js';
-import {localMoodInstruction,normalizeLocalMood,localVoiceInstruction,literalLocalMood} from './local-chat-context.js';
+import {formatLocalChatParagraphs,cleanLocalReply,latestUserText,localDialogueInstruction,needsDialogueRepair,requestedFormatting} from './local-reply.js';
+import {localMoodInstruction,normalizeLocalMood,literalLocalMood} from './local-chat-context.js';
 import {applyMood,moodDelivery} from './companion-mood.js';
 import {modelBillions} from './local-gpu-policy.js';
 import {prepareLocalReply,localRepeatRisk,localRepetitionInstruction,repeatRequested} from './local-repetition.js';
 import {createLocalRunStatus} from './local-run-status.js';
 import {optimizeLocalContext,isContextLimitError,contextLimitFeedback,estimateTokens} from './local-context.js';
 import {inspectWorkflow} from './workflow-inspector.js';
+import {describeWorkflowParameters,validateParameterOverrides,applyWorkflowParameters} from './workflow-parameters.js';
+import {applyLocalGpuPolicy,workflowContextWindow} from './local-gpu-policy.js';
+import {createSpeechStylePreparer} from './local-speech-style.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
+const gatewayVersion = JSON.parse(readFileSync(new URL('./package.json',import.meta.url),'utf8')).version;
 
 function sendJson(res, status, body) {
   if (res.writableEnded) return;
@@ -194,6 +207,8 @@ function safeReceipt(receipt) {
     tool: String(receipt.tool || ''),
     ok: receipt.ok === true,
     kind: String(receipt.kind || ''),
+    informational:receipt.informational===true,
+    ...(receipt.routedTool?{routedTool:String(receipt.routedTool)}:{}),
     ...(receipt.kind==='data'?{data:receipt.data}:{}),
     files: Array.isArray(receipt.files) ? receipt.files.map(String) : [],
     text: String(receipt.text || '').slice(0, 1000),
@@ -220,6 +235,8 @@ export function createLocalModelServer({
   logger = message => console.log(message),
 } = {}) {
   const configPath = configFile;
+  const failureFile=configPath+'.tool-failures.json';
+  const scheduleToolBreaker=createScheduleToolBreaker({storage:{read:()=>existsSync(failureFile)?JSON.parse(readFileSync(failureFile,'utf8')):null,write:value=>{mkdirSync(dirname(failureFile),{recursive:true});writeFileSync(failureFile+'.tmp',JSON.stringify(value));renameSync(failureFile+'.tmp',failureFile);}}});
   let config = loadConfig(configPath, env);
   const stats = {startedAt: Date.now(), chat: 0, turns: 0, speech: 0, captions: 0, errors: 0, lastChatAt: 0, lastSpeechAt: 0, lastError: ''};
   const execution=createLocalRunStatus();
@@ -237,7 +254,7 @@ export function createLocalModelServer({
 
   const runtimeConfig = () => ({
     enabled: true,
-    targetedInterrupt: env.LOCAL_COMFY_TARGETED_INTERRUPT==='1',
+    targetedInterrupt: (env.LOCAL_COMFY_TARGETED_INTERRUPT==='1'||config.targetedInterrupt===true),
     baseUrl: config.comfyUrl,
     comfyUrl: config.comfyUrl,
     mediaDir: config.mediaDir,
@@ -254,8 +271,8 @@ export function createLocalModelServer({
   let gpuTail = Promise.resolve();
   let activeComfyKind = '';
   let analysisPending=false,lastForegroundAt=0;
-  const priority=createForegroundPriority(),analysisScope=new AsyncLocalStorage();
-  const targetedInterrupt=env.LOCAL_COMFY_TARGETED_INTERRUPT==='1';
+  const priority=createForegroundPriority(),analysisScope=new AsyncLocalStorage(),initiativeParents=new Map();
+  const targetedInterrupt=(env.LOCAL_COMFY_TARGETED_INTERRUPT==='1'||config.targetedInterrupt===true);
   const waitHistory=new Map();
   const contextPressure = new Map();
   const toolBroker = createLocalToolBroker();
@@ -266,6 +283,12 @@ export function createLocalModelServer({
   const issueFile=join(env.LOCAL_AI_WORK_DIR||dirname(configPath),'bridge-issues-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let issueRows=[];
   try{issueRows=JSON.parse(readFileSync(issueFile,'utf8'));}catch{}
   const issues=createBridgeIssues({getRows:()=>issueRows,setRows:rows=>issueRows=rows,save:()=>{mkdirSync(dirname(issueFile),{recursive:true});writeFileSync(issueFile+'.tmp',JSON.stringify(issueRows));renameSync(issueFile+'.tmp',issueFile);}});
+  let lastDiagnosticCleanup=0;
+  function maintainDiagnosticLogs(){
+    if(Date.now()-lastDiagnosticCleanup<60*60*1000)return;lastDiagnosticCleanup=Date.now();
+    try{scheduleToolBreaker.prune();pruneLogFile(logFile);const nextInv=recentRecords(invocationRows,Date.now()),nextIssues=recentRecords(issueRows);if(nextInv.length!==invocationRows.length){invocationRows=nextInv;writeFileSync(journalFile,JSON.stringify(invocationRows));}if(nextIssues.length!==issueRows.length){issueRows=nextIssues;writeFileSync(issueFile,JSON.stringify(issueRows));}}catch(error){log('日志清理暂未完成：'+String(error.message));}
+  }
+  maintainDiagnosticLogs();
   const issueScope=context=>({...context?.recordScope,backend:'local'});
   const capabilityDetector=createCapabilityDetector({getConfig:()=>config,root,workDir:env.LOCAL_AI_WORK_DIR||'D:/CodexData/work/local-ai-routing',services:async()=>{
     const value=await executionStatus();let voice=voiceService().type!=='voicelab',voiceBusy=false,voiceReason='已手动配置语音协议，实际生成时验证连接与 WAV 回执';
@@ -300,7 +323,7 @@ export function createLocalModelServer({
       })().finally(()=>{queueCheck=null;});
     }
     if(queueCheck)await queueCheck;
-    return {ok:true,version:'1.59.1',execution:execution.snapshot(),priority:priority.snapshot(),comfyQueue:queueStatus,model:config.backend==='comfyui'?config.chatWorkflow:config.modelId,backend:config.backend};
+    return {ok:true,version:gatewayVersion,execution:execution.snapshot(),priority:priority.snapshot(),comfyQueue:queueStatus,model:config.backend==='comfyui'?config.chatWorkflow:config.modelId,backend:config.backend};
   }
 
   async function analyzeWorkflow(body) {
@@ -329,6 +352,26 @@ export function createLocalModelServer({
     const token=randomUUID(); inspections.set(token,{...result,at:Date.now(),workflowId:body.workflowId||''});
     const {api,...analysis}=result;
     return {ok:true,token,analysis};
+  }
+
+  async function workflowParameters(body){
+    const entry=config.workflowLibrary.find(row=>row.id===body.workflowId);if(!entry)throw Error('工作流已删除或未保存，请先保存工作流');
+    const before=JSON.stringify(entry),base=config.comfyUrl;
+    const response=await fetchImpl(config.comfyUrl.replace(/\/+$/,'')+'/object_info',{signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('读取节点参数失败，请确认 ComfyUI 正在运行');
+    const info=await response.json(),file=/^[a-zA-Z]:[\\/]|^\//.test(entry.file)?entry.file:join(root,entry.file);
+    if(base!==config.comfyUrl||JSON.stringify(config.workflowLibrary.find(row=>row.id===entry.id))!==before)throw Error('读取期间工作流配置改变，请重新读取');
+    const raw=JSON.parse(readFileSync(file,'utf8').replace(/^\uFEFF/,'')),analysis=inspectWorkflow(raw,info,{preferredKind:entry.kind});
+    if(analysis.errors.length)throw Error(analysis.errors.join('；'));
+    let description=describeWorkflowParameters(analysis.api,info,entry);
+    if(body.action==='save'){
+      if(body.fingerprint!==description.fingerprint)throw Error('工作流或参数已改变，请重新读取后再保存');
+      const parameterOverrides=validateParameterOverrides(body.parameters,description),library=config.workflowLibrary.map(row=>row.id===entry.id?{...row,parameterOverrides}:row);
+      const next=normalizeLocalConfig({workflowLibrary:library},config);saveConfig(configPath,next);config=next;
+      description=describeWorkflowParameters(analysis.api,info,{...entry,parameterOverrides});
+    }else if(body.action!=='describe')throw Error('未知工作流参数操作');
+    const spec=config.workflowLibrary.find(row=>row.id===entry.id),effective=applyLocalGpuPolicy(applyWorkflowParameters(structuredClone(analysis.api),spec),{memoryProfile:config.memoryProfile,kind:entry.kind});
+    for(const p of description.parameters){p.effectiveValue=p.managedBy?config[p.managedBy]:effective[p.node]?.inputs?.[p.field];p.limited=JSON.stringify(p.effectiveValue)!==JSON.stringify(p.value);}
+    return {ok:true,workflowId:entry.id,name:entry.name,...description,config:publicLocalConfig(config)};
   }
 
   function importWorkflow(body) {
@@ -361,6 +404,14 @@ export function createLocalModelServer({
     try{const next=normalizeLocalConfig({workflowLibrary:library,...(body.activateChat===true&&kind==='chat'?{backend:'comfyui',chatWorkflow:id}:{})},config);saveConfig(configPath,next);config=next;}catch(error){try{rmSync(file);}catch{}throw error;}
     inspections.delete(String(body.token));
     return {ok:true,entry:config.workflowLibrary.find(item=>item.id===id),config:publicLocalConfig(config)};
+  }
+
+  function deleteWorkflow(body) {
+    const result=removeLocalWorkflow(config,body.workflowId);
+    saveConfig(configPath,result.config);config=result.config;
+    // Preserve source files and in-flight submissions; only remove the saved registration.
+    for(const [token,inspection]of inspections)if(inspection.workflowId===body.workflowId)inspections.delete(token);
+    return {ok:true,deletedId:String(body.workflowId),deleted:!!result.deleted,config:publicLocalConfig(config)};
   }
 
   async function availableModels(baseUrl=config.modelBaseUrl) {
@@ -420,10 +471,15 @@ export function createLocalModelServer({
     activeComfyKind = kind;
   }
 
-  async function speakBytes(text, {signal, preset,emotion='auto',onProgress=()=>{}} = {}) {
+  const prepareSpeechStyle=createSpeechStylePreparer();
+  async function speakBytes(text, {signal, preset,emotion='auto',instructions='',presentationPreferences,onProgress=()=>{}} = {}) {
     if (!config.voiceEnabled) throw new Error('本地语音已在网关配置里关闭');
     if (!String(text || '').trim()) throw new Error('语音文字不能为空');
     if(String(text).length>2000)throw Error('一次本地语音最多 2000 字，请分段合成，原文未截断。');
+    const rawStyle=voicePromptInstructions(instructions||breezeDelivery(String(text),{},{emotion}).instructions,presentationPreferences);
+    const style=await prepareSpeechStyle(rawStyle,{model:typeof model==='function'?model:config.backend==='openai'?callOpenAIModel:callComfyModel,signal,onProgress});
+    style.instruction=composeDirection({mood:emotion,userDirection:style.instruction,language:/[\p{Script=Han}]/u.test(String(text))?'zh':'en',maxLength:Math.max(160,style.instruction.length+70)});
+    if(style.compacted)onProgress({phase:'invocation',invocation:{id:randomUUID(),tool:'speech.style',kind:'speech',status:'returned',purpose:'将完整语音偏好提炼为合成引擎语气',arguments:{sourceChars:style.sourceChars,instruction:rawStyle},result:style}});
     onProgress({phase:'waiting_gpu'});
     return enqueueGpu(async () => {
       const service=structuredClone(voiceService());
@@ -435,9 +491,9 @@ export function createLocalModelServer({
       const selectedVoice=service.type==='voicelab'?selectLocalVoice(voices,{requested:preset,configured}):String(preset&&preset!=='default'?preset:configured);
       if(service.device!=='cpu')await freeChatModel(signal,onProgress);
       onProgress({phase:'speech'});
-      const scoped = mergeDeadline(signal, 240000, '本地语音合成');
+      const scoped = mergeDeadline(signal, Number(service.timeoutMs)||600000, '本地语音合成');
       try {
-        const bytes=await requestLocalSpeech(service,{text:String(text),voice:selectedVoice,instruction:localVoiceInstruction(emotion),fetchImpl,signal:scoped.signal});
+        const bytes=await requestLocalSpeech(service,{text:String(text),voice:selectedVoice,instruction:style.instruction,fetchImpl,signal:scoped.signal});
         stats.speech += 1;
         stats.lastSpeechAt = Date.now();
         return bytes;
@@ -447,8 +503,8 @@ export function createLocalModelServer({
     }, signal);
   }
 
-  async function synthesizeSpeech(text, {signal,onProgress,emotion} = {}) {
-    const bytes = await speakBytes(text, {signal,onProgress,emotion});
+  async function synthesizeSpeech(text, {signal,onProgress,emotion,presentationPreferences} = {}) {
+    const bytes = await speakBytes(text, {signal,onProgress,emotion,presentationPreferences});
     mkdirSync(config.mediaDir, {recursive: true});
     const file = join(config.mediaDir, `tts-${Date.now()}-${randomUUID().slice(0, 8)}.wav`);
     writeFileSync(file, bytes);
@@ -595,10 +651,8 @@ export function createLocalModelServer({
     let window=4096;
     try{
       const graph=JSON.parse(readFileSync(resolve(root,spec.file),'utf8'));
-      const limits=Object.values(graph).filter(node=>node.class_type==='QwenTE_ModelLoader').map(node=>Number(node.inputs?.['上下文长度'])).filter(n=>n>=1024);
-      if(limits.length)window=Math.min(...limits);
+      window=workflowContextWindow(graph,spec,{memoryProfile:config.memoryProfile,kind:'chat',vision:imageFiles.length>0});
     }catch{}
-    if(config.memoryProfile==='8gb')window=Math.min(window,imageFiles.length?6144:4096);
     const pressureKey=JSON.stringify([config.comfyUrl,config.chatWorkflow,window,maxTokens,config.memoryProfile]);
     let fitted=optimizeLocalContext(context,{window,maxTokens,protocol,images:imageFiles.length,targetRatio:config.dialoguePriority==='quality'?.9:fastDialogue?.68:.86,continuity:config.dialoguePriority==='quality',...contextPressure.get(pressureKey)});
     onProgress({...(fitted.context.droppedMessages||fitted.context.promptCompacted?{phase:'context'}:{}),context:fitted.context});
@@ -646,31 +700,33 @@ export function createLocalModelServer({
     }
   }
 
-  function configuredTools(tools = injectedTools, sourceImages = new Set(),voiceEmotion=()=> 'auto',personaReference=null,prepareImage=null,beforeMedia=null,referenceDiagnostics={}) {
+  function configuredTools(tools = injectedTools, sourceImages = new Set(),voiceEmotion=()=> 'auto',personaReference=null,prepareImage=null,beforeMedia=null,referenceDiagnostics={},presentationPreferences) {
     if (tools) return tools;
     const result = {};
     if (config.voiceEnabled) {
-      result.speech = {execute: (args, options) => synthesizeSpeech(args.text, {...options,emotion:voiceEmotion()})};
+      result.speech = {execute: (args, options) => synthesizeSpeech(args.text, {...options,emotion:voiceEmotion(),presentationPreferences})};
     }
     for (const kind of ['image', 'video']) {
       const choices = mediaWorkflowSpecs(config).filter(item => item.kind === kind);
       if (!choices.length) continue;
+      const current = choices.find(item => item.id === config.defaultWorkflows?.[kind]);
       result[kind] = {
-        description: `可用的${kind === 'image' ? '图片' : '视频'}工作流：` + choices.map(item => `${item.id}=${item.name}${item.description ? '（' + item.description + '）' : ''}`).join('；'),
-        workflows: choices.map(({id, name, description}) => ({id, name, description})),
+        description: current ? `调用面板手动选中的当前${kind === 'image' ? '图片' : '视频'}工作流「${current.name}」。不能在本轮改选工作流。` : `尚未在本地连接页手动选中当前${kind === 'image' ? '图片' : '视频'}工作流；调用会返回明确错误。`,
+        currentWorkflow: current ? {id:current.id,name:current.name} : null,
         execute: async (args, options) => {
-          const selected = resolveMediaWorkflow(config, kind, args.workflowId);
+          const selected = resolveMediaWorkflow(config, kind);
           if(kind==='image')options?.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',reference:{...referenceDiagnostics,prepared:!!personaReference,used:false},workflowSelection:{id:selected.id,name:selected.name,file:selected.file}}});
-          const needsIdentity=kind==='image'&&(referenceDiagnostics.required===true||referenceDiagnostics.configured===true&&referenceDiagnostics.plannedOwnPortrait===true||!!personaReference);
+          const needsIdentity=['image','video'].includes(kind)&&(referenceDiagnostics.required===true||referenceDiagnostics.configured===true&&referenceDiagnostics.plannedOwnPortrait===true||!!personaReference);
           if(kind==='image'&&referenceDiagnostics.configured===true&&!personaReference&&referenceDiagnostics.reason==='no_image_plan')throw Error('当前已有人设图，但这轮没有确认图片主体，未绕过人设图直接提交文生图；请先明确拍当前角色还是其他主体');
           if(needsIdentity&&!personaReference)throw Error('这轮需要已保存的人设参考图，但图片没有准备成功，未提交无参考图的生成任务');
           if(needsIdentity)args={...args,image:personaReference.file,requirePersonaReference:true};
           if(beforeMedia)await beforeMedia(kind,args,options);
+          if(kind==='video'){const preference=promptPreferenceRule('video',presentationPreferences);if(preference)args={...args,prompt:String(args.prompt||'')+'\n'+preference};}
           if(kind==='image'&&prepareImage)args=await prepareImage(args,selected,options);
           if(needsIdentity&&args.image!==personaReference.file)throw Error('人设参考图在提示词准备后发生变化，未提交缺失或替换参考图的任务');
-          if(kind==='image'&&personaReference&&(!args.image||needsIdentity&&!prepareImage)){
-            if(!selected.inputs?.image?.node)throw Error('当前图片工作流没有参考图输入映射，不能保持已保存的人设图身份');
-            args={...args,image:personaReference.file,prompt:prepareImage?args.prompt:'以提供的人设图保持角色身份、脸部和稳定外观特征，服装、姿势和背景按本轮要求。'+(personaReference.description||'')+'\n本轮画面：'+args.prompt+(personaReference.camera?'\n镜头约束：'+personaReference.camera:'')};
+          if(['image','video'].includes(kind)&&personaReference&&(!args.image||needsIdentity&&!(kind==='image'&&prepareImage))){
+            if(!selected.inputs?.image?.node)throw Error('当前生成工作流没有参考图输入映射，不能保持已保存的人设图身份');
+            args={...args,image:personaReference.file,prompt:kind==='image'&&prepareImage?args.prompt:'以提供的人设图保持角色身份、脸部和稳定外观特征，服装、姿势和背景按本轮要求。'+(personaReference.description||'')+'\n本轮画面：'+args.prompt+(personaReference.camera?'\n镜头约束：'+personaReference.camera:'')};
           }
           if (args.image) {
             const image = resolve(String(args.image));
@@ -702,8 +758,9 @@ export function createLocalModelServer({
   }
 
   async function runTurn(messages, {signal, externalTools = {},onProgress=()=>{},turnContext={},onEvent=null} = {}) {
+    maintainDiagnosticLogs();
     const invocationIds=new Set(),scope={accountId:String(turnContext.recordScope?.accountId||''),personaId:String(turnContext.recordScope?.personaId||''),chat:String(turnContext.recordScope?.chat||'panel:local'),auditId:String(turnContext.recordScope?.auditId||''),backend:'local'};
-    const upstreamProgress=onProgress;onProgress=event=>{if(event.phase==='invocation'&&event.invocation){const value=event.invocation,args=value.arguments||{},routed=value.tool==='bridge_tools'&&args.action==='call';const row=invocationJournal.record({...value,...(routed?{tool:args.name,arguments:args.arguments,router:'bridge_tools'}:{}),kind:value.kind||invocationKind(routed?args.name:value.tool,args)},scope);invocationIds.add(row.id);onEvent?.({type:'invocation',record:row});}upstreamProgress(event);};
+    const upstreamProgress=onProgress;onProgress=event=>{if(event.phase==='invocation'&&event.invocation){const value=event.invocation,args=value.arguments||{},routed=value.tool==='bridge_tools'&&args.action==='call';const row=invocationJournal.record({...value,...(routed?{tool:args.name,arguments:args.arguments??value.arguments,attemptedArguments:value.arguments,router:'bridge_tools'}:{}),kind:value.kind||invocationKind(routed?args.name:value.tool,args)},scope);invocationIds.add(row.id);onEvent?.({type:'invocation',record:row});}upstreamProgress(event);};
     if (!Array.isArray(messages) || !messages.length) throw new Error('messages 不能为空');
     const groupContext=prepareLocalGroupContext(messages,{chat:scope.chat,speaker:turnContext.groupSpeaker});
     messages=groupContext.messages;
@@ -712,18 +769,26 @@ export function createLocalModelServer({
     const sourceImages = new Set();
     const waitKey=JSON.stringify([scope.accountId,scope.personaId,scope.chat]);
     const recentWaitNotices=[...(turnContext.recentWaitNotices||[]),...(waitHistory.get(waitKey)||[])].filter(t=>typeof t==='string').slice(-3);
-    const waitNotice=createWaitNotice({emit:event=>onEvent?.(event),style:turnContext.waitStyle,recent:recentWaitNotices,remember:text=>{waitHistory.set(waitKey,[...(waitHistory.get(waitKey)||[]),text].slice(-3));if(waitHistory.size>100)waitHistory.delete(waitHistory.keys().next().value);}});
-    const report=onProgress;let contextState=null;
-    let preparingImage=false;
-    onProgress=event=>{if(event.context)contextState={...contextState,...event.context,reset:contextState?.reset||event.context.reset};if(event.phase==='tool'){if(event.tool==='image'){preparingImage=true;waitNotice.stop();}else waitNotice.start(event.tool);}if(!preparingImage&&['waiting_gpu','waiting_comfy'].includes(event.phase))waitNotice.start('queue');if(['model','understanding','vision','image_prompt'].includes(event.phase))waitNotice.stop('queue');if(event.phase==='tool_done'){preparingImage=false;waitNotice.stop();}report(event);};
+    const report=onProgress;let contextState=null,lastProgress={phase:'preparing'},lastFailure='';
+    const waitElapsed=Number.isFinite(Number(turnContext.waitStartedAt))?Math.max(0,Math.min(180000,Date.now()-Number(turnContext.waitStartedAt))):0;
+    const waitMonitor=createTaskWaitMonitor({delayMs:180000-waitElapsed,style:turnContext.waitStyle,emit:event=>{onEvent?.(event);waitHistory.set(waitKey,[...(waitHistory.get(waitKey)||[]),event.text].slice(-3));},getStatus:async()=>{
+      if(signal?.aborted)return {state:'done'};
+      if(lastFailure)return {state:'failed',reason:lastFailure};
+      if(['waiting_gpu','waiting_comfy'].includes(lastProgress.phase))return {state:'queued'};
+      if(['model','understanding','vision','image_prompt','speech','tool'].includes(lastProgress.phase))return {state:'running'};
+      return {state:'unknown'};
+    }});
+    onProgress=event=>{if(event.context)contextState={...contextState,...event.context,reset:contextState?.reset||event.context.reset};if(event.phase)lastProgress=event;if(event.phase==='tool_done'&&event.ok===false)lastFailure=event.error||'工具未完成';if(event.phase==='tool')lastFailure='';report(event);};
+    waitMonitor.start();
     try {
       const prepared = await imageCaptionMessages(messages, tempFiles, sourceImages, signal,onProgress);
       const request=latestUserText(messages);
       const modelRunner=externalTools.bridge_model_complete?options=>externalTools.bridge_model_complete.execute({messages:options.messages,protocol:options.protocol||'',outputTokens:options.outputTokens||config.maxTokens,purpose:options.purpose||''}):typeof model==='function'?model:config.backend==='openai'?callOpenAIModel:callComfyModel;
       const mediaHistory=groupContext.isGroup?messages:Array.isArray(turnContext.mediaHistory)?turnContext.mediaHistory:messages;
       let mediaTask=resolveLocalMediaTask(request,{history:mediaHistory});
-      if(turnContext.mediaOnly&&['image','speech'].includes(turnContext.mediaOnly.kind))mediaTask={...mediaTask,source:'explicit',ambiguous:false,image:turnContext.mediaOnly.kind==='image',speech:turnContext.mediaOnly.kind==='speech',video:false,effectiveRequest:turnContext.mediaOnly.prompt||request,semanticChecked:true};
-      if(!turnContext.mediaOnly&&turnContext.toolsEnabled!==false){try{mediaTask=await planLocalMediaTask(mediaTask,{request,history:mediaHistory,model:modelRunner,signal,onProgress});}catch(error){if(signal?.aborted)throw error;log('local media intent check deferred; explicit requests preserved');}}
+      if(turnContext.autonomous===true)mediaTask={image:false,speech:false,video:false,ambiguous:false,source:'self',effectiveRequest:request,semanticChecked:true};
+      if(turnContext.mediaOnly&&['image','speech','video'].includes(turnContext.mediaOnly.kind))mediaTask={...mediaTask,source:'explicit',ambiguous:false,image:turnContext.mediaOnly.kind==='image',speech:turnContext.mediaOnly.kind==='speech',video:turnContext.mediaOnly.kind==='video',effectiveRequest:turnContext.mediaOnly.prompt||request,semanticChecked:true};
+      if(!turnContext.autonomous&&!turnContext.mediaOnly&&turnContext.toolsEnabled!==false){try{mediaTask=await planLocalMediaTask(mediaTask,{request,history:mediaHistory,model:modelRunner,signal,onProgress});}catch(error){if(signal?.aborted)throw error;log('local media intent check deferred; explicit requests preserved');}}
       const missingImagePlan=turnContext.personaReferenceDiagnostics?.configured===true&&!turnContext.imagePlan&&!turnContext.personaImage?.dataUrl&&turnContext.personaReferenceDiagnostics?.reason==='no_image_plan';
       const subjectNeedsClarification=missingImagePlan||turnContext.imagePlan?.subjectResolution?.ambiguous||!turnContext.imagePlan?.subjectResolution&&turnContext.personaReferenceDiagnostics?.configured===true&&turnContext.imagePlan&&resolveLocalPhotoSubject(mediaTask.effectiveRequest,{history:mediaHistory}).ambiguous;
       if(mediaTask.image&&subjectNeedsClarification){
@@ -746,23 +811,13 @@ export function createLocalModelServer({
       let moodSource='';
       const acceptMood=(value,source)=>{if(!judgeMood)return;const normalized=normalizeLocalMood(value,request);if(!normalized)return;mood=normalized;moodSource=source;const applied=applyMood(turnContext.mood||{},mood,request,{config:turnContext.moodConfig||{}}),next=moodDelivery(applied.state,{config:turnContext.moodConfig||{}}).emotion;voiceEmotion=applied.accepted&&next!=='auto'?next:baseVoiceEmotion;};
       acceptMood(literalLocalMood(request),'literal-cue');
-      prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:localDialogueInstruction(request)},{role:'system',_localContextKind:'repetition',content:localRepetitionInstruction(messages)});
+      if(!turnContext.autonomous)prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:localDialogueInstruction(request)},{role:'system',_localContextKind:'repetition',content:localRepetitionInstruction(messages)});
       if(judgeMood&&config.maxTokens>=192)prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:localMoodInstruction()});
-      const beforeMedia=async(kind,args,options)=>{
-        if(kind!=='image')return;
-        if(!waitNotice.hasText){
-          try{
-            const persona=messages.find(row=>row.role==='system');
-            const reply=await modelRunner({messages:[{role:'system',content:String(persona?.content||'')+'\n请用当前角色的口吻，结合这次画面要求说一句简短的等待话，表示接下来开始准备图片。不要套用固定口头禅，不承诺已完成，不给秒数，只输出直接对话正文。'},{role:'user',content:JSON.stringify({request,recent:recentWaitNotices})}],tools:[],protocol:'只输出一句等待对话，不调用工具，不写JSON和旁白。',outputTokens:96,signal:options.signal,purpose:'notice',onProgress});
-            const message=reply?.choices?.[0]?.message||reply?.message||reply;
-            if(!message?.tool_calls?.length)waitNotice.set(typeof reply==='string'?reply:contentText(message?.content));
-          }catch(error){if(options.signal?.aborted)throw error;issues.record({kind:'notice',message:String(error.message||error)},scope);}
-        }
-        waitNotice.announce(kind);
-      };
+      const beforeMedia=null;
       const plan=fastDialoguePlan(request,{messages,hasImages:sourceImages.size>0,pending:turnContext.features?.pending>0,maxTokens:config.maxTokens,judgeMood,priority:config.dialoguePriority});
       if(mediaTask.image||mediaTask.speech||mediaTask.video||mediaTask.ambiguous)plan.fast=false;
       if(!config.fastDialogue)plan.fast=false;
+      if(turnContext.autonomous===true)plan.fast=false;
       if(config.dialoguePriority==='quality'&&plan.fast&&!mediaTask.semanticChecked){
         try{
           const meaning=await understandLocalTurn(prepared,{request,model:modelRunner,signal,onProgress});
@@ -775,11 +830,14 @@ export function createLocalModelServer({
           }
         }catch(error){if(signal?.aborted||error.name==='AbortError')throw error;log('local understanding deferred; original input preserved');}
       }
-      if(config.dialoguePriority==='quality'&&!plan.fast)prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:QUALITY_CONVERSATION_RULES});
+      if(!turnContext.autonomous&&config.dialoguePriority==='quality'&&!plan.fast)prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:QUALITY_CONVERSATION_RULES});
       const stream=createDialogueStream({request,messages,paragraphs:config.dialoguePriority==='quality',emit:(text,index)=>onEvent?.({type:'text',text,index})});
       onProgress({priority:config.dialoguePriority,mode:plan.fast?'dialogue':'tools',outputTokens:plan.fast?plan.outputTokens:config.maxTokens});
       let mediaOnlyIssued=false;
       const makeAgent=fast=>createLocalAgent({
+        continueAcrossBudgets:!fast&&turnContext.autonomous!==true,
+        onCheckpoint:checkpoint=>onProgress({phase:'invocation',invocation:{id:'local-checkpoint:'+(scope.auditId||randomUUID())+':'+checkpoint.phase,tool:'local.task.checkpoint',kind:'tool',status:'returned',purpose:'保存本地多步任务进度',result:checkpoint}}),
+        executeTool:(name,args,execute)=>{if(name==='image'&&imageExecutionInquiry(request))throw Error('当前是在询问已有图片的生成过程，不执行新的生图任务');if(name==='video'&&!turnContext.mediaOnly&&localVideoObservationRequest(request))throw Error('当前要求观看已有视频，不能调用生成视频工作流；应使用 bridge_watch');return Object.hasOwn(externalTools,name)?execute():scheduleToolBreaker.run(turnContext.scheduleScope,name,args,execute);},
         model:async options=>{
           if(turnContext.mediaOnly){if(mediaOnlyIssued)return {content:JSON.stringify({action:'final',text:''})};mediaOnlyIssued=true;const task=turnContext.mediaOnly;return {content:JSON.stringify({action:task.kind,arguments:task.kind==='speech'?{text:task.prompt}:{prompt:task.prompt,...(task.workflowId?{workflowId:task.workflowId}:{})}})};}
           const result=await modelRunner({...options,protocol:fast?(config.dialoguePriority==='quality'?QUALITY_DIALOGUE_RULES:FAST_DIALOGUE_RULES):options.protocol+'\n'+WAIT_NOTICE_RULE+(recentWaitNotices.length?'\n最近的等待提示（本轮不要复用）：'+JSON.stringify(recentWaitNotices):''),...(fast?{fastDialogue:true,outputTokens:plan.outputTokens,...(onEvent&&!groupContext.isGroup&&!asksOutfit(request)&&config.streamDialogue&&options.purpose!=='repair'?{onText:delta=>stream.feed(delta)}:{})}:{})});
@@ -787,15 +845,16 @@ export function createLocalModelServer({
           return result;
         },
         requiredSpeech:turnContext.toolsEnabled!==false&&mediaTask.speech,
-        requiredDataTools:turnContext.toolsEnabled!==false&&externalTools.bridge_tools?localRequiredDataTools(request):[],
+        expectAction:turnContext.autonomous===true&&turnContext.expectAction===true,
+        requiredDataTools:!turnContext.autonomous&&turnContext.toolsEnabled!==false&&externalTools.bridge_tools?[...new Set([...(localVideoObservationRequest(request)?['bridge_watch']:localRequiredDataTools(request))])]:[],
         requiredMedia:turnContext.toolsEnabled===false?[]:[...(mediaTask.image?[{kind:'image',prompt:mediaTask.effectiveRequest}]:[]),...(mediaTask.video?[{kind:'video',prompt:mediaTask.effectiveRequest}]:[])],
         terminalMedia:mediaTask.image&&!mediaTask.speech&&!mediaTask.video&&!/(?:介绍|解释|说明|分析|描述|点评|评价|搜索|查找|视频)/.test(request)?['image']:[],
-        tools: fast||turnContext.toolsEnabled===false||mediaTask.ambiguous?{}:{...configuredTools(injectedTools, sourceImages,()=>voiceEmotion,personaReference,turnContext.imagePlan?async(args,selected,options)=>{
+        tools: fast||turnContext.toolsEnabled===false||mediaTask.ambiguous?{}:{...(turnContext.autonomous?{}:configuredTools(injectedTools, sourceImages,()=>voiceEmotion,personaReference,turnContext.imagePlan?async(args,selected,options)=>{
           const imageRequest=turnContext.imagePlan.subjectResolution?.source==='recent-human-photo'?turnContext.imagePlan.humanRequest:mediaTask.effectiveRequest;
-          const prepared=await prepareLocalImagePrompt({args,plan:{...turnContext.imagePlan,humanRequest:imageRequest},workflow:selected,reference:personaReference,root,model:modelRunner,signal:options.signal,onProgress:event=>{onProgress(event);if(event.promptPreparation)options.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,tool:'image',status:'started',promptPreparation:event.promptPreparation}});},maxTokens:config.maxTokens,contextWindow:config.memoryProfile==='8gb'?4096:0,conversation:messages,operationReview:{intent:'image',resolvedRequest:imageRequest}});
+          const prepared=await prepareLocalImagePrompt({args,plan:{...turnContext.imagePlan,humanRequest:imageRequest},workflow:selected,reference:personaReference,root,model:modelRunner,signal:options.signal,onProgress:event=>{onProgress(event);if(event.promptPreparation)options.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,tool:'image',status:'started',promptPreparation:event.promptPreparation}});},maxTokens:config.maxTokens,contextWindow:config.memoryProfile==='8gb'?(await capabilityDetector.snapshot()).contextWindow:0,conversation:messages,operationReview:{intent:'image',resolvedRequest:imageRequest}});
           options.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',imagePlan:{ownPortrait:turnContext.imagePlan.ownPortrait,portraitSource:turnContext.imagePlan.portraitSource,cameraConstraint:turnContext.imagePlan.cameraChinese||turnContext.imagePlan.cameraEnglish,characterName:turnContext.imagePlan.characterName,camera:turnContext.imagePlan.camera,framing:turnContext.imagePlan.framing,lifeContext:turnContext.imagePlan.lifeContext,styleTags:turnContext.imagePlan.styleTags},preparedPrompt:prepared.prompt,modelProfile:prepared.modelProfile}});
           return {...args,prompt:prepared.prompt,negativePrompt:prepared.negativePrompt,fixedPrompts:prepared.fixedPrompts,recomposeScene:turnContext.imagePlan.ownPortrait===true&&!!personaReference&&(!args.image||args.image===personaReference.file)};
-        }:null,beforeMedia,turnContext.personaReferenceDiagnostics),...gatewayMediaOverrides(externalTools,beforeMedia),...Object.fromEntries(Object.entries(withoutInternalMediaTools(externalTools)).map(([name,tool])=>[name,{...tool,execute:async(args,options)=>{
+        }:null,beforeMedia,turnContext.personaReferenceDiagnostics,turnContext.promptPreferences||turnContext.imagePlan?.promptPreferences)),...gatewayMediaOverrides(externalTools,beforeMedia),...Object.fromEntries(Object.entries(withoutInternalMediaTools(externalTools)).map(([name,tool])=>[name,{...tool,execute:async(args,options)=>{
           const raw=reconcileLocalToolAudio(name,args,await tool.execute(args,options));
           const {localObservations=[],...result}=typeof raw==='string'?{ok:true,text:raw}:raw||{};
           const observed=[];
@@ -816,18 +875,18 @@ export function createLocalModelServer({
         replyQualityRisk:groupContext.isGroup?value=>localGroupReplyRisk(value,{request}):()=>null,
         stripSpokenText:(value,spoken)=>repeatRequested(request)||/(?:文字|文本).{0,8}(?:和|与|加|以及|也要).{0,8}(?:语音|音频)|(?:语音|音频).{0,8}(?:和|与|加|以及|也要).{0,8}(?:文字|文本)/.test(request)?value:prepareLocalReply(value,{request,spoken}),
         onProgress,
-        onWaitText:value=>waitNotice.set(value),onMood:value=>acceptMood(value,'model'),acceptMixedActions:!requestedFormatting(request),
+        onWaitText:()=>{},onMood:value=>acceptMood(value,'model'),acceptMixedActions:!requestedFormatting(request),
       });
       let result;
-      try{result=await makeAgent(plan.fast).run({messages:prepared,signal});}catch(error){
+      try{result=turnContext.toolsEnabled!==false&&localGroupSendRequest(request)?await executeLocalGroupSend({request,messages:prepared,tools:externalTools,model:modelRunner,signal,onProgress}):await makeAgent(plan.fast).run({messages:prepared,signal});}catch(error){
         if(error.code==='LOCAL_FAST_TOOLS'&&!stream.parts.length){onProgress({mode:'tools'});result=await makeAgent(false).run({messages:prepared,signal});}
         else throw error;
       }
-      const failed=unresolvedLocalReceipts(result.receipts);
+      const failed=unresolvedLocalReceipts(result.receipts).filter(r=>!(turnContext.autonomous&&result.continuation&&r.limited));
       for(const row of failed)issues.record({id:row.invocationId?'local:'+row.invocationId:'local:'+scope.auditId+':'+row.tool+':'+(row.at||''),kind:row.tool,message:row.error},scope);
       if(result.error)issues.record({id:'local:partial:'+scope.auditId,kind:'chat',message:result.error},scope);
       if(failed.length||result.error)result={...result,text:''};
-      result={...result,text:alignOutfitReply(result.text,request,turnContext.personaState)};
+      result={...result,text:formatLocalChatParagraphs(alignOutfitReply(result.text,request,turnContext.personaState),{request})};
       const delivered=stream.finish(cleanLocalReply(result.text,{request}));
       if(!delivered.consistent){result={...result,text:stream.parts.join('\n'),partial:true};}
       result.streamedParts=stream.parts.length;
@@ -838,6 +897,7 @@ export function createLocalModelServer({
         text: cleanLocalReply(result.text,{request}),
         streamedParts:result.streamedParts||0,
         partial:result.partial===true,
+        ...(result.continuation?{continuation:result.continuation}:{}),
         spokenText: result.spokenText || '',
         attachments: result.attachments.filter(item => ['speech', 'image', 'video'].includes(item.kind)),
         receipts: publicReceipts(result.receipts),invocations:invocationJournal.list({limit:240}).filter(row=>invocationIds.has(row.id)),
@@ -850,7 +910,7 @@ export function createLocalModelServer({
         ...(contextState?{context:contextState}:{}),
       };
     } finally {
-      waitNotice.stop();
+      waitMonitor.stop();
       for (const file of tempFiles) try {
         rmSync(file, {recursive: true, force: true});
       } catch {}
@@ -888,7 +948,7 @@ export function createLocalModelServer({
     return {
       ok: true,
       service: 'local-ai',
-      version: '1.59.1',
+      version: gatewayVersion,
       execution:execution.snapshot(),
       config: publicLocalConfig(config),
       chat: {backend: config.backend, model: config.modelId, chatWorkflow: config.chatWorkflow, comfy: comfy.reachable === true, workflows: comfy.workflows || []},
@@ -898,8 +958,8 @@ export function createLocalModelServer({
         detection:await capabilityDetector.snapshot(),
         streaming: {enabled:config.streamDialogue,available:config.backend==='comfyui'?(await runtime.streamStatus?.())?.available===true:null,backend:config.backend},
         speech: config.voiceEnabled,
-        image: mediaWorkflowSpecs(config).some(item => item.kind === 'image'),
-        video: mediaWorkflowSpecs(config).some(item => item.kind === 'video'),
+        image: mediaWorkflowSpecs(config).some(item => item.kind === 'image' && item.id === config.defaultWorkflows?.image),
+        video: mediaWorkflowSpecs(config).some(item => item.kind === 'video' && item.id === config.defaultWorkflows?.video),
         vision: {enabled:config.visionMode!=='off',mode:config.visionMode,route:visionRoute()},
         memory: {profile:config.memoryProfile,serial:true,gpu:comfy.gpu||[],externalServiceManaged:config.backend==='openai'},
         workflowLibrary: config.workflowLibrary,
@@ -907,6 +967,7 @@ export function createLocalModelServer({
     };
   }
 
+  const diagnosticCleanupTimer=setInterval(maintainDiagnosticLogs,60*60*1000);diagnosticCleanupTimer.unref?.();
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     const origin = req.headers.origin;
@@ -925,7 +986,7 @@ export function createLocalModelServer({
     }
     if(url.pathname==='/v1/local/issues'&&req.method==='GET'){sendJson(res,200,{issues:issues.list()});return;}
     if(url.pathname==='/v1/local/voices'&&req.method==='GET'){void serviceVoices(voiceService(),{fetchImpl,signal:AbortSignal.timeout(5000)}).then(voices=>sendJson(res,200,{voices,selected:config.voicePreset||voiceId})).catch(error=>sendJson(res,502,{error:{message:String(error.message)}}));return;}
-    if(url.pathname==='/v1/local/invocations'&&req.method==='GET'){sendJson(res,200,{records:invocationJournal.list({limit:240}),mediaRoot:resolve(config.mediaDir)});return;}
+    if(url.pathname==='/v1/local/invocations'&&req.method==='GET'){maintainDiagnosticLogs();sendJson(res,200,{records:invocationJournal.list({limit:240}),mediaRoot:resolve(config.mediaDir)});return;}
     if(url.pathname==='/v1/local/capabilities'&&req.method==='GET'){
       void capabilityDetector.snapshot().then(value=>sendJson(res,200,value)).catch(error=>sendJson(res,503,{error:{message:String(error.message)}}));return;
     }
@@ -955,10 +1016,13 @@ export function createLocalModelServer({
       return;
     }
 
-    if(req.method==='POST'&&['/v1/local/workflow/inspect','/v1/local/workflow/import','/v1/local/models'].includes(url.pathname)){
+    if(req.method==='POST'&&url.pathname==='/v1/local/workflow/parameters'){
+      void(async()=>{try{sendJson(res,200,await workflowParameters(JSON.parse((await readBody(req))||'{}')));}catch(error){sendJson(res,400,{error:{message:String(error.message).slice(0,1000)}});}})();return;
+    }
+    if(req.method==='POST'&&['/v1/local/workflow/inspect','/v1/local/workflow/import','/v1/local/workflow/delete','/v1/local/models'].includes(url.pathname)){
       void(async()=>{try{
         const body=JSON.parse((await readBody(req))||'{}');
-        const result=url.pathname.endsWith('/inspect')?await analyzeWorkflow(body):url.pathname.endsWith('/import')?importWorkflow(body):await availableModels(body.baseUrl||config.modelBaseUrl);
+        const result=url.pathname.endsWith('/inspect')?await analyzeWorkflow(body):url.pathname.endsWith('/import')?importWorkflow(body):url.pathname.endsWith('/delete')?deleteWorkflow(body):await availableModels(body.baseUrl||config.modelBaseUrl);
         sendJson(res,200,result);
       }catch(error){sendJson(res,400,{error:{message:String(error?.message||error).slice(0,1500)}});}})();return;
     }
@@ -974,8 +1038,8 @@ export function createLocalModelServer({
           chatWorkflowManagement:true,
           workflowLibrary: mediaWorkflowSpecs(config),
           defaultWorkflows: config.defaultWorkflows,
-          imageConfigured: mediaWorkflowSpecs(config).some(item => item.kind === 'image'),
-          videoConfigured: mediaWorkflowSpecs(config).some(item => item.kind === 'video'),
+          imageConfigured: mediaWorkflowSpecs(config).some(item => item.kind === 'image' && item.id === config.defaultWorkflows?.image),
+          videoConfigured: mediaWorkflowSpecs(config).some(item => item.kind === 'video' && item.id === config.defaultWorkflows?.video),
         },
       });
       return;
@@ -1022,13 +1086,13 @@ export function createLocalModelServer({
     if (req.method === 'POST' && url.pathname === '/v1/audio/speech') {
       const controller = abortFromResponse(req, res);
       void (async () => {
-        const leave=priority.enter();const task=execution.start('speech','speech'),onProgress=event=>execution.update(task,event);let speechScope={};
+        const leave=priority.enter();const task=execution.start('speech','speech');let speechScope={};const onProgress=event=>{execution.update(task,event);if(event.phase==='invocation'&&event.invocation)invocationJournal.record(event.invocation,{...speechScope,backend:'local'});};
         try {
           const body = JSON.parse((await readBody(req)) || '{}');
           speechScope=body.recordScope||{};
           const input = String(body.input || '').trim();
           if (!input) throw new Error('input 不能为空');
-          const bytes = await speakBytes(input, {signal: controller.signal, preset: body.voice && body.voice !== 'default' ? body.voice : voiceId,onProgress});
+          const bytes = await speakBytes(input, {signal: controller.signal, preset: body.voice && body.voice !== 'default' ? body.voice : voiceId,instructions:String(body.instructions||''),presentationPreferences:body.promptPreferences,onProgress});
           execution.finish(task,{result:{attachments:[{kind:'speech'}]}});
           sendAudio(res, bytes);
         } catch (error) {
@@ -1073,26 +1137,33 @@ export function createLocalModelServer({
       const controller = abortFromResponse(req, res);
       void (async () => {
         const started = Date.now();
-        const leave=priority.enter();
+        let leave=()=>{};
         const task=execution.start('turn');
         const onProgress=event=>execution.update(task,event);
-        let streaming=false,bodyContext={};
+        let streaming=false,bodyContext={},parentToken='';
         const emit=event=>{if(!streaming||res.destroyed)return;res.write(JSON.stringify({event:event.type,...event})+'\n');};
         const finish=(status,body)=>{if(streaming){res.end(JSON.stringify({event:'result',status,body})+'\n');}else sendJson(res,status,body);};
         try {
           const body = JSON.parse((await readBody(req)) || '{}');
+          const autonomous=body.origin==='initiative';
+          if(autonomous){
+            if(config.backend==='comfyui'&&!targetedInterrupt&&!injectedRuntime)throw Object.assign(Error('本地主动任务等待可安全让路的运行环境'),{code:'LOCAL_ANALYSIS_DEFERRED'});
+            leave=priority.beginBackground(controller);
+            parentToken=String(body.turnContext?.autonomyId||'');
+            if(parentToken){if(initiativeParents.has(parentToken))throw Error('主动任务标识正在使用');initiativeParents.set(parentToken,controller);}
+          }else leave=priority.enter();
           bodyContext=body.turnContext||{};streaming=body.stream===true;
           if(streaming){res.writeHead(200,{'content-type':'application/x-ndjson; charset=utf-8','cache-control':'no-store'});res.write('{"event":"start"}\n');}
-          lastForegroundAt=Date.now();execution.update(task,{origin:body.origin||(body.toolSession?'qq':'api')});
+          if(!autonomous)lastForegroundAt=Date.now();execution.update(task,{origin:body.origin||(body.toolSession?'qq':'api')});
           execution.update(task,{features:body.turnContext?.features});
           const claimed=body.toolSession?toolBroker.claim(body.toolSession,controller.signal):null;
           let result;
-          try{result=await runTurn(Array.isArray(body.messages)?body.messages:[],{signal:controller.signal,externalTools:claimed?.tools||{},onProgress,turnContext:body.turnContext&&typeof body.turnContext==='object'?body.turnContext:{},onEvent:streaming?emit:null});}finally{claimed?.close();}
+          try{result=await analysisScope.run(autonomous,()=>runTurn(Array.isArray(body.messages)?body.messages:[],{signal:controller.signal,externalTools:claimed?.tools||{},onProgress,turnContext:body.turnContext&&typeof body.turnContext==='object'?body.turnContext:{},onEvent:streaming?emit:null}));}finally{claimed?.close();}
           execution.finish(task,{result});
           stats.turns += 1;
           stats.chat += 1;
           stats.lastChatAt = Date.now();
-          lastForegroundAt=Date.now();
+          if(!autonomous)lastForegroundAt=Date.now();
           log('local turn done elapsedMs='+(Date.now()-started)+' attachments='+result.attachments.length);
           finish(200, {...result, elapsedMs: Date.now() - started});
         } catch (error) {
@@ -1103,8 +1174,8 @@ export function createLocalModelServer({
           lastForegroundAt=Date.now();
           if(!controller.signal.aborted)issues.record({id:'local:error:'+(bodyContext.recordScope?.auditId||randomUUID()),kind:'chat',message:stats.lastError},issueScope(bodyContext));
           log('local turn error elapsedMs='+(Date.now()-started)+' '+stats.lastError);
-          finish(controller.signal.aborted ? 499 : 500, {error: {message:stats.lastError,userMessage:localIssueReply(error),type:'local_turn_error'}});
-        }finally{leave();}
+          finish(controller.signal.aborted ? 499 : 500, {error: {message:stats.lastError,userMessage:localIssueReply(error),type:'local_turn_error',code:String(error?.code||'').slice(0,100)}});
+        }finally{if(parentToken&&initiativeParents.get(parentToken)===controller)initiativeParents.delete(parentToken);leave();}
       })();
       return;
     }
@@ -1113,10 +1184,13 @@ export function createLocalModelServer({
       const controller = abortFromResponse(req, res);
       void (async () => {
         const started = Date.now();
-        let task=null,ownsAnalysis=false,leavePriority=()=>{};const onProgress=event=>execution.update(task,event);
+        let task=null,ownsAnalysis=false,leavePriority=()=>{},detachParent=()=>{};const onProgress=event=>execution.update(task,event);
         try {
           const body = JSON.parse((await readBody(req)) || '{}');
-          if(body.analysis===true){
+          const parent=body.initiativeParent?initiativeParents.get(String(body.initiativeParent)):null;
+          if(body.initiativeParent&&(!parent||parent.signal.aborted))throw Object.assign(Error('本地主动任务已结束，未启动旧任务的辅助生成'),{code:'LOCAL_ANALYSIS_DEFERRED'});
+          if(parent){const abort=()=>controller.abort(parent.signal.reason);parent.signal.addEventListener('abort',abort,{once:true});detachParent=()=>parent.signal.removeEventListener('abort',abort);}
+          if(body.analysis===true&&!parent){
             if(config.backend==='comfyui'&&!targetedInterrupt&&!injectedRuntime){sendJson(res,503,{error:{message:'后台本地分析暂缓：当前服务未验证能只停止自己的任务，QQ 请求优先',type:'local_analysis_deferred'}});return;}
             leavePriority=priority.beginBackground(controller); 
             if(analysisPending||Date.now()-lastForegroundAt<30000){sendJson(res,503,{error:{message:'聊天优先，后台分析等待空闲时段',type:'local_analysis_deferred'}});return;}
@@ -1125,9 +1199,9 @@ export function createLocalModelServer({
             const state=config.backend==='comfyui'?await executionStatus():{execution:execution.snapshot()};
             if(state.execution.active.length||config.backend==='comfyui'&&(!state.comfyQueue.reachable||state.comfyQueue.running||state.comfyQueue.pending)){sendJson(res,503,{error:{message:'聊天和手动任务优先，后台分析稍后重试',type:'local_analysis_deferred'}});return;}
           }
-          if(body.analysis!==true)leavePriority=priority.enter();
-          task=execution.start('chat',body.analysis===true?'analysis':'api');
-          const result = await analysisScope.run(body.analysis===true,()=>runOrdinaryChat(Array.isArray(body.messages) ? body.messages : [], {signal: controller.signal,onProgress,outputTokens:body.analysis===true?Math.min(body.fullBudget===true?config.maxTokens:384,Number(body.max_tokens)||384):body.max_tokens}));
+          if(body.analysis!==true&&!parent)leavePriority=priority.enter();
+          task=execution.start('chat',parent?'initiative-helper':body.analysis===true?'analysis':'api');
+          const result = await analysisScope.run(body.analysis===true||!!parent,()=>runOrdinaryChat(Array.isArray(body.messages) ? body.messages : [], {signal: controller.signal,onProgress,outputTokens:body.analysis===true?Math.min(body.fullBudget===true?config.maxTokens:384,Number(body.max_tokens)||384):body.max_tokens}));
           execution.finish(task,{result});
           const answer = String(result.text || '');
           stats.chat += 1;
@@ -1155,7 +1229,7 @@ export function createLocalModelServer({
           stats.errors += 1;
           stats.lastError = String(error?.message || error).slice(0, 300);
           sendJson(res, controller.signal.aborted ? 499 : error.retryable?503:500, {error: {message: stats.lastError, type: 'local_model_error'}});
-        } finally {leavePriority();if(ownsAnalysis)analysisPending=false;}
+        } finally {detachParent();leavePriority();if(ownsAnalysis)analysisPending=false;}
 
       })();
       return;
@@ -1171,7 +1245,7 @@ export function createLocalModelServer({
       return publicLocalConfig(config);
     },
     async close() {
-      toolBroker.dispose();
+      clearInterval(diagnosticCleanupTimer);toolBroker.dispose();
       if (!server.listening) return;
       await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     },

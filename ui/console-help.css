@@ -1,0 +1,6 @@
+html body #deviceUiBar{display:flex;align-items:center;justify-content:space-between;gap:12px;overflow:visible;position:relative;z-index:80}
+html body #boxHomeHelp{display:block;position:relative;flex:none;font-size:12px}
+#boxHomeHelp summary{display:flex;align-items:center;min-height:36px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;list-style:none;white-space:nowrap;color:var(--ink);background:var(--panel)}
+#boxHomeHelp summary::-webkit-details-marker{display:none}
+#boxHomeHelp .help-popover{position:absolute;right:0;top:calc(100% + 8px);width:min(330px,calc(100vw - 36px));max-height:65dvh;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:0 8px 24px #0002;line-height:1.8;z-index:100}
+#boxHomeHelp p{margin:8px 0 0}

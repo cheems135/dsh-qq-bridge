@@ -1,0 +1,9 @@
+.page-diary .diary-shelf{display:block;max-width:760px;margin-left:auto;margin-right:auto}
+.page-diary .diary-shelf::after{display:none!important}
+.page-diary .diary-sheet{width:100%;box-sizing:border-box}
+.page-diary .diary-sheet>.diary-text{font-family:'Diary Handwriting','LXGW WenKai Lite','KaiTi','STKaiti',cursive;font-size:20px;font-weight:400;line-height:32px;letter-spacing:.025em}
+.page-diary .diary-title{font-size:24px;font-weight:400}
+.page-diary .diary-date{display:flex;gap:10px;align-items:baseline}
+@media(max-width:600px){.page-diary .diary-sheet>.diary-text{font-size:19px;letter-spacing:.01em}.page-diary .diary-title{font-size:22px}}
+
+.save-dock small{color:var(--ink2);font-size:12px}.save-dock[data-state="dirty"] small{color:var(--warn)}.save-dock[data-state="failed"] small{color:var(--danger)}

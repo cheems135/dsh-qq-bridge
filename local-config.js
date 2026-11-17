@@ -1,5 +1,6 @@
 import {localImageMetadata} from './local-image-template.js';
 import {normalizeVoiceService} from './local-voice.js';
+import {normalizeParameterOverrides} from './workflow-parameters.js';
 import {existsSync, statSync} from 'node:fs';
 import {extname, isAbsolute, relative, resolve, sep} from 'node:path';
 
@@ -93,6 +94,7 @@ export function defaultLocalConfig(env = process.env) {
     streamDialogue: true,
     visionMode: 'auto',
     memoryProfile: '8gb',
+    targetedInterrupt:false,
     mediaDir: String(env.LOCAL_MEDIA_DIR || LOCAL_MEDIA_DEFAULT).replace(/\\/g, '/'),
     workflowLibrary: [],
     defaultWorkflows: {image: '', video: ''},
@@ -173,7 +175,8 @@ export function normalizeWorkflowSpec(spec = {}, name = 'workflow') {
   return {
     file,
     inputs,
-    ...(kind==='image'?localImageMetadata(spec):{}),
+    parameterOverrides:normalizeParameterOverrides(spec.parameterOverrides),
+    ...(kind==='image'?localImageMetadata(spec):kind==='video'?{triggerWords:String(spec.triggerWords||'').slice(0,4000)}:{}),
     output: {kind, node: outputNode, field: outputField},
     timeoutMs: finiteNumber(spec.timeoutMs, 600000, `${name}.timeoutMs`, 5000, 3600000, true),
   };
@@ -222,9 +225,10 @@ export function normalizeWorkflowLibrary(value, legacyWorkflows = {}) {
       description: String(item.description || '').trim().slice(0, 800),
       file: normalized.file,
       inputs: normalized.inputs,
+      parameterOverrides:normalized.parameterOverrides,
       output: {...normalized.output, kind:kind==='chat'?'text':kind},
       timeoutMs: normalized.timeoutMs,
-      ...(kind==='image'?localImageMetadata(item):{}),
+      ...(kind==='image'?localImageMetadata(item):kind==='video'?{triggerWords:String(item.triggerWords||'').slice(0,4000)}:{}),
       ...(item.autoDetection && typeof item.autoDetection === 'object' ? {autoDetection: copy(item.autoDetection)} : {}),
     });
   }
@@ -248,6 +252,20 @@ function mergeWorkflow(base, patch, name) {
     : patch, name);
 }
 
+export function removeLocalWorkflow(config,id) {
+  id=String(id||'').trim();
+  if(!id)throw Error('请选择要删除的工作流');
+  const deleted=config.workflowLibrary.find(item=>item.id===id)||null;
+  const patch={workflowLibrary:config.workflowLibrary.filter(item=>item.id!==id),defaultWorkflows:{...config.defaultWorkflows}};
+  // Deleting the active model leaves an explicit empty selection; never pick a preset.
+  if(config.chatWorkflow===id)patch.chatWorkflow='';
+  for(const kind of ['image','video'])if(config.defaultWorkflows?.[kind]===id){
+    patch.defaultWorkflows[kind]='';
+    patch.workflows={...(patch.workflows||config.workflows),[kind]:copy(EMPTY_MEDIA_WORKFLOW)};
+  }
+  return {deleted,config:normalizeLocalConfig(patch,config)};
+}
+
 export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('配置必须是对象');
   const merged = {...copy(base), ...input};
@@ -268,11 +286,18 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
   };
   const workflowLibrary = normalizeWorkflowLibrary(Object.hasOwn(input, 'workflowLibrary') ? input.workflowLibrary : base.workflowLibrary?.length ? base.workflowLibrary : undefined, workflows);
   if (chatWorkflow && !CHAT_WORKFLOWS[chatWorkflow] && !workflowLibrary.some(item=>item.id===chatWorkflow&&item.kind==='chat')) throw new Error('请导入或选择聊天工作流：' + chatWorkflow);
-  if (!workflowLibrary.some(item => item.kind === 'image' && item.id === String(merged.defaultWorkflows?.image || ''))) {
-    merged.defaultWorkflows = {...(merged.defaultWorkflows || {}), image: workflowLibrary.find(item => item.kind === 'image')?.id || ''};
-  }
-  if (!workflowLibrary.some(item => item.kind === 'video' && item.id === String(merged.defaultWorkflows?.video || ''))) {
-    merged.defaultWorkflows = {...(merged.defaultWorkflows || {}), video: workflowLibrary.find(item => item.kind === 'video')?.id || ''};
+  const selectedWorkflows = {};
+  for (const kind of ['image', 'video']) {
+    const entries = workflowLibrary.filter(item => item.kind === kind);
+    const explicitlySelected = Object.hasOwn(input.defaultWorkflows || {}, kind);
+    const selected = String(merged.defaultWorkflows?.[kind] || '');
+    if (selected && !entries.some(item => item.id === selected) && explicitlySelected) {
+      throw new Error(`所选${kind === 'image' ? '图片' : '视频'}工作流不存在，请重新选择`);
+    }
+    // A single existing workflow can be migrated safely. Multiple entries require
+    // an explicit choice; clearing a choice must never silently activate another.
+    selectedWorkflows[kind] = entries.some(item => item.id === selected) ? selected
+      : !explicitlySelected && entries.length === 1 ? entries[0].id : '';
   }
   return {
     backend,
@@ -281,6 +306,7 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
     comfyUrl,
     chatWorkflow,
     visionMode: ['auto','native','caption','off'].includes(merged.visionMode) ? merged.visionMode : (() => {throw new Error('请选择有效的看图方式');})(),
+    targetedInterrupt:merged.targetedInterrupt===true,
     memoryProfile: ['8gb','workflow'].includes(merged.memoryProfile) ? merged.memoryProfile : (() => {throw new Error('请选择有效的显存方案');})(),
     temperature: finiteNumber(merged.temperature, 0.7, 'temperature', 0, 3),
     maxTokens: finiteNumber(merged.maxTokens, 512, 'maxTokens', 32, 32768, true),
@@ -295,10 +321,7 @@ export function normalizeLocalConfig(input = {}, base = defaultLocalConfig()) {
     streamDialogue: merged.streamDialogue !== false,
     mediaDir,
     workflowLibrary,
-    defaultWorkflows: {
-      image: String(merged.defaultWorkflows?.image || ''),
-      video: String(merged.defaultWorkflows?.video || ''),
-    },
+    defaultWorkflows: selectedWorkflows,
     workflows,
   };
 }
@@ -332,16 +355,11 @@ export function mediaWorkflowSpecs(config) {
   return copy(Array.isArray(config.workflowLibrary) ? config.workflowLibrary.filter(item=>['image','video'].includes(item.kind)) : []);
 }
 
-export function resolveMediaWorkflow(config, kind, workflowId = '') {
+export function resolveMediaWorkflow(config, kind) {
   const entries = config.workflowLibrary || [];
-  if (workflowId) {
-    const selected = entries.find(item => item.id === String(workflowId) && item.kind === kind);
-    if (!selected) throw new Error(`没有找到类型为 ${kind} 的工作流：${workflowId}`);
-    return copy(selected);
-  }
-  const selected = entries.find(item => item.kind === kind && item.id === config.defaultWorkflows?.[kind])
-    || entries.find(item => item.kind === kind);
-  if (!selected) throw new Error(`没有配置可用的${kind === 'image' ? '图片' : '视频'}工作流`);
+  const label = kind === 'image' ? '图片' : '视频';
+  const selected = entries.find(item => item.kind === kind && item.id === config.defaultWorkflows?.[kind]);
+  if (!selected) throw new Error(`没有选中当前${label}工作流，请在本地连接页手动选择并保存`);
   return copy(selected);
 }
 

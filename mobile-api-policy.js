@@ -1,6 +1,7 @@
+import {API_CONNECTION_TYPES} from './settings-contract.js';
 // Mobile keeps the shared API features but never starts inference services.
 export const mobileApiMessage='手机版仅支持 API，请在“连接与搭配”选择 API 来源；本地模型和本地生成服务只在电脑版使用。';
-const apiTypes=new Set(['openai','anthropic','responses','runninghub']);
+const apiTypes=new Set(API_CONNECTION_TYPES);
 export function apiOnlySettings(value={},apiOnly=true){
  if(!apiOnly)return value;
  return {...value,localChat:{...value.localChat,enabled:false,apiComplement:false,initiativeEnabled:false},comfyui:{...value.comfyui,enabled:false,localVoiceDir:''},agency:{...value.agency,desktop:false,workspace:'internal',browserExecutable:''},voice:{...value.voice,...(value.voice?.engine==='localai'?{engine:'none',enabled:false}:{})}};
@@ -8,7 +9,7 @@ export function apiOnlySettings(value={},apiOnly=true){
 export function apiOnlyConnections(value={},apiOnly=true){
  if(!apiOnly)return value;
  const profiles=Array.isArray(value.profiles)?value.profiles:[],routes={enabled:false,chat:'host',image:'legacy',speech:'legacy',...value.routes};
- for(const kind of ['chat','image','speech']){
+ for(const kind of ['chat','image','speech','video']){
   const p=profiles.find(p=>'profile:'+p.id===routes[kind]);
   if(routes[kind]==='local'||p&&!apiTypes.has(p.type))routes[kind]=kind==='chat'?'host':'legacy';
  }

@@ -13,3 +13,13 @@ Thumbs.db
 !.env.example
 *.pem
 *.key
+
+# Personal media and generated local assets are not part of the public source release.
+/assets/voice-recipes/
+/assets/sfx-samples/
+/assets/fonts/xiaolai/
+__pycache__/
+*.pyc
+/test-temp/
+/.prompt-preferences-tests/
+/.voice-preference-tests/

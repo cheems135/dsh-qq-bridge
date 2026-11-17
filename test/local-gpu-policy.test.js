@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {applyLocalGpuPolicy,modelBillions} from '../local-gpu-policy.js';
 import {createComfyRuntime} from '../comfyui-runtime.js';
 
+test('9B Q4 native chat uses bounded GPU offload without weakening other large-model protection',()=>{
+ const node={class_type:'QwenTE_ModelLoader',inputs:{'主模型':'Local-9B/model-9B.Q4_K_M.gguf','模型系列':'Qwen3.5-VL','GPU层数':-1,'上下文长度':16384}};
+ const result=applyLocalGpuPolicy({'1':structuredClone(node)},{vision:true});assert.equal(result['1'].inputs['GPU层数'],20);assert.equal(result['1'].inputs['上下文长度'],8192);
+ for(const layers of [0,16]){const copy=structuredClone(node);copy.inputs['GPU层数']=layers;assert.equal(applyLocalGpuPolicy({'1':copy})['1'].inputs['GPU层数'],layers);}
+ const higher=structuredClone(node);higher.inputs['主模型']='model-9B.Q8_0.gguf';assert.equal(applyLocalGpuPolicy({'1':higher})['1'].inputs['GPU层数'],0);
+});
+
 test('8GB profile bounds known Qwen contexts and makes large MoE experts use CPU',()=>{
   const graph={'1':{class_type:'QwenTE_ModelLoader',inputs:{'主模型':'Qwen3.6-35B-A3B-IQ2_M.gguf','模型系列':'Qwen3.6-VL','GPU层数':-1,'上下文长度':32768,'MoE专家上CPU':false,'KV缓存K类型':'f16','KV缓存V类型':'f16'}},'2':{class_type:'QwenTE_ChatSettings',inputs:{'最大边长':2048}}};
   const original=JSON.stringify(graph);

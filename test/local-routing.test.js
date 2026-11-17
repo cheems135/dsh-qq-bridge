@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {localRequirements,chooseLocalRoute,localCompletionInput,createModelRouter} from '../local-routing.js';
 import {estimateTokens} from '../local-context.js';
+import {auditModelCompletion} from '../model-invocation-audit.js';
 const ready=()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:Object.fromEntries(['text','json','tools','vision','asr','speech','image','video'].map(key=>[key,{supported:true}]))});
 test('local mode rejects unsupported capabilities and capacity without choosing an API',()=>{
  for(const field of ['text','json','tools','vision','asr','speech','image','video','native','special']){const c=ready();c.features[field]={supported:false,reason:'未接入'};assert.equal(chooseLocalRoute(c,{[field]:true}).target,'unavailable');}
@@ -36,7 +37,7 @@ test('local failures, pending checks, busy service and unsupported vision never 
 
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 const helpers=source.slice(source.indexOf('  function apiChatRoute('),source.indexOf('\n  const PERSONA_SYSTEM'));
-function host(){let cloud=0,local=0;const s={settings:{activeAccountId:'test',localChat:{enabled:true},model:{}},featureState:{generation:0},apiModeController:new AbortController(),apiModelScope:new AsyncLocalStorage(),cfg:{model:{provider:'example-api',model:'custom-any-model'}},AbortSignal,AbortController,JSON,Date,estimateTokens,localCompletionInput,chooseLocalRoute,createModelRouter,calendarModelStats:[],effectiveModel:()=>s.settings.model?.provider?s.settings.model:s.cfg.model,recordModelRoute:()=>{},getLocalCapabilities:async()=>ready(),ctx:{get:name=>name==='llm'?{async*stream(){cloud++;yield {type:'text-delta',text:'api result'};}}:undefined},requestLocalJson:async()=>{local++;return {ok:true,body:{choices:[{message:{content:'{"items":[]}'}}]}};}};vm.createContext(s);vm.runInContext(helpers+'\nthis.api=askApiModel;this.ask=askModel;',s);return {s,cloud:()=>cloud,local:()=>local};}
+function host(){let cloud=0,local=0;const s={settings:{activeAccountId:'test',localChat:{enabled:true},model:{}},featureState:{generation:0},apiModeController:new AbortController(),apiModelScope:new AsyncLocalStorage(),cfg:{model:{provider:'example-api',model:'custom-any-model'}},AbortSignal,AbortController,JSON,Date,estimateTokens,localCompletionInput,chooseLocalRoute,createModelRouter,auditModelCompletion,recordInvocation:()=>{},invocationScope:()=>({accountId:"test"}),calendarModelStats:[],effectiveModel:()=>s.settings.model?.provider?s.settings.model:s.cfg.model,recordModelRoute:()=>{},getLocalCapabilities:async()=>ready(),ctx:{get:name=>name==='llm'?{async*stream(){cloud++;yield {type:'text-delta',text:'api result'};}}:undefined},requestLocalJson:async()=>{local++;return {ok:true,body:{choices:[{message:{content:'{"items":[]}'}}]}};}};vm.createContext(s);vm.runInContext(helpers+'\nthis.api=askApiModel;this.ask=askModel;',s);return {s,cloud:()=>cloud,local:()=>local};}
 test('actual host helpers isolate local structured analysis from API model selection',async()=>{
  const h=host();assert.equal(await h.s.ask('system','input',200,null,1000,true),'{"items":[]}');assert.equal(h.local(),1);assert.equal(h.cloud(),0);
  await assert.rejects(h.s.api('system','input'),/本地模式/);assert.equal(h.cloud(),0);
@@ -71,7 +72,7 @@ test('complement never replays a local inference that already started',async()=>
 test('mode changes abort old API calls and cancel old bridge jobs exactly once',()=>{
  const transitions=[],oldController=new AbortController();const s={settings:{localChat:{enabled:true}},backendMode:()=>JSON.stringify([s.settings.localChat.enabled===true,s.settings.localChat.apiComplement===true]),savedBackendMode:'[false,false]',state:{chats:{}},saveState:()=>{},featureState:{generation:0},apiModeController:oldController,AbortController,Promise,chats:new Map([['session',{sessionId:'session'}]]),cancelFeatureWork:reason=>transitions.push(reason),ctx:{sessionController:{cancel:()=>transitions.push('session-cancel')}},mkdirSync:()=>{},dirname:()=>'',settingsFile:'unused',writeFileSync:()=>{},renameSync:()=>{},profilesReloading:true,monitorReady:false,log:()=>{}};
  s.isDesktop=true;s.apiOnlySettings=value=>value;s.applyNonpaymentPolicy=applyNonpaymentPolicy;
- vm.createContext(s);vm.runInContext(source.slice(source.indexOf('  function saveSettings()'),source.indexOf('\n  function setPrivateWhitelist'))+'\nthis.save=saveSettings;',s);
+ vm.createContext(s);vm.runInContext(source.slice(source.indexOf('  function saveSettings('),source.indexOf('\n  function setPrivateWhitelist'))+'\nthis.save=saveSettings;',s);
  s.save();assert.equal(oldController.signal.aborted,true);assert.equal(s.apiModeController.signal.aborted,false);assert.equal(transitions.length,2);s.save();assert.equal(transitions.length,2);s.settings.localChat.enabled=false;s.save();assert.equal(transitions.length,4);
 });
 

@@ -32,13 +32,12 @@ test('explicit speech repairs a model promise into one real tool call and does n
 });
 async function fixture(run){const dir=mkdtempSync(join(tmpdir(),'voice-notices-'));let service;try{await run(dir,s=>service=s);}finally{if(service){service.server.closeAllConnections();await service.close();}rmSync(dir,{recursive:true,force:true});}}
 const listen=listenLocalServer;
-test('image wait line is emitted before prompt preparation and image execution; missing metadata uses the same model',async()=>{
+test('quick images do not emit waiting notices or spend an extra model call, even with waitText metadata',async()=>{
  for(const supplied of [true,false])await fixture(async(dir,set)=>{
   const order=[];const graph=join(dir,'graph.json'),config=join(dir,'config.json');writeFileSync(graph,'{}');writeFileSync(config,JSON.stringify({voiceEnabled:false,mediaDir:dir,workflowLibrary:[{id:'pic',kind:'image',name:'图',file:graph,inputs:{prompt:{node:'1',field:'text'}}}]}));
   const service=createLocalModelServer({configFile:config,env:{LOCAL_AI_WORK_DIR:dir},logger:()=>{},runtime:{status:async()=>({reachable:true}),release:async()=>({freed:true}),run:async()=>{order.push('image');const file=join(dir,'image.png');writeFileSync(file,probeColorPng());return {media:[{kind:'image',file}]};}},fetchImpl:async()=>Response.json({loaded:false,busy:false,queue_running:[],queue_pending:[]}),model:async options=>{if(options.purpose==='notice'){order.push('notice-model');assert.deepEqual(options.tools,[]);return '我先给那只猫找个晒太阳的角落，等我一下。';}return JSON.stringify({action:'image',arguments:{prompt:'晒太阳的猫'},...(supplied?{waitText:'给小猫挑个暖和的角落，等我画出来。'}:{})});}});set(service);const base=await listen(service);
   const response=await fetch(base+'/v1/local/turn',{method:'POST',headers:{accept:'application/x-ndjson'},body:JSON.stringify({stream:true,messages:[{role:'user',content:'生成一张晒太阳的猫图'}]})});
-  const lines=(await response.text()).trim().split('\n').map(line=>JSON.parse(line));const notice=lines.find(line=>line.type==='notice');assert.ok(notice,JSON.stringify(lines));assert.equal(notice.source,'model');assert.equal(lines.filter(line=>line.type==='notice').length,1);
-  const submittedIndex=lines.findIndex(line=>line.type==='invocation'&&line.record.status==='returned');assert.ok(lines.indexOf(notice)<submittedIndex);assert.deepEqual(order,supplied?['image']:['notice-model','image']);
+  const lines=(await response.text()).trim().split('\n').map(line=>JSON.parse(line));assert.equal(lines.filter(line=>line.type==='notice').length,0);assert.deepEqual(order,['image']);assert.ok(lines.some(line=>line.type==='invocation'&&line.record.status==='returned'));
  });
 });
 test('speech HTTP route preserves manual VoiceLab work and records failure without sending partial WAV',async()=>{

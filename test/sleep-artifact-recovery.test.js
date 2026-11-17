@@ -1,0 +1,61 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {registerDigitalArtifact} from '../digital-artifacts.js';
+import {createExecutionRuntime} from '../execution-runtime.js';
+import {reconcileArtifactRejections,createLifeExecution} from '../life-execution.js';
+import {createSleepInbox} from '../sleep-inbox.js';
+const source=fs.readFileSync(new URL('../index.js',import.meta.url),'utf8');
+test('artifact refusal explains exact destination, relative import verifies checksum and preserves original',t=>{
+ const dir=fs.mkdtempSync(path.join(process.cwd(),'test-artifact-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const root=path.join(dir,'persona'),workspace=path.join(dir,'task');fs.mkdirSync(root);fs.mkdirSync(workspace);fs.mkdirSync(path.join(workspace,'notes'));const original=path.join(workspace,'notes','完成.md');fs.writeFileSync(original,'已完成的真实作品');
+ const options={workspace,since:Date.now()-10000};const rejected=registerDigitalArtifact(root,'notes/完成.md',options);
+ assert.equal(rejected.status,'not_applied');assert.equal(rejected.submitted,false);assert.equal(rejected.artifactDir,fs.realpathSync(root));assert.match(rejected.nextStep,/action=import/);assert.equal(fs.readdirSync(root).length,0);
+ const imported=registerDigitalArtifact(root,'notes/完成.md',{...options,action:'import'});assert.equal(imported.ok,true);assert.equal(imported.originalPreserved,true);assert.equal(fs.readFileSync(imported.file,'utf8'),fs.readFileSync(original,'utf8'));
+ assert.equal(registerDigitalArtifact(root,original,{...options,action:'import'}).sha256,imported.sha256);assert.equal(fs.readdirSync(root).length,1);
+ const outside=path.join(dir,'outside.md');fs.writeFileSync(outside,'其他文件');assert.equal(registerDigitalArtifact(root,outside,{...options,action:'import'}).status,'not_applied');
+ const missing=registerDigitalArtifact(root,'不存在.md',options);assert.equal(missing.code,'ENOENT');assert.equal(missing.workspaceDir,workspace);
+});
+test('read-only failures cannot deadlock task, unknown native writes and sends still require reconciliation',()=>{
+ for(const [name,args,result,opts,expected] of [
+  ['bridge_life_artifact',{file:'missing'},{ok:false,status:'not_applied',submitted:false,queued:false},{},'not_applied'],
+  ['bridge_life_artifact',{file:'missing'},undefined,{error:'ENOENT'},'failed'],
+  ['write_file',{file:'a'},undefined,{error:'timeout'},'unknown'],
+  ['bridge_life_qq',{action:'send',target:'private:12345'},undefined,{error:'timeout'},'unknown']
+ ]){
+  const settled=[],begun=[];const rt=createExecutionRuntime({policy:{check:()=>({}),consume:()=>{}},metaFor:()=>({}),getLife:()=>({beginStep:(_i,_m,v)=>{begun.push(v);return {step:{id:'s'}};},settleStep:(_i,_m,_s,r)=>settled.push(r)})});
+  const exec={name,arguments:args},c={accountId:'a',personaId:'p',meta:{lifeJobId:'j'}};rt.begin(exec,c);rt.finish(exec,c,result,opts);assert.equal(settled[0].status,expected);if(name==='bridge_life_artifact')assert.equal(begun[0].idempotent,true);
+ }
+});
+test('legacy recovery requires exact host journal and scope, never clears other unknown operations or checkpoints',()=>{
+ const meta={accountId:'a',personaId:'p'},step=()=>({id:'s',status:'unknown',effect:'local',idempotent:false,evidence:{operationId:'op'}}),make=()=>({id:'j',meta,status:'needs_reconcile',at:1,checkpoint:{next:'保留实际进度'},steps:[step()]});
+ const op={id:'op',tool:'bridge_life_artifact',...meta,error:'只登记当前角色自己的数字作品目录中的文件'},data={jobs:[make()]};
+ assert.equal(reconcileArtifactRejections(data,[{...op,personaId:'wrong'}]),0);assert.equal(reconcileArtifactRejections(data,[op]),1);assert.equal(data.jobs[0].status,'paused');assert.equal(data.jobs[0].steps[0].status,'not_applied');assert.equal(data.jobs[0].checkpoint.next,'保留实际进度');assert.equal(reconcileArtifactRejections(data,[op]),0);
+ const mixed={jobs:[make()]};mixed.jobs[0].steps.push({status:'unknown',effect:'send',idempotent:false});reconcileArtifactRejections(mixed,[op]);assert.equal(mixed.jobs[0].status,'needs_reconcile');
+ let saved;const engine=createLifeExecution({storage:{read:()=>({jobs:[make()]}),write:x=>saved=structuredClone(x)},config:()=>({}),roles:()=>[],operationJournal:()=>[op]});assert.equal(saved.jobs[0].steps[0].status,'not_applied');engine.close();
+});
+test('API mode retains sleeping message and original image just like local mode; unmentioned groups stay untouched',()=>{
+ const start=source.indexOf('    if(sleepingPayload(payload)){',source.indexOf('  function handlePayload(')),end=source.indexOf("      const segments=segmentsOf(payload.message),key='private:'",start);assert(end>start);
+ for(const enabled of [false,true]){
+  const captured=[];const deps={settings:{localChat:{enabled}},sleepingPayload:()=>true,sleepInboxScope:()=>({key:'private:12345'}),stopped:false,accountPaused:false,recordsAllowed:()=>true,pausedConversation:()=>false,groupStopped:()=>false,mentionsSelf:()=>false,sleepInbox:{capture:p=>{captured.push(p);return false;}},memoryHub:null};
+  const handle=Function(...Object.keys(deps),'payload',source.slice(start,end)+'}') .bind(null,...Object.values(deps));
+  const p={message_type:'private',user_id:'12345',self_id:'99999',message_id:'m',message:[{type:'image',data:{file:'original'}}]};handle(p);assert.equal(captured.length,1);assert.equal(captured[0].message[0].data.file,'original');handle({...p,message_type:'group'});assert.equal(captured.length,1);
+ }
+});
+test('failed unread admission is retried from retained originals, while ambiguous sends are never replayed',()=>{
+ let rows=[],clock=1000;const scope={accountId:'a',personaId:'p',key:'private:12345'},box=createSleepInbox({getRows:()=>rows,setRows:r=>rows=r,save:()=>{},now:()=>clock});const p={self_id:'9',message_id:'m',message_type:'private',user_id:'12345',time:1,message:[{type:'text',data:{text:'睡醒看看'}}]};box.capture(p,scope);const first=box.batches(()=>true)[0];box.acknowledge(first.rows.map(r=>r.id),first.messageId);assert(rows[0].recoveryPayload);clock+=61000;
+ const job={id:'9:private:12345:'+first.messageId,status:'admitted'},audit={id:'audit',accountId:'a',persona:'p',chat:scope.key,at:1100,inboundIds:['m'],status:'failed'};
+ box.reconcile([job],[audit],[{auditId:'audit',status:'unknown'}]);assert.equal(rows[0].status,'queued');box.reconcile([job],[audit],[]);assert.equal(rows[0].status,'pending');assert.notEqual(box.batches(()=>true)[0].messageId,first.messageId);assert.equal(rows[0].payload.message[0].data.text,'睡醒看看');
+});
+test('sleep review status reflects observed delivery rather than mere queue admission',()=>{
+ let rows=[];const box=createSleepInbox({getRows:()=>rows,setRows:r=>rows=r,save:()=>{},now:()=>100});box.capture({self_id:'9',message_id:'m',time:1,message:[]},{accountId:'a',personaId:'p',key:'private:12345'});const b=box.batches(()=>true)[0];box.acknowledge(b.rows.map(r=>r.id),b.messageId);box.reconcile([],[],[]);assert.equal(rows[0].status,'queued');box.reconcile([],[{id:'a',accountId:'a',persona:'p',chat:'private:12345',at:100,inboundIds:['m'],status:'completed',deliveryState:'sent'}],[]);assert.equal(rows[0].status,'reviewed');assert.equal(rows[0].recoveryPayload,undefined);
+});
+test('real reconnect history path captures sleeping messages without fresh command execution, rejects stale account results',async()=>{
+ const start=source.indexOf('  async function catchUpMissedMessages() {'),end=source.indexOf('  async function sharedContext(',start);assert(end>start);
+ for(const stale of [false,true]){
+  const captured=[],settings={activeAccountId:'a'},featureState={generation:0,inbox:[]};let reviews=0;
+  const deps={stopped:false,accountPaused:false,socket:{ready:true},settings,featureState,lastSelfId:'99999',cfg:{napcat:{}},effectiveUsers:()=>['12345'],effectiveGroups:()=>[],messages:[],state:{},activePersona:()=>({id:'p'}),request:async()=>{if(stale)settings.activeAccountId='changed';return {messages:[{message_id:1,time:Math.floor(Date.now()/1000),user_id:'12345',sender:{user_id:'12345'},message:[{type:'text',data:{text:'睡着时收到的消息'}}]}]};},sleepInboxScope:()=>({accountId:'a',personaId:'p',key:'private:12345'}),recordsAllowed:()=>true,pausedConversation:()=>false,groupStopped:()=>false,mentionsSelf:()=>false,sleepInbox:{capture:(p,s)=>captured.push({p,s})},reviewSleepInbox:()=>reviews++,log:()=>{}};
+  const run=Function(...Object.keys(deps),'let catchUpRunning=false,lastCatchUpAt=0;const catchUpUnavailable=new Set();'+source.slice(start,end)+';return catchUpMissedMessages;')(...Object.values(deps));await run();assert.equal(captured.length,stale?0:1);assert.equal(reviews,stale?0:1);if(!stale)assert.equal(captured[0].p._bridgeCatchUp,true);
+ }
+});

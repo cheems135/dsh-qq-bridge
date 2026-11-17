@@ -53,6 +53,15 @@ export function localRepeatRisk(value,{messages=[],request=''}={}) {
   const common=(left,right)=>{let i=0;while(i<Math.min(left.length,right.length)&&left[i]===right[i])i++;return i;};
   const numbers=value=>(String(value).match(/\d+(?:\.\d+)?/g)||[]).join('|');
   const recent=previous.slice(-3).filter(text=>numbers(text)===numbers(value)).map(plain);
+  if(candidate.length>=32){
+    const width=6,grams=s=>new Set(Array.from({length:Math.max(0,s.length-width+1)},(_,i)=>s.slice(i,i+width)));
+    const currentGrams=grams(candidate),histories=recent.map(grams);
+    for(const older of histories){const shared=[...currentGrams].filter(g=>older.has(g)).length,score=shared/Math.max(1,currentGrams.size);if(shared>=12&&score>=0.68)return {kind:'reused-content',score};}
+    if(histories.length>=2){
+      const covered=new Set();for(let i=0;i<=candidate.length-width;i++){const gram=candidate.slice(i,i+width);if(histories.filter(h=>h.has(gram)).length>=2)for(let j=i;j<i+width;j++)covered.add(j);}
+      if(covered.size>=24&&covered.size/candidate.length>=0.48)return {kind:'reused-topic-loop',score:covered.size/candidate.length};
+    }
+  }
   const opening=String(value).split(/[。！？!?；;\n～~]/u)[0];
   const opener=plain(opening);
   if(opener.length>=3&&opener.length<=10&&previous.slice(-4).filter(text=>plain(text.split(/[。！？!?；;\n～~]/u)[0])===opener).length>=2)return {kind:'persona-opening',score:opener.length/candidate.length};
@@ -66,5 +75,5 @@ export function localRepeatRisk(value,{messages=[],request=''}={}) {
 
 export function localRepetitionInstruction(messages=[]) {
   const previous=recentAssistantReplies(messages);
-  return '【本轮内容优先】先回应对方这一次新说的具体内容。历史和人设示例是背景，不是待续写或逐字复读的范文；人设口头禅不必每轮出现，不能只拿称呼或语气词代替实质回应。不要沿用最近回复的整段内容、固定开场和固定收尾。不为换说法编造事实。明确要求复述或确认时按要求回答。'+(previous.length?'\n最近已说过，避免复读：'+JSON.stringify(previous.slice(-3).map(text=>text.slice(0,140))):'');
+  return '【本轮内容优先】先回应最后一条真实用户消息的新内容，不续写上一条助手回复。历史是理解指代的背景，不是待复述的范文。对方已经答应或追问后，应推进回答，不再次邀请对方做同一件事。保持人设语气，省去已经说过的固定开场、主体和收尾；不能靠换称呼或语气词重复同样意思。旧助手自述不证明实际完成了活动，只有工具回执和可靠状态能证明；不为变化编造新进度。明确要求复述或确认时照要求回答。'+(previous.length?'本轮已有近期助手历史可参考，不要把其中的句子再当答案。':'');
 }

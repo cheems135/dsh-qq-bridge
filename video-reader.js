@@ -1,3 +1,4 @@
+import {visualObservationPolicy,currentVisualFrames} from './visual-observation.js';
 export const VIDEO_READER_REVISION='20261106-continuous-playback-v1';
 // Bounded local FFmpeg sampling. The base path has no Python dependency; the
 // optional video-watch-plus pass only adds audio analysis and cut detection.
@@ -51,7 +52,7 @@ function trustedMedia(url){
   try{
     const parsed=new URL(url);
     return parsed.protocol==='https:'&&!parsed.username&&!parsed.password
-      &&isHost(parsed.hostname,['qq.com','qpic.cn','qq.net']);
+      &&isHost(parsed.hostname,['qq.com','qpic.cn','qq.net','gtimg.cn','gtimg.com','multimedia.nt.qq.com.cn']);
   }catch{return false;}
 }
 
@@ -425,8 +426,9 @@ async function readPlus(data,material,{runtime,config,dir,getCacheDir,signal,spa
 
 export function createVideoReader({
   getConfig,getCacheDir,getPlatformFile,fetchImpl=globalThis.fetch,spawnImpl=spawn,
-  platform=process.platform,env=process.env,mobile=false,continuous=true,
+  platform=process.platform,env=process.env,mobile=false,
 }={}){
+  const continuous=true;
   let busy=false,closed=false;
   const playback=createVideoPlayback({spawnImpl}),streams=new Map(),preparing=new Map(),activeByScope=new Map();
   function configNow(){const c=getConfig?.()||{};return mobile?{...c,mobile:true,allowWhisper:false,whisperModelPath:''}:c;}
@@ -560,11 +562,12 @@ export function createVideoReader({
     if(!entry){let pending=preparing.get(id);if(!pending){const controller=new AbortController(),combined=signal?AbortSignal.any([signal,controller.signal]):controller.signal;pending={controller,promise:null};pending.promise=prepareStream(data,{signal:combined,id,scope}).finally(()=>{if(preparing.get(id)===pending)preparing.delete(id);});preparing.set(id,pending);}entry=await pending.promise;}
     throwIfAborted(signal);entry.usedAt=Date.now();
     if(Number.isFinite(Number(data.start))&&data.start!==undefined){const snap=playback.snapshot(id,scope);if(snap&&Math.abs((Number(snap.at)||0)-Number(data.start))>2){playback.control(id,'seek',{scope,at:Number(data.start)});entry.cursor=-Infinity;}}
-    const result=await playback.read(id,{scope,after:entry.cursor,waitMs:Math.min(5000,Math.max(0,Number(data.waitMs)||2200)),minFrames:4,signal});
+    const result=await playback.read(id,{scope,after:entry.cursor,waitMs:Math.min(5000,Math.max(0,Number(data.waitMs)||2200)),minFrames:1,signal});
     if(result.status==='failed'){discard(id);throw videoError('视频连续解码失败','VIDEO_DECODE');}
     if(Number.isFinite(result.cursor))entry.cursor=result.cursor;
-    return {...result,source:'ffmpeg-realtime',mode:'continuous',continuous:true,positionSource:data.positionSource||'decoder-clock',audioDecoded:false};
+    const selected=currentVisualFrames(result.frames,data);
+    return {...result,frames:selected,observationMode:'playback-clock',visualBudget:visualObservationPolicy(data),source:'ffmpeg-realtime',mode:'continuous',continuous:true,positionSource:data.positionSource||'decoder-clock',audioDecoded:false};
   }
 
-  return{read:continuous?readContinuous:readSnapshot,status,control,close,reset};
+  return{read:readContinuous,status,control,close,reset};
 }

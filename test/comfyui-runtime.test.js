@@ -50,6 +50,25 @@ test('Comfy output is downloaded and written only after MIME verification', asyn
   }
 });
 
+test('video submission appends the selected workflow LoRA triggers once and logs the actual prompt',async()=>{
+  const mediaDir=mkdtempSync(join(tmpdir(),'video-trigger-'));
+  const original={'1':{inputs:{text:''}},'2':{inputs:{}}};
+  const events=[];let submitted;
+  const runtime=createComfyRuntime({root:process.cwd(),getConfig:{baseUrl:'http://127.0.0.1:8188',mediaDir,workflows:{motion:{api:original,triggerWords:'motion_style\n<lora:motion:0.8>\nmotion_style',inputs:{prompt:{node:'1',field:'text'}},output:{node:'2',field:'videos',kind:'video'},timeoutMs:5000}}},fetchImpl:async(url,init={})=>{
+    if(url.endsWith('/prompt')){submitted=JSON.parse(init.body).prompt;return Response.json({prompt_id:'video-trigger'});}
+    if(url.includes('/history/video-trigger'))return Response.json({'video-trigger':{outputs:{'2':{videos:[{filename:'result.mp4',subfolder:'',type:'output'}]}}}});
+    if(url.includes('/view?'))return new Response(Buffer.from('000000186674797069736f6d00000000','hex'),{headers:{'content-type':'video/mp4'}});
+    throw Error('Unexpected request '+url);
+  }});
+  try{
+    const result=await runtime.run('motion',{prompt:'窗边挥手，motion_style'},{onInvocation:e=>events.push(e)});
+    assert.equal(result.ok,true);
+    assert.equal(submitted['1'].inputs.text,'窗边挥手，motion_style\n<lora:motion:0.8>');
+    assert.equal(original['1'].inputs.text,'');
+    assert.equal(events.find(e=>e.submittedArguments)?.submittedArguments.prompt,submitted['1'].inputs.text);
+  }finally{rmSync(mediaDir,{recursive:true,force:true});}
+});
+
 test('native Comfy images are uploaded and bound to the chat node on a private workflow copy',async()=>{
   const directory=mkdtempSync(join(tmpdir(),'native-upload-'));
   const {writeFileSync}=await import('node:fs');const image=join(directory,'input.png');writeFileSync(image,Buffer.from('89504e470d0a1a0a','hex'));

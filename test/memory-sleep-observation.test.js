@@ -1,3 +1,4 @@
+import {readConsoleSource} from './console-source.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -5,7 +6,15 @@ import vm from 'node:vm';
 import {createMemoryHub} from '../memory-hub.js';
 import {createLifeExecution} from '../life-execution.js';
 import {createLocalGroupWindow} from '../local-group-window.js';
-const source=readFileSync(new URL('../index.js',import.meta.url),'utf8'),html=readFileSync(new URL('../console.html',import.meta.url),'utf8');
+const source=readFileSync(new URL('../index.js',import.meta.url),'utf8'),html=readConsoleSource();
+test('actual sleep transition releases each turn and still cancels the session without a scope error',async()=>{
+ let released=0,cancelled=0;const chat={key:'private:1',sessionId:'s',pendingTurns:['old'],turns:new Map([['turn',{resumeObservation:()=>released++,resumeWake:()=>released++}]])};
+ const start=source.indexOf('      stop:async(m,options={})=>{',source.indexOf('lifeExecution=createLifeExecution(')),end=source.indexOf('\n      notify:',start);
+ const code=source.slice(start,end).trim().replace(/^stop:/,'').replace(/,$/,'');
+ const deps={localInitiative:null,effectiveGroups:()=>[],localTurns:new Map(),chats:new Map([['s',chat]]),activePersona:()=>({id:'p'}),videoReader:null,videoScope:()=>'',ctx:{sessionController:{cancel:async()=>cancelled++}},clearSilenceTimer:()=>{},clearAfterTimer:()=>{}};
+ await Function(...Object.keys(deps),'return ('+code+');')(...Object.values(deps))({personaId:'p',accountId:'a'});
+ assert.equal(released,2);assert.equal(cancelled,1);assert.deepEqual(chat.pendingTurns,[]);
+});
 function extract(code,name,deps={}){const start=code.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0,name);for(let end=code.indexOf('}',start);end>=0;end=code.indexOf('}',end+1)){let factory;try{factory=Function(...Object.keys(deps),'return ('+code.slice(start,end+1)+');');}catch(error){if(error instanceof SyntaxError)continue;throw error;}return factory(...Object.values(deps));}throw Error(name);}
 function memoryFixture(){const files=new Map();let now=Date.now();const hub=createMemoryHub({storage:{list:()=>[...files.keys()],read:n=>{if(!files.has(n))throw Object.assign(Error('missing'),{code:'ENOENT'});return structuredClone(files.get(n));},write:(n,v)=>files.set(n,structuredClone(v))},allowed:m=>m.accountId==='a',now:()=>now,signature:()=> 'v'});const meta=key=>({key,accountId:'a',personaId:'p',personaVersion:'v'});const record=(key,speakerId,text,extra={})=>hub.record(meta(key),{dir:'in',text,speakerId,messageId:String(++now),time:now,...extra});return {hub,meta,record};}
 test('actual shared hub recalls a persons public group self-report in their private conversation without nickname matching',async()=>{
@@ -46,6 +55,21 @@ test('explicit wake is temporary and resuming rest takes effect without a model 
  const h=sleepFixture();h.engine.wake(h.role.meta);assert.equal(h.engine.asleep(h.role.meta),false);h.advance(20*60000+1);assert.equal(h.engine.asleep(h.role.meta),true);
  h.engine.wake(h.role.meta,{minutes:5});assert.equal(h.engine.asleep(h.role.meta),false);h.engine.rest(h.role.meta);assert.equal(h.engine.asleep(h.role.meta),true);
  h.actual={date:'2026-11-06',start:'23:10',activity:'我决定现在睡觉',taskKind:'sleep',actual:true};assert.equal(h.engine.asleep(h.role.meta),true);
+});
+
+test('waking survives a renamed or adjacent sleep slot and continued conversation refreshes idle time',()=>{
+ const h=sleepFixture();h.engine.wake(h.role.meta,{minutes:10});h.advance(2*60000);
+ h.plan={date:'2026-11-07',start:'00:00',end:'01:00',activity:'继续睡眠',taskKind:'sleep',planned:true};
+ assert.equal(h.engine.asleep(h.role.meta),false);assert.equal(h.engine.touchAwake(h.role.meta),true);
+ h.advance(9*60000);assert.equal(h.engine.asleep(h.role.meta),false);h.advance(60001);assert.equal(h.engine.asleep(h.role.meta),true);
+});
+test('long generation does not consume the awake conversation window, and explicit rest remains effective',()=>{
+ const h=sleepFixture();h.engine.wake(h.role.meta,{minutes:5});const release=h.engine.holdAwake(h.role.meta);
+ h.advance(30*60000);assert.equal(h.engine.asleep(h.role.meta),false);release();release();
+ h.advance(4*60000);assert.equal(h.engine.asleep(h.role.meta),false);h.engine.rest(h.role.meta);assert.equal(h.engine.asleep(h.role.meta),true);
+});
+test('the scheduler does not dispatch the old sleep plan immediately after waking',async()=>{
+ const h=sleepFixture();h.engine.wake(h.role.meta);await h.engine.tick();assert.equal(h.dispatches,0);assert.equal(h.engine.asleep(h.role.meta),false);assert.equal(h.engine.snapshot(h.role.meta).jobs[0].status,'paused');
 });
 test('API and local use the same 120-second observation clock and generation pauses it independently for each group',()=>{
  for(const local of [false,true]){let time=0;const settings={activeAccountId:'a',localChat:{enabled:local}},window=createLocalGroupWindow({now:()=>time}),meta={accountId:'a',personaId:'p'},deps={Date:{now:()=>time},settings,localGroupWindow:window,localGroupKey:(m,g)=>JSON.stringify([m.accountId,m.personaId,g]),calendarMeta:()=>meta,activePersona:()=>({id:'p'})};

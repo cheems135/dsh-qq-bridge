@@ -1,0 +1,29 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';import {join} from 'node:path';
+import {describeWorkflowParameters,validateParameterOverrides,applyWorkflowParameters} from '../workflow-parameters.js';
+import {normalizeLocalConfig} from '../local-config.js';import {createComfyRuntime} from '../comfyui-runtime.js';
+import {createLocalModelServer} from '../local-model-server.mjs';import {listenLocalServer} from './local-server-listen.js';
+const graph={'1':{class_type:'TestGenerator',inputs:{prompt:'original',steps:12,seed:123,top_p:0.9,temperature:0.7,max_tokens:128,sampler_name:'euler',enable_thinking:false}},'99':{class_type:'TestGenerator',inputs:{steps:4}}};
+const info={TestGenerator:{input:{required:{prompt:['STRING'],steps:['INT',{min:1,max:60,step:1}],seed:['INT',{min:0,max:9999}],top_p:['FLOAT',{min:0,max:1}],temperature:['FLOAT',{min:0,max:2}],max_tokens:['INT',{min:32,max:1024}],sampler_name:[['euler','heun']],enable_thinking:['BOOLEAN']}},output:['STRING'],output_node:true}};
+const spec={id:'native',name:'Test',kind:'chat',file:'unused.json',inputs:{prompt:{node:'1',field:'prompt'},temperature:{node:'1',field:'temperature'},maxTokens:{node:'1',field:'max_tokens'}},output:{kind:'text',node:'1',field:'text'}};
+test('node metadata supplies bounds, enums and controls, while unreachable and prompt inputs stay untouched',()=>{
+ const desc=describeWorkflowParameters(graph,info,spec);assert.ok(desc.parameters.some(p=>p.field==='steps'&&p.max===60));assert.ok(desc.parameters.some(p=>p.field==='sampler_name'&&p.options.includes('heun')));assert.ok(desc.parameters.some(p=>p.managedBy==='maxTokens'));assert.ok(desc.parameters.every(p=>p.node!=='99'&&p.field!=='prompt'));
+ for(const row of [{node:'1',field:'steps',value:61},{node:'1',field:'steps',value:2.5},{node:'1',field:'sampler_name',value:'arbitrary'},{node:'1',field:'prompt',value:'changed'},{node:'1',field:'temperature',value:0.2}])assert.throws(()=>validateParameterOverrides([row],desc));
+ const overrides=validateParameterOverrides([{node:'1',field:'steps',value:20},{node:'1',field:'enable_thinking',value:true}],desc);const changed=applyWorkflowParameters(structuredClone(graph),{...spec,parameterOverrides:overrides});assert.equal(changed['1'].inputs.steps,20);assert.equal(graph['1'].inputs.steps,12);assert.equal(changed['1'].inputs.prompt,'original');
+});
+test('saved parameters survive normal config normalization and cannot overwrite conversation input',()=>{
+ const config=normalizeLocalConfig({backend:'comfyui',chatWorkflow:'native',workflowLibrary:[{...spec,file:'workflow.json',parameterOverrides:[{node:'1',field:'top_p',value:0.8}]}]});assert.equal(config.workflowLibrary[0].parameterOverrides[0].value,0.8);
+ assert.throws(()=>applyWorkflowParameters(structuredClone(graph),{...spec,parameterOverrides:[{node:'1',field:'prompt',value:'hijack'}]}),/失效/);
+});
+test('real runtime submits saved parameters after dynamic bindings and preserves the source workflow',async()=>{
+ let submitted;const runtime=createComfyRuntime({getConfig:()=>({enabled:true,baseUrl:'http://comfy',memoryProfile:'workflow',workflows:{chat:{...spec,inputs:{...spec.inputs,text:spec.inputs.prompt},api:graph,parameterOverrides:[{node:'1',field:'steps',value:27},{node:'1',field:'seed',value:77}]}}}),fetchImpl:async(url,init={})=>{
+ if(url.endsWith('/prompt')){submitted=JSON.parse(init.body).prompt;return Response.json({prompt_id:'owned'});}if(url.includes('/history/'))return Response.json({owned:{outputs:{'1':{text:['ok']}}}});throw Error('Unexpected '+url);
+ }});const result=await runtime.run('chat',{text:'new request',seed:999});assert.equal(result.text,'ok');assert.equal(submitted['1'].inputs.steps,27);assert.equal(submitted['1'].inputs.seed,77);assert.equal(submitted['1'].inputs.prompt,'new request');assert.equal(graph['1'].inputs.steps,12);
+});
+test('HTTP parameter save validates metadata, rejects stale edits, persists and reads back without inference',async()=>{
+ const dir=mkdtempSync(join(process.cwd(),'parameters-test-')),file=join(dir,'config.json'),workflow=join(dir,'workflow.json');writeFileSync(workflow,JSON.stringify(graph));writeFileSync(file,JSON.stringify({backend:'comfyui',chatWorkflow:'native',workflowLibrary:[{...spec,file:workflow}]}));let inference=0;
+ const service=createLocalModelServer({configFile:file,logger:()=>{},env:{LOCAL_AI_WORK_DIR:dir},runtime:{queue:async()=>({running:0,pending:0}),close:()=>{}},model:async()=>{inference++;throw Error('No inference allowed');},fetchImpl:async url=>{if(url.endsWith('/object_info'))return Response.json(info);throw Error('Unexpected '+url);}});const base=await listenLocalServer(service);
+ const call=async body=>{const response=await fetch(base+'/v1/local/workflow/parameters',{method:'POST',body:JSON.stringify({workflowId:'native',...body})});return {status:response.status,data:await response.json()};};
+ try{const first=await call({action:'describe'});assert.equal(first.status,200);const rows=[{node:'1',field:'steps',value:24}];const saved=await call({action:'save',fingerprint:first.data.fingerprint,parameters:rows});assert.equal(saved.status,200);assert.deepEqual(JSON.parse(readFileSync(file,'utf8')).workflowLibrary[0].parameterOverrides,rows);assert.equal(saved.data.parameters.find(p=>p.field==='steps').effectiveValue,24);assert.equal((await call({action:'save',fingerprint:first.data.fingerprint,parameters:[]})).status,400);assert.equal((await call({action:'save',fingerprint:saved.data.fingerprint,parameters:[{node:'1',field:'steps',value:999}]})).status,400);const reread=await call({action:'describe'});assert.equal(reread.data.parameters.find(p=>p.field==='steps').value,24);assert.equal(inference,0);}
+ finally{service.server.closeAllConnections();await service.close();rmSync(dir,{recursive:true,force:true});}
+});

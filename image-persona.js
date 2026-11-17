@@ -157,22 +157,10 @@ export function emptyReferenceInputs(entry) {
   return (entry.discovery?.fields||[]).filter(field=>field.type==='IMAGE'&&!auxiliaryImage.test([field.fieldName,field.label,field.nodeName].join(' '))&&!sameImageSlot(field,primary)&&!(entry.extraNodes||[]).some(extra=>sameImageSlot(extra,field)&&String(extra.fieldValue??'').trim())).map(field=>({nodeId:field.nodeId,fieldName:field.fieldName}));
 }
 export function routePersonaWorkflow(config,{selector='',styles=[],hasReference=false}={}) {
-  const list=(config.workflows||[]).filter(w=>w.mode==='app'?w.webappId:w.workflowId);
-  if(selector){const matches=list.filter(w=>[w.id,w.name,w.mode==='app'?w.webappId:w.workflowId].includes(selector));if(matches.length!==1)throw Error('未找到唯一的已配置工作流');return matches[0].id;}
-  const score=w=>{
-    const tags=w.style&&w.style!=='auto'?[w.style]:visualStyles([w.name,w.note,w.discovery?.title].join(' '));
-    const match=styles.some(s=>tags.includes(s));
-    const targets=hasReference?[...referenceBindings(w),...referenceReuseBindings(w)]:[];
-    const cleared=hasReference&&targets.length?emptyReferenceInputs(w):[];
-    const missingMedia=(w.discovery?.requiredFields||[]).some(f=>/^(IMAGE|AUDIO|VIDEO)$/.test(f.type)&&![...targets,...cleared].some(t=>t.nodeId===f.nodeId&&t.fieldName===f.fieldName)&&!(w.extraNodes||[]).some(n=>n.nodeId===f.nodeId&&n.fieldName===f.fieldName&&String(n.fieldValue??'').trim()));
-    return (tags.includes(styles[0])?100:match?60:styles.length&&tags.length?-100:0)+(w.id===config.activeWorkflowId?1:0)-(missingMedia?500:0);
-  };
-  // Prefer usable identity-image inputs within the requested aesthetic. A text-only
-  // workflow remains valid when no compatible reference workflow is configured.
-  const imageCandidates=hasReference?list.filter(w=>referenceInput(w)):[];
-  let candidates=imageCandidates.length?imageCandidates:list;
-  candidates=candidates.map((w,i)=>({w,i,score:score(w)})).sort((a,b)=>b.score-a.score||a.i-b.i);
-  return candidates[0]?.w.id||'';
+  const active=(config.workflows||[]).find(w=>w.id===config.activeWorkflowId);
+  if(!active)throw Error('没有选中当前图片工作流，请在图像生成页手动选择并保存');
+  if(!(active.mode==='app'?active.webappId:active.workflowId))throw Error('当前图片工作流还没有配置应用或工作流 ID，请在图像生成页补全');
+  return active.id;
 }
 
 const changeableAppearance=/(?:穿|换装|衣服|衣着|穿搭|上衣|外套|裙|裤|睡衣|泳装|制服|发型|头发|长发|短发|马尾|丸子头|辫|披发|扎发|刘海|头饰|发饰|发箍|发带|发卡|发夹|帽子|头巾|蝴蝶结|戴|摘|headwear|headband|headpiece|outfit|wear|dress|shirt|skirt|hairstyle|ponytail|braid|bun\b|hair)/i;
