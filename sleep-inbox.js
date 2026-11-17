@@ -8,16 +8,44 @@ export function createSleepInbox({getRows,setRows,save,now=Date.now}={}){
   const row={id,scope:{...scope},at:now(),status:'pending',payload:structuredClone(payload)};setRows([...rows,row]);save();return true;
  }
  function batches(current){
-  const groups=new Map();for(const row of getRows()){if(row.status!=='pending'||!current(row.scope))continue;const key=JSON.stringify(row.scope);const group=groups.get(key)||[];if(group.length&&Buffer.byteLength(JSON.stringify(group.concat(row)))>55000)continue;group.push(row);groups.set(key,group);}
+  const groups=new Map();for(const row of getRows()){if(row.status!=='pending'||!current(row.scope))continue;const key=JSON.stringify(row.scope);const group=groups.get(key)||[];group.push(row);groups.set(key,group);}
+  const omitted=new Set();
+  for(const [key,group] of groups){
+   if(!group[0].scope.key.startsWith('group:'))continue;
+   group.sort((a,b)=>a.at-b.at);
+   let kept=group.slice(-20);
+   while(kept.length>1&&Buffer.byteLength(JSON.stringify(kept))>55000)kept=kept.slice(1);
+   for(const row of group)if(!kept.includes(row))omitted.add(row.id);
+   groups.set(key,kept);
+  }
+  if(omitted.size){setRows(getRows().map(row=>omitted.has(row.id)?{...row,status:'skipped',skippedAt:now(),skipReason:'group-sleep-context-limit',payload:undefined}:row));save();}
+  for(const [key,group] of groups)if(!group[0].scope.key.startsWith('group:')){const kept=[];for(const row of group){if(kept.length&&Buffer.byteLength(JSON.stringify(kept.concat(row)))>55000)continue;kept.push(row);}groups.set(key,kept);}
   return [...groups.values()].map(rows=>{
    const latest=rows.at(-1),parts=[];for(const row of rows){const p=row.payload,date=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date((Number(p.time)||row.at/1000)*1000));parts.push({type:'text',data:{text:'\n【睡眠期间未读 · '+date+' · '+String(p.sender?.card||p.sender?.nickname||p.user_id)+'（'+p.user_id+'）】\n'}});parts.push(...(Array.isArray(p.message)?p.message:[{type:'text',data:{text:String(p.message||'')}}]));}
-   const messageId='sleep-review-'+hash(rows.map(r=>[r.id,r.retries||0]));return {rows,messageId,payload:{...structuredClone(latest.payload),message_id:messageId,time:Math.floor(now()/1000),message:[{type:'text',data:{text:'醒来后检查这些未读消息。'+SLEEP_REVIEW_RULE}},...parts],_sleepReview:true,_bridgeReceivedIds:rows.map(r=>String(r.payload.message_id)),_groupAttentionApproved:true}};
+   const messageId='sleep-review-'+hash(rows.map(r=>[r.id,r.retries||0]));return {rows,messageId,payload:{...structuredClone(latest.payload),message_id:messageId,time:Math.floor(now()/1000),message:[{type:'text',data:{text:'醒来后检查这些未读消息。'+SLEEP_REVIEW_RULE}},...parts],_sleepReview:true,_bridgeReceivedIds:rows.map(r=>String(r.payload.message_id)),_groupAttentionApproved:latest.payload.message_type==='group'}};
   });
  }
  function acknowledge(ids,reviewMessageId=''){const wanted=new Set(ids);setRows(getRows().map(r=>wanted.has(r.id)?{...r,status:'queued',queuedAt:now(),reviewMessageId,recoveryPayload:r.payload,payload:undefined}:r));save();}
+ function quarantine(ids,reviewMessageId=''){
+  const wanted=new Set(ids);let count=0;
+  setRows(getRows().map(r=>{if(!wanted.has(r.id)||r.status!=='pending')return r;count++;return {...r,status:'admission-unknown',admissionUnknownAt:now(),reviewMessageId,recoveryPayload:r.payload,payload:undefined};}));
+  if(count)save();return count;
+ }
  function reconcile(inbox=[],audits=[],outbox=[]){
   let changed=false;
   const rows=getRows().map(r=>{
+   if((r.status==='pending'&&r.payload)||(r.status==='admission-unknown'&&r.recoveryPayload)){
+    // A previous private review could bypass queue admission but still send.
+    // Settle it from the actual delivery record instead of replaying it.
+    const original=r.payload||r.recoveryPayload;
+    const alreadyAnswered=audits.some(a=>a.accountId===r.scope.accountId&&(a.personaId||a.persona)===r.scope.personaId&&a.chat===r.scope.key&&a.at>=r.at&&(a.inboundIds||[]).includes(String(original.message_id))&&(a.status==='silent'||a.deliveryState==='sent'));
+    if(alreadyAnswered){changed=true;return {...r,status:'reviewed',reviewedAt:now(),payload:undefined,recoveryPayload:undefined};}
+    if(r.status==='admission-unknown'){
+     const job=inbox.find(j=>j.id===String(original.self_id)+':'+r.scope.key+':'+r.reviewMessageId);
+     if(job){changed=true;return {...r,status:'queued',queuedAt:now(),recoveryPayload:original};}
+    }
+    return r;
+   }
    if(r.status!=='queued'||!r.recoveryPayload||!r.reviewMessageId)return r;
    const p=r.recoveryPayload,job=inbox.find(j=>j.id===p.self_id+':'+r.scope.key+':'+r.reviewMessageId);
    const audit=audits.filter(a=>a.accountId===r.scope.accountId&&(a.personaId||a.persona)===r.scope.personaId&&a.chat===r.scope.key&&a.at>=r.queuedAt&&(a.inboundIds||[]).includes(String(p.message_id))).at(-1);
@@ -30,5 +58,5 @@ export function createSleepInbox({getRows,setRows,save,now=Date.now}={}){
   });
   if(changed){setRows(rows);save();}return changed;
  }
- return {capture,batches,acknowledge,reconcile};
+ return {capture,batches,acknowledge,quarantine,reconcile};
 }
