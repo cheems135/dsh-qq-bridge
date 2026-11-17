@@ -6,6 +6,7 @@ import {groupSpeakerLabel,groupReplyBinding,groupReplyContext,groupAddressConfli
 import {mergeGroupWindow} from '../group-conversation.js';
 import {localGroupAttentionInput} from '../local-group-attention.js';
 import {qqParagraphGroups,cleanOutgoingText,deliveryFingerprint,existingDelivery} from '../qq-reliability.js';
+import {deliveryCommitmentId} from '../commitments.js';
 const settings={owners:['1000000001'],activeAccountId:'a'};
 const message=(user_id='1000000003',text='怎么回事？',message_id=15)=>({message_type:'group',group_id:'200000001',self_id:'1000000002',user_id,message_id,sender:{nickname:'相同昵称'},message:[{type:'text',data:{text}}]});
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
@@ -56,7 +57,7 @@ test('one rewrite only, invalid rewrites withheld, no calls for correct address 
 function queueFixture(){
  const binding=groupReplyBinding(message(),settings),audit={id:'audit1',accountId:'a',persona:'p',groupReply:binding,outboxIds:[]};
  const featureState={outbox:[],proactiveContacts:[]};let flushes=0;
- const deps={qqParagraphGroups,cleanOutgoingText,deliveryFingerprint,existingDelivery,groupAddressConflict,groupDeliverySegments,featureState,settings,stripUnrequestedActions:v=>v,lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),deliveryScopeCurrent:()=>true,personaContextIdentity:()=> 'v',calendarSafeText:v=>v,groupStopped:()=>false,auditById:v=>v===audit.id?audit:null,noteDeliveryIssue:()=>{},markReplyDelivery:()=>{},recipientDenial:()=>'',recordsAllowed:()=>true,wrongOwnerAddress:()=>false,privateInitiativeAllowed:()=>true,randomUUID,stopped:false,accountPaused:false,proactiveCheck:()=>'',reserveProactive:()=>{},proactiveIncoming:()=>0,log:()=>{},saveFeatures:()=>true,logDelivery:()=>{},flushOutbox:()=>{flushes++;}};
+ const deps={qqParagraphGroups,cleanOutgoingText,deliveryFingerprint,existingDelivery,deliveryCommitmentId,groupAddressConflict,groupDeliverySegments,featureState,settings,stripUnrequestedActions:v=>v,lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),deliveryScopeCurrent:()=>true,personaContextIdentity:()=> 'v',calendarSafeText:v=>v,groupStopped:()=>false,auditById:v=>v===audit.id?audit:null,noteDeliveryIssue:()=>{},markReplyDelivery:()=>{},recipientDenial:()=>'',recordsAllowed:()=>true,wrongOwnerAddress:()=>false,privateInitiativeAllowed:()=>true,randomUUID,stopped:false,accountPaused:false,proactiveCheck:()=>'',reserveProactive:()=>{},proactiveIncoming:()=>0,log:()=>{},saveFeatures:()=>true,logDelivery:()=>{},flushOutbox:()=>{flushes++;}};
  const queue=extract('queueOutgoing',deps),chat={key:'group:200000001',kind:'group',chatId:'200000001',userId:'999999999',auditId:'audit1',turnKind:'user',deliveryKey:'local:turn-a'};
  return {queue,chat,audit,featureState,get flushes(){return flushes;}};
 }

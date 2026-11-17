@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createCommitments} from '../commitments.js';
+import {createCommitments,deliveryCommitmentId} from '../commitments.js';
 
 const plan=(trigger={kind:'now'})=>({action:'plan',goal:'把答应的资料发出去',doneWhen:'目标会话能读回完整资料',next:'整理资料并核对发送',trigger});
 const privateContext=(personaId='p',accountId='a')=>({key:'private:123',accountId,personaId,chat:{kind:'private',isOwner:true,userId:'123'},meta:{kind:'user',speakerId:'123',userWords:'请稍后把资料发出去'}});
@@ -10,6 +10,11 @@ function harness(initial={version:1,jobs:[],sleep:{}}){
  const ledger=createCommitments({read:()=>structuredClone(state),write:value=>{state=structuredClone(value);},now:()=>clock,dispatch:async job=>{calls.push(job);return true;},isOwner:c=>c.chat?.kind==='group'?c.meta?.speakerId==='123':c.chat?.isOwner===true});
  return {ledger,calls,state:()=>structuredClone(state),advance:ms=>{clock+=ms;}};
 }
+
+test('a promise acknowledgement cannot masquerade as the promised QQ operation',()=>{
+ assert.equal(deliveryCommitmentId({key:'private:123'}),'');
+ assert.equal(deliveryCommitmentId({key:'private:123',commitmentId:'job-1'}),'job-1');
+});
 
 test('owner promise in a group is persisted for the same owner private chat, without leaking to other actors or personae',async()=>{
  const h=harness(),group=groupContext(),owner=privateContext();

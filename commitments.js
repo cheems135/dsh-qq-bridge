@@ -6,6 +6,9 @@ const scope=c=>JSON.stringify([c.accountId||'',c.personaId||'',ownerId(c)]);
 const terminal=new Set(['completed','cancelled']);
 const pendingResult=new Set(['queued','sending','pending','accepted','unknown','unconfirmed','failed','cancelled']);
 const confirmed=r=>r.ok===true&&r.unknown!==true&&(r.verified===true||!r.reference&&!pendingResult.has(r.status));
+// An ordinary proactive reply may announce an intention, but it is not the
+// promised operation. Only the actual tool-send target carries this ID.
+export const deliveryCommitmentId=chat=>clean(chat?.commitmentId,100);
 export const COMMITMENT_RULES='【约定与连续任务】对号主明确答应稍后执行或多步办理的事项，先用bridge_commitment plan保存目标、触发条件和完成标准；你自己在主动回合明确决定并承诺要做的事，也要保存。普通闲聊、引用和假设不建立任务，不把猜测当约定。当前可做用now，明确时间用带时区的ISO时间，醒后用wake，收到特定消息用message。条件尚未出现不要提前执行。每个实际阶段完成后checkpoint记录已确认进度和下一步；同一轮能继续就继续，不要每做一步都等用户催。需要用户补资料时block；结果未知或发送尚未读回时reconcile，先核对而不重复操作。任务完成用complete，取消用cancel。工具任务必须有真实结果回执；排队、口头答应、打开工具目录或计划不算完成。表达仍按当前人设，不逐步播报内部状态。';
 export const COMMITMENT_PROPERTIES={action:{type:'string',enum:['plan','list','checkpoint','complete','block','reconcile','resume','cancel']},id:{type:'string'},goal:{type:'string'},doneWhen:{type:'string'},next:{type:'string'},summary:{type:'string'},reason:{type:'string'},trigger:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:['now','time','wake','message']},at:{type:'string',description:'含时区的ISO时间'},phrases:{type:'array',items:{type:'string'},maxItems:8}},required:['kind']}};
 
