@@ -20,6 +20,16 @@ test('local and API directors share scene, schedule, style, camera and identity 
  assert.equal(actual.prompt,referencePromptPrefix('zh',reference.description,false,plan.characterName)+' '+finishImagePrompt(lockLocalPortraitCamera(expected.prompt,plan,'zh'),'二维二次元插画。'));assert.equal(actual.negativePrompt,expected.negativePrompt);
 });
 
+test('a model-added rear camera is corrected before local selfie submission',async()=>{
+ let drafts=0,reviews=0;
+ const actual=await prepareLocalImagePrompt({args:{prompt:'portrait'},plan,workflow,reference,root:process.cwd(),model:async options=>{
+  const system=options.messages[0].content,brief=JSON.parse(options.messages[1].content);
+  if(system.startsWith('【图像细节核对】')){reviews++;assert.equal(brief.requirements.camera,'front');assert.match(brief.finalPrompt,/前置自拍/);return '{"ok":true,"missing":[]}';}
+  drafts++;return JSON.stringify({prompt:drafts===1?prompt.replace('前置自拍','后置第一人称'):prompt,style:'二维二次元插画。'});
+ }});
+ assert.equal(drafts,2);assert.equal(reviews,1);assert.match(actual.prompt,/参考图为人设图/);assert.match(actual.prompt,/前置自拍/);assert.doesNotMatch(actual.prompt,/后置第一人称/);
+});
+
 test('scene omissions cannot reach image submission and missing reference bindings are explicit',async()=>{
  let calls=0;
  await assert.rejects(prepareLocalImagePrompt({args:{prompt:'portrait'},plan,workflow,reference,root:process.cwd(),model:async options=>{calls++;return options.messages[0].content.startsWith('【图像细节核对】')?'{"ok":false,"missing":["缺少实际场景，只有白底立绘"]}':JSON.stringify({prompt,style:'二维二次元插画。'});}}),/细节或日程核对未通过/);assert.equal(calls,6);

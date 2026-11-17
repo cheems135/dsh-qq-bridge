@@ -1,4 +1,5 @@
 import {qqTaskEvidence} from '../qq-task-evidence.js';
+import {conversationExecutionGrounding} from '../initiative-grounding.js';
 import {foldAuxiliaryUsage} from '../usage-accounting.js';
 import {groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply} from '../group-identity.js';
 import {CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor} from '../context-demand.js';
@@ -67,6 +68,8 @@ function setup(){
   sandbox.requestLocalJson=async(url,options)=>{if(url.endsWith('/v1/local/priority'))return {ok:true,status:200,body:{ok:true}};const response=await sandbox.fetch(url,{...options,body:JSON.stringify(options.body)});return {ok:response.ok,status:response.status,body:await response.json()};};
   sandbox.invocationJournal=createInvocationJournal({getRows:()=>sandbox.featureState.invocations||[],setRows:rows=>sandbox.featureState.invocations=rows});
   vm.createContext(sandbox);
+  sandbox.conversationExecutionGrounding=conversationExecutionGrounding;
+  vm.runInContext(source.slice(source.indexOf('  function conversationExecutionHint('),source.indexOf('  async function nudge(')),sandbox);
   const invocationSource=source.slice(source.indexOf('  function recordInvocation(event,scope)'),source.indexOf('\n  function invocationScope('));
   const identitySource=source.slice(source.indexOf('  function groupBindingFor(chat)'),source.indexOf('  function sendText(chat,text)'));
   vm.runInContext(identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
@@ -85,6 +88,7 @@ test('actual bridge function preserves account/persona/chat scope and current in
   const rows=h.calls[0].body.messages;
   assert.equal(rows.filter(r=>r.content==='本条请求').length,1);
   assert.ok(rows.some(r=>r.content==='有效历史'));
+  assert.ok(rows.some(r=>String(r.content).includes('【经历与执行状态】')&&String(r.content).includes('没调用不是失败')));
   assert.ok(rows.some(r=>String(r.content).includes('【本轮真实时间】')&&String(r.content).includes('有效历史')));
   assert.ok(!rows.some(r=>/其他账号|其他人设|其他联系人/.test(r.content)));
   assert.equal(h.logged.filter(r=>r.text==='本条请求').length,1);

@@ -101,4 +101,11 @@ test('actual photo plan uses the retrieved shared outfit, retains scenery and re
  deps.auditById=()=>({userWords:'这张自拍换成红色连衣裙'});
  const override=extract('photoPromptPlan',deps)('角色的自拍',{key:'private:11111111',auditId:'audit'});assert.equal(override.lifeContext.override.outfit,true);assert.equal(wardrobeReads,1);
  const landscape=extract('photoPromptPlan',deps)('只画风景，不要人物',{key:'private:11111111'});assert.equal(landscape.ownPortrait,false);assert.equal(wardrobeReads,1);
+ deps.auditById=()=>({userWords:'发张你的日常照，看看你正在做什么'});
+ deps.featureState.photoCompositions=[{key:'private:11111111',accountId:'a',personaId:'p',camera:'front',framing:'upper'}];
+ const selfie=extract('photoPromptPlan',deps)('角色本人坐在书桌前，后置第一人称，手中拿着书',{key:'private:11111111',auditId:'audit'});
+ assert.equal(selfie.camera,'front');assert.equal(selfie.ownPortrait,true);assert.match(selfie.cameraChinese,/自拍/);
+ deps.auditById=()=>({userWords:'发张你的照片，请朋友他拍全身'});
+ const external=extract('photoPromptPlan',deps)('角色本人在书桌前自拍',{key:'private:11111111',auditId:'audit'});
+ assert.equal(external.camera,'external');assert.equal(external.framing,'full');
 });

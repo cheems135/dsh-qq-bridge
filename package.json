@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.62.88",
+  "version": "1.62.89",
   "private": true,
   "type": "module",
   "description": "QQ 桥接：手机与电脑共用 API 核心，电脑版另支持本地",

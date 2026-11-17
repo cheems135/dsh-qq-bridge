@@ -31,10 +31,10 @@ export function matchesPersonaSubject(request,{name='',appearance=''}={}) {
 export function personaCamera(text, ownPortrait) {
   text=String(text);
   const positive=re=>{for(const m of text.matchAll(new RegExp(re.source,'gi')))if(!/(?:不要|避免|禁止|不用|别|不是|不需要|no |not )[^，,。；;!?！？\n]{0,5}$/i.test(text.slice(Math.max(0,m.index-14),m.index)))return true;return false;};
-  const rear=positive(/后置|后镜|后摄|rear.?camera|first.person|第一人称|我的视角|你的视角|眼前/);
+  const rear=positive(/后置|后镜|后摄|rear.?camera|first.person|第一人称|我的视角|你的视角/);
   const mirror=positive(/对镜|镜子.{0,5}自拍|mirror selfie/);
-  const external=positive(/第三人称|他拍|别人.{0,4}(?:拍|镜头)|摄影师|third.person|taken by (?:someone|a friend)/);
-  const front=/(?:前置|前镜|前摄|front.?camera|自拍|selfie)/i.test(text)&&!/(?:不要|别|避免|不需要).{0,3}(?:自拍|selfie)/i.test(text);
+  const external=positive(/第三人称|他拍|旁拍|旁观视角|他人拍摄|外部视角|别人.{0,4}(?:拍|镜头)|摄影师|third.person|external view|taken by (?:someone|a friend)/);
+  const front=positive(/前置|前镜|前摄|front.?camera|自拍|selfie/);
   const noSelf=/(?:不要|别|避免|不需要).{0,3}(?:自拍|selfie)/i.test(text);
   const camera=external?'external':mirror?'mirror':rear?'rear':(front||ownPortrait&&!noSelf)?'front':'scene';
   const english={
@@ -54,15 +54,14 @@ export function personaCamera(text, ownPortrait) {
   return {camera,english,chinese,negative,negativeChinese};
 }
 const auxiliaryImage=/mask|蒙版|遮罩|背景|background|pose|姿态|depth|深度|style.?ref|风格参考/i;
-/** Explicit requests win; unspecified everyday photos vary within their context. */
+/** Character photos default to selfies; only the human request selects another camera. */
 export function photoComposition({request='',subject='',cameraPlan,ownPortrait=false,recent=[]}={}){
  const positive=(text,re)=>[...String(text).matchAll(new RegExp(re.source,'gi'))].some(m=>!/(?:不要|别|避免|不用|不是|不需要|no |not )[^，,。；;!?！？\n]{0,5}$/i.test(String(text).slice(Math.max(0,m.index-14),m.index)));
- let view=cameraPlan||personaCamera(request||subject,ownPortrait);
+ let view=ownPortrait?personaCamera(request,true):cameraPlan||personaCamera(request||subject,false);
  const explicitCamera=positive(request,/前置|前镜|前摄|自拍|对镜|后置|后摄|后镜|他拍|第三人称|selfie|camera|mirror/);
  const seePerson=positive(request,/脸|长相|样子|本人|全身|半身|穿搭|看看你(?:[，,。！!？?\s]|$)|看一眼你/);
  const viewOnly=positive(request,/窗外|眼前|周围|桌面|风景|景色|手里的|手中|正在吃|正在喝/);
- const activity=/在干嘛|做什么|忙什么|正在做|手边|日常|此刻/.test(request);
- if(!explicitCamera&&!seePerson&&(viewOnly||ownPortrait&&activity&&recent.at(-1)?.camera==='front'))view=personaCamera('后置',false);
+ if(!ownPortrait&&!explicitCamera&&!seePerson&&viewOnly)view=personaCamera('后置',false);
  let framing='scene';
  if(view.camera==='rear')framing=positive(request,/特写|近景|细节|手里|手中|杯|食物/)?'detail':'scene';
  else if(ownPortrait||['front','mirror','external'].includes(view.camera)){
