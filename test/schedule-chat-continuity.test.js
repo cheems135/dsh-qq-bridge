@@ -78,3 +78,14 @@ test('detailed schedule UI renders unknown versus verified steps and received ve
  const render=Function('esc','LIFE_JOB_LABELS','INVOCATION_TOOL_LABELS',html.slice(start,end)+';return lifeExecutionDetails;')(v=>String(v??''),{needs_reconcile:'待核对'},{bridge_read:'读网页'});
  const at=Date.parse('2026-11-15T10:00:00+08:00'),view=render({v:{today:{day:'2026-11-15',conversations:[{key:'private:12345',startedAt:at,lastAt:at,topic:'文章结尾',status:'received'}]}},life:{jobs:[{status:'needs_reconcile',scene:{activity:'阅读'},details:{steps:[{at,tool:'bridge_read',status:'unknown',target:'正文'}]}}]}});assert.match(view,/消息已收到，未确认回复送达/);assert.match(view,/结果待核对/);assert.match(view,/文章结尾/);assert(!view.includes('undefined'));
 });
+
+test('foreground borrowing waits on the original job across reload and resolves ordinary owner speech',async()=>{
+ for(const [device,reply,expected] of [['desktop','你用吧','paused'],['phone','我在用','cancelled']]){
+  let asked=0;const f=execution({notify:async()=>{asked++;}});await f.engine.tick();
+  const id=f.engine.snapshot(f.meta).jobs[0].id,params={kind:'device_borrow',question:'想玩一局，可以借我一会儿吗？',details:{device,ownerId:'12345'}};
+  const receipt=await f.engine.request(id,f.meta,params);f.engine.reload();await f.engine.request(id,f.meta,params);
+  assert.equal(asked,1);assert.equal(f.engine.job(id,f.meta).status,'waiting_user');
+  assert.equal(f.engine.answer(receipt.id,f.meta,'午饭吃什么').unrelated,true);
+  assert.equal(f.engine.answer(receipt.id,f.meta,reply).status,expected);await f.engine.close();
+ }
+});

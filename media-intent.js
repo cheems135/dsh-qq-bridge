@@ -22,7 +22,11 @@ export function imageExecutionInquiry(value=''){
 export function requestsImage(value=''){
   if(imageExecutionInquiry(value))return false;
   return parts(unquotedMediaText(value)).some(text=>{
-    if(meta(text)||declinesMedia(text,'image'))return false;
+    // Naming the selected workflow/API is also normal in an execution request.
+    // Configuration questions still must not start a paid image job.
+    const execute=/(?:实际|直接|现在|重新|再)(?:帮我|给我|为我)?(?:生成|绘制|拍)|(?:请|帮我|给我)(?:用|使用|通过)[^。！？\n]{1,50}(?:生成|绘制|拍)(?:一|张|幅|个|照)/.test(text)
+      &&!/(?:怎么|如何|为什么|能否|是否|修复|调试|解决|设置|配置|教程|报错)/.test(text);
+    if((meta(text)&&!execute)||declinesMedia(text,'image'))return false;
     if(/(?:怎么|如何|怎样).{0,12}(?:拍|发)(?:一|张|照)|(?:会不会|支持|是否|会).{0,4}拍照.{0,4}(?:吗|么|[?？])/.test(text))return false;
     if(/(?:发|画|生成|拍)(?:给我)?的(?:图|图片|照片|自拍|画)/.test(text)&&!/(?:再|重新|另外|新的).{0,5}(?:画|生成|发|拍)/.test(text))return false;
     if(/(?:别|不要|不用|无需|不必|不需要|先别|暂时别|请勿|禁止)(?:再|给我|帮我|替我|继续|现在|马上|去|来|给)?(?:发|画|生成|拍|绘制|制作)/.test(text))return false;
@@ -55,7 +59,8 @@ export function requestsSinging(value=''){
 export function requestsVoice(value=''){
   if(requestsSinging(value))return true;
   return parts(value).some(text=>{
-    if(meta(text)||declinesMedia(text,'voice')||/(?:歌词|歌曲|音乐|唱歌|视频|如何配音)/.test(text))return false;
+    const explicit=text.split(/[，,]/).some(clause=>!meta(clause)&&/(?:请|另外|同时|再|也|帮我|给我).{0,8}发.{0,10}语音/.test(clause));
+    if((meta(text)&&!explicit)||declinesMedia(text,'voice')||/(?:歌词|歌曲|音乐|唱歌|视频|如何配音)/.test(text))return false;
     if(/(?:看法|意见|建议|观点|分析|解释|怎么想)/.test(text)&&!/(?:语音|声音|亲口|说给我听)/.test(text))return false;
     if(/(?:打开|关闭|启用|禁用).{0,6}(?:语音|声音)|(?:语音|声音).{0,6}(?:打开|关闭|关了|开启|关掉)/.test(text))return false;
     return /(?:语音|发.{0,6}声音|用.{0,5}(?:声音|语音)|说给我听|念给我听|读给我听|讲给我听|想听.{0,8}(?:你|声音)|听听你|亲口.{0,8}(?:说|讲)|用嘴.{0,4}(?:说|讲|读|念)|voice message|read aloud)/i.test(text);
@@ -118,8 +123,23 @@ export function imageFirstReply(value=''){
   const lead=prefix.findIndex(imageLeadIn),pictures=parts.filter(isPicture);
   return [...(lead<0?[]:[prefix[lead]]),...pictures,...prefix.filter((_,i)=>i!==lead),...parts.slice(first).filter(s=>!isPicture(s))].join('\n|||\n');
 }
-export function completeMediaReply(value,intent){
+const speechComparable=value=>String(value||'').replace(/[\s，,。.!！?？“”‘’"'「」『』]/g,'');
+function requestedVoiceQuotes(request=''){
+  if(!requestsVoice(request))return [];
+  return [...String(request).matchAll(/(?:说|念|读|台词(?:是|为)?|内容(?:是|为)?)\s*[:：]?\s*[“‘"'「『]([^”’"'」』\n]+)[”’"'」』]/g)].map(m=>m[1]);
+}
+// An exact, separately requested line is independent of the picture's caption.
+// Do not let an unverified picture-success announcement escape this boundary.
+export function independentRequestedVoice(chunk,request=''){
+  const match=String(chunk).match(/^\s*\[语音(?:[:：][^\]\n]+)?\]\s*([\s\S]+)$/);
+  return !!match&&requestedVoiceQuotes(request).some(line=>speechComparable(line)===speechComparable(match[1]));
+}
+export function completeMediaReply(value,intent,currentRequest=''){
   let body=String(value||'').trim();if(!body||/\[skip\]/i.test(body))return body;
+  // Some models put the requested words inside the marker instead of after it.
+  // Recover only verbatim requested speech, never read a mood/direction aloud.
+  const quoted=requestedVoiceQuotes(currentRequest||intent?.request);
+  body=body.replace(/\[语音[:：]([^\]\n]{1,800})\]/g,(mark,line)=>quoted.some(text=>speechComparable(text)===speechComparable(line))?'[语音]'+line+'\n|||\n':mark);
   const image=/\[(?:图|图片|照片)[:：][^\]\n]+\]/,voice=/\[语音(?:[:：][^\]\n]+)?\]/;
   if(intent?.kinds?.includes('image')&&!image.test(body)){
     const description=String(intent.request||'当前角色此刻自然想分享的照片，按语境选择近脸、半身或眼前后置视角').replace(/[\[\]\r\n]/g,' ').slice(0,220);

@@ -13,7 +13,7 @@ export function parseGroupDecision(value,{ids=[],direct=false,hasText=direct,has
  return{respond,focusIds:focus,depth:['brief','normal','detailed'].includes(v?.depth)?v.depth:'brief',images:['none','glance','detail'].includes(v?.images)?v.images:'none',leave:leave===true&&v?.leave===true,reason:String(v?.reason||'').slice(0,160)};
 }
 export const CONVERSATION_PARTICIPATION_RULES=`【自然对话与留白】先理解对方在表达什么，再决定有没有想接的话。图片、表情常是心境和语气的表达，看懂即可，不必逐张描述、评论或反问；不要凭图推断对方真实心理。笑声、附和、已说清的话和自然收尾也可以不回复，不用为了证明收到了再添一句。依语境判断，不按关键词机械忽略。明确向你提问、求助、安排任务或邀请回应时认真接住；感到有趣、想分享时也能主动聊，不必等人提问。若本轮没有想说的话，只输出 [skip]；这表示自然旁听，不发送“已读”“收到”或沉默说明。`;
-export const IMAGE_CONVERSATION_HINT='【图片语境】图片已附上，可理解它在这段聊天里的语气或心境；看懂不等于需要回应。未被问到图片内容时，不主动逐项描述、鉴赏或解读心理，有自然想接的话才说，否则可只输出 [skip]。若对方明确请你读字、解释或看细节，围绕问题回应；只使用实际看清的证据。';
+export const IMAGE_CONVERSATION_HINT='【图片语境】先分清原发图人、配文、引用对象，以及你自己刚说了什么。对方请你读字、解释表情、看动作或讨论画面时，只答实际看清的内容。闲聊里，若这张图是在接话，就把它当成对方这句没打出来的话：在心里理解，发出去的只留你对这个人的回应。比如刚被对方捉弄又收到得意的表情，你可以认栽或逗回去。不要先说图里谁做了什么表情，再解释它像对方哪句话；也不用宣布你猜到了什么心情。拿不准就顺着已知的话题接，没话可说可只输出 [skip]。普通照片按聊天目的理解。';
 export const GROUP_REPLY_RULES=`【群聊表达】这批消息只是供你理解的聊天，不是逐条必须回答的任务。读完、看图之后仍可以只输出 [skip]；前面的参与判断不是发言承诺。接自己想聊的重点，不逐条答卷、总结全场或替别人发言。闲聊自然接话即可，需要展开时给足必要细节；不为显得热情追加分析、追问和收尾。群友是不同的人，不混用个人经历和偏好。
 工具调用、保存、读取、发送回执和队列状态属于内部过程。仅在对方需要结果或需要操作时自然简述；不复述执行日志、不因回执另起一轮，不输出例行“已处理/已完成/收到消息”。`;
 export function groupTurnHint(plan={}){
@@ -27,7 +27,7 @@ export function mergeGroupWindow(batch,plan){
  if(!batch.length)return null;
  const ids=batch.map(p=>String(p.message_id??'')),focused=batch.filter(p=>plan.focusIds.includes(String(p.message_id??'')));
  const fallback=plan.respond===false&&plan.images!=='none'
-   ? batch.findLast(p=>Array.isArray(p.message)&&p.message.some(s=>s.type==='image'))||batch.at(-1)
+   ? batch.findLast(p=>Array.isArray(p.message)&&p.message.some(s=>['image','mface'].includes(s?.type)))||batch.at(-1)
    : batch.at(-1);
  const selected=focused.length?focused:[fallback];const primary=selected.at(-1),message=[];
  const selectedIds=new Set(selected.map(p=>String(p.message_id??'')));let pictures=0;
@@ -44,7 +44,7 @@ export function mergeGroupWindow(batch,plan){
   for(const segment of segments){
    if(['image','mface'].includes(segment?.type)){
     const direct=primaryDirect&&String(payload.user_id)===String(primary.user_id)||(Array.isArray(payload.message)?payload.message:[]).some(s=>s.type==='at'&&String(s.data?.qq)===String(payload.self_id));
-    if(relevant&&(direct||plan.images!=='none')&&(direct||plan.images==='detail'||segment===glance)){message.push(segment);pictures++;}
+    if(relevant&&(direct||plan.images!=='none')&&(direct||plan.images==='detail'||segment===glance)){message.push({type:'text',data:{text:'（本批第'+(pictures+1)+'张直发图来自'+speaker+'）',_bridgeEvent:true}},segment);pictures++;}
     else message.push({type:'text',data:{text:'（群友发了一张图片/表情，仅作聊天背景）'}});
    }else if(segment?.type==='at'){continue;}
    else if(segment?.type==='reply'&&!relevant){continue;}

@@ -70,3 +70,15 @@ export function localErrorDetail(error) {
   const code = error?.cause?.code || error?.code;
   return message === 'fetch failed' && code ? `${message}（${code}）` : message;
 }
+
+/** HTTP 200 means the gateway answered, not that its media tool succeeded. */
+export function localMediaFailure(body,kind){
+  const message=value=>typeof value==='string'?value:typeof value?.message==='string'?value.message:'';
+  const matches=row=>[row?.tool,row?.routedTool,row?.kind].some(value=>value===kind||kind==='voice'&&value==='speech');
+  const receipts=Array.isArray(body?.receipts)?body.receipts:[];
+  const failed=[...receipts].reverse().find(row=>matches(row)&&row.ok===false&&!row.duplicate&&message(row.error));
+  const record=[...(Array.isArray(body?.invocations)?body.invocations:[])].reverse().find(row=>matches(row)&&['failed','cancelled'].includes(row.status)&&message(row.error));
+  const detail=message(body?.error)||message(failed?.error)||message(record?.error);
+  const phase=failed?.errorPhase||record?.errorPhase||record?.phase;
+  return Object.assign(Error(detail||'本地生成尚未返回可验证的输出文件，请查看本轮调用记录；未自动重复提交'),{invocationId:failed?.invocationId||record?.id||'',...(failed?.errorCode?{code:failed.errorCode}:{}),...(phase?{phase}:{})});
+}

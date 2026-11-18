@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.62.89",
+  "version": "1.62.92",
   "private": true,
   "type": "module",
   "description": "QQ 桥接：手机与电脑共用 API 核心，电脑版另支持本地",
@@ -44,6 +44,7 @@
     "image-workflows.js",
     "tone-routing.js",
     "image-studio.js",
+    "image-prompt-language.js",
     "image-model-prompts.js",
     "voice-studio.js",
     "media-sharing.js",

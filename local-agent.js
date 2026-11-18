@@ -438,7 +438,7 @@ export function createLocalAgent({model,continueAcrossBudgets=false,onCheckpoint
           failedCalls.set(key,String(error?.message||error).slice(0,180));
           trace(signal?.aborted?'cancelled':'failed',args,{error:String(error?.message||error),...(error.evidence?{result:{ok:false,relevance:error.evidence}}:{})});
           throwIfAborted();
-          const receipt = {invocationId,tool: name,...(name==='bridge_tools'&&args.action==='call'?{routedTool:String(args.name||'')}:{}), ok: false, error: String(error?.message || error).slice(0, 500), at: Date.now()};
+          const receipt = {invocationId,tool: name,...(name==='bridge_tools'&&args.action==='call'?{routedTool:String(args.name||'')}:{}), ok: false, error: String(error?.message || error).slice(0, 500), errorCode:String(error?.code||''),errorPhase:String(error?.phase||''),at: Date.now()};
           receipts.push(receipt);
           report({phase:'tool_done',tool:name,ok:false,error:receipt.error});
           if(error.code==='SEARCH_UNRELATED'&&!searchRetried){const query=name==='bridge_search'?args.query:args.arguments?.query,retry=quotedSearchRetry(query);if(retry){searchRetried=true;report({phase:'repair',reason:'search-relevance',tool:'bridge_search'});return execute(name,name==='bridge_search'?{...args,query:retry}:{...args,arguments:{...args.arguments,query:retry}});}}

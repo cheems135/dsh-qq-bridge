@@ -50,3 +50,11 @@ export function shareBubbleParts(value){
  }
  return result;
 }
+
+// A standalone gloss sometimes precedes the actual conversational response.
+export function stickerReplyText(text){
+  const parts=String(text??'').trim().split(/\s*\|\|\|\s*|\n\s*\n/u);
+  if(parts.length<2||!parts.slice(1).some(s=>/[\p{L}]/u.test(s)&&!s.includes('[')))return text;
+  const gloss=/^(?:这(?:个|张|只)?(?:表情包?|动图|猫的表情)|你这(?:个|张)?表情)[^\n]{0,14}(?:读懂了|意思是|就是[“「"]|就是你刚才那句)/u;
+  return gloss.test(parts[0])&&!/[？?\[\]]/u.test(parts[0])?parts.slice(1).join('\n\n'):text;
+}

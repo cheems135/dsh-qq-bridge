@@ -16,6 +16,7 @@ test('the records panel distinguishes selected references, verified workflow bin
  assert.match(c.render({tool:'image',reference:{selected:true,used:false}}),/已选中，尚未确认上传绑定/);
  const bound=c.render({tool:'image',reference:{selected:true,used:true,verified:true,uploadedImage:'reference.png',onOutputPath:true,reason:'persona_reference_bound_to_submitted_workflow'}});assert.match(bound,/已上传并连接到输出分支/);assert.match(bound,/输出分支连通：是/);assert.match(bound,/不代表最终画面必然保持身份/);
  assert.match(c.render({tool:'image',reference:{reason:'subject_needs_clarification',used:false}}),/没有提交无参考图/);
+ const textOnly=c.render({tool:'image',reference:{mode:'text-to-image',used:false,required:false,reason:'text_to_image_selected'}});assert.match(textOnly,/文生图，不传参考图/);assert.match(textOnly,/工作流触发词/);assert.doesNotMatch(textOnly,/必须沿用，不能被聊天模型省略/);
 });
 
 test('the actual gateway blocks a missing required persona image and records binding verification only after runtime submission',async()=>{

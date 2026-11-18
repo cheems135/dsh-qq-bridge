@@ -1,4 +1,5 @@
-// Local-only decoding. Do not change the shared/API image director.
+import {maskRequestedImageText} from './image-prompt-language.js';
+// Local-only response decoding, sharing the director's lettering validation.
 export function localPromptObject(response,{review=false}={}){
  const message=response?.choices?.[0]?.message||response?.message||response;
  if(message?.refusal||response?.choices?.[0]?.finish_reason==='content_filter')throw Object.assign(Error('模型没有提供可用的图片提示词，本次未提交工作流'),{code:'LOCAL_PROMPT_REFUSED'});
@@ -21,8 +22,8 @@ export function localPromptObject(response,{review=false}={}){
  }
  return {value:parsed,raw:text};
 }
-export function localPromptLanguageMismatch(value,language,characterName=''){
- const body=['prompt','style','negativePrompt'].map(key=>String(value?.[key]||'')).join(' ').split(characterName||'\u0000').join(language==='en'?'She':characterName);
+export function localPromptLanguageMismatch(value,language,characterName='',literalText=[]){
+ const body=['prompt','style','negativePrompt'].map(key=>maskRequestedImageText(value?.[key]||'',key==='prompt'?literalText:[])).join(' ').split(characterName||'\u0000').join(language==='en'?'She':characterName);
  if(!body.trim())return false;
  return language==='en'?/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(body):!/[\p{Script=Han}]/u.test(body);
 }

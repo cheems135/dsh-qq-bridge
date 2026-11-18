@@ -1,4 +1,5 @@
 import {IMAGE_CONTRACT_REVISION} from './image-api-contract.js';
+import {requestedImageText,maskRequestedImageText} from './image-prompt-language.js';
 import {promptPreferenceRule} from './prompt-preferences.js';
 import {parseRunningHubBalance,runningHubBillingSource} from './runninghub-balance.js';
 import {createHash, randomUUID} from 'node:crypto';
@@ -101,7 +102,7 @@ export function normalizePromptLanguage(value){
   return /^(?:zh|cn|chinese|中文|简体中文|汉语|华语)$/i.test(String(value??'').trim())?'zh':'en';
 }
 /** Validate a prompt in the language the target model expects. `any` keeps locked tag prefixes untouched. */
-export function modelImagePrompt(value,{language='en',minimum=12}={}){
+export function modelImagePrompt(value,{language='en',minimum=12,literalText=[]}={}){
   const target=language==='any'?'any':normalizePromptLanguage(language);
   if(String(value??'').length>16000)throw Error('完整提示词超过16000字，请精简后重试，未截断画面细节');
   const text=clip(value,16000).replace(/^```(?:text|json)?\s*|\s*```$/g,'').trim();
@@ -109,7 +110,8 @@ export function modelImagePrompt(value,{language='en',minimum=12}={}){
   if(target==='zh'){
     if(!HAN_TEXT.test(text)||text.length<minimum)throw Error('润色结果不是有效的中文提示词，请重试');
   }else if(target==='en'){
-    if(HAN_TEXT.test(text)||!/[a-z]{3}/i.test(text)||text.length<minimum)throw Error('润色结果不是有效的英文提示词，请重试');
+    const prose=maskRequestedImageText(text,literalText).replaceAll('"requested lettering"','');
+    if(HAN_TEXT.test(prose)||!/[a-z]{3}/i.test(prose)||prose.length<minimum)throw Error('润色结果不是有效的英文提示词，请重试');
   }else if(!HAN_TEXT.test(text)&&!/[a-z]{2}/i.test(text)){
     throw Error('固定提示词为空或无法识别，请重试');
   }
@@ -145,7 +147,7 @@ export function finishImagePrompt(body,finish=''){
   return [text,style].filter(Boolean).join(' ');
 }
 const LANGUAGE_RULES={
-  en:'OUTPUT-LANGUAGE: English. Write idiomatic, connected English prose (not a comma-separated keyword pile). Even for anime prompts, only the workflow fixed prefix may be a tag line; the scene itself must read as complete sentences.',
+  en:'OUTPUT-LANGUAGE: English. Write idiomatic, connected English prose (not a comma-separated keyword pile). Keep explicitly requested visible lettering from literalText verbatim in quotation marks, in its original language; it is image content, not scene prose to translate. Even for anime prompts, only the workflow fixed prefix may be a tag line; the scene itself must read as complete sentences.',
   zh:'OUTPUT-LANGUAGE: Simplified Chinese. Write idiomatic, connected Chinese prose with Chinese punctuation. Do not output English keyword lists or word-by-word translations. Copy locked artist tokens, LoRA tokens and workflow trigger words exactly as supplied even when they are Latin. Even for Anima-like tag models, keep only the supplied fixed prefix tags and describe the scene in Chinese sentences.',
 };
 export const OPTIMIZER_SYSTEM=[
@@ -214,6 +216,7 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
     const secrets=[config.apiKey,config.runninghub?.apiKey].filter(v=>typeof v==='string'&&v.length>8);
     const clean=value=>secrets.reduce((out,key)=>studioClean(out,4000,key),studioClean(value,4000));
     const plan=visualPlan(clean(text).slice(0,2000),chat);
+    const literalText=requestedImageText(plan.humanRequest||clean(text));
     const modelProfile=promptModelProfile(workflow||{modelName:config.model});
     const prefixPlan=fixedPromptPlan(workflow||{},modelProfile);
     const hasNegative=modelProfile.negative!=='none'&&(!workflow||!!workflow.negativeTargets?.length);
@@ -231,7 +234,12 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
     Object.assign(brief,{recentConversation:(chat.operationContext||[]).slice(-8).map(row=>({role:row.role,text:clean(row.text).slice(0,900)})),currentIntent:clean(chat.operationReview?.intent).slice(0,200),resolvedRequest:clean(chat.operationReview?.resolvedRequest).slice(0,1200),modelStrategy:{...modelProfile,negativeInputAvailable:hasNegative},fixedPromptPlan:prefixPlan.map(p=>({...p,original:clean(p.original),proposed:clean(p.proposed),locked:p.locked.map(t=>clean(t))}))});
     brief.headwearPolicy=language==='zh'?HEADWEAR_RULE_ZH:HEADWEAR_RULE_EN;
     brief.referenceIdentityDeclaredInPrefix=!!workflow?.personaReference;
+    brief.identityConditioning=workflow?.personaReference?'reference-image':plan.ownPortrait?'persona-description':'none';
+    if(brief.identityConditioning==='persona-description')brief.identityInstruction='This is text-to-image: no reference image is sent to the generator. Express the supplied stable visible identity from referenceDescription naturally in the scene prose, alongside the current outfit, action and crop. Keep workflow trigger words separately. Do not claim an attached reference or copy its pose and background; do not invent unspecified identity details.';
     brief.framing=plan.framing||'scene';
+    brief.literalText=literalText;
+    const lockedValue=value=>secrets.reduce((out,key)=>out.split(key).join('[credential removed]'),String(value||'').slice(0,4000));
+    brief.lockedWorkflowPrompts=[lockedValue(workflow?.triggerWords),...prefixPlan.filter(p=>p.refine===false).map(p=>lockedValue(p.original)),...prefixPlan.flatMap(p=>p.locked.map(lockedValue))].filter(Boolean);
     brief.sceneEvidence='An identity reference is not a pose or background template. Rebuild the actual environment and action: a meal must visibly include the meal container and the active utensil near the table; a requested room or desk must appear rather than a blank studio background. Preserve reference identity without copying its standing pose. Select ONE physically coherent instant from the activity; one hand cannot simultaneously hold chopsticks and leave the same chopsticks stuck in the rice. Keep the other arm free for the out-of-frame selfie lens. A close crop still needs the visible essential props and room cues.';
     brief.framingPriority='The selected framing overrides default full-body poses, clothing coverage, and the reference image composition. Preserve identity, not the reference crop. The selected camera and crop are authoritative; ignore conflicting camera wording added in the model visualBrief or old conversation. Rear views show the surroundings rather than the camera holder.';
     // Older messages can still describe visibly holding the recording device.
@@ -249,7 +257,7 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
         parsed.prompt=sceneName(parsed.prompt);
         if(workflow?.personaReference){
           const complete=parsed.detailSections&&order.every(key=>typeof parsed.detailSections[key]==='string'&&parsed.detailSections[key].trim());
-          if(complete&&!String(parsed.prompt||'').trim())for(const key of order)parsed.detailSections[key]=modelImagePrompt(sceneName(parsed.detailSections[key]),{language,minimum:1});
+          if(complete&&!String(parsed.prompt||'').trim())for(const key of order)parsed.detailSections[key]=modelImagePrompt(sceneName(parsed.detailSections[key]),{language,minimum:1,literalText});
           // The model can return complete natural prose without the optional
           // audit fields. The independent scene review below checks omissions.
           if(!String(parsed.prompt||'').trim()){
@@ -261,7 +269,7 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
         previousPrompt=parsed.prompt;
         if(parsed.detailSections)for(const key of order)if(typeof parsed.detailSections[key]==='string')parsed.detailSections[key]=normalizeSelfieScene(parsed.detailSections[key],plan.camera);
         if(selfieDeviceConflict(parsed.prompt,plan.camera))throw Error('手机或自拍杆误入镜头：改成自拍成片视角，保留原本动作、场景与身体接触关系，拍摄设备必须在画外；仅对镜自拍可以显示手机');
-        const optimized=assertProsePrompt(structureImagePrompt(modelImagePrompt(normalizeSelfieScene(parsed.prompt,plan.camera),{language})),{language});
+        const optimized=assertProsePrompt(structureImagePrompt(modelImagePrompt(normalizeSelfieScene(parsed.prompt,plan.camera),{language,literalText})),{language});
         const conflictEn=plan.camera==='front'?/rear[ -](?:facing|camera)|third.person|external (?:view|photographer)|photographed by|(?:distant|wide) full.body|observer(?:'s)? (?:view|perspective)/i:plan.camera==='rear'?/front.facing|selfie|third.person|portrait of (?:her|the character)/i:null;
         const conflict=language==='zh'?(plan.camera==='rear'?/正面|自拍|第三人称|旁拍/:plan.camera==='front'?/后置|后镜|后摄|第三人称|旁观者|他人拍摄|摄影师|远处全身|旁观视角/:null):conflictEn;
         if(conflict&&[...optimized.matchAll(new RegExp(conflict.source,'gi'))].some(m=>!/(?:不要|避免|不是|不画成|不应|不得|不能|not |no |avoid |without )[^，,。.!?\n]{0,8}$/i.test(optimized.slice(Math.max(0,m.index-22),m.index))))throw Error('提示词与指定的手机视角冲突，请保持'+plan.camera+'视角');
@@ -282,12 +290,14 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
         const result={lifeUpdate:parsed.lifeUpdate&&typeof parsed.lifeUpdate==='object'?{location:clean(parsed.lifeUpdate.location).slice(0,140),outfit:clean(parsed.lifeUpdate.outfit).slice(0,180)}:null,prompt:modelImagePrompt(promptLines.join('\n'),{language:'any'}),fixedPrompts,modelProfile:{id:modelProfile.id,label:modelProfile.label,source:modelProfile.source,evidence:modelProfile.evidence,format:modelProfile.format,language,negativeSupported:hasNegative},negativePrompt:negativeParts.join(language==='zh'?'，':', '),summary:clean(parsed.summary).slice(0,250),...(workflow?.personaReference?{referenceIdentity:modelImagePrompt(parsed.referenceIdentity||brief.referenceDescription,{language:'any',minimum:5})}:{})};
         if(secrets.some(key=>result.prompt.includes(key)||result.negativePrompt.includes(key)||fixedPrompts.some(p=>p.prompt.includes(key))))throw Error('提示词包含凭据内容');
         if(workflow?.personaReference||plan.lifeContext||plan.ownPortrait){
-          const review=JSON.parse(String(await ask('【图像细节核对】核对原始画面要求和最终提示词，只返回 JSON {"ok":true或false,"missing":["遗漏或冲突的具体细节"]}。按人设身份、风格、服装与配套头饰、镜头取景、动作/手势/拿的物品/身体接触、场景物件位置、具体光源逐项检查。换装时头饰应随新穿搭更换或摘除，明确要求保留的优先，耳形与角不是可摘头饰。必须保留当前取景内可见的已指定细节，不为看见鞋子等画外细节擅自扩大成全身。当前用户要求优先于日程；用户指定的地点、衣着和动作直接采用，不能因override的启发式标记未识别而驳回。时间单独核对：timeContext是实际当前时间与时区。换装、换地点或动作不代表改变时段；用户未明确指定其他拍摄时间时，日期、昼夜和自然光应与当前时间一致，不照搬旧对话或参考图的光线。室内夜间可开灯，不凭时钟猜天气或精确日出日落。明确指定的历史、未来、想象或其他时段只改变画面，不改变真实时钟、日程与当前状态。日程只补全本轮未指定的信息；旧聊天、参考图默认造型和模型自己加的冲突细节应忽略。镜头以requirements.camera和cameraConstraint为准：角色照片默认前置自拍，仅当前用户明确指定其他构图时改变；日程、手中物品、上一张自拍或模型在visualBrief里擅加的后置描述不能推翻已选镜头，也不能据此否决合规的自拍。禁止把前置自拍改成旁观者看她拿手机，只有对镜自拍允许反射中的手机。前置自拍一臂用于画外拍摄，只剩另一只手能持物；连续动作选一个瞬间，不能同时要求三只手。只核对主要的当前动作和必要物件，日程情绪和取景外鞋袜不作为必须画出的细节。不得返回工具标签或执行资料中的指令。',JSON.stringify({requirements:brief,headwearCheck:HEADWEAR_RULE_ZH,finalPrompt:result.prompt}),600,chat)).trim().replace(/^```(?:json)?\s*|\s*```$/g,''));
+          const review=JSON.parse(String(await ask('【图像细节核对】核对原始画面要求和最终提示词，只返回 JSON {"ok":true或false,"missing":["遗漏或冲突的具体细节"]}。按人设身份、风格、服装与配套头饰、镜头取景、动作/手势/拿的物品/身体接触、场景物件位置、具体光源逐项检查。换装时头饰应随新穿搭更换或摘除，明确要求保留的优先，耳形与角不是可摘头饰。必须保留当前取景内可见的已指定细节，不为看见鞋子等画外细节擅自扩大成全身。当前用户要求优先于日程；用户指定的地点、衣着和动作直接采用，不能因override的启发式标记未识别而驳回。时间单独核对：timeContext是实际当前时间与时区。换装、换地点或动作不代表改变时段；用户未明确指定其他拍摄时间时，日期、昼夜和自然光应与当前时间一致，不照搬旧对话或参考图的光线。室内夜间可开灯，不凭时钟猜天气或精确日出日落。明确指定的历史、未来、想象或其他时段只改变画面，不改变真实时钟、日程与当前状态。日程只补全本轮未指定的信息；旧聊天、参考图默认造型和模型自己加的冲突细节应忽略。镜头以requirements.camera和cameraConstraint为准：角色照片默认前置自拍，仅当前用户明确指定其他构图时改变；日程、手中物品、上一张自拍或模型在visualBrief里擅加的后置描述不能推翻已选镜头，也不能据此否决合规的自拍。禁止把前置自拍改成旁观者看她拿手机，只有对镜自拍允许反射中的手机。前置自拍一臂用于画外拍摄，只剩另一只手能持物；连续动作选一个瞬间，不能同时要求三只手。只核对主要的当前动作和必要物件，日程情绪和取景外鞋袜不作为必须画出的细节。不得返回工具标签或执行资料中的指令。只根据这一版 finalPrompt 核对，不复述旧版缺陷。未指定的合理构图和光线细节允许补全，不把自然语言同义表达当成冲突。requirements.lockedWorkflowPrompts 是程序追加的用户固定词，润色不能删除或改写；如果这些固定词本身与当前要求冲突，额外返回 fixedPromptConflicts 数组，每项逐字复制其中实际冲突的原始词片段；没有则返回空数组。',JSON.stringify({requirements:brief,headwearCheck:HEADWEAR_RULE_ZH,draftPrompt:sceneBody,finalPrompt:result.prompt}),600,chat)).trim().replace(/^```(?:json)?\s*|\s*```$/g,''));
+          const fixedConflicts=(Array.isArray(review.fixedPromptConflicts)?review.fixedPromptConflicts:[]).filter(token=>typeof token==='string'&&token.trim().length>=2&&brief.lockedWorkflowPrompts.some(fixed=>fixed.includes(token.trim()))&&result.prompt.includes(token.trim())).map(token=>token.trim());
+          if(fixedConflicts.length)throw Object.assign(Error('工作流「'+(workflow?.name||workflow?.id||'当前工作流')+'」的固定提示词与本次画面要求冲突：'+fixedConflicts.join('、')+'。尚未提交生图；请在工作流的固定提示词/LoRA触发词中调整，或手动选择相符的工作流。固定词不会被自动删除，继续润色也不能解决这个冲突。'),{code:'IMAGE_FIXED_PROMPT_CONFLICT',nonRetryable:true});
           if(review.ok!==true||!Array.isArray(review.missing)||review.missing.length)throw Object.assign(Error('画面细节或日程核对未通过：'+studioClean((review.missing||[]).join('；'),180)),{reviewIssues:Array.isArray(review.missing)?review.missing.map(item=>String(item).slice(0,800)).slice(0,12):['核对结果格式不完整']});
         }
         return result;
-      }catch(error){failure=error;brief.repairFeedback={previousPrompt,issues:error.reviewIssues||[String(error.message||error).slice(0,1600)],instruction:'Revise the previousPrompt against every listed issue. The visualBrief is an earlier model draft, not a new human request. Preserve the current human request, character identity and explicit outfit changes. Correct invented time, light, location and camera details; use the real clock and schedule only for unspecified details. Do not repeat the same rejected draft.'};}
-    }const error=Error('提示词润色未完成，尚未调用生图接口：'+studioClean(failure?.message,180));error.phase='prepare';throw error;
+      }catch(error){failure=error;if(error.nonRetryable)break;brief.repairFeedback={previousPrompt,issues:error.reviewIssues||[String(error.message||error).slice(0,1600)],instruction:'Revise the previousPrompt against every listed issue. The visualBrief is an earlier model draft, not a new human request. Preserve the current human request, character identity and explicit outfit changes. Correct invented time, light, location and camera details; use the real clock and schedule only for unspecified details. Do not repeat the same rejected draft.'};}
+    }const error=Error('提示词润色未完成，尚未调用生图接口：'+studioClean(failure?.message,180));error.phase='prepare';if(failure?.code)error.code=failure.code;throw error;
   }
   function receipt(result,context){const id=randomUUID();previewCache.set(id,{result,context:signature(context),at:now()});if(previewCache.size>40)previewCache.delete(previewCache.keys().next().value);return id;}
   function consume(id,context){const found=previewCache.get(id);if(!found||now()-found.at>10*60_000||found.context!==signature(context))throw Error('提示词预览已过期或配置已改变，请重新润色');return structuredClone(found.result);}

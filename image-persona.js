@@ -64,15 +64,16 @@ export function photoComposition({request='',subject='',cameraPlan,ownPortrait=f
  if(!ownPortrait&&!explicitCamera&&!seePerson&&viewOnly)view=personaCamera('后置',false);
  let framing='scene';
  if(view.camera==='rear')framing=positive(request,/特写|近景|细节|手里|手中|杯|食物/)?'detail':'scene';
+ else if(positive(request,/全身|从头到脚|head.to.toe|full.body/))framing='full';
+ else if(positive(request,/半身|上半身|腰部以上|胸像|upper.body|half.body|waist.up|bust shot/))framing='upper';
+ else if(positive(request,/人脸|脸部|只看脸|近脸|大头|face portrait|headshot/))framing='face';
+ else if(positive(request,/特写|近景|细节|close.up/))framing='detail';
  else if(ownPortrait||['front','mirror','external'].includes(view.camera)){
-   if(positive(request,/全身|从头到脚|head.to.toe|full.body/))framing='full';
-   else if(positive(request,/半身|上半身|腰部以上|胸像|upper.body|half.body|waist.up|bust shot/))framing='upper';
-   else if(positive(request,/人脸|脸部|只看脸|近脸|大头|特写|近景|close.up|face portrait|headshot/))framing='face';
-   else if(/穿搭|衣服|换装|outfit/.test(request))framing='upper';
+   if(/穿搭|衣服|换装|outfit/.test(request))framing='upper';
    else framing=[...recent].reverse().find(item=>['face','upper'].includes(item.framing))?.framing==='upper'?'face':'upper';
  }
- const english={face:'Close-up face framing: frame the head and shoulders, with the face filling most of the image; the crop ends above the chest.',upper:'Upper-body composition: frame the head through the waist, with the crop ending around the waist; emphasize expression and natural nearby gestures.',full:'Full-body composition, showing the person from head to toe.',detail:'Close view of the requested object or explicitly requested hands from the camera holder\'s perspective.',scene:'Frame the surroundings and objects in front of the camera, following the current subject.'}[framing];
- const chinese={face:'近脸特写，画面取头部和肩膀，脸占主要区域，下缘裁在胸部以上。',upper:'半身构图，取头部到腰部附近，突出表情和近处自然动作，下缘裁在腰部附近。',full:'全身构图，从头到脚完整呈现人物。',detail:'从拍摄者眼前视角拍所要求的物件或明确要求露出的手的近景。',scene:'按本次主体拍眼前的环境与物件。'}[framing];
+ const english={face:'Close-up face framing: frame the head and shoulders, with the face filling most of the image; the crop ends above the chest.',upper:'Upper-body composition: frame the head through the waist, with the crop ending around the waist; emphasize expression and natural nearby gestures.',full:'Full-body composition, showing the person from head to toe.',detail:'Close crop of the explicitly requested subject or detail. Keep that subject in focus; do not widen the crop to include off-screen body parts or surroundings.',scene:'Compose the currently requested subject, preserving its specified action and viewpoint. Include only the surroundings that fit the requested crop.'}[framing];
+ const chinese={face:'近脸特写，画面取头部和肩膀，脸占主要区域，下缘裁在胸部以上。',upper:'半身构图，取头部到腰部附近，突出表情和近处自然动作，下缘裁在腰部附近。',full:'全身构图，从头到脚完整呈现人物。',detail:'近距离突出本轮明确指定的主体或局部细节，不为展示画外身体部位或环境而扩大取景。',scene:'围绕本轮明确指定的主体、动作和视角构图，仅保留取景范围内适合出现的环境。'}[framing];
  const negative=['face','upper'].includes(framing)?'full-body, head-to-toe, distant wide shot':framing==='full'?'cropped head, cropped feet':'';
  const negativeChinese=['face','upper'].includes(framing)?'全身构图，从头到脚，远景':framing==='full'?'头部被裁切，脚被裁切':'';
  if(view.camera==='front'&&framing==='full')view={...view,english:'Ultra-wide-angle front-facing full-body selfie captured from an outstretched arm, with a believable downward handheld angle and enough field of view to include the head and feet. Natural nearby proportions and perspective remain coherent; this is not a distant photographer or tripod view. The recording device remains completely outside the image.',chinese:'前置超广角全身自拍，由本人伸臂取景、合理向下俯拍，以足够广的视野让头脚入镜，保留近处手持透视和连贯身体比例；不是远处摄影师或三脚架旁拍，拍摄设备始终在画外。'};

@@ -6,7 +6,7 @@ export function createGameSessions({policy,metaFor,request,open,now=()=>Date.now
  function record(c,tool,args,result){const s=sessions.get(scope(c));if(!s||s.until<=now()||result?.ok===false)return null;let matches=false;if(s.url&&tool==='bridge_browser'){try{const expected=new URL(s.url),actual=new URL(result.url||result.snapshot?.url||'');matches=actual.origin===expected.origin&&actual.pathname.startsWith(expected.pathname);}catch{}}else if(s.shortcut&&tool==='bridge_device')matches=!!s.windowId&&String(result.windowId)===s.windowId;if(!matches)return null;if(['click','press','fill','scroll','type'].includes(args.action))s.controls++;if(result.file||result.elements||result.snapshot)s.observations++;return progress(c);}
  async function act(a,c){const key=scope(c);if(['status','progress'].includes(a.action))return progress(c);if(a.action==='stop'){sessions.delete(key);return {ok:true,stopped:true,coverage:'结束游戏任务许可，不自动关闭其他窗口'};}
   const args=operation(a),trusted={risk:'permission',target:args.target,label:'游玩游戏：'+args.name};
-  if(a.action==='request')return {ok:true,ordinary:true,waiting:false,requiresDecision:false,coverage:'游戏无需额外许可；用play实际打开后再观察操作，此步尚未打开'};
+  if(a.action==='request')return {ok:true,ordinary:true,waiting:false,requiresDecision:false,coverage:'后台网页游戏可用play打开后观察操作；桌面游戏可直接玩，也可以按情境先问本人或换个时间。此步尚未打开游戏'};
   if(a.action!=='play')throw Error('未知游戏动作');
   const old=sessions.get(key);if(old&&old.fingerprint===createHash('sha256').update(JSON.stringify(args)).digest('hex')&&old.until>now())return {ok:true,alreadyPlaying:true,session:old,coverage:'本次游戏已打开，继续观察现有窗口，不重开'};
   const receipt=policy.check(metaFor(c),args,trusted,{allowMatchingGrant:true,decisionId:a.decisionId});policy.consume(receipt);

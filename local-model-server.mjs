@@ -15,7 +15,7 @@ import {prepareLocalGroupContext} from './local-group-context.js';
 import {localGroupReplyRisk} from './local-group-quality.js';
 import {createBridgeIssues,unresolvedLocalReceipts} from './bridge-issues.js';
 import {selectLocalVoice,voiceServiceState,serviceVoices,requestLocalSpeech,releaseVoiceService} from './local-voice.js';
-import {prepareLocalImagePrompt} from './local-image-prompt.js';
+import {prepareLocalImagePrompt,assertReferenceInput,localImageReferenceMode,explicitlyRequiresReference} from './local-image-prompt.js';
 import {createInvocationJournal,invocationKind} from './invocation-journal.js';
 import {understandLocalTurn} from './local-understanding.js';
 // Local AI gateway, independent of DSH. It exposes an ordinary OpenAI-compatible
@@ -214,6 +214,8 @@ function safeReceipt(receipt) {
     text: String(receipt.text || '').slice(0, 1000),
     promptId: String(receipt.promptId || ''),
     error: String(receipt.error || '').slice(0, 500),
+    errorCode: String(receipt.errorCode || '').slice(0, 80),
+    errorPhase: String(receipt.errorPhase || '').slice(0, 80),
     duplicate: receipt.duplicate === true,
     limited: receipt.limited === true,
     rejected: receipt.rejected === true,
@@ -700,7 +702,7 @@ export function createLocalModelServer({
     }
   }
 
-  function configuredTools(tools = injectedTools, sourceImages = new Set(),voiceEmotion=()=> 'auto',personaReference=null,prepareImage=null,beforeMedia=null,referenceDiagnostics={},presentationPreferences) {
+  function configuredTools(tools = injectedTools, sourceImages = new Set(),voiceEmotion=()=> 'auto',personaReference=null,prepareImage=null,beforeMedia=null,referenceDiagnostics={},presentationPreferences,imageRequest='') {
     if (tools) return tools;
     const result = {};
     if (config.voiceEnabled) {
@@ -716,16 +718,21 @@ export function createLocalModelServer({
         execute: async (args, options) => {
           const selected = resolveMediaWorkflow(config, kind);
           if(kind==='image')options?.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',reference:{...referenceDiagnostics,prepared:!!personaReference,used:false},workflowSelection:{id:selected.id,name:selected.name,file:selected.file}}});
-          const needsIdentity=['image','video'].includes(kind)&&(referenceDiagnostics.required===true||referenceDiagnostics.configured===true&&referenceDiagnostics.plannedOwnPortrait===true||!!personaReference);
+          const textOnly=kind==='image'&&localImageReferenceMode(selected,root)==='text';
+          const explicitImage=!!args.image&&args.image!==personaReference?.file;
+          if(kind==='image'&&(explicitImage||args.requirePersonaReference===true||explicitlyRequiresReference(imageRequest)))assertReferenceInput(selected);
+          const needsIdentity=!textOnly&&['image','video'].includes(kind)&&(referenceDiagnostics.required===true||referenceDiagnostics.configured===true&&referenceDiagnostics.plannedOwnPortrait===true||!!personaReference);
           if(kind==='image'&&referenceDiagnostics.configured===true&&!personaReference&&referenceDiagnostics.reason==='no_image_plan')throw Error('当前已有人设图，但这轮没有确认图片主体，未绕过人设图直接提交文生图；请先明确拍当前角色还是其他主体');
           if(needsIdentity&&!personaReference)throw Error('这轮需要已保存的人设参考图，但图片没有准备成功，未提交无参考图的生成任务');
           if(needsIdentity)args={...args,image:personaReference.file,requirePersonaReference:true};
+          if(textOnly&&!explicitImage){args={...args};delete args.image;delete args.requirePersonaReference;}
+          if(needsIdentity||args.image)assertReferenceInput(selected);
           if(beforeMedia)await beforeMedia(kind,args,options);
           if(kind==='video'){const preference=promptPreferenceRule('video',presentationPreferences);if(preference)args={...args,prompt:String(args.prompt||'')+'\n'+preference};}
           if(kind==='image'&&prepareImage)args=await prepareImage(args,selected,options);
           if(needsIdentity&&args.image!==personaReference.file)throw Error('人设参考图在提示词准备后发生变化，未提交缺失或替换参考图的任务');
-          if(['image','video'].includes(kind)&&personaReference&&(!args.image||needsIdentity&&!(kind==='image'&&prepareImage))){
-            if(!selected.inputs?.image?.node)throw Error('当前生成工作流没有参考图输入映射，不能保持已保存的人设图身份');
+          if(!textOnly&&['image','video'].includes(kind)&&personaReference&&(!args.image||needsIdentity&&!(kind==='image'&&prepareImage))){
+            assertReferenceInput(selected);
             args={...args,image:personaReference.file,prompt:kind==='image'&&prepareImage?args.prompt:'以提供的人设图保持角色身份、脸部和稳定外观特征，服装、姿势和背景按本轮要求。'+(personaReference.description||'')+'\n本轮画面：'+args.prompt+(personaReference.camera?'\n镜头约束：'+personaReference.camera:'')};
           }
           if (args.image) {
@@ -733,7 +740,7 @@ export function createLocalModelServer({
             if (!sourceImages.has(image)) throw new Error('源图片只能是本轮收到的图片或本轮已生成的图片');
           }
           const personaSelected=!!personaReference&&args.image===personaReference.file;
-          if(kind==='image')options?.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',reference:{...referenceDiagnostics,prepared:!!personaReference,selected:personaSelected,used:false,verified:false,actualSource:args.image?(personaSelected?'persona':'turn_image'):'none',sha256:personaReference?.sha256||'',reason:personaReference?(personaSelected?'persona_reference_selected':'model_selected_another_source'):referenceDiagnostics.reason||'no_persona_reference'}}});
+          if(kind==='image')options?.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',reference:{...referenceDiagnostics,prepared:!!personaReference,selected:personaSelected,used:false,verified:false,actualSource:args.image?(personaSelected?'persona':'turn_image'):'none',sha256:personaReference?.sha256||'',reason:textOnly?'text_to_image_selected':personaReference?(personaSelected?'persona_reference_selected':'model_selected_another_source'):referenceDiagnostics.reason||'no_persona_reference',...(textOnly?{required:false,selectionPolicy:'text-to-image',mode:'text-to-image',actualSource:'text-prompt'}:{})}}});
           const deadline = mergeDeadline(options?.signal, Number(selected.timeoutMs || 600000) + 30000, `ComfyUI ${selected.name}`);
           try {
             return await enqueueGpu(async () => {
@@ -853,8 +860,8 @@ export function createLocalModelServer({
           const imageRequest=turnContext.imagePlan.subjectResolution?.source==='recent-human-photo'?turnContext.imagePlan.humanRequest:mediaTask.effectiveRequest;
           const prepared=await prepareLocalImagePrompt({args,plan:{...turnContext.imagePlan,humanRequest:imageRequest},workflow:selected,reference:personaReference,root,model:modelRunner,signal:options.signal,onProgress:event=>{onProgress(event);if(event.promptPreparation)options.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,tool:'image',status:'started',promptPreparation:event.promptPreparation}});},maxTokens:config.maxTokens,contextWindow:config.memoryProfile==='8gb'?(await capabilityDetector.snapshot()).contextWindow:0,conversation:messages,operationReview:{intent:'image',resolvedRequest:imageRequest}});
           options.onProgress?.({phase:'invocation',invocation:{id:options.invocationId,status:'started',tool:'image',imagePlan:{ownPortrait:turnContext.imagePlan.ownPortrait,portraitSource:turnContext.imagePlan.portraitSource,cameraConstraint:turnContext.imagePlan.cameraChinese||turnContext.imagePlan.cameraEnglish,characterName:turnContext.imagePlan.characterName,camera:turnContext.imagePlan.camera,framing:turnContext.imagePlan.framing,lifeContext:turnContext.imagePlan.lifeContext,styleTags:turnContext.imagePlan.styleTags},preparedPrompt:prepared.prompt,modelProfile:prepared.modelProfile}});
-          return {...args,prompt:prepared.prompt,negativePrompt:prepared.negativePrompt,fixedPrompts:prepared.fixedPrompts,recomposeScene:turnContext.imagePlan.ownPortrait===true&&!!personaReference&&(!args.image||args.image===personaReference.file)};
-        }:null,beforeMedia,turnContext.personaReferenceDiagnostics,turnContext.promptPreferences||turnContext.imagePlan?.promptPreferences)),...gatewayMediaOverrides(externalTools,beforeMedia),...Object.fromEntries(Object.entries(withoutInternalMediaTools(externalTools)).map(([name,tool])=>[name,{...tool,execute:async(args,options)=>{
+          return {...args,prompt:prepared.prompt,negativePrompt:prepared.negativePrompt,fixedPrompts:prepared.fixedPrompts,recomposeScene:turnContext.imagePlan.ownPortrait===true&&!!personaReference&&args.image===personaReference.file};
+        }:null,beforeMedia,turnContext.personaReferenceDiagnostics,turnContext.promptPreferences||turnContext.imagePlan?.promptPreferences,turnContext.imagePlan?.humanRequest||mediaTask.effectiveRequest)),...gatewayMediaOverrides(externalTools,beforeMedia),...Object.fromEntries(Object.entries(withoutInternalMediaTools(externalTools)).map(([name,tool])=>[name,{...tool,execute:async(args,options)=>{
           const raw=reconcileLocalToolAudio(name,args,await tool.execute(args,options));
           const {localObservations=[],...result}=typeof raw==='string'?{ok:true,text:raw}:raw||{};
           const observed=[];

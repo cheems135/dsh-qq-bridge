@@ -7,7 +7,7 @@ import vm from 'node:vm';
 test('actual API proactive reply receives protected execution facts after planning',async()=>{
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');let received;
  const chat={key:'private:1',kind:'private',isOwner:true,sessionId:'session',lifeOnly:true,turns:new Map()};
- const sandbox={chat,conversationExecutionGrounding,randomUUID:()=> 'id',stopped:false,accountPaused:false,
+ const sandbox={chat,isDesktop:true,conversationExecutionGrounding,randomUUID:()=> 'id',stopped:false,accountPaused:false,
   autonomousStandby:()=>false,proactiveCheck:()=>'',recordsAllowed:()=>true,autonomyAllowed:()=>true,privateInitiativeAllowed:()=>true,pausedConversation:()=>false,
   featureProfile:()=>({}),keepSessionAlive:async()=>true,autonomyState:()=>({counts:{chats:0}}),saveState:()=>{},pinApprovalPolicy:async()=>{},installAgentContext:()=>true,
   settings:{activeAccountId:'a',localChat:{enabled:false},owners:['1'],realism:{enabled:true},mood:{}},featureState:{invocations:[],generation:0},activePersona:()=>({id:'p'}),lifeExecution:null,
@@ -18,7 +18,7 @@ test('actual API proactive reply receives protected execution facts after planni
  };
  vm.createContext(sandbox);vm.runInContext(source.slice(source.indexOf('  function conversationExecutionHint('),source.indexOf('  /** He went quiet mid-conversation:')),sandbox);
  assert.equal(await sandbox.nudge(chat,'想和对方分享音乐','autonomy'),true);
- const text=received.content.map(p=>p.text||'').join('\n');assert.match(text,/音乐分享与语音合成是不同操作/);assert.match(text,/没调用不是失败/);assert.match(text,/想和对方分享音乐/);
+ const text=received.content.map(p=>p.text||'').join('\n');assert.match(text,/音乐分享与语音合成是不同操作/);assert.match(text,/没调用不是失败/);assert.match(text,/想和对方分享音乐/);assert.match(text,/当前运行在电脑/);assert.match(text,/由你自己推进/);
 });
 test('media planning cannot replace user words with an invented reply',()=>{
  const intent=selectMediaIntent('你准备听啥呢',{form:'voice',confidence:.85,reason:'声音适合表达',request:'我就听你安排，你想听什么呀'});
@@ -38,4 +38,9 @@ test('reply facts retain scoped outcomes and never treat absence or an old failu
 test('autonomous facts preserve failure and partial results without converting wishes or summaries to receipts',()=>{
  const now=Date.now(),hint=initiativeGrounding([{updatedAt:now,status:'failed',actuallyCompleted:false,scene:{activity:'听音乐'},checkpoint:{summary:'已经听完了'},evidence:[{at:now,tool:'bridge_audio',ok:false,substantive:true,coverage:'音乐好听'},{at:now,tool:'bridge_browser',ok:true,substantive:true,partial:true,coverage:'专辑页面标题'}]}],now);
  assert.match(hint,/"completed":false/);assert.match(hint,/"partial":true/);assert.doesNotMatch(hint,/已经听完了|音乐好听/);assert.match(hint,/页面文字不证明听过音频/);
+});
+
+test('mobile group awareness distinguishes disabled device control from other usable tools',()=>{
+ const text=conversationExecutionGrounding({operating:{platform:'手机',chat:'group',deviceTools:false,modelTools:false}});
+ assert.match(text,/当前运行在手机，这里是群聊/);assert.match(text,/设备工具总开关已关/);assert.match(text,/本轮本地模型未通过工具调用能力检测/);
 });

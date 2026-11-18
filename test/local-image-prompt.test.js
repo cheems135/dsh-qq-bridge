@@ -33,7 +33,7 @@ test('a model-added rear camera is corrected before local selfie submission',asy
 test('scene omissions cannot reach image submission and missing reference bindings are explicit',async()=>{
  let calls=0;
  await assert.rejects(prepareLocalImagePrompt({args:{prompt:'portrait'},plan,workflow,reference,root:process.cwd(),model:async options=>{calls++;return options.messages[0].content.startsWith('【图像细节核对】')?'{"ok":false,"missing":["缺少实际场景，只有白底立绘"]}':JSON.stringify({prompt,style:'二维二次元插画。'});}}),/细节或日程核对未通过/);assert.equal(calls,6);
- await assert.rejects(prepareLocalImagePrompt({args:{prompt:'portrait'},plan,workflow:{...workflow,inputs:{}},reference,root:process.cwd(),model:()=>assert.fail('no compatible identity input')}),/参考图输入映射/);
+ await assert.rejects(prepareLocalImagePrompt({args:{prompt:'portrait',requirePersonaReference:true},plan,workflow:{...workflow,inputs:{}},reference,root:process.cwd(),model:()=>assert.fail('no compatible identity input')}),/参考图输入映射/);
 });
 
 test('explicit user source image does not inherit a persona identity declaration',async()=>{
