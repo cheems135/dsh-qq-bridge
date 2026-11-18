@@ -109,7 +109,8 @@ export function getLive2dGateway(){
         answer=await b.ask(rules,JSON.stringify({purpose,history:recent.map(r=>({role:r.role,text:r.text})),input:text,...(avatar?{body:{enabled:avatar.enabled,rendering:avatar.rendererConnected,focusTargets:avatar.focusTargets?.slice(0,12),currentPlan:avatar.plan?.label||''}}:{})}),key,signal);
         raw=typeof answer==='string'?answer:answer.raw;ensure();if(typeof raw!=='string'||!raw.trim())throw Error('QQ 桥接模型没有返回回复');
         // Record originals in the existing bridge memory hub, never in a second store.
-        if(record){const id=randomUUID();let spoken=raw;try{spoken=JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,'')).text||raw;}catch{}
+        // Silent body plans are requests, not spoken words or proof of execution.
+        if(record){const id=randomUUID();let spoken=raw;try{const reply=JSON.parse(raw.trim().replace(/^```(?:json)?\s*|\s*```$/g,''));if(reply&&typeof reply==='object')spoken=typeof reply.text==='string'?reply.text:'';}catch{}
           const at=Date.now();
           if(key.startsWith('live:')){
             // Livestream memory keeps her side of the exchange. A viewer name
@@ -121,10 +122,10 @@ export function getLive2dGateway(){
             const asked=/[?？]/.test(comment)||/吗|呢|怎么|为什么|请问/.test(comment);
             const name=viewer&&asked?viewer:'一位观众';
             memory?.record(meta,{id:id+'-in',at:at-1,role:'user',text:asked?`直播里，${name}问我：${comment.slice(0,90)}`:`直播里，${name}和我说了句话。`,origin:'livestream',speakerName:name});
-            memory?.record(meta,{id:id+'-out',at,role:'assistant',text:String(spoken),origin:'livestream'});
+            if(spoken.trim())memory?.record(meta,{id:id+'-out',at,role:'assistant',text:spoken,origin:'livestream'});
           }else{
             memory?.record(meta,{id:id+'-in',at:at-1,role:'user',text,origin:'livestream',speakerName:'本机用户'});
-            memory?.record(meta,{id:id+'-out',at,role:'assistant',text:String(spoken),origin:'livestream'});
+            if(spoken.trim())memory?.record(meta,{id:id+'-out',at,role:'assistant',text:spoken,origin:'livestream'});
           }
         }
         ensure();

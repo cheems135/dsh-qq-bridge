@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "QQ / IM Bridge",
-    "description": "Bridges QQ private and group chats into DeepSeek Harness sessions over NapCat (OneBot 11): one Session per chat, messages in, replies out."
+    "description": "Send and receive QQ messages directly from DeepSeek Harness: every private chat and group gets its own session, incoming messages go to the model, replies go back out to QQ. The connection runs on NapCat (OneBot 11)."
   }
 }
