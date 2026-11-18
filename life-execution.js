@@ -2,6 +2,7 @@ import {taskProgressSignature,scheduleJobDetails} from './schedule-continuity.js
 import {taskCompletion,offlineSlot} from './schedule-evidence.js';
 import {SCHEDULE_TOOL_RULE} from './schedule-tool-breaker.js';
 import {createHash,randomUUID} from 'node:crypto';
+import {constants,copyFileSync,readFileSync,renameSync,rmSync,writeFileSync} from 'node:fs';
 import {calendarNow} from './life-memory.js';
 import {digitalActivityKind,DIGITAL_PERSON_RULES} from './digital-life.js';
 import {approvalAnswer} from './operation-policy.js';
@@ -10,6 +11,48 @@ import {latestTaskWait} from './task-progress.js';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const text=(v,n=500)=>String(v??'').trim().slice(0,n);
 const ACTIVE=new Set(['queued','running','waiting_user','planned','paused','needs_reconcile','participating']);
+export function lifeExecutionStorage(file,log=()=>{},now=Date.now){
+ const backup=file+'.last-good';
+ function readOne(path){
+  try{
+   const state=JSON.parse(readFileSync(path,'utf8'));
+   if(!Array.isArray(state?.jobs)||state.jobs.some(job=>!job||typeof job!=='object'))throw new SyntaxError('invalid job list');
+   return {state};
+  }catch(error){
+   if(error.code==='ENOENT')return {};
+   if(!(error instanceof SyntaxError))throw error;
+   const preserved=path+'.corrupt-'+randomUUID();
+   copyFileSync(path,preserved,constants.COPYFILE_EXCL);
+   log('日程执行记录无法解析，已保留原件：'+preserved);
+   return {damaged:true};
+  }
+ }
+ function replace(path,bytes){
+  const temp=path+'.'+randomUUID()+'.tmp';
+  try{writeFileSync(temp,bytes,{flag:'wx',flush:true});renameSync(temp,path);}
+  finally{rmSync(temp,{force:true});}
+ }
+ return {
+  read(){
+   const main=readOne(file);if(main.state)return main.state;
+   const previous=readOne(backup);
+   if(!previous.state&&!main.damaged&&!previous.damaged)return undefined;
+   const state=previous.state||{version:2,jobs:[],sleep:{},wake:{}};
+   state.recoveredAt=now();
+   for(const job of state.jobs)if(ACTIVE.has(job.status)){
+    job.status='needs_reconcile';job.resume=false;job.resumeOnIdle=false;
+    job.reason='从备用记录恢复，先核对任务的真实进度';
+   }
+   log(previous.state?'已从备用日程执行记录恢复':'无可读的备用执行记录，保留日程计划，从下一时段继续执行');
+   return state;
+  },
+  write(state){
+   const bytes=JSON.stringify(state,null,2);
+   replace(file,bytes);
+   try{replace(backup,bytes);}catch(error){log('日程执行备用记录保存失败：'+error.message);}
+  }
+ };
+}
 const EFFECTS=new Set(['send','publish','comment','payment','delete','security','credentials']);
 const groupIds=scene=>(Array.isArray(scene?.groupIds)?scene.groupIds.map(String).filter(id=>/^\d{5,20}$/.test(id)).slice(0,20):[]);
 export const CONTINUATION_RULE='\n【任务续做与收尾】每轮结束前核对scene.goal：已达成时用bridge_life_finish结束；未达成且可以继续时，用bridge_life_checkpoint保存真实进度、具体next及safeToResume，再继续推进。暂停、放弃或受阻时写清原因，不把“发了一句话”当作看完视频。continuation.closeoutOnly=true表示上一轮有操作却没有收尾：先用已有证据核对目标，完成则结束，未完成则保存具体下一步；不要重复已确认的发送、生成或发布。连续续做没有新增进度时停止空转，保留阻碍，不谎称完成。';
@@ -270,6 +313,10 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    const blockedSlot=jobs(role.meta).find(j=>['needs_reconcile','failed'].includes(j.status)&&j.scene?.date===sc.date&&j.scene?.end>calendarNow(now()).clock&&(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)));
    if(blockedSlot&&!sc.requested)continue;
    const kind=activityKind(sc),stampedId=sceneStamp(role.meta,sc);
+   if(state.recoveredAt&&kind!=='sleep'&&!sc.requested){
+    const recovery=calendarNow(state.recoveredAt);
+    if(sc.date===recovery.day&&sc.start<=recovery.clock&&sc.end>recovery.clock)continue;
+   }
    let scheduled=state.jobs.find(j=>j.id===stampedId);
    // The planner may split one activity at a phase boundary or slide its
    // clock by a minute. Adjacent parts with the same goal remain one task,

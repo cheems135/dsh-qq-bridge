@@ -52,12 +52,12 @@ export function parseInitiativeDecision(raw,actions){
  return {action:value.action,text:typeof value.text==='string'?value.text.trim():'',reason:typeof value.reason==='string'?value.reason.slice(0,180):'',imagePrompt:typeof value.imagePrompt==='string'?value.imagePrompt:''};
 }
 export async function decideInitiative({system,input,actions,ask,isCurrent=()=>true}){
- const protocol=INITIATIVE_DECISION_RULE+'\n本轮候选：'+JSON.stringify(actions);
+ const instructions=INITIATIVE_DECISION_RULE+'\n'+system+'\n本轮候选：'+JSON.stringify(actions);
  let raw,decision;
- try{raw=await ask(system+'\n'+protocol,input);}catch(error){if(error?.name==='AbortError'||!/JSON|json|格式/.test(String(error?.message)))throw error;raw='首次结构化输出格式无效，请按原始输入重新判断。'+String(input).slice(0,1000);}
+ try{raw=await ask(instructions,input);}catch(error){if(error?.name==='AbortError'||!/JSON|json|格式/.test(String(error?.message)))throw error;raw='首次结构化输出格式无效，请按原始输入重新判断。'+String(input).slice(0,1000);}
  if(!isCurrent())return {cancelled:true};
  try{decision=parseInitiativeDecision(raw,actions);}catch{
-  raw=await ask(system+'\n'+protocol+'\n上次格式无效。请依据原始场景重新决定，不直接转写无效草稿；草稿可能编造读过资料、对方发言或行动结果，不能作为事实。无法确定候选时选none。',JSON.stringify({originalInput:input,invalidDraft:{trusted:false,text:String(raw).slice(0,3000)}}));
+  raw=await ask(instructions+'\n上次格式无效。请依据原始场景重新决定，不直接转写无效草稿；草稿可能编造读过资料、对方发言或行动结果，不能作为事实。无法确定候选时选none。',JSON.stringify({originalInput:input,invalidDraft:{trusted:false,text:String(raw).slice(0,3000)}}));
   if(!isCurrent())return {cancelled:true};
   decision=parseInitiativeDecision(raw,actions);
  }

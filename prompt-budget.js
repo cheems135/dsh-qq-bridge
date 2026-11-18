@@ -20,9 +20,19 @@ export function briefLifeJob(job={}){return {id:job.id,meta:job.meta,scene:job.s
 export function createPromptBudget({secret}={}){
  const key=/^[a-f\d]{64}$/i.test(secret||'')?Buffer.from(secret,'hex'):randomBytes(32),nonce=createHash('sha256').update(key).digest('hex').slice(0,10),open='⟦qqctx:'+nonce+':',close='⟦/qqctx⟧',sign=s=>createHmac('sha256',key).update(s).digest('hex').slice(0,16);
  const totals={turns:0,requests:0,removedChars:0,prunedBlocks:0};
- function pack(content,{protectedParts=new Set(),nativePersona=false,identityText=''}={}){
+ function pack(content,{protectedParts=new Set(),executionFacts,nativePersona=false,identityText=''}={}){
   const states=[],keep=[],seen=new Set();let before=0;
-  for(const part of content){if(part.type!=='text'||protectedParts.has(part)){keep.push(part);continue;}const text=String(part.text||'');before+=text.length;
+  for(const part of content){
+   // Only the host-created rule prefix is disposable. Preserve the observed
+   // tool and schedule records even when this message becomes old history.
+   if(part===executionFacts&&part.type==='text'){
+    const boundary=part.text.indexOf('\n【近期同一对话工具事实');
+    if(boundary>0){
+     states.push(part.text.slice(0,boundary));before+=boundary;
+     keep.push({...part,text:part.text.slice(boundary+1)});continue;
+    }
+   }
+   if(part.type!=='text'||protectedParts.has(part)){keep.push(part);continue;}const text=String(part.text||'');before+=text.length;
    if(!text.trim()||seen.has(text)||nativePersona&&identityText&&text===identityText)continue;seen.add(text);
    // Speaker attribution and session bootstrap rules remain with the dialogue.
    if(/【本轮群聊说话者】|【真实QQ说话者】|【当前角色与桥接能力】|【最近对话资料/.test(text)){keep.push(part);continue;}
