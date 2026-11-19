@@ -49,3 +49,37 @@ test('actual private reply delivery separates comma-only chat into two persisted
  assert.equal(h.featureState.outbox.length,2);
  assert.equal(h.featureState.outbox.map(job=>job.segments[0].data.text).join(''),sample.replace('好近，明天','好近明天'));
 });
+test('a paced proactive note queues at most two bubbles in one episode and cancels the remainder after a reply',async()=>{
+ const {proactiveDenial,reserveProactive}=await import('../social-pacing.js');
+ const h=fixture(),at=Date.now(),incoming=at-31*60_000;
+ const check=(job,lastIncoming=incoming,clock=Date.now())=>proactiveDenial(job,h.featureState.proactiveContacts,lastIncoming,clock,60);
+ const queue=extract('queueOutgoing',{...h.deps,settings:{...h.deps.settings,autonomy:{privateMinGapMinutes:60}},proactiveCheck:job=>check(job),proactiveIncoming:()=>incoming,reserveProactive});
+ const actor={...chat,turnKind:'proactive',deliveryKey:'proactive:three-paragraphs'};
+ const text='第一段刚翻到一篇有意思的文章\n第二段里有个细节我反复想了两遍\n第三段也想问问你会怎么看';
+ assert.ok(queue(actor,[{type:'text',data:{text}}]));
+ const [first,second]=h.featureState.outbox;
+ assert.equal(h.featureState.outbox.length,2);
+ assert.deepEqual(first.paragraphIds,[first.id,second.id]);
+ assert.equal(first.proactiveEpisode,second.proactiveEpisode);
+ assert.ok(second.notBefore>=first.notBefore+3000);
+ assert.deepEqual([first,second].map(j=>j.segments[0].data.text).join('\n'),text);
+ assert.equal(h.featureState.proactiveContacts.length,1);
+ assert.equal(check(first),'');
+ assert.equal(check(second),'');
+ assert.match(check(second,at+10),/本次主动私聊/);
+ assert.match(check({...second,id:'different-job'}),/本次主动私聊/);
+ assert.match(check({...second,proactiveEpisode:'extra',proactiveParagraphBatch:''}),/全账号主动私聊间隔/);
+ assert.match(check({...first,proactiveEpisode:'next'},incoming,at+61*60_000),/相同内容/);
+ assert.equal(h.saves,1);
+ assert.equal(h.flushes,1);
+});
+test('phone batch write failure marks both proactive bubbles failed without flushing',async()=>{
+ const {proactiveDenial,reserveProactive}=await import('../social-pacing.js');
+ const h=fixture({saveOk:false}),incoming=Date.now()-31*60_000;
+ const queue=extract('queueOutgoing',{...h.deps,settings:{...h.deps.settings,autonomy:{privateMinGapMinutes:60}},proactiveCheck:job=>proactiveDenial(job,h.featureState.proactiveContacts,incoming,Date.now(),60),proactiveIncoming:()=>incoming,reserveProactive});
+ const persist=extract('persistTextBubbles',{...h.deps,queueOutgoing:queue,markReplyDelivery:()=>{},burstSegments:text=>[{type:'text',data:{text}}],stickerMessageGroups});
+ persist({...chat,turnKind:'proactive',deliveryKey:'proactive:phone'},['第一段\n第二段\n第三段'],0);
+ assert.equal(h.featureState.outbox.length,2);
+ assert.ok(h.featureState.outbox.every(j=>j.status==='failed'));
+ assert.equal(h.flushes,0);
+});

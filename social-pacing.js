@@ -2,7 +2,7 @@ import {qzoneDay,dailySpaceOffer} from './qzone-policy.js';
 const CONTACT_HISTORY_MS=7*86400000;
 const normalize=value=>String(value||'').normalize('NFKC').replace(/[\p{P}\p{S}\s]/gu,'').toLowerCase();
 const sameScope=(r,j)=>r.accountId===j.accountId&&r.chat===j.chat&&(r.personaId||'')===(j.personaId||'');
-const contactText=job=>normalize((job.segments||[]).filter(s=>s.type==='text').map(s=>s.data?.text||'').join(''));
+const contactText=job=>job.proactiveParagraphBatch&&job.bubbleIndex===1?'':normalize(job.proactiveParagraphText||(job.segments||[]).filter(s=>s.type==='text').map(s=>s.data?.text||'').join(''));
 export function signatureAvailable(rows,accountId,now=Date.now()){return !rows.some(r=>r.accountId===accountId&&r.day===qzoneDay(now));}
 export function claimSignature(rows,accountId,now=Date.now()){
  if(!signatureAvailable(rows,accountId,now))throw Error('今天已尝试自动修改签名，明天再考虑；本人明确要求修改不受此限制');
@@ -36,7 +36,11 @@ export function proactiveDenial(job,rows,lastIncoming,now=Date.now(),privateMinG
  const gap=Math.max(0,Math.min(1440,Number(privateMinGapMinutes)||0))*60_000;
  if(gap&&privateContact(job.chat)&&!job.commitmentId){
   if(episode){
-   if(job.id&&episode.deliveryId===job.id&&Number(lastIncoming||0)<=Number(episode.lastIncoming||0))return '';
+   if(Number(lastIncoming||0)<=Number(episode.lastIncoming||0)){
+    if(job.id&&episode.deliveryId===job.id)return '';
+    if(job.id&&job.bubbleIndex===1&&job.proactiveParagraphBatch&&job.proactiveParagraphBatch===episode.paragraphBatch
+      &&(!episode.secondDeliveryId||episode.secondDeliveryId===job.id))return '';
+   }
    return '本次主动私聊已经占用一个通知，暂缓后续消息';
   }
   if(lastIncoming>0&&now-lastIncoming<Math.min(gap,30*60_000))return '刚聊过，先留一点安静时间';
@@ -55,8 +59,10 @@ export function reserveProactive(job,rows,lastIncoming,now=Date.now()){
  const denial=proactiveDenial(job,rows,lastIncoming,now);if(denial)throw Error(denial);
  if(!job.initiative||job.manualInitiative)return false;
  const own=rows.find(r=>sameScope(r,job)&&r.episode===job.proactiveEpisode),text=contactText(job);
- if(own){if(job.id&&own.deliveryId===job.id)own.at=now;own.texts||=[];own.fingerprints||=[];if(text&&!own.texts.includes(text))own.texts.push(text);if(job.fingerprint&&!own.fingerprints.includes(job.fingerprint))own.fingerprints.push(job.fingerprint);return false;}
- const value={accountId:job.accountId,personaId:job.personaId||'',chat:job.chat,episode:job.proactiveEpisode,deliveryId:job.id||'',at:now,lastIncoming:Number(lastIncoming)||0,texts:text?[text]:[],fingerprints:job.fingerprint?[job.fingerprint]:[]};
+ if(own){if(job.id&&own.deliveryId===job.id)own.at=now;
+  if(job.id&&job.bubbleIndex===1&&job.proactiveParagraphBatch&&job.proactiveParagraphBatch===own.paragraphBatch&&!own.secondDeliveryId)own.secondDeliveryId=job.id;
+  own.texts||=[];own.fingerprints||=[];if(text&&!own.texts.includes(text))own.texts.push(text);if(job.fingerprint&&!own.fingerprints.includes(job.fingerprint))own.fingerprints.push(job.fingerprint);return false;}
+ const value={accountId:job.accountId,personaId:job.personaId||'',chat:job.chat,episode:job.proactiveEpisode,deliveryId:job.id||'',...(job.bubbleIndex===0&&job.proactiveParagraphBatch?{paragraphBatch:job.proactiveParagraphBatch}:{}),at:now,lastIncoming:Number(lastIncoming)||0,texts:text?[text]:[],fingerprints:job.fingerprint?[job.fingerprint]:[]};
  rows.push(value);
  for(let i=rows.length-1;i>=0;i--)if(now-rows[i].at>=CONTACT_HISTORY_MS)rows.splice(i,1);
  const scoped=rows.filter(r=>sameScope(r,job));for(const old of scoped.slice(0,-32)){const i=rows.indexOf(old);if(i>=0)rows.splice(i,1);}

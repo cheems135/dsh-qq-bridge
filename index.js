@@ -8621,6 +8621,7 @@ export function apply(ctx, rawConfig) {
       const said=String(auditById(chat.auditId)?.answer||'').replace(/\[(?:图|图片|照片|语音|声音|表情包)[^\]\n]*\]|https?:\/\/\S+/g,'').trim();
       if(said)segments=[...segments,{type:'text',data:{text:said.slice(0,300)}}];
     }
+    const quietPrivate=Number(settings.autonomy?.privateMinGapMinutes)>0&&chat.kind==='private'&&chat.turnKind==='proactive'&&!chat.manualInitiative&&!deliveryCommitmentId(chat);
     const formatAudit=auditById(chat.auditId),formatGenerated=!!formatAudit||['user','proactive'].includes(chat.turnKind);
     segments=segments.map(segment=>segment.type==='text'?{...segment,data:{...segment.data,text:cleanOutgoingText(calendarSafeText(formatGenerated?stripUnrequestedActions(segment.data?.text||'',{request:chat.turnKind==='proactive'?'':formatAudit?.userWords||''}):segment.data?.text||''),{chatStyle:!chat._qqParagraphChild})}}:segment).filter(segment=>segment.type!=='text'||segment.data.text);
     if(!segments.length)return null;
@@ -8634,17 +8635,21 @@ export function apply(ctx, rawConfig) {
       /* 群聊的"回复谁"绑定会在群消息里插 reply 段，QQ 显示成引用；带语音时不插。 */
       if(segments.some(segment=>segment&&segment.type==='record'))segments=segments.filter(segment=>segment&&segment.type!=='reply');
     }
-    const quietPrivate=Number(settings.autonomy?.privateMinGapMinutes)>0&&chat.kind==='private'&&chat.turnKind==='proactive'&&!chat.manualInitiative&&!deliveryCommitmentId(chat);
-    if(!quietPrivate&&!chat._qqParagraphChild){
+    if(!chat._qqParagraphChild){
       const wholeKey=chat.key||`${chat.kind}:${chat.chatId}`;
       if(recipientDenial({...chat,key:wholeKey},settings)||!recordsAllowed(wholeKey)||wrongOwnerAddress(segments.filter(s=>s.type==='text').map(s=>s.data?.text||'').join('\n'),wholeKey,settings))return null;
-      const groups=qqParagraphGroups(segments);
+      let groups=qqParagraphGroups(segments);
+      if(quietPrivate&&groups.length>2){
+        const tail=groups.slice(1).flatMap(group=>group.filter(s=>s.type==='text').map(s=>s.data.text)).join('\n');
+        groups=[groups[0],[{type:'text',data:{text:tail}}]];
+      }
       if(groups.length>1){
         if(featureState.outbox.filter(j=>['queued','sending'].includes(j.status)).length+groups.length>200){noteDeliveryIssue({id:'overflow:'+(chat.auditId||wholeKey),chat:wholeKey,accountId:settings.activeAccountId||'',auditId:chat.auditId},'发送队列空间不足，整段消息未排队');return null;}
         const batch=chat.bubbleBatchId||randomUUID(),episode=chat.contactEpisode||chat.auditId||chat.deliveryKey||batch,baseKey=chat.deliveryKey||'paragraph:'+batch,ids=[];
         const beforeIds=new Set(featureState.outbox.map(j=>j.id));
+        const proactiveParagraphText=quietPrivate?segments.filter(s=>s.type==='text').map(s=>s.data.text).join(''):'';
         for(let i=0;i<groups.length;i++){
-          const id=queueOutgoing({...chat,_qqParagraphChild:true,contactEpisode:episode,bubbleBatchId:batch,bubbleIndex:i,deliveryKey:baseKey+':line:'+i},groups[i],i===0?previousId:'',{defer:true});
+          const id=queueOutgoing({...chat,_qqParagraphChild:true,contactEpisode:episode,bubbleBatchId:batch,proactiveParagraphBatch:quietPrivate?batch:'',proactiveParagraphText:i===0?proactiveParagraphText:'',bubbleIndex:i,deliveryKey:baseKey+':line:'+i},groups[i],i===0?previousId:'',{defer:true});
           if(!id){for(const row of featureState.outbox.filter(j=>ids.includes(j.id)&&!beforeIds.has(j.id)&&j.status==='queued')){row.status='cancelled';row.error='同一回复有分段未能排队，未提交QQ';}saveFeatures();return null;}
           ids.push(id);
         }
@@ -8663,7 +8668,7 @@ export function apply(ctx, rawConfig) {
     // An ordinary acknowledgement or proactive final reply is not task evidence.
     // Explicit bridge_life_qq/share sends carry the commitment on their target.
     const commitmentId=deliveryCommitmentId(chat);
-    const job = { id: randomUUID(),proactiveEpisode:chat.contactEpisode||activeMeta?.contactEpisode||chat.auditId||chat.bubbleBatchId||String(chat.deliveryKey||'').replace(/:part:\d+$/,'')||randomUUID(), localTranscript:String(chat.localTranscript||'').slice(0,2000), accountId: settings.activeAccountId || '',personaId:origin?.persona||activePersona(key).id,chat: key, kind: chat.kind, chatId: String(chat.chatId), commitmentId,segments,groupReply:groupBinding,fingerprint:deliveryFingerprint(segments),deliveryKey:chat.deliveryKey||'',mediaTaskId:chat.mediaTaskId||'',afterImageId:chat.afterImageId||'', initiative:chat.turnKind==='proactive'||!chat.turnKind&&activeMeta?.kind==='proactive',manualInitiative:chat.manualInitiative===true, at: Date.now(), status: stopped || accountPaused ? 'cancelled' : 'queued', attempts: 0, auditId: chat.auditId || '', previousId,notBefore:Number.isFinite(chat.notBefore)?chat.notBefore:0,bubbleBatchId:chat.bubbleBatchId||'',bubbleIndex:chat.bubbleIndex??null };
+    const job = { id: randomUUID(),proactiveEpisode:chat.contactEpisode||activeMeta?.contactEpisode||chat.auditId||chat.bubbleBatchId||String(chat.deliveryKey||'').replace(/:part:\d+$/,'')||randomUUID(), localTranscript:String(chat.localTranscript||'').slice(0,2000), accountId: settings.activeAccountId || '',personaId:origin?.persona||activePersona(key).id,chat: key, kind: chat.kind, chatId: String(chat.chatId), commitmentId,segments,groupReply:groupBinding,fingerprint:deliveryFingerprint(segments),deliveryKey:chat.deliveryKey||'',mediaTaskId:chat.mediaTaskId||'',afterImageId:chat.afterImageId||'', initiative:chat.turnKind==='proactive'||!chat.turnKind&&activeMeta?.kind==='proactive',manualInitiative:chat.manualInitiative===true, at: Date.now(), status: stopped || accountPaused ? 'cancelled' : 'queued', attempts: 0, auditId: chat.auditId || '', previousId,notBefore:Number.isFinite(chat.notBefore)?chat.notBefore:0,bubbleBatchId:chat.bubbleBatchId||'',...(chat.proactiveParagraphBatch?{proactiveParagraphBatch:chat.proactiveParagraphBatch,...(chat.proactiveParagraphText?{proactiveParagraphText:chat.proactiveParagraphText}:{})}:{}),bubbleIndex:chat.bubbleIndex??null };
     if(!previousId){const existing=existingDelivery(featureState.outbox,job);if(existing)return existing.id;}
     if(job.initiative&&!job.manualInitiative){const reason=proactiveCheck(job);if(reason){log('主动消息暂缓：'+reason);return null;}reserveProactive(job,featureState.proactiveContacts||=([]),proactiveIncoming(key));const parts=featureState.outbox.filter(r=>r.accountId===job.accountId&&r.chat===key&&r.proactiveEpisode===job.proactiveEpisode&&['queued','sending','sent','unknown'].includes(r.status));job.notBefore=Math.max(job.notBefore||0,Date.now(),...parts.map(r=>(r.notBefore||r.at)+3000));}
     featureState.outbox.push(job);
@@ -8688,7 +8693,11 @@ export function apply(ctx, rawConfig) {
       const groups=stickerMessageGroups(segments);
       for(let group=0;group<groups.length;group++){
         if(group)notBefore+=600+Math.random()*1200;
-        const id=queueOutgoing({...chat,mediaCaptionHandled:true,notBefore,bubbleBatchId:batch,bubbleIndex:index,deliveryKey:'reply:'+index+':'+group},groups[group],'',{defer:true});if(id)ids.push(id);
+        const id=queueOutgoing({...chat,mediaCaptionHandled:true,notBefore,bubbleBatchId:batch,bubbleIndex:index,deliveryKey:'reply:'+index+':'+group},groups[group],'',{defer:true});
+        if(id){
+          const row=featureState.outbox.find(job=>job.id===id);
+          ids.push(...(row?.paragraphIds||[id]));
+        }
       }
     }
     const rows=featureState.outbox.filter(job=>job.bubbleBatchId===batch&&ids.includes(job.id));
