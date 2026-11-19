@@ -38,7 +38,7 @@ test('silent round without real progress stops periodic model retries but explic
 });
 test('one activity split at noon or shifted by a minute keeps its task and send receipt',async()=>{
  let clock=Date.parse('2026-11-17T11:57:00+08:00'),calls=0,stored;
- const meta={accountId:'a',personaId:'p'},scene={date:'2026-11-17',phase:'morning',start:'11:56',end:'12:00',activity:'午休',taskKind:'rest',goal:'睡个短午觉'};
+ const meta={accountId:'a',personaId:'p'},scene={date:'2026-11-17',phase:'morning',start:'11:56',end:'12:00',activity:'读文章',taskKind:'browse',goal:'读完一篇具体文章'};
  const engine=createLifeExecution({storage:{read:()=>stored,write:v=>stored=structuredClone(v)},config:()=>({execute:true,sleep:false,maxTasksPerDay:0}),roles:()=>[{meta}],allowed:()=>true,sceneFor:()=>scene,now:()=>clock,dispatch:async()=>{calls++;return 'session';}});
  await engine.tick();const id=engine.snapshot(meta).jobs[0].id;
  const step=engine.beginStep(id,meta,{effect:'send',target:'private:1',details:{tool:'bridge_life_qq'}}).step;

@@ -276,7 +276,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
 
  function deliveryReceipt(deliveryId,{status,messageId,verification}={}){for(const j of state.jobs){if(j.finalReply?.deliveryIds?.includes(deliveryId)){j.finalReply.receipts||={};j.finalReply.receipts[deliveryId]={status,messageId:messageId||'',verification,at:now()};const values=j.finalReply.deliveryIds.map(id=>j.finalReply.receipts[id]?.status);j.finalReply.status=values.every(s=>s==='sent')?'sent':values.includes('unknown')?'unknown':values.includes('failed')?'failed':'queued';}}for(const j of state.jobs)for(const step of j.steps||[]){const ids=step.evidence?.deliveryIds||[step.evidence?.deliveryId].filter(Boolean);if(!ids.includes(deliveryId))continue;step.evidence.deliveryStates||={};step.evidence.deliveryStates[deliveryId]={status,messageId:messageId||'',verification,at:now()};if(ids.every(id=>step.evidence.deliveryStates[id]?.status==='sent'&&step.evidence.deliveryStates[id]?.verification?.state==='observed')){step.status='confirmed';step.checkedAt=now();step.evidence.verified=true;if(j.status==='needs_reconcile'&&!(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status))){if(j.lastTurnEnded){j.status='paused';j.resumeOnIdle=true;j.closeoutAttempted=true;j.continuation={...j.continuation,closeoutOnly:true};j.reason='延迟QQ回执已核对，下轮收尾或续做，不重复发送';}else{j.status='running';j.reason='QQ回执已确认，可以继续当前任务';}}}}save();}
  function pause(j,reason){j.status='paused';j.reason=reason;j.pausedAt=now();j.resumeOnIdle=true;}
- function resume(id,meta,{observed=false}={}){if(!cfg().execute)throw Error('执行实际任务已关闭，先开启后再继续日程任务');const j=job(id,meta);if(j.status==='waiting_user')throw Error('先等待对应问题的真实回答');if(j.status==='needs_reconcile'&&!observed)throw Error('先观察并核对上次操作结果');if(!['paused','interrupted','needs_reconcile','incomplete'].includes(j.status))throw Error('任务不能在当前状态恢复');if((j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)))throw Error('仍有结果未知的步骤，不能恢复执行');j.status='paused';j.resume=true;j.nextDispatchAt=0;j.resumeObserved=observed;j.reason='从保留的进度恢复，先重新观察';save();return {ok:true,id};}
+ function resume(id,meta,{observed=false}={}){if(!cfg().execute)throw Error('执行实际任务已关闭，先开启后再继续日程任务');const j=job(id,meta);if(j.status==='waiting_user')throw Error('先等待对应问题的真实回答');if(j.status==='needs_reconcile'&&!observed)throw Error('先观察并核对上次操作结果');if(!['paused','interrupted','needs_reconcile','incomplete'].includes(j.status))throw Error('任务不能在当前状态恢复');if((j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)))throw Error('仍有结果未知的步骤，不能恢复执行');j.status='paused';j.resume=true;j.nextDispatchAt=0;j.resumeRequestedAt=now();j.resumeObserved=observed;j.reason='从保留的进度恢复，先重新观察';save();return {ok:true,id};}
  async function syncState(meta){
   if(closed||!liveRole(meta))return;
   const sleeping=asleep(meta),key=scope(meta);
@@ -291,6 +291,12 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    j.status=(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status))?'needs_reconcile':'paused';j.reason='执行实际任务已关闭，保留进度，不声明完成';j.pausedAt=now();j.resume=false;j.resumeOnIdle=false;j.pausedByExecutionSwitch=true;stopped.set(scope(j.meta),j.meta);
   }
   save();for(const meta of stopped.values())await stop(meta,{scheduledOnly:true,reason:'执行实际任务已关闭'});
+ }
+ function resumableJobs(meta,explicitOnly=false){
+  return jobs(meta).filter(j=>j.kind!=='sleep'&&j.status==='paused'
+   &&(explicitOnly?j.resume&&(j.resumeRequestedAt||j.resumeAfterAnswer):j.resume||j.resumeOnIdle)
+   &&!(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)))
+   .sort((a,b)=>(b.resumeRequestedAt||b.question?.answeredAt||b.pausedAt||0)-(a.resumeRequestedAt||a.question?.answeredAt||a.pausedAt||0));
  }
  async function tick(){
   if(closed||busy)return;await enforceExecution();if(!cfg().enabled)return;busy=true;
@@ -312,12 +318,20 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    // A failed execution must not start again under a minute-shifted self-plan.
    const blockedSlot=jobs(role.meta).find(j=>['needs_reconcile','failed'].includes(j.status)&&j.scene?.date===sc.date&&j.scene?.end>calendarNow(now()).clock&&(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)));
    if(blockedSlot&&!sc.requested)continue;
-   const kind=activityKind(sc),stampedId=sceneStamp(role.meta,sc);
-   if(state.recoveredAt&&kind!=='sleep'&&!sc.requested){
+   const kind=activityKind(sc);
+   const quietSlot=!sc.requested&&kind!=='sleep'&&(sc.planOnly===true||kind==='rest');
+   let explicitResume;
+   if(quietSlot){
+    for(const old of jobs(role.meta))if(old.group?.open)await closeGroupWindow(old.meta,old,'进入日常计划时段，结束群参与');
+    explicitResume=resumableJobs(role.meta,true)[0];
+    if(!explicitResume)continue;
+   }
+   const stampedId=sceneStamp(role.meta,sc);
+   if(state.recoveredAt&&kind!=='sleep'&&!sc.requested&&!explicitResume){
     const recovery=calendarNow(state.recoveredAt);
     if(sc.date===recovery.day&&sc.start<=recovery.clock&&sc.end>recovery.clock)continue;
    }
-   let scheduled=state.jobs.find(j=>j.id===stampedId);
+   let scheduled=explicitResume||state.jobs.find(j=>j.id===stampedId);
    // A renamed overlapping plan with the same concrete goal is a revision
    // of the same activity, so it keeps the existing execution and receipts.
    if(!scheduled&&!sc.requested&&kind!=='group'&&kind!=='sleep'){
@@ -341,7 +355,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    for(const old of jobs(role.meta))if(old.id!==id&&old.status==='planned'){old.status='cancelled';old.reason='旧计划未开始，已过原定时段';}save();
    // Her group participation belongs to one slot: close it as soon as that slot ends.
    for(const old of jobs(role.meta))if(old.id!==id&&old.group?.open)await closeGroupWindow(old.meta,old,'时段结束，结束群参与');
-   if(String(sc.taskKind||'')==='group'){
+   if(!quietSlot&&String(sc.taskKind||'')==='group'){
     const actual=activityFor(role);
     const sameGroupConversation=actual?.conversation===true&&groupIds(sc).some(id=>actual.key==='group:'+id);
     const elsewhere=!sameGroupConversation&&!!actual&&actual.actual===true&&activityKind(actual)!=='group'&&actual.activity!==sc.activity;
@@ -352,8 +366,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    // Pending questions survive time-slot changes, midnight, restart and another
    // user request. They are never implicitly treated as approvals or expired.
    save();if(sc.requested||sleeping||!cfg().execute||jobs(role.meta).some(j=>['running','queued'].includes(j.status)))continue;
-   const resumable=jobs(role.meta).filter(j=>j.kind!=='sleep'&&j.status==='paused'&&(j.resume||j.resumeOnIdle)&&!(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status))).sort((a,b)=>(b.question?.answeredAt||b.pausedAt||0)-(a.question?.answeredAt||a.pausedAt||0));
-   const j=resumable[0]||scheduled;if(!['planned','paused'].includes(j.status)||j.status==='paused'&&!j.resume&&!j.resumeOnIdle)continue;
+   const j=explicitResume||resumableJobs(role.meta)[0]||scheduled;if(!['planned','paused'].includes(j.status)||j.status==='paused'&&!j.resume&&!j.resumeOnIdle)continue;
    const pending=latestTaskWait(j,now());
    if(pending?.expired){j.status='needs_reconcile';j.resumeOnIdle=false;j.reason='服务状态已过期，保留原任务号，先核对原任务，不重新提交';save();continue;}
    if(j.kind==='unsupported'){j.status='unsupported';j.reason='忽略无法实际完成的实体活动，不伪造经历';save();continue;}
@@ -372,7 +385,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    }
    if(conversationBusy(role.meta)||j.nextDispatchAt>now())continue;
    const stamp=sceneStamp(role.meta,sc);j.status='queued';j.dispatchSignature=taskProgressSignature(j);delete j.lastTurnEnded;save();
-   try{const sessionId=await dispatch(role,j);if(!sessionId){if(j.status==='queued')j.status=j.resume||j.resumeOnIdle?'paused':'planned';save();continue;}if(!cfg().execute||!allowed(role.meta)){await stop(role.meta,{scheduledOnly:true,reason:'日程执行已关闭'});if(['queued','running'].includes(j.status))pause(j,'执行期间安排变化，保留进度');save();continue;}if(j.status==='queued')j.status='running';j.boundSceneId=stamp;j.sessionId=sessionId;j.startedAt||=now();j.lastDispatchAt=now();j.dispatchCount=(j.dispatchCount||0)+1;j.resume=false;j.resumeOnIdle=false;save();}
+   try{const sessionId=await dispatch(role,j);if(!sessionId){if(j.status==='queued')j.status=j.resume||j.resumeOnIdle?'paused':'planned';save();continue;}if(!cfg().execute||!allowed(role.meta)){await stop(role.meta,{scheduledOnly:true,reason:'日程执行已关闭'});if(['queued','running'].includes(j.status))pause(j,'执行期间安排变化，保留进度');save();continue;}if(j.status==='queued')j.status='running';j.boundSceneId=stamp;j.sessionId=sessionId;j.startedAt||=now();j.lastDispatchAt=now();j.dispatchCount=(j.dispatchCount||0)+1;j.resume=false;j.resumeOnIdle=false;delete j.resumeRequestedAt;delete j.resumeAfterAnswer;save();}
    catch(e){j.status='failed';j.reason=text(e.message,220);j.endedAt=now();save();onFinish(j);}
   }catch(error){/* one broken role must not block the others */}
   }

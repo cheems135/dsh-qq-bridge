@@ -166,3 +166,52 @@ test('autonomous tasks rest for thirty minutes after completion even with no dai
    assert.equal(started,2);
  }finally{await engine.close();}
 });
+test('plan-only and rest slots do not dispatch while the next tool slot still can',async()=>{
+ const date='2026-11-19',meta={accountId:'a',personaId:'p',ownerId:'12345'};
+ let now=Date.parse(date+'T14:20:00+08:00'),stored,started=0;
+ let scene={date,start:'14:00',end:'14:30',activity:'在书桌前放空',goal:'留半小时空闲',taskKind:'rest'};
+ const engine=createLifeExecution({storage:{read:()=>stored,write:v=>{stored=structuredClone(v);}},roles:()=>[{meta,ownerKey:target}],
+   sceneFor:()=>scene,config:()=>({enabled:true,execute:true,maxTasksPerDay:0,minGapMinutes:120}),allowed:()=>true,dispatch:async()=>{started++;return 'slot-'+started;},now:()=>now});
+ try{
+  await engine.tick();
+  assert.equal(engine.snapshot(meta).jobs.length,0);
+  scene={...scene,start:'14:30',end:'15:00',activity:'把想看的文章留到以后',taskKind:'browse',planOnly:true};
+  now+=20*60_000;
+  await engine.tick();
+  assert.equal(started,0);
+  assert.equal(engine.snapshot(meta).jobs.length,0);
+  scene={...scene,start:'15:00',end:'16:00',activity:'选一篇文章认真读',planOnly:false};
+  now+=30*60_000;
+  await engine.tick();
+  assert.equal(started,1);
+ }finally{await engine.close();}
+});
+test('a planned-only slot preserves quiet while allowing an explicit resume or panel answer',async()=>{
+ for(const trigger of ['resume','answer']){
+  const date='2026-11-19',meta={accountId:'a',personaId:'p',ownerId:'12345'};
+  let now=Date.parse(date+'T14:20:00+08:00'),stored;
+  const dispatches=[];
+  let scene={date,start:'14:00',end:'14:30',activity:'读资料',goal:'读完一篇文章',taskKind:'browse'};
+  const engine=createLifeExecution({storage:{read:()=>stored,write:v=>{stored=structuredClone(v);}},roles:()=>[{meta,ownerKey:target}],
+    sceneFor:()=>scene,config:()=>({enabled:true,execute:true,maxTasksPerDay:0,minGapMinutes:120}),allowed:()=>true,
+    questionChannel:'panel',dispatch:async(_role,job)=>{dispatches.push(job.id);return 'session-'+dispatches.length;},now:()=>now});
+  try{
+   await engine.tick();
+   const id=dispatches[0];
+   const question=trigger==='answer'?await engine.request(id,meta,{kind:'payment',question:'测试审批，仅在模拟内使用',details:{merchant:'fixture',amount:1,currency:'CNY'}}):null;
+   if(!question)engine.interruptForRequest(meta);
+   scene={...scene,start:'14:30',end:'15:00',taskKind:'rest',planOnly:true,activity:'留一段安静时间'};
+   now+=15*60_000;
+   await engine.tick();
+   assert.deepEqual(dispatches,[id]);
+   if(question)engine.answer(question.id,meta,'同意');
+   else engine.resume(id,meta);
+   await engine.tick();
+   assert.deepEqual(dispatches,[id,id]);
+   const job=engine.snapshot(meta).jobs[0];
+   assert.equal(engine.snapshot(meta).jobs.length,1);
+   assert.equal(job.resumeRequestedAt,undefined);
+   assert.equal(job.resumeAfterAnswer,undefined);
+  }finally{await engine.close();}
+ }
+});
