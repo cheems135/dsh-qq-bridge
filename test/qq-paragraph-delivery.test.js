@@ -36,7 +36,7 @@ test('sticker marker no longer suppresses explicit newlines before parsing',()=>
 });
 test('actual private reply delivery separates comma-only chat into two persisted QQ jobs',async()=>{
  const {formatLocalChatParagraphs}=await import('../local-reply.js');
- const sample='我今天打算在附近走走，买点吃的，回来刚好能看看那本书，你晚上要不要一起看';
+ const sample='我刚把窗户关好，外面下雨的声音好近，明天再出门走走';
  const audit={id:'audit',accountId:'a',persona:'p',status:'completed',userWords:'今晚你打算做什么？',answer:sample,outboxIds:[]};
  const h=fixture({audit}),errors=[];
  const start=source.indexOf('function splitBursts('),end=source.indexOf('\n}',start)+2;
@@ -47,5 +47,5 @@ test('actual private reply delivery separates comma-only chat into two persisted
  await actor.sendChain;
  assert.deepEqual(errors,[]);
  assert.equal(h.featureState.outbox.length,2);
- assert.equal(h.featureState.outbox.map(job=>job.segments[0].data.text).join(''),sample.replace('买点吃的，回来','买点吃的回来'));
+ assert.equal(h.featureState.outbox.map(job=>job.segments[0].data.text).join(''),sample.replace('好近，明天','好近明天'));
 });

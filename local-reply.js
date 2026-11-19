@@ -76,33 +76,27 @@ export function needsDialogueRepair(value, {request = ''} = {}) {
 
 // Final text only: keep model-authored breaks, structured content and speech intact.
 export function formatLocalChatParagraphs(value,{request=''}={}){
- const text=String(value??'');
- if(text.trim().length<32||/[\r\n]|\\(?:r\\n|n|r)|\|\|\|/.test(text)||requestedFormatting(request)||requestedActionNarration(request)||/一段|不要分段|别分段|不换行|不要换行|single paragraph/i.test(request))return text;
- if(/`|\uE200PIC|https?:\/\/|\[(?:发送|群发|定时|语音|声音|表情|表情包|图|图片|照片|设置|查|收藏表情)[:：\]]|^\s*(?:[{[]|#{1,6}\s|[-*•]\s|\d+[.)、]\s)/m.test(text))return text;
- const units=[];let cursor=0;
- for(const match of text.matchAll(/[。！？!?；;]+[”’」』"]*|[～~]+|(?<=[，,])(?=然后|不过|但是|另外|还有|至于|第二天|明天|现在|如果|这样)/gu)){const end=match.index+match[0].length;units.push(text.slice(cursor,end));cursor=end;}
- if(cursor<text.length)units.push(text.slice(cursor));
- if(units.length<2&&text.trim().length>=32){
-  // A casual reply may use commas for all its pauses. One balanced break
-  // preserves the whole reply without sending each clause as a bubble.
-  const commas=[...text.matchAll(/[，,]/g)];
-  if(commas.length<2)return text;
-  const middle=text.length/2;
-  const breakAt=commas.map(match=>match.index+1)
-   .filter(index=>text.slice(0,index-1).trim().length>=10&&text.slice(index).trim().length>=10)
+ const text=String(value??''),length=text.trim().length;
+ const singleParagraph=/(?:不要|别|不用|无需|不)\s*(?:分段|换行|拆成多条)|(?:只要|只用|用|写成|合成|压成|保持)\s*一段(?:话|文字|回复|回答|就好|即可|$)|一段话(?:就好|就行|即可|回复|回答)|single paragraph/i;
+ if(length<22||/[\r\n]|\\(?:r\\n|n|r)|\|\|\|/.test(text)||requestedFormatting(request)||requestedActionNarration(request)||singleParagraph.test(request))return text;
+ if(/\x60|\uE200PIC|https?:\/\/|\[(?:发送|群发|定时|语音|声音|表情|表情包|图|图片|照片|设置|查|收藏表情)[:：\]]|^\s*(?:[{[]|#{1,6}\s|[-*•]\s|\d+[.)、]\s)/m.test(text))return text;
+ const boundaries=Array.from(text.matchAll(/[。！？!?；;]+[”’」』"]*|[～~]+|(?<=[，,])(?=然后|不过|但是|另外|还有|至于|第二天|明天|现在|如果|这样)/gu),match=>match.index+match[0].length);
+ const commas=Array.from(text.matchAll(/[，,]/g),match=>match.index+1);
+ const minPart=length<32?7:10;
+ const middle=text.length/2;
+ function balancedPause(points){
+  return points
+   .filter(index=>text.slice(0,index).trim().replace(/[，,。！？!?；;～~]+$/u,'').length>=minPart&&text.slice(index).trim().length>=minPart)
    .sort((a,b)=>Math.abs(a-middle)-Math.abs(b-middle))[0];
-  return breakAt?text.slice(0,breakAt).trim()+'\n'+text.slice(breakAt).trim():text;
  }
- if(units.length<2)return text;
- if(text.trim().length<56){
-  let prefix='';
-  for(const unit of units.slice(0,-1)){
-   prefix+=unit;
-   const rest=text.slice(prefix.length);
-   if(prefix.trim().length>=12&&rest.trim().length>=10)return prefix.trim()+'\n'+rest.trim();
-  }
-  return text;
- }
+ const fallback=()=>{
+  const at=balancedPause(boundaries)||(length>=24&&commas.length>=2?balancedPause(commas):undefined);
+  return at?text.slice(0,at).trim()+'\n'+text.slice(at).trim():text;
+ };
+ if(length<56)return fallback();
+ const units=[];let cursor=0;
+ for(const end of boundaries){units.push(text.slice(cursor,end));cursor=end;}
+ if(cursor<text.length)units.push(text.slice(cursor));
  const parts=[];let current='';
  for(let i=0;i<units.length;i++){
   const unit=units[i],remaining=units.slice(i).join('').trim().length;
@@ -110,5 +104,5 @@ export function formatLocalChatParagraphs(value,{request=''}={}){
   current+=unit;
  }
  if(current.trim())parts.push(current.trim());
- return parts.length>1?parts.join('\n'):text;
+ return parts.length>1?parts.join('\n'):fallback();
 }

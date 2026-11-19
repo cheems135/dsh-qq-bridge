@@ -38,3 +38,17 @@ test('short casual replies with several comma pauses use at most one balanced sp
  assert.equal(formatLocalChatParagraphs('好呀，你先去吧'),'好呀，你先去吧');
  assert.equal(formatLocalChatParagraphs(sample+'[表情包:开心]'),sample+'[表情包:开心]');
 });
+test('short replies with distinct clauses are split once, while a short acknowledgment stays intact',()=>{
+ for(const text of [
+  '我先把窗关上，等我收拾完桌子，再回来看你发来的消息',
+  '我刚把窗户关好，外面下雨的声音好近，明天再出门走走',
+  '窗外雨已经停了。等我把手里的书收好就出去转一圈。',
+ ]){
+  const formatted=formatLocalChatParagraphs(text);
+  assert.equal(formatted.split('\n').length,2);
+  assert.equal(formatted.replaceAll('\n',''),text);
+  assert.equal(formatLocalChatParagraphs(text,{request:'请用一段话回答'}),text);
+  assert.equal(formatLocalChatParagraphs(text,{request:'你看到这一段有什么感想'}),formatted);
+ }
+ assert.equal(formatLocalChatParagraphs('嗯嗯，好呀，我这就来'),'嗯嗯，好呀，我这就来');
+});
