@@ -41,7 +41,7 @@ export function createCommitments({read,write,now=Date.now,dispatch,eligible=()=
    if(kind==='message'){trigger.phrases=[...new Set((a.trigger.phrases||[]).map(v=>clean(v,80)).filter(Boolean))];if(!trigger.phrases.length)throw Error('请保存需要等到的明确消息，不能用空条件');}
    const actor=context(c),prior=state.jobs.find(j=>scope(j)===scope(actor)&&!terminal.has(j.status)&&j.goal===goal&&JSON.stringify(j.trigger)===JSON.stringify(trigger));
    if(prior){c.meta.commitmentId=prior.id;return {ok:true,reused:true,job:structuredClone(prior)};}
-   const id=ownerId(actor),j={id:randomUUID(),accountId:c.accountId||'',personaId:c.personaId||'',ownerId:id,key:'private:'+id,sourceKey:c.key,goal,doneWhen,next,trigger,status:kind==='now'?'ready':'waiting',source:fromUser?clean(c.meta.userWords,1200):'当前人设自主决定：'+goal,at:now(),updatedAt:now(),revision:0,receipts:[],stalls:0};
+   const id=ownerId(actor),j={id:randomUUID(),accountId:c.accountId||'',personaId:c.personaId||'',ownerId:id,key:'private:'+id,sourceKey:c.key,goal,doneWhen,next,trigger,status:kind==='now'?'ready':'waiting',source:fromUser?clean(c.meta.userWords,1200):'当前人设自主决定：'+goal,...(fromSelf&&(c.meta.lifeJobId||c.meta.sourceLifeJobId)?{sourceLifeJobId:c.meta.lifeJobId||c.meta.sourceLifeJobId}:{}),at:now(),updatedAt:now(),revision:0,receipts:[],stalls:0};
    state.jobs.push(j);c.meta.commitmentId=j.id;save();return {ok:true,job:structuredClone(j)};
   }
   const j=owned(a.id||c.meta?.commitmentId,c);if(terminal.has(j.status))return {ok:true,job:structuredClone(j)};

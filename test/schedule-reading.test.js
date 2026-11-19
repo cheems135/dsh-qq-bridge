@@ -1,3 +1,4 @@
+import {scheduledChatHeld,scheduledChatReceipt} from '../schedule-continuity.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
 import {assertScheduleReading,scheduleReadingEvidence,unsupportedScheduleReading} from '../schedule-reading.js';import {executeLocalAutonomy} from '../local-autonomy.js';import {briefLifeJob} from '../prompt-budget.js';
 const planned={id:'j',status:'planned',scene:{activity:'阅读鲸鱼育幼文章',actual:false},steps:[],evidence:[]};
@@ -35,8 +36,8 @@ test('actual task with real reading still delivers a contextual reply',async()=>
 const source=fs.readFileSync(new URL('../index.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 function nativeChat(job=planned){
  const start=source.indexOf('      lifeChat:async(args,context)=>{'),end=source.indexOf('\n      adjustLife:',start);assert(start>0&&end>start);let sends=0;
- const deps={socialReplyForChat:async v=>v,agencyAuthorized:()=>true,shareTask:()=>job,targets:()=>['private:12345'],resolveShareRecipient:v=>v||'private:12345',assertScheduleReading,textHash:v=>crypto.createHash('sha256').update(v).digest('hex'),outgoingActivityChat:()=>({}),executionRuntime:{begin:()=>{}},naturalBubbleParts:v=>[v],sendSegments:()=>{sends++;return 'sent';},rememberActivityShare:()=>{}};
- const fn=new Function(...Object.keys(deps),'return ({'+source.slice(start,end)+'}).lifeChat;')(...Object.values(deps));return {call:text=>fn({action:'send',text,target:'private:12345'},{key:'private:12345',meta:{lifeJobId:'j'}}),get sends(){return sends;}};
+ const deps={scheduledChatHeld,scheduledChatReceipt,socialReplyForChat:async v=>v,agencyAuthorized:()=>true,shareTask:()=>job,targets:()=>['private:12345'],resolveShareRecipient:v=>v||'private:12345',assertScheduleReading,textHash:v=>crypto.createHash('sha256').update(v).digest('hex'),outgoingActivityChat:()=>({}),executionRuntime:{begin:()=>{}},naturalBubbleParts:v=>[v],sendSegments:()=>{sends++;return 'sent';},rememberActivityShare:()=>{}};
+ const fn=new Function(...Object.keys(deps),'return ({'+source.slice(start,end)+'}).lifeChat;')(...Object.values(deps));return {call:text=>fn({action:'send',text,target:'private:12345'},{key:'private:12345',meta:{kind:'user',lifeJobId:'j'}}),get sends(){return sends;}};
 }
 test('actual native API schedule chat checks evidence before any queue side effect',async()=>{
  const f=nativeChat();await assert.rejects(f.call(failedSample),e=>e.code==='SCHEDULE_READING_EVIDENCE_REQUIRED');assert.equal(f.sends,0);
@@ -54,7 +55,7 @@ test('tool-time reading proof is refreshed instead of rejecting a task that just
 });
 
 test('actual native artwork share blocks invented reading before queuing image or caption',async()=>{
- const existing=fs.readFileSync(new URL('./sharing-dialogue.test.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');let fixture=existing.slice(existing.indexOf('function shareFixture('),existing.indexOf("test('actual native image sharing prepares"));fixture=fixture.replace('const deps={','const deps={assertScheduleReading,').replace("'先给你看看这只小鲸鱼。'",JSON.stringify(failedSample));
- const make=new Function('source','assertScheduleReading','crypto','assert',fixture+';return shareFixture;')(source,assertScheduleReading,crypto,assert),f=make();f.context.meta.lifeJobId='j';await assert.rejects(f.callback({action:'send',file:f.file},f.context),e=>e.code==='SCHEDULE_READING_EVIDENCE_REQUIRED');assert.equal(f.sent.length,0);
- const valid=make();valid.context.meta.lifeJobId='j';valid.job.evidence=[read];assert((await valid.callback({action:'send',file:valid.file},valid.context)).ok);assert.equal(valid.sent.length,2);
+ const existing=fs.readFileSync(new URL('./sharing-dialogue.test.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');let fixture=existing.slice(existing.indexOf('function shareFixture('),existing.indexOf("test('actual native image sharing prepares"));fixture=fixture.replace('const deps={','const deps={assertScheduleReading,scheduledChatHeld,scheduledChatReceipt,').replace("'先给你看看这只小鲸鱼。'",JSON.stringify(failedSample));
+ const make=new Function('source','assertScheduleReading','scheduledChatHeld','scheduledChatReceipt','crypto','assert',fixture+';return shareFixture;')(source,assertScheduleReading,scheduledChatHeld,scheduledChatReceipt,crypto,assert),f=make();f.context.meta= {kind:'user',lifeJobId:'j'};await assert.rejects(f.callback({action:'send',file:f.file},f.context),e=>e.code==='SCHEDULE_READING_EVIDENCE_REQUIRED');assert.equal(f.sent.length,0);
+ const valid=make();valid.context.meta= {kind:'user',lifeJobId:'j'};valid.job.evidence=[read];assert((await valid.callback({action:'send',file:valid.file},valid.context)).ok);assert.equal(valid.sent.length,2);
 });

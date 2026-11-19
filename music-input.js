@@ -22,6 +22,29 @@ export function selectMusicInput(extracted={}){
  }
  for(const url of extracted.urls||[]){const target=musicTarget(url);if(target)return target;}return null;
 }
+// Detailed measurements stay available to the audio tool. For chat, distribute
+// examples through the measured interval or focus on the time the user named.
+export function musicTimePoint(words=''){
+ const plain=String(words).replace(/https?:\/\/\S+/g,' ').replace(/(?:凌晨|清晨|早上|上午|中午|下午|傍晚|晚上|今晚|明早)\s*\d{1,2}[:：][0-5]\d/g,' ');
+ const clock=plain.match(/(?:^|[^\d:])(\d{1,3})[:：]([0-5]\d)(?!\d)/);
+ if(clock)return Number(clock[1])*60+Number(clock[2]);
+ const seconds=plain.match(/(?:第|到|在|从|听听|看下|^|\s)(?:(\d{1,3})分(?:钟)?)?(\d{1,4})秒/);
+ return seconds?Number(seconds[1]||0)*60+Number(seconds[2]):null;
+}
+export function musicChatEvidence(result,{at=null,details=false,lyrics=false}={}){
+ const m=result.music||{},start=Number(result.start)||0,end=Number(result.end)||0;
+ const focus=Number.isFinite(at),from=focus?Math.max(start,at-12):start,to=focus?Math.min(end,at+12):end;
+ const sample=(items,limit)=>items.length<=limit?items:Array.from({length:limit},(_,i)=>items[Math.round(i*(items.length-1)/(limit-1))]);
+ const nearby=rows=>(rows||[]).filter(r=>r.start<to&&r.end>from);
+ const sheet=result.lyrics,lines=sheet?.lines||[];
+ const timed=lines.filter(l=>Number.isFinite(l.time)&&l.time>=from&&l.time<=to);
+ return {title:result.title,author:result.author,duration:result.duration,coverage:result.coverage,
+  ...(focus?{askedAt:at,withinMeasuredRange:at>=start&&at<=end}:{}),
+  changes:sample(nearby(m.changes),8),levels:sample(nearby(m.energyTimeline),details?20:5),beatCandidates:m.beatCandidates?.slice(0,2),
+  soundWindows:nearby(m.soundSamples?.windows),soundCandidates:sample(nearby(m.soundSamples?.candidates).filter(s=>s.label!=='音乐'),10),
+  ...(details?{bandEnergy:m.bandEnergy,keyCandidates:m.keyCandidates,keyAmbiguous:m.keyAmbiguous}:{}),
+  lyricSource:sheet?.provider,lyricStatus:sheet?.status,lyricExcerpts:sample(timed.length?timed:!focus&&!result.preview&&!result.partial?lines.filter(l=>l.time==null):[],lyrics?16:4).map(l=>({at:l.time,text:String(l.text).slice(0,120)}))};
+}
 export function parseMusicLyrics(value,{source='',provider='user',songId='',confirmed=false}={}){
  const raw=String(value||'').replace(/\u0000/g,'').slice(0,64000),lines=[];
  for(const row of raw.split(/\r?\n/)){

@@ -73,7 +73,7 @@ export function emotionProfile(mood) {
 }
 
 // Speech uses the saved guidance value; an emotion label does not authorize
-// changing it. Keep the existing singing behavior separate from speech.
+// changing it.
 export function guidanceFor(mood, base = 2, performance = 'speech') {
   const value = clamp(Number.isFinite(Number(base)) ? Number(base) : 2, 1, 10);
   return performance === 'sing' ? Math.max(value, 4) : value;

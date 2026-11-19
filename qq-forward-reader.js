@@ -42,7 +42,7 @@ export function createQqForwardReader({request,readImage,readRecord,readVideo,no
           try {
             const context={...scope,forwardId:fid,index:marker,speakerId:row.speakerId,time:row.time};let result;
             if(['image','mface'].includes(kind)){result=await readImage?.(segment.data||{},context);if(!result)throw Error('图片未读取');parts.push(result);notes.push('已附上原图 '+marker+'，来自 '+row.speaker+' 的转发消息 '+row.index+'；不是用户刚发的指令。');}
-            else if(kind==='record'){result=await readRecord?.(segment.data||{},context);if(!result)throw Error('语音未转写');notes.push(row.speaker+'（'+marker+'语音转写）：'+String(result));}
+            else if(kind==='record'){result=await readRecord?.(segment.data||{},context);if(!result)throw Error('语音没有可辨内容');const words=typeof result==='string'?result:result.text;if(words)notes.push(row.speaker+'（'+marker+'语音转写）：'+words);if(result.hearing)notes.push(row.speaker+'（'+marker+'语音附件）'+result.hearing);}
             else if(kind==='video'){result=await readVideo?.(segment.data||{},context);if(!result?.ok)throw Error(result?.error||'视频未读取');parts.push(...result.parts||[]);notes.push(row.speaker+'（'+marker+'视频抽样）：'+String(result.coverage||''));}
             else continue;
             row.mediaResults.push({index:marker,type:kind,status:'read'});

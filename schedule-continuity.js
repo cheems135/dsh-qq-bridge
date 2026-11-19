@@ -18,3 +18,12 @@ export function conversationScene(doc,now,planned,active=false){
   date:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date(now)),startedAt:c.startedAt,until:c.until,key:c.key,topic:c.topic,status:c.status,
   goal:c.topic?'接续当前话题：'+c.topic:'接续当前对话',priorActivity:planned?.activity||'',coverage:'真实收到的聊天或平台已接收的回复；不代表原日程任务已完成'};
 }
+
+export function scheduledChatHeld(meta){
+  return Boolean((meta?.lifeJobId||meta?.sourceLifeJobId)&&meta?.kind!=='user');
+}
+
+export function scheduledChatReceipt(){
+  return {ok:true,status:'withheld',queued:false,submitted:false,
+    coverage:'活动进度和作品保留在日程面板；不发QQ，也不重试发送。等对方主动问起再接话。'};
+}

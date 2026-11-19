@@ -1,3 +1,7 @@
+import {initiativeConversation,recentOperationContext} from '../operation-context.js';
+import {qqHumanWords} from '../qq-poke.js';
+import {isShortAcknowledgement} from '../background-cost-policy.js';
+import {recentReplyAnchor,replyAnchorHint} from '../operation-context.js';
 import {qqTaskEvidence} from '../qq-task-evidence.js';
 import {conversationExecutionGrounding} from '../initiative-grounding.js';
 import {foldAuxiliaryUsage} from '../usage-accounting.js';
@@ -12,7 +16,7 @@ import {calendarNow} from '../life-memory.js';
 import {localDailyDiaryInput} from '../daily-journal.js';
 import {createLocalInitiative} from '../local-initiative.js';
 import {speakerIdentity} from '../contact-policy.js';
-import {groupTurnHint} from '../group-conversation.js';
+import {groupTurnHint,IMAGE_CONVERSATION_HINT,silentConversationReply} from '../group-conversation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -21,10 +25,13 @@ import {createHash,randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
 import {validateLocalAttachment} from '../local-config.js';
-import {cleanLocalReply} from '../local-reply.js';
+import {cleanLocalReply,formatLocalChatParagraphs} from '../local-reply.js';
+import {hasHearingEvidence} from '../hearing-evidence.js';
+import {dialogueReceiptHint} from '../api-conversation-context.js';
 import {prepareLocalReply} from '../local-repetition.js';
-import {naturalBubbleParts} from '../chat-bubbles.js';
-import {localImageRequest} from '../media-intent.js';
+import {naturalBubbleParts,stickerReplyText} from '../chat-bubbles.js';
+import {localImageRequest,mediaIntentHint,requestsDifferentCover,requestsSinging,selectMediaIntent} from '../media-intent.js';
+import {isRunningHubCover} from '../runninghub-audio.js';
 import {removeStreamedPrefix} from '../local-fast-chat.js';
 import {unresolvedLocalReceipts} from '../bridge-issues.js';
 import {createInvocationJournal} from '../invocation-journal.js';
@@ -39,19 +46,20 @@ import {resolveLocalMediaTask} from '../local-media-task.js';
 import {localRequirements,chooseLocalRoute,waitForLocalRoute} from '../local-routing.js';
 
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
+const anchorSource=source.slice(source.indexOf('  function chatReplyAnchor('),source.indexOf('  async function understandMediaRequest('));
 const localSource=source.slice(source.indexOf('  function localTurnScope(chat)'),source.indexOf('\n  async function handlePayloadCore('));
 const inboundSource=source.slice(source.indexOf('  function handlePayload(payload,'),source.indexOf('\n  async function drainInbox('));
 assert.ok(localSource.length>1000&&inboundSource.length>1000);
 
 function setup(){
   const queued=[],logged=[],calls=[],issues=[];
-  const sandbox={voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
+  const sandbox={musicContextByChat:new Map(),prepareMusicEvidence:async()=>{},hasHearingEvidence,dialogueReceiptHint,recordsAllowed:()=>true,qqHumanWords,isShortAcknowledgement,recentReplyAnchor,replyAnchorHint,requestsSinging,voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,formatLocalChatParagraphs,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
     foldAuxiliaryUsage,usage:{},invocationCost:()=>0,saveUsage:()=>{},splitBursts:(value,limit,options)=>naturalBubbleParts(value,options),replyCharLimit:()=>2000,
     settings:{activeAccountId:'a',presetPrompts:{p:'角色设定'},basePersona:'完整系统提示词',memory:{enabled:false},localChat:{enabled:true,baseUrl:'http://127.0.0.1:8777'},owners:['12345'],reliability:{}},
     persona:{id:'p'},version:'v1',featureState:{floors:{},inbox:[],outbox:[],audits:[]},memories:{},messages:[],memoryHub:null,localTurns:new Map(),stopped:false,accountPaused:false,
     state:{chats:{}},ctx:{get:()=>undefined,effect:()=>{},sessionController:{cancel:()=>{}}},
     soul:{mood:moodState()},soulFor:()=>sandbox.soul,currentPersonaMood:()=>sandbox.soul.mood,
-    enrichConversation:()=>{},prepareCalendarContext:async()=>{},
+    enrichConversation:()=>{},prepareCalendarContext:async()=>{},imageTurnHint:()=>'',isSoloStickerTurn:()=>false,
     segmentsOf:parts=>Array.isArray(parts)?parts:[],transcribeRecord:async()=>'',
     auditForTurn:()=>{const audit={id:randomUUID(),accountId:'a',persona:'p'};sandbox.featureState.audits||=[];sandbox.featureState.audits.push(audit);return audit;},auditAnswerCap:()=>20000,
     extractExpressionTag:text=>({text,emotion:''}),publishCompanionReaction:()=>{},reflectOnTurn:async()=>{},
@@ -72,7 +80,7 @@ function setup(){
   vm.runInContext(source.slice(source.indexOf('  function conversationExecutionHint('),source.indexOf('  async function nudge(')),sandbox);
   const invocationSource=source.slice(source.indexOf('  function recordInvocation(event,scope)'),source.indexOf('\n  function invocationScope('));
   const identitySource=source.slice(source.indexOf('  function groupBindingFor(chat)'),source.indexOf('  function sendText(chat,text)'));
-  vm.runInContext(identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
+  vm.runInContext(anchorSource+'\n'+identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
   sandbox.getLocalCapabilities=async()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:Object.fromEntries(['text','json','tools','vision','asr','speech','image','video'].map(key=>[key,{supported:true}]))});
   return {sandbox,queued,logged,calls,issues,...sandbox.review,chat:{key:'private:12345',kind:'private',isOwner:true,chatId:'12345',userId:'12345',incomingImages:[]}};
 }
@@ -110,7 +118,7 @@ test('actual private and group bridge turns share only current outfit and preser
 
 test('actual local initiative adapter uses background inference and the same reliable QQ outbox without a host API session',async()=>{
  const h=setup(),s=h.sandbox;
- Object.assign(s,{autonomyConfig:()=>({enabled:true,initiate:true}),effectiveUsers:()=>['12345'],privateInitiativeAllowed:()=>true,calendarRole:()=>({meta:{}}),socket:{ready:true},recordsAllowed:()=>true,pausedConversation:()=>false,featureProfile:()=>({}),inDnd:()=>false,initiativeWindow:()=>true,lifeExecution:null,lifeMemory:null,personaPromptText:()=> '角色风格'});
+ Object.assign(s,{proactiveCheck:()=>'',privateInitiativeUnanswered:()=>false,initiativeConversation,operationContext:()=>recentOperationContext(s.messages,{key:h.chat.key,accountId:'a',personaId:'p'}),autonomyConfig:()=>({enabled:true,initiate:true}),effectiveUsers:()=>['12345'],privateInitiativeAllowed:()=>true,calendarRole:()=>({meta:{}}),socket:{ready:true},recordsAllowed:()=>true,pausedConversation:()=>false,featureProfile:()=>({}),inDnd:()=>false,initiativeWindow:()=>true,lifeExecution:null,lifeMemory:null,personaPromptText:()=> '角色风格'});
  s.messages.push({chat:h.chat.key,accountId:'a',personaId:'p',time:Date.now()-2*3600000,dir:'in',text:'最近在学摄影。'});
  s.requestLocalJson=async(url,options={})=>{
   h.calls.push({url,body:options.body});
@@ -446,4 +454,87 @@ test('actual local routing releases its wake hold once after success and capabil
   await h.routeLocalTurn(h.chat,'你好',false,{message_id:998});
   assert.equal(held,1);assert.equal(released,1);assert.equal(h.calls.length,unavailable?0:1);
  }
+});
+
+test('opted-in RunningHub singing can use local chat even when its gateway has no singing engine',async()=>{
+ const h=setup(),requested='你能给我唱一首歌吗？';
+ h.sandbox.settings.voice={enabled:true,runninghub:{sing:{id:'2055815336380911617',allowLocal:true}}};
+ Object.assign(h.sandbox,{requestsDifferentCover,mediaIntentHint,isRunningHubCover,selectMediaIntent,featureProfile:()=>({})});
+ const songCode=source.slice(source.indexOf('  function singingWorkflowFor('),source.indexOf('  function voiceRuntimeReadiness('));
+ vm.runInContext(songCode,h.sandbox);
+ h.sandbox.settings.imagegen={runninghub:{apiKey:'test-key'}};
+ h.sandbox.getLocalCapabilities=async()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:{text:{supported:true},tools:{supported:true},speech:{supported:false},special:{supported:false}}});
+ assert.equal(await h.routeLocalTurn(h.chat,requested,false,{message_id:552}),true);
+ assert.equal(h.calls.length,1);
+ assert.equal(h.queued.at(-1).segments[0].data.text,'最后答复');
+ h.sandbox.settings.voice.runninghub.sing.allowLocal=false;
+ assert.equal(await h.routeLocalTurn(h.chat,requested,false,{message_id:553}),true);
+ assert.equal(h.calls.length,1);
+ assert.notEqual(h.queued.at(-1).segments[0].data.text,'最后答复');
+});
+
+test('a solo private sticker is a conversational reaction even without recent history',()=>{
+  const h=setup();
+  Object.assign(h.sandbox,{operationContext:()=>[],IMAGE_CONVERSATION_HINT});
+  const stickerCode=source.slice(source.indexOf('  function isSoloStickerTurn('),source.indexOf('\n  function recentDialogueReplies('));
+  const imageHint=vm.runInContext(stickerCode+'\nimageTurnHint',h.sandbox);
+  const reaction={type:'image',data:{sub_type:1}};
+  assert.match(imageHint(h.chat,{message:[reaction]}),/直接说自己的反应/);
+  assert.equal(imageHint(h.chat,{message:[reaction,{type:'text',data:{text:'这个表情是什么意思？'}}]}),IMAGE_CONVERSATION_HINT);
+  assert.equal(imageHint({...h.chat,kind:'group'},{message:[reaction]}),IMAGE_CONVERSATION_HINT);
+  const caption='这只企鹅吐着舌头看人，是不是替你说"别得意！就这？"';
+  const natural='这张把我逗笑了，我刚才确实有点得意。';
+  assert.equal(stickerReplyText(caption),'');
+  assert.equal(stickerReplyText(caption+'。\n'+natural),natural);
+  assert.equal(stickerReplyText(natural),natural);
+});
+
+test('actual local sticker turn buffers narration and only rewrites a discarded draft',async()=>{
+  for(const shouldRepair of [true,false]){
+    const h=setup();
+    const caption='这只企鹅吐着舌头，是不是替你说“别得意”';
+    const natural='还挺会逗我。好嘛，这局算你赢。';
+    const stickerCode=source.slice(source.indexOf('  function isSoloStickerTurn('),source.indexOf('\n  function recentDialogueReplies('));
+    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+    let repairs=0;
+    h.chat.incomingImageData=[{file:'qq-sticker'}];
+    Object.assign(h.sandbox,{stickerReplyText,silentConversationReply,IMAGE_CONVERSATION_HINT,operationContext:()=>[],personaPromptText:()=> '测试人设',readImageBytes:async()=>png,
+      askModel:async(system,input,_limit,_model,_timeout,_structured,signal)=>{
+        repairs++;
+        assert.match(system,/直接说自己的反应/);
+        assert.equal(JSON.parse(input).draft,caption);
+        assert.equal(signal.aborted,false);
+        return natural;
+      }});
+    const isSolo=vm.runInContext(stickerCode+'\nisSoloStickerTurn',h.sandbox);
+    const audit=h.sandbox.auditForTurn;
+    h.sandbox.auditForTurn=(chat,text,payload,parts)=>Object.assign(audit(chat,text,payload,parts),{soloSticker:isSolo(chat,payload),at:Date.now()});
+    h.sandbox.requestLocalJson=async(_url,options)=>{
+      const draft=shouldRepair?caption:natural;
+      assert.match(JSON.stringify(options.body.messages.at(-1).content),/单发私聊表情/);
+      options.onEvent({event:'text',index:0,text:draft});
+      assert.equal(h.queued.length,0);
+      return {ok:true,status:200,body:{text:draft,attachments:[],receipts:[]}};
+    };
+    await h.handleLocalChatTurn(h.chat,'',true,{message_id:720,message:[{type:'image',data:{sub_type:1}}]});
+    assert.equal(repairs,Number(shouldRepair));
+    assert.deepEqual(h.queued.map(entry=>entry.segments[0].data.text),[natural]);
+  }
+});
+
+test('actual local QQ turn queues a configured cover after a text answer without a second tool request',async()=>{
+  const h=setup(),song='你再唱一段吧',coverCalls=[];
+  const selected={kinds:['voice'],cover:true,source:'direct',request:song};
+  Object.assign(h.sandbox,{explicitSingingIntent:()=>selected,mediaIntentHint:()=> '本轮使用保存的原曲翻唱。',
+    sendText:(actor,marker)=>coverCalls.push({actor,marker})});
+  h.sandbox.requestLocalJson=async(_url,options)=>{
+    assert.match(JSON.stringify(options.body.messages),/本轮使用保存的原曲翻唱/);
+    return {ok:true,status:200,body:{text:'行呀。',attachments:[]}};
+  };
+  await h.handleLocalChatTurn(h.chat,song,false,{message_id:964,message:[{type:'text',data:{text:song}}]});
+  assert.equal(h.queued[0].segments[0].data.text,'行呀。');
+  assert.equal(coverCalls.length,1);
+  assert.equal(coverCalls[0].actor.runningHubCover,true);
+  assert.equal(coverCalls[0].marker,'[语音:唱歌]');
+  assert.equal(h.sandbox.featureState.audits.at(-1).mediaIntent.cover,true);
 });

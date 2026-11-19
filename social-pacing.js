@@ -15,10 +15,34 @@ export function claimSpaceComment(offers,c,row,now=Date.now()){
  if(offer.commentAttempt)throw Error('这次空间访问已尝试一条评论或回复，继续浏览即可，不再连续评论');
  offer.commentAttempt={id:row.id,kind:row.kind,at:now};return true;
 }
-export function proactiveDenial(job,rows,lastIncoming,now=Date.now()){
+const privateContact=chat=>String(chat||'').startsWith('private:');
+
+// An outbox reservation is not evidence that the other person received a message.
+export function unansweredPrivateInitiative(job,outbox,messages,lastIncoming){
+ if(!job.initiative||job.manualInitiative||job.commitmentId||!privateContact(job.chat))return false;
+ const scope=row=>row.accountId===job.accountId&&row.chat===job.chat;
+ const afterReply=(at,episode)=>Number(at)>0&&Number(at)>=Number(lastIncoming||0)
+  &&(!episode||episode!==job.proactiveEpisode);
+ return outbox.some(row=>scope(row)&&row.initiative===true&&!row.manualInitiative&&!row.commitmentId&&!row.lifeJobId&&!row.sourceLifeJobId
+   &&row.status==='sent'&&!row.retracted&&!row.withdrawn&&afterReply(row.sentAt||row.ackAt||row.at,row.proactiveEpisode))
+  ||messages.some(row=>scope(row)&&row.dir==='out'&&row.delivery==='sent'&&row.automaticPrivate===true&&!row.retracted
+   &&afterReply(row.initiativeSentAt||row.time,row.proactiveEpisode));
+}
+
+export function proactiveDenial(job,rows,lastIncoming,now=Date.now(),privateMinGapMinutes=0){
  if(!job.initiative||job.manualInitiative)return '';
  const own=rows.filter(r=>sameScope(r,job)&&now-r.at<CONTACT_HISTORY_MS);
- if(job.proactiveEpisode&&own.some(r=>r.episode===job.proactiveEpisode))return '';
+ const episode=job.proactiveEpisode&&own.find(r=>r.episode===job.proactiveEpisode);
+ const gap=Math.max(0,Math.min(1440,Number(privateMinGapMinutes)||0))*60_000;
+ if(gap&&privateContact(job.chat)&&!job.commitmentId){
+  if(episode){
+   if(job.id&&episode.deliveryId===job.id&&Number(lastIncoming||0)<=Number(episode.lastIncoming||0))return '';
+   return '本次主动私聊已经占用一个通知，暂缓后续消息';
+  }
+  if(lastIncoming>0&&now-lastIncoming<Math.min(gap,30*60_000))return '刚聊过，先留一点安静时间';
+  if(rows.some(r=>r.accountId===job.accountId&&privateContact(r.chat)&&now-r.at<gap))return '全账号主动私聊间隔还未到';
+ }
+ if(episode)return '';
  const text=contactText(job);
  // Decision probes have no payload. Check content when it actually reaches the outbox.
  if(!job.segments)return '';
@@ -31,8 +55,8 @@ export function reserveProactive(job,rows,lastIncoming,now=Date.now()){
  const denial=proactiveDenial(job,rows,lastIncoming,now);if(denial)throw Error(denial);
  if(!job.initiative||job.manualInitiative)return false;
  const own=rows.find(r=>sameScope(r,job)&&r.episode===job.proactiveEpisode),text=contactText(job);
- if(own){own.texts||=[];own.fingerprints||=[];if(text&&!own.texts.includes(text))own.texts.push(text);if(job.fingerprint&&!own.fingerprints.includes(job.fingerprint))own.fingerprints.push(job.fingerprint);return false;}
- const value={accountId:job.accountId,personaId:job.personaId||'',chat:job.chat,episode:job.proactiveEpisode,at:now,lastIncoming:Number(lastIncoming)||0,texts:text?[text]:[],fingerprints:job.fingerprint?[job.fingerprint]:[]};
+ if(own){if(job.id&&own.deliveryId===job.id)own.at=now;own.texts||=[];own.fingerprints||=[];if(text&&!own.texts.includes(text))own.texts.push(text);if(job.fingerprint&&!own.fingerprints.includes(job.fingerprint))own.fingerprints.push(job.fingerprint);return false;}
+ const value={accountId:job.accountId,personaId:job.personaId||'',chat:job.chat,episode:job.proactiveEpisode,deliveryId:job.id||'',at:now,lastIncoming:Number(lastIncoming)||0,texts:text?[text]:[],fingerprints:job.fingerprint?[job.fingerprint]:[]};
  rows.push(value);
  for(let i=rows.length-1;i>=0;i--)if(now-rows[i].at>=CONTACT_HISTORY_MS)rows.splice(i,1);
  const scoped=rows.filter(r=>sameScope(r,job));for(const old of scoped.slice(0,-32)){const i=rows.indexOf(old);if(i>=0)rows.splice(i,1);}

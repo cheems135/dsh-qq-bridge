@@ -4,6 +4,7 @@ export function renderPageNavigation(group,current,heads,escape){
 }
 
 export function passiveConsoleRequest(method,url,payload){
+ if(method==='POST'&&url==='/im-bridge/voice/preview'&&payload?.action==='status')return true;
  if(method!=='POST')return true;
  if(url==='/im-bridge/clientlog')return true;
  const reads={

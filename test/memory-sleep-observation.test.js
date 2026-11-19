@@ -9,7 +9,7 @@ import {createLocalGroupWindow} from '../local-group-window.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8'),html=readConsoleSource();
 test('actual sleep transition releases each turn and still cancels the session without a scope error',async()=>{
  let released=0,cancelled=0;const chat={key:'private:1',sessionId:'s',pendingTurns:['old'],turns:new Map([['turn',{resumeObservation:()=>released++,resumeWake:()=>released++}]])};
- const start=source.indexOf('      stop:async(m,options={})=>{',source.indexOf('lifeExecution=createLifeExecution(')),end=source.indexOf('\n      notify:',start);
+ const start=source.indexOf('      stop:async(m,options={})=>{',source.indexOf('lifeExecution=createLifeExecution(')),end=source.indexOf('\n      questionChannel:',start);
  const code=source.slice(start,end).trim().replace(/^stop:/,'').replace(/,$/,'');
  const deps={localInitiative:null,effectiveGroups:()=>[],localTurns:new Map(),chats:new Map([['s',chat]]),activePersona:()=>({id:'p'}),videoReader:null,videoScope:()=>'',ctx:{sessionController:{cancel:async()=>cancelled++}},clearSilenceTimer:()=>{},clearAfterTimer:()=>{}};
  await Function(...Object.keys(deps),'return ('+code+');')(...Object.values(deps))({personaId:'p',accountId:'a'});

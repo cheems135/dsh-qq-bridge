@@ -22,7 +22,7 @@ for(const isDesktop of [true,false])for(const text of ['第一段，\n第二段�
  const audit={id:'audit',accountId:'a',persona:'p',status:'completed',userWords:'聊聊天',answer:text,outboxIds:[]};
  const h=fixture({audit}),errors=[];
  const parse=extract('burstSegments',{settings:{stickerDisabled:[]},FACE_IDS:{},resolveSticker:()=>'/fixture/happy.png',randomSticker:()=>'/fixture/happy.png',stickersInGroup:()=>[],log:()=>{}});
- const deps={...h.deps,isDesktop,stripUnrequestedActions:v=>v,completeMediaReply:v=>v,directMediaIntent:()=>null,explicitlyRequestsImage:()=>false,removeDuplicatePassages:v=>v,imageFirstReply:v=>v,cfg:{plainText:false},replyCharLimit:()=>2000,companionSettings:()=>({maxBubbles:1,automaticBreaks:false}),splitBursts:(v,_limit,options)=>naturalBubbleParts(v,options),burstSegments:parse,stickerMessageGroups,sendSegments:(actor,segments)=>h.queue(actor,segments),setTimeout:fn=>queueMicrotask(fn),replyDeliveryFailure:(_chat,error)=>errors.push(error)};
+ const deps={...h.deps,chats:new Map(),state:{chats:{}},isDesktop,stripUnrequestedActions:v=>v,completeMediaReply:v=>v,directMediaIntent:()=>null,explicitlyRequestsImage:()=>false,removeDuplicatePassages:v=>v,imageFirstReply:v=>v,cfg:{plainText:false},replyCharLimit:()=>2000,companionSettings:()=>({maxBubbles:1,automaticBreaks:false}),splitBursts:(v,_limit,options)=>naturalBubbleParts(v,options),burstSegments:parse,stickerMessageGroups,sendSegments:(actor,segments)=>h.queue(actor,segments),setTimeout:fn=>queueMicrotask(fn),replyDeliveryFailure:(_chat,error)=>errors.push(error)};
  const send=extract('sendTextNow',deps),actor={...chat,auditId:audit.id,mediaIntentHandled:true};send(actor,text);await actor.sendChain;
  assert.deepEqual(errors,[]);const jobs=h.featureState.outbox,images=jobs.filter(j=>j.segments.some(s=>s.type==='image'));
  assert.equal(jobs.length,3);assert.equal(images.length,1);assert.deepEqual(images[0].segments,[{type:'image',data:{file:'/fixture/happy.png'}}]);
@@ -33,4 +33,19 @@ for(const isDesktop of [true,false])for(const text of ['第一段，\n第二段�
 test('sticker marker no longer suppresses explicit newlines before parsing',()=>{
  assert.deepEqual(naturalBubbleParts('第一段\n第二段[表情包:开心]',{maxBubbles:1,automaticBreaks:false}),['第一段','第二段[表情包:开心]']);
  assert.deepEqual(naturalBubbleParts('[发送:12345|第一段\n第二段]'),['[发送:12345|第一段\n第二段]']);
+});
+test('actual private reply delivery separates comma-only chat into two persisted QQ jobs',async()=>{
+ const {formatLocalChatParagraphs}=await import('../local-reply.js');
+ const sample='我今天打算在附近走走，买点吃的，回来刚好能看看那本书，你晚上要不要一起看';
+ const audit={id:'audit',accountId:'a',persona:'p',status:'completed',userWords:'今晚你打算做什么？',answer:sample,outboxIds:[]};
+ const h=fixture({audit}),errors=[];
+ const start=source.indexOf('function splitBursts('),end=source.indexOf('\n}',start)+2;
+ const splitBursts=Function('formatLocalChatParagraphs','naturalBubbleParts','splitMessage','return ('+source.slice(start,end)+')')(formatLocalChatParagraphs,naturalBubbleParts,text=>[text]);
+ const deps={...h.deps,chats:new Map(),state:{chats:{}},isDesktop:true,stripUnrequestedActions:v=>v,completeMediaReply:v=>v,directMediaIntent:()=>null,explicitlyRequestsImage:()=>false,removeDuplicatePassages:v=>v,imageFirstReply:v=>v,cfg:{plainText:false},replyCharLimit:()=>2000,companionSettings:()=>({}),splitBursts,burstSegments:text=>[{type:'text',data:{text}}],stickerMessageGroups,sendSegments:(actor,segments)=>h.queue(actor,segments),setTimeout:fn=>queueMicrotask(fn),replyDeliveryFailure:(_chat,error)=>errors.push(error)};
+ const actor={...chat,auditId:audit.id,mediaIntentHandled:true};
+ extract('sendTextNow',deps)(actor,sample);
+ await actor.sendChain;
+ assert.deepEqual(errors,[]);
+ assert.equal(h.featureState.outbox.length,2);
+ assert.equal(h.featureState.outbox.map(job=>job.segments[0].data.text).join(''),sample.replace('买点吃的，回来','买点吃的回来'));
 });

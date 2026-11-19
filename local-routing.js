@@ -1,12 +1,13 @@
 import {resolveLocalMediaTask} from './local-media-task.js';
 import {estimateTokens} from './local-context.js';
 
-export function localRequirements(text='',{images=false,voiceInput=false,structured=false,outputTokens=0,inputTokens=0,toolTask=false,history=[]}={}){
+export function localRequirements(text='',{images=false,voiceInput=false,structured=false,outputTokens=0,inputTokens=0,toolTask=false,history=[],hostSinging=false}={}){
  const value=String(text);
  const native=/(?:终端|命令行|powershell|cmd\b|bash\b|执行.{0,12}(?:脚本|代码|命令)|运行.{0,12}(?:脚本|代码)|(?:读|写|保存|修改|删除).{0,8}(?:文件|目录))/i.test(value);
- const special=/(?:按谱|清唱|唱一首|唱歌|表情包|收藏表情|转发消息)/.test(value);
+ const special=/表情包|收藏表情|转发消息/.test(value)||!hostSinging&&/按谱|清唱|唱一首|唱歌/.test(value);
  const tools=toolTask||native||/(?:搜索|搜一下|查找|查询|联网|浏览|打开|登录|扫码|B站|哔哩|bilibili|刷视频|读(?:取)?网页|播放|评论|点赞|收藏|日程|计划|提醒|任务|画布|手绘|玩游戏|签名|空间动态)/i.test(value);
- const {image,speech,video}=resolveLocalMediaTask(value,{history});
+ const {image,speech:localSpeech,video}=resolveLocalMediaTask(value,{history});
+ const speech=localSpeech||hostSinging;
  return {text:true,json:structured||/\bJSON\b/i.test(value),tools:tools||image||speech||video,externalTools:tools,vision:images,asr:voiceInput,image,speech,video,native,special,outputTokens:Math.max(0,Number(outputTokens)||0),inputTokens:inputTokens||estimateTokens(value)};
 }
 export function chooseLocalRoute(snapshot,requirements={}, {enabled=true,hostTools=true,apiComplement=false}={}){

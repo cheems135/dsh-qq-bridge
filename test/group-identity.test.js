@@ -72,7 +72,7 @@ test('actual queue refuses wrong group address and voice transcript before sendi
  assert.equal(h.queue({...h.chat,localTranscript:'爸爸～你好'},[{type:'record',data:{file:'voice.wav'}}]),null);assert.equal(h.featureState.outbox.length,0);
 });
 test('local group stream is buffered until validation; API and local use the same checked identity helper',()=>{
- assert.match(source,/if\(chat.kind==='group'\|\|bufferLinkShare\|\|/);
+ assert.match(source,/if\((?:audit\.soloSticker\|\|)?chat.kind==='group'\|\|bufferLinkShare\|\|/);
  assert.match(source,/replyText=await checkedGroupReply/);assert.match(source,/function sendText\(chat,text\)/);
  const guard=source.slice(source.indexOf('  async function checkedGroupReply('),source.indexOf('  function sendText(chat,text)'));
  assert.match(guard,/if\(!local\)return askApiModel/);assert.match(guard,/\/v1\/chat\/completions/);assert.doesNotMatch(guard,/askModel\(/);

@@ -6,6 +6,7 @@ import {toolActorIsOwner,directOwnerOperation} from '../dialogue-persona.js';
 import {mergeGroupWindow,parseGroupDecision} from '../group-conversation.js';
 import {segmentsOf,extractIncoming} from '../bridge-features.js';
 import {groupReplyBinding} from '../group-identity.js';
+import {hearingContext} from '../hearing-evidence.js';
 import {createQqImageInput} from '../qq-image-input.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 function extract(name,deps){const start=source.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0);for(let end=source.indexOf('}',start);end>=0;end=source.indexOf('}',end+1)){let f;try{f=Function(...Object.keys(deps),'return ('+source.slice(start,end+1)+');');}catch(e){if(e instanceof SyntaxError)continue;throw e;}return f(...Object.values(deps));}throw Error(name);}
@@ -50,7 +51,7 @@ test('history cross-read uses the actual speaker in both group and private conte
 });
 test('local and API use the same scoped attachment reader for actual image bytes and audio transcription',async()=>{
  const key='group:'+group,scope={key,accountId:'a',personaId:'p'},mapKey=JSON.stringify([scope,'image']),rows=new Map([[mapKey,{id:'image',type:'image',at:Date.now(),data:image.data,source:{messageId:'100'}}]]),input=createQqImageInput();
- const read=extract('readQqAttachment',{voiceHearingEvidence:new WeakMap(),qqMediaReferences:rows,qqMediaKey:(s,id)=>JSON.stringify([s,id]),imagePart:async data=>({type:'image',mediaType:'image/png',data:Buffer.from(await input.read(data)).toString('base64')}),settings:{media:{voice:true}},transcribeRecord:async()=> '实际音频转写'});
+ const read=extract('readQqAttachment',{hearingContext,voiceHearingEvidence:new WeakMap(),qqMediaReferences:rows,qqMediaKey:(s,id)=>JSON.stringify([s,id]),imagePart:async data=>({type:'image',mediaType:'image/png',data:Buffer.from(await input.read(data)).toString('base64')}),settings:{media:{voice:true}},transcribeRecord:async()=> '实际音频转写'});
  assert.equal((await read({key},{action:'image',id:'image'},scope)).parts[0].data,png);
  rows.set(JSON.stringify([scope,'record']),{id:'record',type:'record',at:Date.now(),data:{file:'audio'}});
  assert.equal((await read({key},{action:'record',id:'record'},scope)).result.transcription,'实际音频转写');

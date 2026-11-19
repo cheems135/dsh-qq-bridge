@@ -89,6 +89,45 @@ test('dynamic search does not claim completion from an empty shell and can reuse
   const result=await f.manager.call(name,{q:'asyncio'},scope,{render:async url=>{rendered++;assert.equal(new URL(url).searchParams.get('q'),'asyncio');return {body:'asyncio 的实际搜索结果',links:[]};}});
   assert.equal(result.ok,true);assert.equal(result.rendered,true);assert.equal(rendered,1);
 });
+test('authenticated reads require a bridge session and keep private content out of the journal',async()=>{
+  const f=fixture(),p=await f.manager.inspect(origin,scope),s=f.manager.save(p.previewId,scope),name=s.id+'__read_page',before=f.requests.length;
+  const args={action:'call',name,useBrowserSession:true};
+  await assert.rejects(f.manager.agent(args,scope),/无法连接/);
+  const result=await f.manager.agent(args,scope,{readSession:async(url,identity)=>{
+    assert.equal(url,origin+'/');assert.equal(identity,scope);
+    return {status:200,url,text:'private account content'};
+  }});
+  assert.equal(result.text,'private account content');
+  assert.equal(f.requests.length,before);
+  assert.deepEqual(f.records.at(-1).output,{ok:true,needsBrowser:false,usedBrowserSession:true});
+  const expired=await f.manager.agent(args,scope,{readSession:async url=>({status:200,url,text:'',loginRequired:true})});
+  assert.equal(expired.ok,false);assert.equal(expired.needsBrowser,true);
+  await assert.rejects(f.manager.agent(args,scope,{readSession:async()=>({status:200,url:'https://other.test/',text:'private'})}),/同一站点/);
+});
+test('a successful HTTP response without readable page text does not count as a successful read',async()=>{
+  const f=fixture(async url=>response(url.includes('openapi')||url.includes('swagger')?'{}':'<script>init()</script>',url));
+  const preview=await f.manager.inspect(origin,scope),site=f.manager.save(preview.previewId,scope);
+  const result=await f.manager.call(site.id+'__read_page',{},scope);
+  assert.equal(result.ok,false);
+  assert.equal(result.websiteEvidence.read,false);
+  assert.match(result.error,/公开请求没有取得/);
+});
+test('Bilibili mobile homepage uses the official desktop homepage only for browser reads',async()=>{
+  const mobile='https://m.bilibili.com/',desktop='https://www.bilibili.com/';
+  const f=fixture(),preview=await f.manager.inspect(mobile,scope),site=f.manager.save(preview.previewId,scope);
+  const name=site.id+'__read_page';
+  const publicResult=await f.manager.call(name,{},scope);
+  assert.equal(publicResult.url,mobile);
+  const browserResult=await f.manager.call(name,{},scope,{useBrowserSession:true,readSession:async url=>{
+    assert.equal(url,desktop);
+    return response('哔哩哔哩首页',url);
+  }});
+  assert.equal(browserResult.websiteEvidence.read,true);
+  assert.equal(browserResult.url,desktop);
+  const unexpectedRedirect={useBrowserSession:true,readSession:async()=>response('unrelated','https://other.test/')};
+  await assert.rejects(f.manager.call(name,{},scope,unexpectedRedirect),/同一站点/);
+  await assert.rejects(f.manager.call(name,{url:'https://other.test/'},scope,unexpectedRedirect),/同一站点/);
+});
 test('MCP lifecycle, list, successful call, error results, and unknown methods are standard JSON-RPC',async()=>{
   const f=fixture(),p=await f.manager.inspect(origin,scope);f.manager.save(p.previewId,scope);const rpc=createWebsiteMcpProtocol({manager:f.manager,scope});
   assert.equal((await rpc({jsonrpc:'2.0',id:1,method:'tools/list'})).error.code,-32002);

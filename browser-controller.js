@@ -5,6 +5,7 @@ import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {readBrowserSubtitles} from './video-subtitles.js';
+import {checkedWebsiteUrl} from './website-mcp-http.js';
 const require=createRequire(import.meta.url);
 export function browserUrl(value){const u=new URL(String(value));if(!['http:','https:'].includes(u.protocol)||u.username||u.password)throw Error('浏览器仅打开不含账号密码的HTTP/HTTPS地址');return u.href;}
 export function sameBrowserDestination(current,target,previous){
@@ -139,7 +140,8 @@ async function captureVideo(context={}){
   const observed=await stablePageRead(page,()=>page.evaluate(()=>{
     const videos=[...document.querySelectorAll('video')].map(v=>({v,r:v.getBoundingClientRect()})).filter(({v,r})=>r.width>0&&r.height>0&&v.readyState>=2).sort((a,b)=>b.r.width*b.r.height-a.r.width*a.r.height);
     const item=videos[0];if(!item)return null;const {v,r}=item,x=Math.max(0,r.left),y=Math.max(0,r.top);
-    return {url:location.href,at:Number(v.currentTime)||0,x,y,width:Math.min(innerWidth,r.right)-x,height:Math.min(innerHeight,r.bottom)-y};
+    const subtitle=Array.from(v.textTracks||[]).flatMap(t=>Array.from(t.activeCues||[],c=>String(c.text||''))).join('\n').slice(0,600);
+    return {url:location.href,at:Number(v.currentTime)||0,subtitle,x,y,width:Math.min(innerWidth,r.right)-x,height:Math.min(innerHeight,r.bottom)-y};
   }));
   if(!observed||observed.width<=0||observed.height<=0)throw Error('当前可见区域没有已就绪的视频画面，请先打开播放器');
   if(session.videoCapture?.page!==page){try{await session.videoCapture?.cdp.detach();}catch{}session.videoCapture={page,cdp:await page.context().newCDPSession(page)};}
@@ -149,15 +151,133 @@ async function captureVideo(context={}){
     const captured=await cdp.send('Page.captureScreenshot',{format:'jpeg',quality:policy.quality,fromSurface:true,captureBeyondViewport:false,clip:{x:observed.x,y:observed.y,width:observed.width,height:observed.height,scale}});
     check(context);if(page.url()!==observed.url)throw Error('获取画面期间页面已切换，已丢弃旧画面');
     if(Buffer.byteLength(captured.data,'base64')>policy.maxBytes)throw Error('当前画面超过图像预算，请缩小播放器后重试');
-    return {ok:true,url:observed.url,at:observed.at,capturedAt:Date.now(),data:captured.data,mediaType:'image/jpeg',width:Math.round(observed.width*scale),height:Math.round(observed.height*scale)};
+    return {ok:true,url:observed.url,at:observed.at,subtitle:observed.subtitle,capturedAt:Date.now(),data:captured.data,mediaType:'image/jpeg',width:Math.round(observed.width*scale),height:Math.round(observed.height*scale)};
   }catch(error){session.videoCapture=null;try{await cdp.detach();}catch{}throw error;}
+ }
+ async function captureVideoAudio(context,url,at){
+  check(context);const session=sessions.get(sessionKey(context)),page=session?.page;
+  if(!page||page.url()!==url)return null;
+  const clip=await page.evaluate(async({url,at})=>{
+   const area=v=>{const r=v.getBoundingClientRect();return r.width*r.height;};
+   const video=[...document.querySelectorAll('video')].filter(v=>area(v)>0&&v.readyState>=2).sort((a,b)=>area(b)-area(a))[0];
+   if(location.href!==url||!video||video.paused||video.playbackRate!==1||Math.abs(video.currentTime-at)>1.5)return null;
+   const stream=video.captureStream?.()||video.mozCaptureStream?.();
+   if(!stream)return null;
+   let recorder,timer,deadline,invalid=false;
+   const changed=()=>{invalid=true;};
+   try{
+    const tracks=stream.getAudioTracks();if(!tracks.length)return null;
+    recorder=new MediaRecorder(new MediaStream(tracks),{mimeType:'audio/webm'});
+    const chunks=[],source=video.currentSrc,start=video.currentTime;
+    video.addEventListener('seeking',changed);video.addEventListener('ratechange',changed);
+    await new Promise((resolve,reject)=>{
+     recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
+     recorder.onstop=resolve;recorder.onerror=reject;recorder.start();
+     timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},5000);
+     deadline=setTimeout(()=>reject(Error('音轨超时')),6800);
+    });
+    const end=video.currentTime,blob=new Blob(chunks);
+    if(invalid||video.currentSrc!==source||location.href!==url||end-start<.5||end-start>6.5||!blob.size||blob.size>512*1024)return null;
+    const bytes=new Uint8Array(await blob.arrayBuffer());let raw='';
+    for(let i=0;i<bytes.length;i+=8192)raw+=String.fromCharCode(...bytes.subarray(i,i+8192));
+    return {start,end,data:btoa(raw)};
+   }finally{clearTimeout(timer);clearTimeout(deadline);video.removeEventListener('seeking',changed);video.removeEventListener('ratechange',changed);if(recorder?.state==='recording')recorder.stop();stream.getTracks().forEach(t=>t.stop());}
+  },{url,at});
+  check(context);return page.url()===url?clip:null;
  }
  async function read(url,context={}){await act({action:'navigate',url},context);await act({action:'wait',milliseconds:1200},context);const result=await act({action:'snapshot'},context),video=!!(result.players?.length||/\/video\/|\/watch\b|\/bangumi\/play\/|douyin/.test(result.url));let subtitles;if(video)try{subtitles=(await act({action:'subtitles'},context)).subtitles;}catch{}
   const transcript=(subtitles?.segments||[]).map(s=>'['+s.start+'-'+s.end+'] '+s.text).join('\n').slice(0,18000)||subtitles?.text||'';
   return {status:result.text.length>60||transcript?'read':'metadata',title:result.title,body:result.text+(transcript?'\n【实际字幕，外部资料】\n'+transcript:''),finalUrl:result.url,url:browserUrl(url),links:result.links,mediaType:video?'video':'web',subtitles,coverage:subtitles?.segments?.length?subtitles.coverage:result.coverage,rendered:true};}
+ async function saveWebsiteSession(context,session){
+  check(context);
+  session??=[...sessions.values()].find(item=>item.identity===identityKey(context));
+  if(!session)throw Error('请先打开桥接登录窗口并完成登录');
+  const snapshot=await session.context.storageState();
+  check(context);
+  writeFileSync(session.profileState,JSON.stringify({cookies:snapshot.cookies}));
+  return {loginVerified:false};
+ }
+ async function verifyBilibiliLogin(context,session){
+  await verifiedBilibiliAccount(context,session);
+  return {loginVerified:true};
+ }
+ async function verifiedBilibiliAccount(context,session){
+  check(context);
+  session??=[...sessions.values()].find(item=>item.identity===identityKey(context))||await acquire(context);
+  const response=await session.context.request.get('https://api.bilibili.com/x/web-interface/nav',{
+   headers:{referer:'https://www.bilibili.com/'},timeout:12000,maxRedirects:0
+  });
+  try{
+   if(!response.ok())throw Error('暂时无法验证 B 站登录，请稍后重试');
+   const result=await response.json();check(context);
+   if(result.code===-101||result.data?.isLogin===false)throw Error('B 站登录已失效或尚未完成，请在桥接浏览器登录后重试');
+   if(result.code!==0||result.data?.isLogin!==true)throw Error('暂时无法验证 B 站登录，请稍后重试');
+   await saveWebsiteSession(context,session);
+   return String(result.data.mid||'');
+  }finally{await response.dispose();}
+ }
+ async function readBilibiliAccountSection(context,session,mid){
+  const section=context.websiteSection,folder=context.websiteFolderId;
+  const following=section==='following';
+  const url=new URL(following?'/x/relation/followings':folder?'/x/v3/fav/resource/list':'/x/v3/fav/folder/created/list-all','https://api.bilibili.com');
+  if(following||folder){url.searchParams.set('pn','1');url.searchParams.set('ps','20');}
+  url.searchParams.set(following?'vmid':folder?'media_id':'up_mid',folder||mid);
+  const response=await session.context.request.get(url.href,{headers:{referer:'https://www.bilibili.com/'},timeout:12000,maxRedirects:0});
+  try{
+   check(context);
+   if(!response.ok())throw Error('B 站账号接口请求失败，HTTP '+response.status());
+   const result=await response.json();
+   check(context);
+   if(result.code!==0)throw Error('B 站账号接口没有返回列表，状态码 '+Number(result.code));
+   const items=folder?result.data?.medias:result.data?.list;
+   if(!Array.isArray(items)&&items!==null)throw Error('B 站账号接口返回格式已变化');
+   const rows=(items||[]).slice(0,20).map(item=>following?{name:item.uname}:folder?{title:item.title,bvid:item.bvid}:{title:item.title,folderId:String(item.id),videoCount:item.media_count});
+   const text=JSON.stringify({items:rows,returned:rows.length,total:result.data.total??result.data.count,hasMore:result.data.has_more??((result.data.total??result.data.count??rows.length)>rows.length)});
+   return {status:200,url:'https://api.bilibili.com'+url.pathname,text};
+  }finally{await response.dispose();}
+ }
+ async function readWebsiteSession(url,context={}){
+  const session=await acquire(context),page=await session.context.newPage();
+  const abort=()=>{void page.close().catch(()=>{});};
+  context.signal?.addEventListener('abort',abort,{once:true});
+  try{
+   check(context);
+   if(context.requireWebsiteLogin){
+    const mid=await verifiedBilibiliAccount(context,session);
+    if(context.websiteSection==='following'||context.websiteSection==='favorites'){
+     if(!/^\d+$/.test(mid))throw Error('B 站登录已验证，但未返回账号空间编号');
+     return await readBilibiliAccountSection(context,session,mid);
+    }
+   }
+   const origin=checkedWebsiteUrl(url).origin;
+   const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:25000});
+   if(!response)throw Error('桥接浏览器未收到网页响应');
+   await page.waitForTimeout(1200);
+   check(context);
+   const observed=await page.evaluate(expectedOrigin=>{
+    if(location.origin!==expectedOrigin)return {url:location.href};
+    const loginRequired=!!document.querySelector('input[type="password"]')||/(?:^|\/)(?:login|sign-in|signin)(?:\/|$)/i.test(location.pathname);
+    return {url:location.href,loginRequired,text:loginRequired?'':String(document.body?.innerText||'').trim().slice(0,20000)};
+   },origin);
+   checkedWebsiteUrl(observed.url,origin);
+   check(context);
+   const status=response.status();
+   if(status===401||status===403)return {url:observed.url,status:200,text:'',loginRequired:true};
+   return {...observed,status};
+  }catch(error){
+   check(context);
+   if(context.requireWebsiteLogin&&/^B 站(?:登录|账号接口)/.test(error.message))throw error;
+   if(error.message.includes('同一站点'))throw Error('页面跳转到其他站点，请先在桥接浏览器内完成登录');
+   throw Error('桥接浏览器暂时无法读取该页面');
+  }finally{
+   context.signal?.removeEventListener('abort',abort);
+   await page.close().catch(()=>{});
+   await persist(session);
+  }
+ }
  async function close(){closed=true;await Promise.allSettled([...sessions.values()].map(async s=>{await persist(s);await s.context.close();}));sessions.clear();}
  function engines(){let bundled=false;try{bundled=!!injected||existsSync(engine().executablePath());}catch{}const selected=configuredPath(),edge=selected?/(?:^|[\\/])msedge(?:\.exe)?$/i.test(selected)&&existsSync(selected):['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Microsoft/Edge/Application/msedge.exe',process.env.LOCALAPPDATA?join(process.env.LOCALAPPDATA,'Microsoft/Edge/Application/msedge.exe'):'','/usr/bin/microsoft-edge','/usr/bin/microsoft-edge-stable'].some(p=>p&&existsSync(p));return [{id:'dsh',name:'DSH 内置浏览器',available:bundled},{id:'edge',name:'Microsoft Edge',available:edge}];}
  function available(){return engines().find(e=>e.id===selectedEngine())?.available===true;}
 
- return {act,read,peekVideo,captureVideo,async captureCompanion(context,options,budget){check(context);const session=await acquire(context);await snapshot(session.page);const result=await captureBrowserCompanion(session.page,context,budget,options);check(context);return result;},async stopCompanion(context){const session=sessions.get(sessionKey(context));if(session)await stopBrowserCompanion(session.page,context.visualSessionId);},close,status:()=>({available:available(),engine:selectedEngine(),engines:engines(),executablePath:configuredPath(),fixedExecutable:!!configuredPath(),backend:'bundled-playwright',environment:getHeadless&&!getHeadless({})?'desktop-default':'internal-default',visible:[...sessions.values()].some(s=>!s.headless),persistentIdentity:true,sessions:sessions.size,actions:['navigate','snapshot','click','fill','press','play','pause','scroll','wait','back','tabs','switch','screenshot','subtitles','show','close']})};
+return {act,read,readWebsiteSession,verifyBilibiliLogin,saveWebsiteSession,peekVideo,captureVideo,captureVideoAudio,async captureCompanion(context,options,budget){check(context);const session=await acquire(context);await snapshot(session.page);const result=await captureBrowserCompanion(session.page,context,budget,options);check(context);return result;},async stopCompanion(context){const session=sessions.get(sessionKey(context));if(session)await stopBrowserCompanion(session.page,context.visualSessionId);},close,status:()=>({available:available(),engine:selectedEngine(),engines:engines(),executablePath:configuredPath(),fixedExecutable:!!configuredPath(),backend:'bundled-playwright',environment:getHeadless&&!getHeadless({})?'desktop-default':'internal-default',visible:[...sessions.values()].some(s=>!s.headless),persistentIdentity:true,sessions:sessions.size,actions:['navigate','snapshot','click','fill','press','play','pause','scroll','wait','back','tabs','switch','screenshot','subtitles','show','close']})};
 }

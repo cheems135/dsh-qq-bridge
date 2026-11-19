@@ -22,10 +22,25 @@ def measure(path,start=0):
         flux.extend(np.maximum(mag-prev,0).sum(axis=1).tolist());previous=mag[-1]
     rms=float(np.sqrt(np.mean(x*x)));peak=float(np.max(np.abs(x)))
     silence=rms<1e-5
-    timeline=[];block=max(1,round(sr*4))
+    timeline=[];changes=[];previous_block=None;block=max(1,round(sr*4))
     for i in range(0,len(x),block):
         seg=x[i:i+block];level=float(np.sqrt(np.mean(seg*seg)))
         timeline.append({'start':round(start+i/sr,2),'end':round(start+min(len(x),i+block)/sr,2),'rmsDbfs':round(20*math.log10(max(level,1e-10)),1)})
+        block_centroids=centroids[i//hop:(i+len(seg))//hop]
+        brightness=float(np.median(block_centroids)) if block_centroids else 0
+        db=timeline[-1]['rmsDbfs']
+        if previous_block and len(seg)>=sr:
+            old_db,old_brightness=previous_block
+            delta=db-old_db
+            shift=math.log2(max(1,brightness)/max(1,old_brightness))
+            notes=[]
+            if abs(delta)>=5 and max(db,old_db)>-60:
+                notes.append('声音明显变响' if delta>0 else '声音明显变轻')
+            if min(db,old_db)>-48 and min(brightness,old_brightness)>30 and abs(shift)>=0.65:
+                notes.append('音色更亮' if shift>0 else '音色更暗')
+            if notes:
+                changes.append({'start':timeline[-1]['start'],'end':timeline[-1]['end'],'observed':notes})
+        previous_block=(db,brightness)
     envelope=np.asarray(flux,dtype=float);envelope-=envelope.mean();beats=[]
     if not silence and len(envelope)>100 and np.std(envelope)>1e-5:
         length=1<<(2*len(envelope)-1).bit_length();correlation=np.fft.irfft(np.abs(np.fft.rfft(envelope,n=length))**2,n=length)[:len(envelope)]
@@ -39,4 +54,4 @@ def measure(path,start=0):
             for root in range(12):keys.append({'root':['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][root],'mode':mode,'profileCorrelation':round(float(np.corrcoef(chroma,np.roll(profile,root))[0,1]),3)})
         keys.sort(key=lambda k:k['profileCorrelation'],reverse=True)
     total=max(float(power.sum()),1e-20);band_energy=[{'hz':[lo,hi],'fraction':round(float(power[(freq>=lo)&(freq<hi)].sum()/total),4)} for lo,hi in bands]
-    return {'status':'measured','sampleRate':sr,'rmsDbfs':round(20*math.log10(max(rms,1e-10)),2),'samplePeakDbfs':round(20*math.log10(max(peak,1e-10)),2),'clippedSamples':int(np.sum(np.abs(x)>=.9999)),'spectralCentroidHz':round(float(np.mean(centroids)),1),'bandEnergy':band_energy,'energyTimeline':timeline,'beatCandidates':beats,'keyCandidates':keys[:3],'keyAmbiguous':len(keys)<2 or keys[0]['profileCorrelation']-keys[1]['profileCorrelation']<.12,'limits':['拍速是周期性候选，存在半速/倍速歧义，不是已确认节拍','调性是频谱模板候选，混音/打击乐/短片段可能不适用；分数不是概率','音频图和测量不能确定乐器、情绪、歌词、创作者意图；可以表达明确标为个人联想的感受','16位重采样的采样峰值不是母带真峰值；没有执行分轨或乐器模型']}
+    return {'status':'measured','sampleRate':sr,'rmsDbfs':round(20*math.log10(max(rms,1e-10)),2),'samplePeakDbfs':round(20*math.log10(max(peak,1e-10)),2),'clippedSamples':int(np.sum(np.abs(x)>=.9999)),'spectralCentroidHz':round(float(np.mean(centroids)),1),'bandEnergy':band_energy,'energyTimeline':timeline,'changes':changes,'beatCandidates':beats,'keyCandidates':keys[:3],'keyAmbiguous':len(keys)<2 or keys[0]['profileCorrelation']-keys[1]['profileCorrelation']<.12,'limits':['拍速是周期性候选，存在半速/倍速歧义，不是已确认节拍','调性是频谱模板候选，混音/打击乐/短片段可能不适用；分数不是概率','音频图和测量不能确定乐器、情绪、歌词、创作者意图；可以表达明确标为个人联想的感受','16位重采样的采样峰值不是母带真峰值；没有执行分轨或乐器模型']}

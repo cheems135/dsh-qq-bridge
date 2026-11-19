@@ -1,4 +1,4 @@
-export function normalizeVoiceEngine(engine){return ['none','minimax','breeze','localai','custom'].includes(engine)?engine:'none';}
+export function normalizeVoiceEngine(engine){return ['none','minimax','breeze','localai','custom','runninghub'].includes(engine)?engine:'none';}
 import{recipePayload}from'./voice-recipes.js';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -102,7 +102,7 @@ export function breezeDelivery(line,config={},options={}) {
  const extras=voiceExtras(config),requested=options.emotion||extras.emotion;
  /* 场景预设（口含、被捂嘴…）：标签与表演方向都走官方字典，不自己编标签。 */
  const scene=voiceScene(requested);
- if(scene&&options.performance!=='sing'){
+ if(scene){
   const english=!/[\p{Script=Han}]/u.test(String(line));
   const current=String(options.instructions||'').trim();
   if(options.instructionsPrepared&&current)return{mood:'natural',scene:scene.id,sceneTags:scene.tags,instructions:current};
@@ -110,8 +110,7 @@ export function breezeDelivery(line,config={},options={}) {
  }const combo=voiceMoodList(requested),moodsList=combo.length?combo:[voiceMood(requested,line)],mood=moodsList[0];
  const english=!/[\p{Script=Han}]/u.test(String(line));
  const direction=String(options.instructions||'').trim();
- if(options.instructionsPrepared&&direction&&options.performance!=='sing')return{mood,instructions:direction};
- if(options.performance==='sing')return{mood:'natural',instructions:english?'Keep this same voice and sing the supplied words as a short, tuneful unaccompanied song. Use a simple original melody, sustained vowels, clear pitch changes and a gentle steady beat. Sing rather than recite, with no spoken introduction or accompaniment.':'保持当前音色，把下面的文字清唱成一小段歌。使用简单的原创旋律、清楚的音高变化和稳定节拍，元音自然延长；不要朗诵歌词，不加口头开场，不加伴奏。'};
+ if(options.instructionsPrepared&&direction)return{mood,instructions:direction};
  // A real contextual direction already describes intensity and pacing. Generic
  // defaults such as "angry but not shouting" must not negate that direction.
  if(direction)return{mood,instructions:composeDirection({mood,userDirection:direction,extra:extras.breeze.instructions,language:english?'en':'zh',profile:{mood,cues:[]}})};
@@ -128,7 +127,7 @@ export function resolveVoiceDelivery(config={},options={},review={}){
  const mood=normalizeVoiceMood(requested==='auto'?review?.delivery?.emotion:requested);
  // 以前二选一：手动情绪时丢掉审核方向，auto 时丢掉情绪配方。auto 只剩一句笼统方向，台词自然被读平。
  const direction=String(options.instructions||review?.delivery?.instructions||'').trim();
- const instructions=breezeDelivery(String(options.text||''),config,{emotion:combo.length?requested:mood,instructions:direction,performance:options.performance}).instructions;
+ const instructions=breezeDelivery(String(options.text||''),config,{emotion:combo.length?requested:mood,instructions:direction,performance:options.performance,arrangement:options.arrangement}).instructions;
  return{emotion:mood,instructions,instructionsPrepared:true,performance:options.performance||'speech',autoTags:options.autoTags===true};
 }
 export async function breezeBalance(config={},fetchImpl=globalThis.fetch){
@@ -272,7 +271,7 @@ async function breezeSpeechNow(line,config={},options={},fetchImpl=globalThis.fe
    url=breeze.baseUrl+'/v1/text-to-speech/'+encodeURIComponent(voice)+'?output_format=mp3';
    headers={'xi-api-key':breeze.apiKey,'content-type':'application/json',accept:'audio/mpeg'};
    // 说话尊重面板的引导强度，不因识别到强烈情绪而暗中抬高。
-   const scale=recipe?recipe.guidance:guidanceFor(delivery.mood,breeze.guidance,options.performance);
+   const scale=recipe?recipe.guidance:guidanceFor(delivery.mood,breeze.guidance);
    // 本轮明确速度优先，否则使用保存速度；情绪节奏交给本轮表演指令。
    const settings={guidance_scale:scale};
    const speed=Number(options.speed??breeze.speed);

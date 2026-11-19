@@ -426,7 +426,7 @@ async function readPlus(data,material,{runtime,config,dir,getCacheDir,signal,spa
 
 export function createVideoReader({
   getConfig,getCacheDir,getPlatformFile,fetchImpl=globalThis.fetch,spawnImpl=spawn,
-  platform=process.platform,env=process.env,mobile=false,
+  platform=process.platform,env=process.env,mobile=false,listenWindow,
 }={}){
   const continuous=true;
   let busy=false,closed=false;
@@ -553,7 +553,7 @@ export function createVideoReader({
       const old=activeByScope.get(scope);if(old&&old!==id)discard(old);
       const max=isMobile(config)?2:4;while(streams.size>=max){const oldest=[...streams.values()].sort((a,b)=>a.usedAt-b.usedAt)[0];discard(oldest.id);}
       playback.start({id,scope,file,ffmpegPath:runtime.ffmpegPath,duration,start:Number(data.start)||0,cleanup});started=true;
-      const entry={id,scope,cursor:-Infinity,usedAt:Date.now()};streams.set(id,entry);activeByScope.set(scope,id);return entry;
+      const entry={id,scope,file,hasAudio:/Audio:\s/i.test(metadata.stderr),cursor:-Infinity,usedAt:Date.now()};streams.set(id,entry);activeByScope.set(scope,id);return entry;
     }finally{if(!started)cleanup();}
   }
   async function readContinuous(data={},options={}){
@@ -566,7 +566,22 @@ export function createVideoReader({
     if(result.status==='failed'){discard(id);throw videoError('视频连续解码失败','VIDEO_DECODE');}
     if(Number.isFinite(result.cursor))entry.cursor=result.cursor;
     const selected=currentVisualFrames(result.frames,data);
-    return {...result,frames:selected,observationMode:'playback-clock',visualBudget:visualObservationPolicy(data),source:'ffmpeg-realtime',mode:'continuous',continuous:true,positionSource:data.positionSource||'decoder-clock',audioDecoded:false};
+    let audio=null;
+    if(!mobile&&entry.hasAudio&&listenWindow&&selected.length){
+      const seconds=data.visualBackend==='local'?8:6;
+      const from=Math.floor(selected.at(-1).at/seconds)*seconds;
+      const end=Math.min(result.duration,from+seconds);
+      if(entry.sound?.from===from)audio=entry.sound.audio;
+      else if(!entry.listening&&end>from){
+        entry.listening=true;
+        try{audio=await listenWindow({file:entry.file,start:from,end},scope,signal);if(audio)entry.sound={from,audio};}
+        catch(error){throwIfAborted(signal);}
+        finally{entry.listening=false;}
+      }
+      throwIfAborted(signal);
+      if(streams.get(id)!==entry)throw abortError();
+    }
+    return {...result,frames:selected,observationMode:'playback-clock',visualBudget:visualObservationPolicy(data),source:'ffmpeg-realtime',mode:'continuous',continuous:true,positionSource:data.positionSource||'decoder-clock',audioDecoded:!!audio,audio};
   }
 
   return{read:readContinuous,status,control,close,reset};

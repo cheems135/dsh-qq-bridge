@@ -3,7 +3,7 @@ import {join} from 'node:path';
 import {createWebsiteMcp} from './website-mcp.js';
 import {redactInvocation} from './invocation-journal.js';
 
-export function installWebsiteMcpPlugin({ctx,dataDir,writeAtomic,getScope,onRecord=()=>{},scriptFile,nodePath=process.execPath,request}) {
+export function installWebsiteMcpPlugin({ctx,dataDir,writeAtomic,getScope,onRecord=()=>{},scriptFile,nodePath=process.execPath,request,readSession,websiteLogin}) {
   const manifest=join(dataDir,'website-mcp.json');
   const manager=createWebsiteMcp({request,storage:{read(){try{if(statSync(manifest).size>4*1024*1024)throw Error('网站配置文件过大');return JSON.parse(readFileSync(manifest,'utf8'));}catch(e){if(e.code==='ENOENT')return {version:1,sites:[]};throw e;}},write:value=>writeAtomic(manifest,value)},onRecord});
   const server=ctx.get('webServer');
@@ -25,13 +25,25 @@ export function installWebsiteMcpPlugin({ctx,dataDir,writeAtomic,getScope,onReco
     req.on('data',chunk=>{if(oversized)return;body+=chunk;if(Buffer.byteLength(body)>65536){oversized=true;body='';send(413,{error:'请求过大'});}});
     req.on('end',()=>{if(oversized)return;void(async()=>{
       try {
-        const input=JSON.parse(body||'{}'),scope=getScope(),options={signal:AbortSignal.timeout(45000)};
+        const input=JSON.parse(body||'{}'),scope=getScope(),options={signal:AbortSignal.timeout(45000),useBrowserSession:typeof input.useBrowserSession==='boolean'?input.useBrowserSession:undefined,readSession};
+        const requireLocalBrowser=()=>{
+          const peer=req.socket.remoteAddress,hostname=new URL('http://'+host).hostname;
+          if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(peer)||!['127.0.0.1','[::1]','localhost'].includes(hostname))throw Error('网站登录仅可在本机桥接面板使用');
+        };
+        if(options.useBrowserSession)requireLocalBrowser();
         let result;
         if(input.action==='inspect')result=await manager.inspect(input.url,scope,options);
         else if(input.action==='save')result={site:manager.save(input.previewId,scope)};
         else if(input.action==='toggle')result=manager.change(input.id,scope,{enabled:input.enabled});
         else if(input.action==='remove')result=manager.change(input.id,scope,{remove:true});
         else if(input.action==='test')result=await manager.test(input.previewId,input.name,input.arguments||{},scope,options);
+        else if(['open-login','bind-login','bilibili-login','bilibili-bind'].includes(input.action)){
+          requireLocalBrowser();
+          const site=manager.list(scope).find(s=>s.id===input.id&&s.enabled);
+          if(!websiteLogin||!site)throw Error('未找到可绑定会话的网站');
+          if(['open-login','bilibili-login'].includes(input.action))result=await websiteLogin(site,scope,{signal:options.signal,open:true});
+          else result=await manager.bindSession(site.id,scope,current=>websiteLogin(current,scope,{signal:options.signal}));
+        }
         else if(input.action==='call')result=await manager.call(input.name,input.arguments||{},scope,options);
         else if(input.action==='export')result={config:{mcpServers:{'qq-websites':{command:nodePath,args:[scriptFile,'--manifest',manifest,'--account',scope.accountId||'']}}}};
         else throw Error('未知网站工具操作');

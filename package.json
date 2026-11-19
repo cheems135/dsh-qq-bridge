@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.62.92",
+  "version": "1.62.106",
   "private": true,
   "type": "module",
   "description": "QQ 桥接：手机与电脑共用 API 核心，电脑版另支持本地",
@@ -119,8 +119,7 @@
     "sleep-wake.js",
     "qq-reliability.js",
     "qq-forward-reader.js",
-    "singing-library.js",
-    "tools/score-sing.py",
+    "runninghub-audio.js",
     "agent-workspace.js",
     "recharge-request.js",
     "video-subtitles.js",

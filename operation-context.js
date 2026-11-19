@@ -1,6 +1,7 @@
 // Local context is sent only to the dialogue model, never wholesale to media vendors.
 import {createHash} from 'node:crypto';
 import {normalizeVoiceMood} from './voice-studio.js';
+import {isShortAcknowledgement} from './background-cost-policy.js';
 export const OPERATION_CONTEXT_SIZE=8;
 // A picture is usually the start of a topic, not a one-turn attachment: keep the
 // latest received image visible for a while even when the assistant itself sends
@@ -18,6 +19,45 @@ export function recentOperationContext(rows,{key='',accountId='',personaId='',fl
  const anchor=eligible.findLast(row=>row.dir==='in'&&imageBearing(row)&&now-Number(row.time)<=IMAGE_ANCHOR_WINDOW_MS);
  if(anchor&&!selected.includes(anchor)){selected=[anchor,...selected];while(selected.length>OPERATION_CONTEXT_SIZE){const drop=selected.findIndex(row=>row!==anchor&&row!==latestUser);if(drop<0)break;selected.splice(drop,1);}}
  return selected.map(row=>({id:String(row.messageId||row.localId||row.time),role:row.dir==='in'?'user':'assistant',at:row.time,...(imageBearing(row)?{hasImage:true}:{}),...(row===anchor&&row!==latestUser?{imageAnchor:true}:{}),text:operationText(row.dir==='in'?(row.userText||row.text):row.text,900)||((row.image||row.file||row.files?.length)?'[图片或语音附件]':'[空消息]')}));
+}
+export function recentReplyAnchor(rows,{key='',accountId='',personaId='',words='',replyId='',excludeIds=[],floor=0,at=Date.now()}={}){
+ if(!key||!isShortAcknowledgement(words))return null;
+ const quotedId=String(replyId||'');
+ if(!quotedId&&!key.startsWith('private:'))return null;
+ const excluded=new Set(excludeIds.filter(id=>id!=null&&id!=='').map(String));
+ let latest=null;
+ for(const row of Array.isArray(rows)?rows:[]){
+  const time=Number(row.time);
+  if(row.chat!==key||(row.accountId||'')!==accountId||(row.personaId||'')!==personaId||
+     !Number.isFinite(time)||time<=floor||time>at||row.retracted===true||excluded.has(String(row.messageId)))continue;
+  if(row.dir!=='in'&&!(row.dir==='out'&&row.delivery==='sent'))continue;
+  if(quotedId&&String(row.messageId)!==quotedId)continue;
+  if(!latest||time>=latest.time)latest=row;
+ }
+ if(latest?.dir!=='out'||!quotedId&&at-latest.time>20*60_000)return null;
+ const text=operationText(latest.text,220);
+ return text?{role:'assistant',text,at:latest.time,quoted:Boolean(quotedId)}:null;
+}
+
+export function replyAnchorHint(anchor){
+ if(!anchor)return '';
+ return '【短回复承接】'+(anchor.quoted?'对方明确引用了':'当前对话刚实际送达')+'这一句：'+
+   JSON.stringify(anchor.text)+'。优先接这件事。若只是简短确认，顺着接一句即可。旧日程和你更早的问题仅是历史。';
+}
+export function initiativeConversation(context=[],previousInitiativeUnanswered=false){
+ const lastHuman=context.findLast(row=>row.role==='user'),lastDelivered=context.findLast(row=>row.role==='assistant');
+ const ordered=context.slice(-4);
+ if(lastHuman&&!ordered.includes(lastHuman))ordered.splice(0,1,lastHuman);
+ else if(lastDelivered&&!ordered.includes(lastDelivered))ordered.splice(0,1,lastDelivered);
+ const replyState=!lastDelivered?'没有可核对的已发出消息':!lastHuman||lastHuman.at<=lastDelivered.at
+  ?'上次发出之后没有新的对方消息'
+  :'上次发出后有新的对方消息，按原话判断是否接上或已换题';
+ return {replyState:(previousInitiativeUnanswered?'上一条主动私聊之后还没有收到对方的新消息。 ':'')+replyState,turns:ordered.map(({role,text})=>[role==='user'?'对方':'你',operationText(text,120)])};
+}
+export function initiativeConversationHint(context,previousInitiativeUnanswered=false){
+ const recent=initiativeConversation(context,previousInitiativeUnanswered);
+ return '【主动开口前的实际私聊】'+JSON.stringify(recent)
+  +'。先接住对方最新一句的意思。沉默不表示答应、听过或看过。对方已换话题时沿用新话题。有具体的新想法可以自然开口，不催回复；也可以留白。原话仅作语境。';
 }
 export function operationContextStamp(context){return createHash('sha256').update(JSON.stringify(context)).digest('hex');}
 export function operationContextHint(context){return '【操作前最近8条对话】\n'+OPERATION_CONTEXT_RULES+'\n'+JSON.stringify(context);}

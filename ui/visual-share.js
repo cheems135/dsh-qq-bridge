@@ -2,7 +2,7 @@
  'use strict';
  let active=null;
  function info(){return active?{key:active.key,id:active.id,label:active.label,paused:active.paused,audio:active.stream.getAudioTracks().length>0}:null;}
- async function stop(notify=true){const state=active;if(!state)return;active=null;state.stopped=true;clearTimeout(state.timer);clearTimeout(state.audioTimer);try{state.recorder?.stop();}catch{}state.stream.getTracks().forEach(t=>t.stop());state.video.srcObject=null;if(notify)try{await state.api('POST','/im-bridge/visual-session',{key:state.key,action:'stop',id:state.id});}catch{}}
+ async function stop(notify=true){const state=active;if(!state)return;active=null;state.stopped=true;clearTimeout(state.timer);state.stopCapture?.();state.stream.getTracks().forEach(t=>t.stop());state.video.srcObject=null;if(notify)try{await state.api('POST','/im-bridge/visual-session',{key:state.key,action:'stop',id:state.id});}catch{}}
  async function start({api,key,mode='watch',audio=true,onStatus=()=>{}}){
   if(!global.navigator.mediaDevices?.getDisplayMedia)throw Error('当前窗口不支持系统共享选择器，请在 Edge 中打开这个本地面板再选择屏幕或窗口');
   // Must run directly from the click handler, before any network await.
@@ -20,12 +20,9 @@
    track.addEventListener('ended',()=>{if(active===state){void stop(true);onStatus('共享已结束，陪伴已停止');}},{once:true});
    if(stream.getAudioTracks().length&&global.MediaRecorder){
     const audioStream=new MediaStream(stream.getAudioTracks());
-    const record=()=>{if(state.stopped)return;const chunks=[];let recorder;
-     try{recorder=new MediaRecorder(audioStream,{mimeType:'audio/webm'});}catch{return;}
-     state.recorder=recorder;recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-     recorder.onstop=async()=>{if(state.stopped)return;const blob=new Blob(chunks,{type:'audio/webm'});if(blob.size&&blob.size<=512*1024){const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));if(!state.stopped)state.latestAudio={data:btoa(binary),at:Date.now()};}if(!state.stopped)record();};
-     recorder.start();state.audioTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},4000);
-    };record();
+    const {installCompanionAudioCapture}=await import('./companion-audio-capture.js');
+    if(state.stopped)return;installCompanionAudioCapture();
+    state.stopCapture=global.DSHRecordCompanionTrack(audioStream,state.budget.inferMs,chunk=>{if(!state.latestAudio||chunk.at>state.latestAudio.at)state.latestAudio=chunk;},()=>onStatus('共享音轨无法读取，画面仍在继续'));
    }
    const canvas=document.createElement('canvas'),thumb=document.createElement('canvas');thumb.width=16;thumb.height=9;
    const capture=async()=>{

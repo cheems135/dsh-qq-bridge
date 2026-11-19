@@ -25,7 +25,7 @@ export function normalizeSharedFrame(frame,budget,now=Date.now()){
  if(frame.audioChunk){
   const a=frame.audioChunk;if(typeof a.data!=='string'||a.data.length>700000||!Number.isFinite(a.at)||now-a.at>12000||a.at>now+2000)throw Error('共享声音片段无效或过期');
   const bytes=Buffer.from(a.data,'base64');if(bytes.length>512*1024||bytes.subarray(0,4).toString('hex')!=='1a45dfa3')throw Error('共享声音不是有效WebM片段');
-  result.audioChunk={data:bytes.toString('base64'),at:a.at,mediaType:'audio/webm'};
+  result.audioChunk={data:bytes.toString('base64'),at:a.at,...(Number.isFinite(a.startedAt)&&a.startedAt<=a.at&&a.at-a.startedAt<=15000?{startedAt:a.startedAt}:{}),mediaType:'audio/webm'};
  }
  return result;
 }

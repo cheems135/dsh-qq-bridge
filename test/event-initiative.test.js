@@ -85,7 +85,7 @@ test('actual API cadence reads account/persona scoped input and consumes only th
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
  const code=source.slice(source.indexOf('  function initiativeCadenceGate('),source.indexOf('  async function runAutonomyTick('));
  const featureState={},settings={activeAccountId:'a'},messages=[{chat:'private:1',dir:'in',accountId:'other',personaId:'p',time:now},{chat:'private:1',dir:'in',accountId:'a',personaId:'old',time:now}];let saves=0;
- const deps={effectiveUsers:()=>['1'],privateInitiativeAllowed:()=>true,settings,featureState,messages,activePersona:()=>({id:'p'}),pausedConversation:()=>false,lifeExecution:null,calendarMeta:()=>({}),initiativeEventFor:()=>({id:'event',kind:'progress'}),eventInitiativeCadence,saveFeatures:()=>{saves++;},Date:{now:()=>now}};
+ const deps={proactiveCheck:()=>'',effectiveUsers:()=>['1'],privateInitiativeAllowed:()=>true,settings,featureState,messages,activePersona:()=>({id:'p'}),pausedConversation:()=>false,lifeExecution:null,calendarMeta:()=>({}),initiativeEventFor:()=>({id:'event',kind:'progress'}),eventInitiativeCadence,saveFeatures:()=>{saves++;},Date:{now:()=>now}};
  const gate=Function(...Object.keys(deps),code+';return initiativeCadenceGate;')(...Object.values(deps));
  assert.equal(gate(false,'private:1').ok,false);assert.equal(saves,0);
  messages.push({chat:'private:1',dir:'in',accountId:'a',personaId:'p',time:now-minute});
@@ -100,7 +100,7 @@ test('actual API cadence reads account/persona scoped input and consumes only th
  assert.equal(initiativeAllowed(config,{counts:{chats:5000},lastActionAt:now},{now}),true);
  assert.equal(initiativeAllowed(config,{counts:{}},{now,quiet:true}),false);
  });
-test('actual final QQ send gate accepts both API and local episodes without owner reply, while retaining scope and whitelist checks',()=>{
+test('actual final QQ send gate supports API and local delivery while retaining scope and whitelist checks',()=>{
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
  const code=source.slice(source.indexOf('  function outgoingJobDenial('),source.indexOf('  function outboundWait('));
  const rows=[],settings={activeAccountId:'a',localChat:{enabled:true}};let allowed=true,personaId='p';

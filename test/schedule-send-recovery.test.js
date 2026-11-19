@@ -1,8 +1,9 @@
+import {scheduledChatReceipt} from '../schedule-continuity.js';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createExecutionRuntime} from '../execution-runtime.js';
 import {createLifeExecution} from '../life-execution.js';
 test('known unqueued send is not_applied, ambiguous and queued sends remain unknown',()=>{
- for(const [value,expected] of [[{ok:false,queued:false,submitted:false,deliveryIds:[]},'not_applied'],[{ok:false},'unknown'],[{ok:true,queued:true,deliveryId:'d'},'unknown']]){
+ for(const [value,expected] of [[scheduledChatReceipt(),'not_applied'],[{ok:false,queued:false,submitted:false,deliveryIds:[]},'not_applied'],[{ok:false},'unknown'],[{ok:true,queued:true,deliveryId:'d'},'unknown']]){
   const events=[],settled=[],life={beginStep:()=>({step:{id:'s'}}),settleStep:(_id,_meta,_step,r)=>settled.push(r)};
   const runtime=createExecutionRuntime({policy:{check:()=>({}),consume:()=>{}},metaFor:()=>({}),getLife:()=>life,journal:e=>events.push(e)});
   const c={accountId:'a',personaId:'p',key:'private:12345',meta:{lifeJobId:'job'}},exec={name:'bridge_life_qq',arguments:{action:'send',target:'private:12345',text:'test'}};

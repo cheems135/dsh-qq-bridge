@@ -5,9 +5,10 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {browserUrl,sameBrowserDestination} from './browser-controller.js';
 
 const recentByBrowser=new WeakMap();
+const soundByBrowser=new WeakMap();
 // Desktop watching always opens the configured browser through the common
 // controller. There is deliberately no decoder or alternate-browser fallback.
-export async function readBrowserVideo({browser,args={},context={},scope='',previous,authorize=()=>true,readFile=readFileSync,sleep=ms=>delay(ms,undefined,{signal:context.signal})}={}){
+export async function readBrowserVideo({browser,args={},context={},scope='',previous,authorize=()=>true,listenWindow,readFile=readFileSync,sleep=ms=>delay(ms,undefined,{signal:context.signal})}={}){
  const check=()=>{context.signal?.throwIfAborted();if(!authorize(context))throw Error('视频观察期间会话或浏览器权限已改变');};
  const policy=visualObservationPolicy(context);
  check();const url=browserUrl(args.url);
@@ -29,7 +30,7 @@ export async function readBrowserVideo({browser,args={},context={},scope='',prev
  if(player.paused&&(!continuing||args.action==='start')){
   await browser.act({action:'play'},context);check();player=await browser.peekVideo(context);
  }
- const frames=[];let state=player;
+ const frames=[];let state=player,subtitle='';
  {
   check();state=await browser.peekVideo(context);
   if(!state||!sameBrowserDestination(state.url,pageUrl))throw Error('浏览器已切换视频，本轮停止旧视频观察');
@@ -37,6 +38,7 @@ export async function readBrowserVideo({browser,args={},context={},scope='',prev
   if(!Number.isFinite(at)||at<0)throw Error('浏览器没有返回有效播放位置');
   const shot=browser.captureVideo?await browser.captureVideo(context):await browser.act({action:'screenshot'},context);check();
   if(shot.url&&!sameBrowserDestination(shot.url,pageUrl))throw Error('截图时浏览器已切换视频，未采用旧视频画面');
+  subtitle=shot.subtitle||'';
   const bytes=shot.data?Buffer.from(shot.data,'base64'):readFile(shot.file);
   const png=bytes.subarray(0,8).toString('hex')==='89504e470d0a1a0a',jpeg=bytes[0]===255&&bytes[1]===216;
   if(!png&&!jpeg)throw Error('浏览器未返回有效视频截图');
@@ -58,8 +60,31 @@ export async function readBrowserVideo({browser,args={},context={},scope='',prev
  const from=frames[0].at,to=frames.at(-1).at,status=state.ended?'ended':state.paused?'paused':'streaming';
  const sessionId='browser'+createHash('sha256').update(scope+'\n'+url).digest('hex').slice(0,32);
  const executable=browser.status?.().executablePath||'';
+ let audio=null;
+ if(listenWindow&&browser.captureVideoAudio&&status==='streaming'){
+  let sounds=soundByBrowser.get(browser);if(!sounds){sounds=new Map();soundByBrowser.set(browser,sounds);}
+  const latest=sounds.get(identity);
+  const same=latest&&latest.url===pageUrl&&args.at===undefined&&args.action!=='start'&&to>=latest.at&&to-latest.at<(policy.backend==='local'?12:8);
+  if(same)audio=latest.audio;
+  else{
+   const slot={url:pageUrl,at:to,audio:null};sounds.delete(identity);sounds.set(identity,slot);
+   if(sounds.size>8)sounds.delete(sounds.keys().next().value);
+   try{
+    const clip=await browser.captureVideoAudio(context,pageUrl,to);check();
+    if(clip?.data&&sounds.get(identity)===slot)audio=await listenWindow({clip:Buffer.from(clip.data,'base64'),start:clip.start,end:clip.end},scope,context.signal);
+    if(sounds.get(identity)===slot)slot.audio=audio;
+   }catch{check();}
+   check();
+   if(sounds.get(identity)!==slot)throw Error('视频观察已被新片段替换');
+   if(audio){
+    const current=await browser.peekVideo(context);check();
+    if(!current||!sameBrowserDestination(current.url,pageUrl)||current.currentTime<to-.5)throw Error('播放器已切换或回看，旧音轨未提交');
+   }
+  }
+ }
+ const heard=audio?'；音轨实测 '+audio.start.toFixed(1)+'–'+audio.end.toFixed(1)+' 秒':'；这次未取得音轨';
  return {ok:true,observationMode:'latest-frame',visualRevision:'20261111-latest-on-demand-v1',visualBudget:policy,url,finalUrl:pageUrl,status,mode:'browser',backend:'configured-browser',browserExecutable:executable,sessionId,continuous:false,realtimeCapture:true,requiresNext:status!=='ended',reactionMode:'on-demand',substantive:true,cursor:to,duration:state.duration,
-  coverage:'通过设置中的浏览器观察真实播放器，当前画面 '+from.toFixed(1)+'–'+to.toFixed(1)+' 秒；不代表看过未观察的时间段或已听音轨。',
+  coverage:'通过设置中的浏览器观察真实播放器，当前画面 '+from.toFixed(1)+'–'+to.toFixed(1)+' 秒'+heard,
   observed:{deliveredFrom:from,deliveredTo:to,gap:!!previous&&previous.scope===scope&&Number(previous.at)<from-2,complete:false},
-  position:{at:to,source:'configured-browser'},window:{start:from,end:to,requested:true},frames,audioDecoded:false,next:status==='ended'?null:{action:'next',url,sessionId}};
+  position:{at:to,source:'configured-browser'},window:{start:from,end:to,requested:true},frames,subtitle,audio,audioDecoded:!!audio,next:status==='ended'?null:{action:'next',url,sessionId}};
 }

@@ -51,10 +51,26 @@ export function shareBubbleParts(value){
  return result;
 }
 
-// A standalone gloss sometimes precedes the actual conversational response.
+// Discard clear captions or attributed translations before a sticker reply is sent.
+function stickerNarration(text){
+  const line=text.trim().replace(/^(?:哈哈+|噗|笑死(?:我了)?)[，,、\s]+/u,'');
+  const namesImage=/^(?:你(?:发的)?这|这|那[张幅只]|(?:图(?:片)?|画面|表情包)[里中]|它)/u.test(line);
+  const gloss=/(?:读懂了|意思(?:就)?是|是不是(?:想表达|在说|替.{1,14}说)|(?:像是|好像|仿佛|就是)在说|(?:替|代替)[^。！？；]{1,12}说(?=[“"「『:：])|就是[“「"]|就是你刚才那句)/u;
+  if((namesImage||/^是不是替/u.test(line))&&gloss.test(line))return true;
+  const describesPose=/^(?:这(?:张|幅|只|个|位)?|(?:图(?:片)?|画面|表情包)[里中](?:的)?)[^我你，,。！？；]{1,14}?(?:吐着?舌头|伸着?舌头|摇着?尾巴|歪着?头|翻(?:了个)?白眼|瞪着|瞪了|眨着?眼|捂着?脸|张着?嘴|叉着?腰)/u;
+  return describesPose.test(line)&&!/(?:逗笑|好笑|可爱|乐了|像我|我也|把我|害我|我倒|我反而|我想|想逗)/u.test(line);
+}
+
 export function stickerReplyText(text){
-  const parts=String(text??'').trim().split(/\s*\|\|\|\s*|\n\s*\n/u);
-  if(parts.length<2||!parts.slice(1).some(s=>/[\p{L}]/u.test(s)&&!s.includes('[')))return text;
-  const gloss=/^(?:这(?:个|张|只)?(?:表情包?|动图|猫的表情)|你这(?:个|张)?表情)[^\n]{0,14}(?:读懂了|意思是|就是[“「"]|就是你刚才那句)/u;
-  return gloss.test(parts[0])&&!/[？?\[\]]/u.test(parts[0])?parts.slice(1).join('\n\n'):text;
+  const paragraphs=String(text??'').split(/\s*\|\|\|\s*|\r?\n/u);
+  let changed=false;
+  const visible=paragraphs.map(paragraph=>{
+    const sentences=paragraph.match(/(?:“[^”]*”|「[^」]*」|『[^』]*』|"[^"]*"|[^。！？!?；])+[。！？!?；]*|[。！？!?；]+/gu)||[];
+    return sentences.filter(sentence=>{
+      if(!stickerNarration(sentence))return true;
+      changed=true;
+      return false;
+    }).join('').trim();
+  }).filter(Boolean);
+  return changed?visible.join('\n\n'):text;
 }

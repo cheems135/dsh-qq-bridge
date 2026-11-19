@@ -2,6 +2,13 @@ import {SOCIAL_SPEECH_RULES} from './social-voice.js';
 const technical=/\b(?:BPM|Hz|kHz|dB|fps)\b|采样率|交叉淡化|接缝.{0,10}\d|\d+(?:\.\d+)?\s*(?:毫秒|分贝)|鼓点.{0,8}\d|\d+\s*bpm/i;
 const musicalRecap=/接缝|(?:磨了|磨到|卡在|卡到).{0,10}(?:半天|拍|秒)|[一二三四五六七八九十\d]+个音|第[一二三四五六七八九十\d]+(?:声|拍|个音)|(?:加了|加上|加)鼓点之后/;
 const implementation=/(?:桥接|插件|接口).{0,16}(?:只(?:能|肯)|不能|不支持).{0,15}(?:文件|音频)|(?:文件|音频).{0,8}(?:甩不进|发不了|无法发送)/;
+const musicActivity=/听(?:了|一会儿|点)?(?:音乐|歌)|音乐赏析|歌曲试听|listen(?:ing)?\s+(?:to\s+)?music/i;
+const scheduleReport=/(?:^|[\s，。；])(?:日程|活动|进度|今天的任务|状态|本次|刚刚完成|已经完成|已完成|完成了).{0,20}(?:听|音乐|歌曲|播放|分析|任务)|(?:听音乐|听歌|音乐赏析).{0,16}(?:已完成|已结束|已记录|任务|进度)|完成情况|活动记录|当前状态|\d{1,2}:\d{2}\s*[-–—]/;
+export function scheduledMusicSilence(text,{scene,kind='',active=false}={}){
+ const value=String(text||'');
+ const music=kind==='music'||kind==='listen'||musicActivity.test(String(scene?.activity||''))||musicActivity.test(value);
+ return music&&(active||scheduleReport.test(value)||technical.test(value)||musicalRecap.test(value));
+}
 export function technicalShareRequested(request=''){
  const s=String(request);if(/(?:不要|不用|别|无需).{0,10}(?:参数|技术|BPM|频率|分析)/i.test(s))return false;
  return /技术细节|详细分析|(?:报|给|看|要|多少|什么).{0,8}参数|参数.{0,8}(?:多少|是什么)|怎么(?:做|制作|处理|剪辑)的|采样率|\bBPM\b|频谱/i.test(s);
@@ -32,6 +39,7 @@ const MEDIA_COMMAND=/\[(?:图|图片|照片|语音|声音|表情包)[:：][^\]\n
  * A failed rewrite keeps the original text instead of dropping the proactive turn. */
 export async function proactiveShareReply(value,{recent=[],request='',...options}={}){
  const raw=String(value??'').trim();if(!raw||raw==='[skip]')return raw;
+ if(!request&&scheduledMusicSilence(raw,{scene:options.scene}))return '[skip]';
  // Owner relay/marker commands are operational, not prose: never rewrite them.
  if(/\[(?:发送|群发|定时|设置|收藏表情)[:：\]]/.test(raw))return raw;
  const commands=raw.match(MEDIA_COMMAND)||[];

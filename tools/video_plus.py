@@ -32,7 +32,7 @@ def normalize(text):
     return "".join(c for c in text.lower() if c.isalnum())
 
 
-def verified_segments(segments, duration, voice_input=False):
+def verified_segments(segments, duration, voice_input=False, speech_intervals=()):
     # VAD-selected text is still a candidate. Repetition alone is not proof of
     # hallucination: real speakers repeat themselves, too.
     rows, rejected = [], 0
@@ -46,7 +46,8 @@ def verified_segments(segments, duration, voice_input=False):
             rejected += 1
             continue
         confident = logprob > -.6 and 0 < compression < 2.0
-        threshold = .9 if voice_input and confident else .6
+        matched_speech = any(min(end, right)-max(start, left) >= .5*(end-start) for left,right in speech_intervals)
+        threshold = .9 if (voice_input or matched_speech) and confident else .6
         if (not text or not all(math.isfinite(v) for v in [start, end, no_speech])
                 or not 0 <= no_speech < threshold or start < 0 or end <= start or end > duration + 1):
             rejected += 1

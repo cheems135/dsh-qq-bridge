@@ -51,10 +51,36 @@ export function requestsDrawing(value=''){
     return /(?:请|帮我|给我|替我|能不能|可不可以|可以|想要|我要|我想(?:要|看)?).{0,8}(?:画|绘制|手绘|涂鸦)|(?:画|绘制|手绘|涂鸦)(?:一|两|几|个|张|幅|下|点|只)/.test(text);
   });
 }
-export function requestsSinging(value=''){
+export function singingArrangement(value=''){
  const text=String(value||'');
- if(meta(text)||/^(?:他说|她说|转发|引用|教程|假如|例如)/.test(text.trim())||/(?:不要|不用|不想|别|停止|不需要|先别).{0,6}(?:唱|清唱|哼)|歌词.{0,4}(?:意思|分析)|怎么.{0,4}(?:唱歌|清唱)/.test(text))return false;
- return /(?:给我|为我|想听你|听你|能不能|可以|请).{0,8}(?:唱|清唱|哼)|^(?:唱(?:一|两|几|个|首|段|歌)|清唱|哼(?:一|个|首|段))/.test(text);
+ if(/(?:不要|不用|不加|不带|无需|别加|没有)\s*(?:任何)?伴奏|清唱.{0,3}(?:优先|最好)|最好.{0,3}清唱/.test(text))return 'acapella';
+ if(/(?:不用|不要|别)清唱|带(?:点|上|个)?伴奏|加(?:点|上|个)?伴奏|配(?:点|上)?伴奏|伴奏版|跟着伴奏/.test(text))return 'backed';
+ return 'acapella';
+}
+// Select from the confirmed library only when the user has left the title open.
+export function openSongChoice(value=''){
+ const text=String(value||'').replace(/(?:不用|不要|别|不一定要|不一定需要)清唱/g,'')
+  .replace(/清唱/g,'唱').replace(/(?:不用|不要|不加|不带|带上?|加点?|轻|有)?伴奏(?:版|也行|也可以)?|[，,。！!？?～~\s]/g,'');
+ return /^(?:请|你|来|给我|为我|想听你|能不能|可以|随便|随意|挑|选|自己|帮我|我想听|再|一会儿)*唱(?:一|个|支|首|段|小|短|歌)*(?:给我听|听听|吧|呗|呀|嘛)?$/.test(text);
+}
+export function requestsSinging(value=''){
+ const original=String(value||'').trim();
+ if(/^(?:他说|她说|转发|引用|教程|假如|例如|比如|测试词)/.test(original))return false;
+ const text=unquotedMediaText(original)
+   .replace(/(?:不用|不要|别|不一定要|不一定需要)清唱(?=[，,。！？；\s]|$)|(?:不要|不用|不带|不加|无需|别加)(?:任何)?伴奏/g,'');
+ if(/(?:不要|不用|不想|别|停止|取消|不需要|先别|不用再)[^，,。！？；\n]{0,8}(?:唱|哼)|(?:唱歌|翻唱|清唱)(?:先|就|暂时)?(?:算了|取消|不要了)|只(?:用|要)文字|不要出声|别出声/.test(text))return false;
+ return parts(text).some(clause=>{
+   if(/(?:怎么|怎样|如何|为什么|是否支持|能否支持)[^，,]{0,18}(?:唱|哼|接口|工作流|API)|(?:会不会|支持|开启|关闭|开通|配置|设置|教程|歌词分析)|(?:刚才|之前|上次|昨天).{0,9}(?:唱的|录的)|(?:唱|哼)的(?:好不好|人|是谁|是什么歌)|(?:唱|哼)得|(?:唱|哼)过|歌词.{0,4}(?:意思|分析)/i.test(clause))return false;
+   const action=/(?:给我|为我|帮我|想听你|听你|能不能|可不可以|可以|请|带(?:点|上)?伴奏|跟着伴奏)[^，,]{0,16}(?:翻唱|清唱|演唱|唱(?!片|法|的)|哼(?:唱|一|两|几|个|首|段))|(?:想听|听一下|听听)[^，,]{0,10}你(?:自己)?唱的(?:歌|版本|那段)|(?:来|发)(?:一|几)?(?:首|段|两句)[^，,]{0,5}(?:翻唱|清唱|你(?:自己)?唱的)|(?:^|[，、\s])(?:你(?:来)?|那你)?(?:再|重新|接着)?(?:翻唱|清唱|演唱|唱(?:一|两|几|个|首|段|歌|给我|《|下)|哼(?:唱|一|两|几|个|首|段))/u.test(clause);
+   const explicitService=/(?:用|使用|走|调用|通过)[^，,]{0,26}(?:running\s*hub|api|工作流)[^，,]{0,24}(?:翻唱|清唱|演唱|唱(?:一|两|几|首|段|歌|给我|《|下)|哼唱)/i.test(clause);
+   return (!meta(clause)&&action)||explicitService;
+ });
+}
+
+// A cover workflow uses the stored song, so a specific new title needs different audio.
+export function requestsDifferentCover(value=''){
+ const text=String(value||'');
+ return /《[^》\n]{1,100}》|(?:换|另|再选)(?:一|个|首|段){1,3}(?:歌|曲)?|(?:用|拿)(?:我|这次|刚才|刚刚).{0,8}(?:发|传|这份|这个).{0,8}(?:音频|原曲|歌|片段)/.test(text);
 }
 export function requestsVoice(value=''){
   if(requestsSinging(value))return true;
@@ -102,10 +128,15 @@ export function selectMediaIntent(value='',decision={},available={image:true,voi
 }
 export function mediaIntentHint(intent){
   if(intent?.draw)return '【本轮画画请求】对方要的是你亲手画的，不是 AI 生图：用 bridge_drawing 亲手画（create 建画布 → path/line/ellipse 起稿、分层上色 → render 看效果再改），画完用 bridge_life_share 把导出的 PNG 发到当前对话。不要用 [图:…] 走生图，也不要说这是 AI 画的；画不好就直说哪里不行。';
+  const singing=requestsSinging(intent?.request);
+  if(singing&&intent.coverNeedsAudio)return '【本轮翻唱】对方要的是另一首歌。这套翻唱工作流使用保存的原曲片段，请自然说明需要在唱歌页换成那首歌的片段。这一轮不生成或发送旧歌曲。';
   if(!intent?.kinds?.length)return '';
-  return (requestsSinging(intent.request)?'【本轮清唱请求】已有按谱歌曲库（内置两只老虎，也可由号主教谱）。点歌使用 [语音:清唱] 后放实际歌词，不加说话开场；程序按当前真实点歌请求查确认歌谱，再用当前音色合成实际旋律和节拍。未知歌曲需要歌谱或示范，不用自由旋律冒充原曲。明确要求原创时才走实验自由清唱。不要仅凭旧语音印象声称不能唱；成功与否以实际工具结果为准。\n':'')+'【本轮媒体表达参考】'+JSON.stringify(intent)+(intent.source==='direct'?'\n对方本轮明确邀请发送媒体。':'\n这是表达形式判断的建议，不是对方明确要求；request仅保留对方原话。先直接回答原问题，自主选择媒体时不改变意思，不把理由或计划当已发生的事实。')+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
+  const songHint=!singing?'':intent.cover
+    ? '【本轮翻唱】程序会用保存的原曲片段和参考音色提交翻唱。不需要写歌词、语音标签或复制指令，自然接话即可；按真实回执确认发送。'
+    : '【本轮唱歌】用 [语音:唱歌] 另起一段，后面写实际要唱的歌词。是否生成以 RunningHub 的实际回执为准。';
+  return (songHint?songHint+'\n':'')+'【本轮媒体表达参考】'+JSON.stringify(intent)+(intent.source==='direct'?'\n对方本轮明确邀请发送媒体。':'\n这是表达形式判断的建议，不是对方明确要求；request仅保留对方原话。先直接回答原问题，自主选择媒体时不改变意思，不把理由或计划当已发生的事实。')+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(!singing&&intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
 }
-export const IMAGE_DELIVERY_RULES='【发图顺序：群聊和私聊相同】先发图片，再发配文、画面描述、感想和语音。图片前可以完全不说话；如果想先开口，只说一句简短的等待或拍摄提示，例如“等等”“我在拍”。调皮、傲娇等符合当前人设时，也可以先逗一句“就不给你”，但仍实际发图，不把逗弄当作取消请求。不强制使用这些示例，不提前描述画面或声称已经发出。图用单独一行 [图:具体画面]，其余文字和语音放图后。';
+export const IMAGE_DELIVERY_RULES='【发图顺序：群聊和私聊相同】先发图片，再发配文、画面描述、感想和语音。图片前可以完全不说话。需要先回答与图片无关的问题时，单独写[即时回复]正文，再用|||隔开[图:具体画面]；依赖图片的配话放图后。如果只想先打一声招呼，可以简短自然地说正在准备。调皮、傲娇等符合当前人设时，也可以先逗一句“就不给你”，但仍实际发图，不把逗弄当作取消请求。不强制使用这些示例，不提前描述画面或声称已经发出。图用单独一行 [图:具体画面]，其余文字和语音放图后。';
 
 export function imageLeadIn(value=''){
   const text=String(value).trim();if(!text||text.length>32||/\[|https?:|已经|好了|拍完|发了|发给你了|送达/.test(text))return false;
@@ -135,7 +166,8 @@ export function independentRequestedVoice(chunk,request=''){
   return !!match&&requestedVoiceQuotes(request).some(line=>speechComparable(line)===speechComparable(match[1]));
 }
 export function completeMediaReply(value,intent,currentRequest=''){
-  let body=String(value||'').trim();if(!body||/\[skip\]/i.test(body))return body;
+  const cover=intent?.cover===true&&intent.kinds?.includes('voice');
+  let body=String(value||'').trim();if(!body||/^\[skip\]$/i.test(body))return cover?'[语音:唱歌]':body;
   // Some models put the requested words inside the marker instead of after it.
   // Recover only verbatim requested speech, never read a mood/direction aloud.
   const quoted=requestedVoiceQuotes(currentRequest||intent?.request);
@@ -146,6 +178,10 @@ export function completeMediaReply(value,intent,currentRequest=''){
     if(/(?:不能|无法|没法|不支持|发不|没有).{0,16}(?:图|照片|发送|能力|功能)|发不过来/.test(body))body='';
     body+=(body?'\n|||\n':'')+'[图:'+description+']';
   }
+  if(cover&&!voice.test(body)){
+    if(body.length<=65&&/(?:不能|没法|无法|不支持).{0,12}(?:唱|翻唱)|唱不了/.test(body))body='';
+    body+=(body?'\n|||\n':'')+'[语音:唱歌]';
+  }
   /* 只在对方明确点名要语音、而且这句本身就是一句台词时才兜底合成。
      以前不管多长的回复都整段念出来：解析、报错、参数说明全被念，还一直在扣积分。 */
   const spokenCandidate=body.replace(image,'').replace(/\|\|\|/g,'').trim();
@@ -154,14 +190,12 @@ export function completeMediaReply(value,intent,currentRequest=''){
     || (spokenCandidate.match(/[：:]/g)||[]).length>=2
     || /(?:^|\n)\s*(?:[-*•]|\d+[.、])/.test(spokenCandidate);
   const shortLine=spokenCandidate.length<=60&&!workOutput;
-  if(intent?.kinds?.includes('voice')&&!voice.test(body)&&intent.direct===true&&shortLine){
-    const singing=requestsSinging(intent.request);
-    if(singing&&/(?:不能|无法|没法|不支持|没有).{0,16}(?:唱|清唱|演唱)/.test(body))return body;
+  if(intent?.kinds?.includes('voice')&&!voice.test(body)&&intent.direct===true&&!requestsSinging(intent.request)&&shortLine){
     let spoken=body.replace(image,'').replace(/\|\|\|/g,'').trim();
     if(/(?:不能|无法|没法|不支持|没有).{0,16}(?:语音|声音|发送|能力|功能)/.test(spoken))spoken='';
     if(!spoken)spoken=/晚安/.test(intent.request||'')?'晚安，好好休息。':/早安/.test(intent.request||'')?'早安。':'嗯，我在听。';
     const pictures=[...body.matchAll(new RegExp(image.source,'g'))].map(m=>m[0]);
-    body=(singing?'[语音:清唱]':'[语音]')+spoken+(pictures.length?'\n|||\n'+pictures.join('\n|||\n'):'');
+    body='[语音]'+spoken+(pictures.length?'\n|||\n'+pictures.join('\n|||\n'):'');
   }
   // 标签可能被写在引子后面：语音必须独占一段开头，否则会把
   // [语音:温柔] 原样当文字发出去；图和语音也拆成各自的消息，保住先后顺序。

@@ -3,7 +3,7 @@ import {taskCompletion,offlineSlot} from './schedule-evidence.js';
 import {SCHEDULE_TOOL_RULE} from './schedule-tool-breaker.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,copyFileSync,readFileSync,renameSync,rmSync,writeFileSync} from 'node:fs';
-import {calendarNow} from './life-memory.js';
+import {calendarNow,lifeConfig} from './life-memory.js';
 import {digitalActivityKind,DIGITAL_PERSON_RULES} from './digital-life.js';
 import {approvalAnswer} from './operation-policy.js';
 import {paymentQuestionText} from './social-voice.js';
@@ -63,11 +63,11 @@ export function borrowAnswer(value){
  return approvalAnswer(value);
 }
 export function lifeQuestionText(q={}){return q.kind==='payment'?paymentQuestionText(q):text(q.question,600);}
-export function lifeExecutionConfig(raw={}){return {enabled:raw.enabled!==false,execute:raw.execute!==false,sleep:raw.sleep!==false,maxTasksPerDay:Number(raw.maxTasksPerDay)===0?0:Math.max(1,Math.min(99,Number(raw.maxTasksPerDay)||8))};}
+export function lifeExecutionConfig(raw={}){return lifeConfig(raw);}
 export function activityKind(scene={}){return digitalActivityKind(scene);}
-const BASE_LIFE_EXECUTION_RULES=DIGITAL_PERSON_RULES+'\n'+SCHEDULE_TOOL_RULE+'\n【日程实际行动】这是你自己选定要做的计划。日程是你给自己留的打算。结合此刻兴趣、设备状态和聊天，自行决定开始、继续、调整、休息或放弃。决定做的事可以自己推进，不必等人催。先根据真实能力自己寻找实现方法：发现工具、观察页面或设备、搜索资料、尝试操作，再核对结果；没有固定教程不等于做不了，一种路径失败时可换可行路径，实际没有能力或需要本人完成登录验证时再说明阻碍并保存进度，不假装成功。视频要实际播放并观察相应窗口，游戏要真实进入并操作；本次体验到自然停顿或目标达成即可，不必强制发QQ或交报告。结合真实进度继续推进，但不必死磕：做不动、卡住太久或者单纯不想做了，可以收尾换别的，记一句原因和进度就行；用bridge_life_adjust mode=start记录已选择开始的活动，mode=plan改计划，mode=finish结束当前活动。不必等用户要求才可更改。时段结束不强行打断，正在做的事可以做完；不能把计划直接说成正在做。当前明确请求优先。只把工具成功返回的作品、页面、画面或音频算作结果，不能把计划写成经历。先观察真实能力和设备状态，再决定行动；首页、标题不能证明看过内容。创作时自己选择适合目标的媒介和工具：bridge_drawing逐笔绘图、bridge_art生成数字画作，或实际可用的原生工具；如实区分制作方式，不把生成图片说成手绘。想记私人感受可用bridge_diary，写或不写由自己决定，没有日结要求。听歌用bridge_audio取得实际音频证据，必要时开启转写或图谱；波形图不是听懂内容的证明，不只看歌词或歌名；想玩游戏可直接bridge_game play并真实操作、bridge_life_qq读取允许对象的真实对话并选择是否发送，不群发。其他数字活动优先直接使用DSH原生工具实际操作，不按固定bridge步骤；写作品前先读取bridge_capabilities的life.artifactDir与artifactWorkspace，优先在artifactDir写入后用bridge_life_artifact登记；不要假定进程当前目录就是任务目录。原件已在artifactWorkspace时可用action=import复制归档，保留原件；登记被拒按返回的suggestedFile和nextStep修正，不重做已完成作品。仅实际付款需要先核对准确收款方、金额与币种，通过bridge_life_request或bridge_operation_request自然询问并等本人同意；本人闲聊不算付款同意。登录、分享和普通操作不用申请，评论仍按独立开关与手动选择。缺少资料时可以自然问清，不输出申请清单。任务切换前用bridge_life_checkpoint保存进度、待验证结果和下一步；发送、发布、支付等操作结果未知时先核对，不重放。当前请求结束后可继续先前任务；重新观察当前页面而非复用旧坐标。日程任务的最终文字只留在Harness，不会自动当成QQ消息。想聊天须实际调用bridge_life_qq发送并查询status；想分享作品或链接须用bridge_life_share取得送达状态，不能只写一段给对方的正文就当已经发出。已经用这些工具发过的，回合末尾只回 [skip]，不另写回执、送达确认或本轮总结。有想说的、想分享的或想邀请的，可以主动开口；不想开口才保持安静。结束调用bridge_life_finish，没有真实结果不能声明完成。';
+const BASE_LIFE_EXECUTION_RULES=DIGITAL_PERSON_RULES+'\n'+SCHEDULE_TOOL_RULE+'\n【日程实际行动】这是你自己选定要做的计划。日程是你给自己留的打算。结合此刻兴趣、设备状态和聊天，自行决定开始、继续、调整、休息或放弃。决定做的事可以自己推进，不必等人催。先根据真实能力自己寻找实现方法：发现工具、观察页面或设备、搜索资料、尝试操作，再核对结果；没有固定教程不等于做不了，一种路径失败时可换可行路径，实际没有能力或需要本人完成登录验证时再说明阻碍并保存进度，不假装成功。视频要实际播放并观察相应窗口，游戏要真实进入并操作；本次体验到自然停顿或目标达成即可，不必强制发QQ或交报告。结合真实进度继续推进，但不必死磕：做不动、卡住太久或者单纯不想做了，可以收尾换别的，记一句原因和进度就行；用bridge_life_adjust mode=start记录已选择开始的活动，mode=plan改计划，mode=finish结束当前活动。不必等用户要求才可更改。时段结束不强行打断，正在做的事可以做完；不能把计划直接说成正在做。当前明确请求优先。只把工具成功返回的作品、页面、画面或音频算作结果，不能把计划写成经历。先观察真实能力和设备状态，再决定行动；首页、标题不能证明看过内容。创作时自己选择适合目标的媒介和工具：bridge_drawing逐笔绘图、bridge_art生成数字画作，或实际可用的原生工具；如实区分制作方式，不把生成图片说成手绘。想记私人感受可用bridge_diary，写或不写由自己决定，没有日结要求。听歌用bridge_audio取得实际音频证据，必要时开启转写或图谱；波形图不是听懂内容的证明，不只看歌词或歌名；想玩游戏可直接bridge_game play并真实操作、bridge_life_qq读取允许对象的真实对话供自己理解，并把活动结果留在日程面板。其他数字活动优先直接使用DSH原生工具实际操作，不按固定bridge步骤；写作品前先读取bridge_capabilities的life.artifactDir与artifactWorkspace，优先在artifactDir写入后用bridge_life_artifact登记；不要假定进程当前目录就是任务目录。原件已在artifactWorkspace时可用action=import复制归档，保留原件；登记被拒按返回的suggestedFile和nextStep修正，不重做已完成作品。仅实际付款需要先核对准确收款方、金额与币种，通过bridge_life_request或bridge_operation_request自然询问并等本人同意；本人闲聊不算付款同意。登录、分享和普通操作不用申请，评论仍按独立开关与手动选择。缺少资料时可以自然问清，不输出申请清单。任务切换前用bridge_life_checkpoint保存进度、待验证结果和下一步；发送、发布、支付等操作结果未知时先核对，不重放。当前请求结束后可继续先前任务；重新观察当前页面而非复用旧坐标。【日程与主聊天】活动结果、作品、感想与待决定问题留在日程面板。继续自己做事和选择是否调整计划，媒体以真实作品为准。不要为日程另发QQ文字、作品、语音、视频或表情包，不为日程安排一条迟到的通知。本人主动问起时，在当前对话回答他真正问到的内容。结束调用bridge_life_finish，没有真实结果不能声明完成。';
 
-export const LIFE_EXECUTION_RULES=BASE_LIFE_EXECUTION_RULES+'\n想用应用或玩游戏时，先查看当前平台与可用工具。独立后台浏览器可直接使用。用电脑或手机前台时，按当前情境自己决定直接用、改用后台、稍后再用，或先聊一句。若想等号主答复，可用 bridge_life_request kind=device_borrow，details.device 为 desktop 或 phone；一旦问了就等这一任务的答复，尊重拒绝。'+CONTINUATION_RULE+'\n【角色语音】想用自己的声音向 QQ 联系人说话或试嗓时，读取 bridge_context 的 voice 说明，走当前配置的人设语音合成与 QQ 语音条发送路径。合成失败或结果未知时记录原因、核对原任务；不要另用系统朗读、脚本生成音频或把音频当作品附件替代语音条。完成以同一任务的 record 类型消息回执为准；转写成功、作品归档和 file 回执各自只证明对应步骤。明确需要音频文件时仍可按文件分享。'+'\n【聊天时间边界】日程任务只把当前收到的消息当作正在进行的对话。较早的聊天、计划和上一轮自己的发言是历史资料；可以记得并在合适时提起，但不能把隔了很久的旧句子当成刚收到的话接着说。仍需兑现的约定以任务和回执核对，不因旧聊天原话未进入本轮上下文而取消。';
+export const LIFE_EXECUTION_RULES=BASE_LIFE_EXECUTION_RULES+'\n想用应用或玩游戏时，先查看当前平台与可用工具。独立后台浏览器可直接使用。用电脑或手机前台时，按当前情境自己决定直接用、改用后台、稍后再用，或先聊一句。若想等号主答复，可用 bridge_life_request kind=device_borrow，details.device 为 desktop 或 phone；一旦问了就等这一任务的答复，尊重拒绝。'+CONTINUATION_RULE+'\n【音频证据】听过或生成的音频要有真实任务结果，文本、歌词、音频文件和试听各自按实际回执记录。'+'\n【聊天时间边界】日程任务只把当前收到的消息当作正在进行的对话。较早的聊天、计划和上一轮自己的发言是历史资料；可以记得并在合适时提起，但不能把隔了很久的旧句子当成刚收到的话接着说。仍需兑现的约定以任务和回执核对，不因旧聊天原话未进入本轮上下文而取消。';
 export function reconcileArtifactRejections(state,operations=[],now=Date.now()){
  let repaired=0;
  for(const job of state.jobs||[]){let changed=false;
@@ -158,7 +158,7 @@ export function reconcileVerifiedLifeOperations(state,operations=[],outbox=[],no
  }
  return repaired;
 }
-export function createLifeExecution({storage,config,roles,sceneFor,activityFor=sceneFor,onFinish=()=>{},allowed,dispatch,groups=null,conversationBusy=()=>false,onProgress=()=>{},onStateChange=()=>{},operationJournal=()=>[],deliveryJournal=()=>[],onReconcile=()=>{},stop=()=>{},notify=async()=>{},now=()=>Date.now()}={}){
+export function createLifeExecution({storage,config,roles,sceneFor,activityFor=sceneFor,onFinish=()=>{},allowed,dispatch,groups=null,conversationBusy=()=>false,onProgress=()=>{},onStateChange=()=>{},operationJournal=()=>[],deliveryJournal=()=>[],onReconcile=()=>{},stop=()=>{},notify=async()=>{},questionChannel='qq',now=()=>Date.now()}={}){
  let state;try{state=storage.read();}catch(e){if(e.code!=='ENOENT')throw e;}
  state=state&&Array.isArray(state.jobs)?state:{version:2,jobs:[],wake:{},sleep:{}};state.version=2;state.wake||={};state.sleep||={};
  let closed=false,busy=false;
@@ -258,7 +258,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
   if(kind==='payment'&&(!details.merchant||!details.amount||!details.currency))throw Error('先核对收款方、金额和币种，再问本人是否付款');
   if(!String(question||'').trim())throw Error('请先写清楚要问的一件事');
   if(j.question&&!j.question.answer)return {ok:true,waiting:true,id:j.question.id};
-  const previous=j.status; j.question={id:randomUUID(),kind,question:text(question,240),details,at:now()};j.status='waiting_user';save();try{await notify(j);}catch(error){if(error.code==='BORROW_NOT_QUEUED'&&j.status==='waiting_user'&&!j.question.answer){delete j.question;j.status=previous;save();}throw error;}return {ok:true,waiting:true,id:j.question.id};
+  const previous=j.status; j.question={id:randomUUID(),kind,question:text(question,240),details,at:now(),...(questionChannel==='panel'?{panelOnly:true}:{})};j.status='waiting_user';save();try{if(questionChannel!=='panel')await notify(j);}catch(error){if(error.code==='BORROW_NOT_QUEUED'&&j.status==='waiting_user'&&!j.question.answer){delete j.question;j.status=previous;save();}throw error;}return {ok:true,waiting:true,id:j.question.id};
  }
  function answer(questionId,meta,value){
   const j=jobs(meta).find(j=>j.question?.id===questionId&&j.status==='waiting_user');if(!j)throw Error('问题已过期或不属于当前角色');
@@ -318,14 +318,17 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
     if(sc.date===recovery.day&&sc.start<=recovery.clock&&sc.end>recovery.clock)continue;
    }
    let scheduled=state.jobs.find(j=>j.id===stampedId);
-   // The planner may split one activity at a phase boundary or slide its
-   // clock by a minute. Adjacent parts with the same goal remain one task,
-   // including its receipts and retry state. An explicit request or a changed
-   // goal still gets a separate job.
+   // A renamed overlapping plan with the same concrete goal is a revision
+   // of the same activity, so it keeps the existing execution and receipts.
    if(!scheduled&&!sc.requested&&kind!=='group'&&kind!=='sleep'){
-    scheduled=jobs(role.meta).findLast(j=>j.status!=='cancelled'&&!j.scene?.requested&&j.kind===kind&&j.scene?.date===sc.date&&j.scene?.activity===sc.activity&&j.scene?.goal===sc.goal&&(
-     sc.start<j.scene?.end&&sc.end>j.scene?.start||j.scene?.end===sc.start&&!!j.scene?.phase&&!!sc.phase&&j.scene.phase!==sc.phase
-    ));
+    scheduled=jobs(role.meta).findLast(j=>{
+     const previous=j.scene;
+     if(j.status==='cancelled'||previous?.requested||j.kind!==kind||previous?.date!==sc.date||previous.goal!==sc.goal)return false;
+     const sameActivity=previous.activity===sc.activity;
+     const overlap=sc.start<previous.end&&sc.end>previous.start;
+     return overlap&&(sameActivity||Boolean(String(sc.goal??'').trim()))
+       ||sameActivity&&previous.end===sc.start&&!!previous.phase&&!!sc.phase&&previous.phase!==sc.phase;
+    });
     if(scheduled){scheduled.scene={...sc,start:scheduled.scene.start<sc.start?scheduled.scene.start:sc.start};save();}
    }
    const id=scheduled?.id||stampedId;
@@ -356,6 +359,17 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    if(j.kind==='unsupported'){j.status='unsupported';j.reason='忽略无法实际完成的实体活动，不伪造经历';save();continue;}
    const day=calendarNow(now()).day,started=jobs(role.meta).filter(x=>x.startedAt&&x.kind!=='group'&&calendarNow(x.startedAt).day===day).length;
    if(!j.resume&&!j.resumeOnIdle&&cfg().maxTasksPerDay>0&&started>=cfg().maxTasksPerDay){j.status='budget';j.reason='今天的实际日程任务额度已用完';save();continue;}
+   const gap=cfg().minGapMinutes*60_000;
+   if(gap&&!j.startedAt&&!j.resume&&!j.resumeOnIdle){
+    const previous=jobs(role.meta).reduce((latest,task)=>task.id!==j.id&&task.kind!=='group'&&task.startedAt&&!task.scene?.requested
+     ?Math.max(latest,Number(task.endedAt||task.lastTurnEnded?.at||task.lastDispatchAt||task.startedAt)):latest,0);
+    if(previous&&now()-previous<gap){
+     const reason='距上一项日程结束未满 '+cfg().minGapMinutes+' 分钟，稍后再开始';
+     if(j.reason!==reason){j.reason=reason;save();}
+     continue;
+    }
+    if(j.reason?.startsWith('距上一项日程结束未满 '))delete j.reason;
+   }
    if(conversationBusy(role.meta)||j.nextDispatchAt>now())continue;
    const stamp=sceneStamp(role.meta,sc);j.status='queued';j.dispatchSignature=taskProgressSignature(j);delete j.lastTurnEnded;save();
    try{const sessionId=await dispatch(role,j);if(!sessionId){if(j.status==='queued')j.status=j.resume||j.resumeOnIdle?'paused':'planned';save();continue;}if(!cfg().execute||!allowed(role.meta)){await stop(role.meta,{scheduledOnly:true,reason:'日程执行已关闭'});if(['queued','running'].includes(j.status))pause(j,'执行期间安排变化，保留进度');save();continue;}if(j.status==='queued')j.status='running';j.boundSceneId=stamp;j.sessionId=sessionId;j.startedAt||=now();j.lastDispatchAt=now();j.dispatchCount=(j.dispatchCount||0)+1;j.resume=false;j.resumeOnIdle=false;save();}

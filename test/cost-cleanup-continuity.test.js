@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {retireConversation} from '../session-retirement.js';
+import {retireConversation,RETAINED_CONVERSATION_SESSIONS,retainedConversationIds,precedingConversationSessions,verifiedConversationArchive} from '../session-retirement.js';
+import {createHash} from 'node:crypto';
 import {mediaPreviewNeeded} from '../background-cost-policy.js';
 import {createMemoryHub} from '../memory-hub.js';
 import {createLifeExecution} from '../life-execution.js';
@@ -72,9 +73,52 @@ test('only the real current speaker can request their own private conversation i
 });
 test('actual host retirement uses verified saved mapping, full persistence and original-memory receipts before archiving',async()=>{
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');const a=source.indexOf('  async function cleanupPreviousConversation('),b=source.indexOf('  const contextHandoffs=',a),code=source.slice(a,b);
- const state={chats:{'private:12345':{sessionId:'current'}},lifeSessions:{}},storage=store(),calls=[];let closed=false;
- const deps={stopped:false,accountPaused:false,personaContextIdentity:()=> 'v',settings:{activeAccountId:'a',memory:{enabled:true}},hubMeta:()=>({key:'private:12345',accountId:'a',personaId:'p',personaVersion:'v'}),state,chats:new Map(),cfg:{stateFile:'state',dataDir:'data'},readFileSync:file=>file==='state'?JSON.stringify(state):JSON.stringify(storage.read(file)),memoryHub:{preserve:()=>{calls.push('memory');return true;}},join:(...p)=>p.join('/'),ctx:{sessionController:{},get:name=>name==='sessionPersistence'?{open:async()=>({header:{id:'old'},read:async()=>({events:[{seq:0,type:'user/message'}]}),close:async()=>{closed=true;}})}:{archiveSession:async({sessionId})=>calls.push('archive:'+sessionId),unpinSession:async()=>calls.push('unpin')}},retireConversation,writeAtomic:(f,v)=>storage.write(f,v),messages:[],saveState:()=>{},recordInvocation:()=>{},randomUUID:()=> 'id',invocationScope:()=>({})};
+ const meta={key:'private:12345',accountId:'a',personaId:'p',personaVersion:'v'};
+ const state={chats:{'private:12345':{sessionId:'current'}},lifeSessions:{},pendingSessionRetirements:[]},storage=store(),calls=[];let closed=false;
+ state.pendingSessionRetirements.push({...meta,previousId:'old',at:1},...Array.from({length:3},(_,i)=>({...meta,previousId:'other-'+i,at:i+2})));
+ const deps={stopped:false,accountPaused:false,personaContextIdentity:()=> 'v',settings:{activeAccountId:'a',memory:{enabled:true}},hubMeta:()=>({key:'private:12345',accountId:'a',personaId:'p',personaVersion:'v'}),state,chats:new Map(),cfg:{stateFile:'state',dataDir:'data'},readFileSync:file=>file==='state'?JSON.stringify(state):JSON.stringify(storage.read(file)),memoryHub:{preserve:()=>{calls.push('memory');return true;}},join:(...p)=>p.join('/'),ctx:{sessionController:{delete:async()=>assert.fail('auto-retirement must never delete a session')},get:name=>name==='sessionPersistence'?{open:async()=>({header:{id:'old'},read:async()=>({events:[{seq:0,type:'user/message'}]}),close:async()=>{closed=true;}})}:{archiveSession:async({sessionId})=>calls.push('archive:'+sessionId),unpinSession:async()=>calls.push('unpin')}},retireConversation,retainedConversationIds,writeAtomic:(f,v)=>storage.write(f,v),messages:[],saveState:()=>{},recordInvocation:()=>{},randomUUID:()=> 'id',invocationScope:()=>({})};
  const cleanup=Function(...Object.keys(deps),code+';return cleanupPreviousConversation;')(...Object.values(deps));
+ assert.equal((await cleanup('old','current',{key:'private:12345'})).status,'retained');
+ assert.deepEqual(calls,[]);
+ assert.equal((await cleanup('newer','current',{key:'private:12345'})).status,'retained');
  const result=await cleanup('old','current',{key:'private:12345'});assert.equal(result.mode,'archived');assert.deepEqual(calls,['memory','archive:old','unpin']);assert(closed);assert.equal(state.chats['private:12345'].sessionId,'current');
  state.chats['private:12345'].sessionId='old';assert.equal((await cleanup('old','old',{key:'private:12345'})).status,'skipped');assert.equal(calls.length,3);
+});
+
+test('the current page and four most recent previous pages are retained independently per contact and persona',()=>{
+ const scope={accountId:'a',personaId:'p',key:'private:12345'};
+ const rows=[...Array.from({length:7},(_,i)=>({...scope,previousId:'page-'+i,at:i})),
+  {...scope,previousId:'page-6',at:9},
+  {...scope,accountId:'b',previousId:'other-account',at:10},
+  {...scope,personaId:'q',previousId:'other-persona',at:11},
+  {...scope,key:'group:12345',previousId:'other-chat',at:12}];
+ assert.deepEqual([...retainedConversationIds(rows,scope,'current')],['current','page-6','page-5','page-4','page-3']);
+});
+
+test('the actual retention startup restores four verified archived pages without reviving older or unrelated sessions',async()=>{
+ const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
+ const a=source.indexOf('  const checkedConversationArchives='),b=source.indexOf('  let sessionRetirementBusy=',a);
+ assert.ok(a>=0&&b>a);
+ const scope={accountId:'a',personaId:'p',key:'private:12345',personaVersion:'v'};
+ const state={chats:{[scope.key]:{sessionId:'page-6'}},sessionRetirements:[]},storage=store(),restored=[];
+ for(let i=0;i<6;i++){
+  const id='page-'+i,file='session-'+String(i).repeat(64)+'.json';
+  state.sessionRetirements.push({previousId:id,currentId:'page-'+(i+1),at:i,mode:'archived',file});
+  const payload={version:1,scope,sessionId:id,header:{id},events:[{type:'user/message',data:{text:'原始消息'}}]};
+  storage.write('data/session-memory/'+file,{...payload,sha256:createHash('sha256').update(JSON.stringify(payload)).digest('hex')});
+ }
+ const ctx={get:()=>({unarchiveSession:async()=>{}})};
+ const deps={state,ctx,hubMeta:()=>scope,retainedConversationIds,RETAINED_CONVERSATION_SESSIONS,precedingConversationSessions,verifiedConversationArchive,
+  readFileSync:file=>JSON.stringify(storage.read(file)),cfg:{dataDir:'data'},join:(...parts)=>parts.join('/'),
+  stopped:false,accountPaused:false,settings:{activeAccountId:'a'},personaContextIdentity:()=> 'v',recordsAllowed:()=>true,
+  keepSessionAlive:async (id,options)=>{assert.equal(options.restoreArchived,true);restored.push(id);},saveState:()=>{}};
+ const restore=Function(...Object.keys(deps),source.slice(a,b)+';return restoreRecentConversationPages;')(...Object.values(deps));
+ await restore(scope.key,'page-6');
+ await restore(scope.key,'page-6');
+ assert.deepEqual(restored,['page-5','page-4','page-3','page-2']);
+ assert.equal(retainedConversationIds(state.pendingSessionRetirements,scope,'page-6').size,5);
+ const copy=storage.read('data/session-memory/session-'+'5'.repeat(64)+'.json');
+ assert(!verifiedConversationArchive(copy,{...scope,personaId:'other'},'page-5'));
+ copy.events[0].data.text='altered';
+ assert(!verifiedConversationArchive(copy,scope,'page-5'));
 });

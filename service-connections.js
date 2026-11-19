@@ -89,7 +89,7 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
     if(apiOnly&&['chat','image','speech','video'].some(kind=>input[kind]==='local'))throw Error(mobileApiMessage);
     const state=load(),routes={enabled:input.enabled===true,chat:String(input.chat||'host'),image:String(input.image||'legacy'),speech:String(input.speech||'legacy'),...(input.video!==undefined||state.routes?.video!==undefined?{video:String(input.video??state.routes.video??'legacy')}:{})};
     for(const kind of ['chat','image','speech',...('video' in routes?['video']:[])]){
-      const value=routes[kind];if(['local',kind==='chat'?'host':'legacy'].includes(value))continue;
+      const value=routes[kind];if(['local',kind==='chat'?'host':'legacy'].includes(value)||kind==='speech'&&value==='runninghub')continue;
       const p=state.profiles.find(x=>'profile:'+x.id===value);if(!p)throw Error('所选连接不存在：'+kind);
       if(!['openai','responses','anthropic'].includes(p.type)||kind!=='chat'&&p.type!=='openai')throw Error('该连接类型不能直接用于此项；ComfyUI 和 VoiceLab 请使用本地选项，RunningHub 沿用图片页');
       if(!p[kind==='chat'?'chatModel':kind==='image'?'imageModel':kind==='video'?'videoModel':'speechModel'])throw Error('请先为所选连接填写对应模型');

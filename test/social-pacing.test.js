@@ -1,3 +1,4 @@
+import {scheduledChatHeld} from '../schedule-continuity.js';
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {randomUUID} from 'node:crypto';
 import {qqParagraphGroups} from '../qq-reliability.js';
 import {stripUnrequestedActions} from '../dialogue-only.js';
@@ -33,8 +34,27 @@ test('actual signature path records before dispatch and blocks a second automati
 });
 test('actual QQ queue preserves image/caption parts, allows a new topic but blocks repeated nagging, and never throttles normal requested replies',()=>{
  const featureState={outbox:[],proactiveContacts:[]},settings={activeAccountId:'a'},time=Date.now();let incoming=time-1000;
- const fn=extract('queueOutgoing',{qqParagraphGroups,stripUnrequestedActions,featureState,settings,lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),deliveryScopeCurrent:()=>true,personaContextIdentity:()=> 'p',cleanOutgoingText:v=>v,calendarSafeText:v=>v,groupStopped:()=>false,auditById:()=>null,noteDeliveryIssue:()=>{},recipientDenial:()=>'',recordsAllowed:()=>true,wrongOwnerAddress:()=>false,privateInitiativeAllowed:()=>true,randomUUID,deliveryCommitmentId,deliveryFingerprint:s=>JSON.stringify(s),stopped:false,accountPaused:false,existingDelivery:()=>null,proactiveCheck:j=>proactiveDenial(j,featureState.proactiveContacts,incoming),reserveProactive,proactiveIncoming:()=>incoming,log:()=>{},saveFeatures:()=>true,logDelivery:()=>{},flushOutbox:()=>{}});
+ const fn=extract('queueOutgoing',{scheduledChatHeld,qqParagraphGroups,stripUnrequestedActions,featureState,settings,lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),deliveryScopeCurrent:()=>true,personaContextIdentity:()=> 'p',cleanOutgoingText:v=>v,calendarSafeText:v=>v,groupStopped:()=>false,auditById:()=>null,noteDeliveryIssue:()=>{},recipientDenial:()=>'',recordsAllowed:()=>true,wrongOwnerAddress:()=>false,privateInitiativeAllowed:()=>true,randomUUID,deliveryCommitmentId,deliveryFingerprint:s=>JSON.stringify(s),stopped:false,accountPaused:false,existingDelivery:()=>null,proactiveCheck:j=>proactiveDenial(j,featureState.proactiveContacts,incoming),reserveProactive,proactiveIncoming:()=>incoming,log:()=>{},saveFeatures:()=>true,logDelivery:()=>{},flushOutbox:()=>{}});
  const chat={key:'private:12345',kind:'private',chatId:'12345',turnKind:'proactive',contactEpisode:'one'};
  assert(fn(chat,[{type:'image',data:{file:'test.png'}}]));assert(fn(chat,[{type:'text',data:{text:'看这个细节（微笑）'}}]));assert.equal(fn({...chat,contactEpisode:'two'},[{type:'text',data:{text:'怎么不回我呀'}}]),null);assert(fn({...chat,turnKind:'user',contactEpisode:'user'},[{type:'text',data:{text:'正常回复'}}]));assert.equal(featureState.outbox.length,3);assert(fn({...chat,contactEpisode:'new-topic'},[{type:'text',data:{text:'我刚画完，想给你看看新的背景'}}]));assert.equal(featureState.outbox[1].segments[0].data.text,'看这个细节');assert(featureState.outbox[1].notBefore-featureState.outbox[0].notBefore>=3000);
- assert(fn({...chat,contactEpisode:'scheduled',lifeJobId:'trusted-job'},[{type:'text',data:{text:'本轮日程真实取得的感想'}}]));assert.equal(featureState.outbox.at(-1).initiative,false);
+ assert.equal(fn({...chat,contactEpisode:'scheduled',lifeJobId:'trusted-job'},[{type:'text',data:{text:'本轮日程真实取得的感想'}}]),null);assert.equal(featureState.outbox.length,4);
+});
+
+test('quiet private pacing survives reservation and blocks more notifications across personas until the interval ends',()=>{
+ const at=Date.parse('2026-11-19T15:10:00+08:00'),rows=[];
+ const job={id:'first',initiative:true,accountId:'a',personaId:'p',chat:'private:1',proactiveEpisode:'first-turn',segments:[{type:'text',data:{text:'想到你了'}}]};
+ const last=at-31*60_000;
+ assert.match(proactiveDenial(job,rows,at-10*60_000,at,60),/刚聊过/);
+ assert.equal(proactiveDenial(job,rows,last,at,60),'');
+ reserveProactive(job,rows,last,at);
+ const restored=structuredClone(rows);
+ assert.equal(proactiveDenial(job,restored,last,at+500,60),'');
+ assert.match(proactiveDenial({...job,id:'next-bubble'},restored,last,at+1000,60),/一个通知/);
+ assert.match(proactiveDenial(job,restored,at+300,at+500,60),/一个通知/);
+ const fresh={...job,id:'another',chat:'private:2',personaId:'p2',proactiveEpisode:'another-turn'};
+ assert.match(proactiveDenial(fresh,restored,last,at+59*60_000,60),/间隔/);
+ assert.equal(proactiveDenial(fresh,restored,last,at+60*60_000,60),'');
+ for(const change of [{initiative:false},{manualInitiative:true},{commitmentId:'requested'},{accountId:'b'},{chat:'group:2'}]){
+   assert.equal(proactiveDenial({...fresh,...change},restored,last,at+1000,60),'');
+ }
 });

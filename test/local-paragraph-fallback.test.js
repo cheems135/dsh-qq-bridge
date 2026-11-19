@@ -29,3 +29,12 @@ test('persona wave punctuation separates full ideas without requiring a followin
  const text='纸质书可以直接拿起来翻看，而且不用充电，放在书桌旁边随时都能读～电子书可以存放很多本书，出门只带一个阅读器，放进包里也不占地方～不过如果想认真做批注，也可以看看自己更习惯哪种方式～';
  const result=formatLocalChatParagraphs(text);assert.ok(result.includes('\n'));assert.equal(result.replace(/\s/g,''),text.replace(/\s/g,''));assert.ok(result.split('\n').every(p=>p.length>=12));
 });
+test('short casual replies with several comma pauses use at most one balanced split',()=>{
+ const sample='我今天打算在附近走走，买点吃的，回来刚好能看看那本书，你晚上要不要一起看';
+ const result=formatLocalChatParagraphs(sample),parts=naturalBubbleParts(result,{automaticBreaks:false});
+ assert.equal(parts.length,2);
+ assert.equal(parts.join(''),sample);
+ assert.equal(formatLocalChatParagraphs(sample,{request:'别分段'}),sample);
+ assert.equal(formatLocalChatParagraphs('好呀，你先去吧'),'好呀，你先去吧');
+ assert.equal(formatLocalChatParagraphs(sample+'[表情包:开心]'),sample+'[表情包:开心]');
+});

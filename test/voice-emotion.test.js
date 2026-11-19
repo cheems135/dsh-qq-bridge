@@ -67,10 +67,9 @@ test('台词已有方括号事件、空台词、无标签时都不改动原文',
 });
 
 // 官方建议表现力档位起点 1–3。
-test('说话保留面板引导强度，不按情绪自动抬高，清唱行为保留',()=>{
+test('说话保留面板引导强度，不按情绪自动抬高',()=>{
   assert.equal(guidanceFor('angry',2),2);assert.equal(guidanceFor('happy',2),2);assert.equal(guidanceFor('sad',2),2);
   assert.equal(guidanceFor('whisper',2),2);assert.equal(guidanceFor('angry',4),4);assert.equal(guidanceFor('happy',1),1);
-  assert.equal(guidanceFor('angry',2,'sing'),4);
 });
 
 test('auto 模式使用审核提供的方向，不额外堆叠固定的语速音量',()=>{
@@ -91,11 +90,6 @@ test('手动选情绪时不丢审核方向和自定义音色方向',()=>{
   assert.match(out.instructions,/她真的等到了/);
   assert.match(out.instructions,/清亮自然/);
   assert.ok(out.instructions.length<=160);
-});
-
-test('清唱仍返回清唱指令，不被说话配方覆盖',()=>{
-  const out=breezeDelivery('小星星',{breeze:{}},{emotion:'happy',performance:'sing'});
-  assert.match(out.instructions,/清唱|唱成/);
 });
 
 // 真链路：发出去的正文只有台词加一个句首标签，指令是短句，档位符合唤醒度。

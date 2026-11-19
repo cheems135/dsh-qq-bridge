@@ -33,7 +33,7 @@ export function visualGameAction(request,frame,{mode,control,target,windowId}={}
 
 // One latest-frame mailbox and one inference at a time. Capture never waits on
 // inference; replacements are discarded instead of becoming a historical queue.
-export function createVisualSessions({capture,analyze,deliver,act,release=()=>{},valid=()=>true,busy=()=>false,local=()=>false,onEvent=()=>{},onError=()=>{},now=()=>Date.now(),schedule=setTimeout,cancel=clearTimeout}={}){
+export function createVisualSessions({capture,observeAudio,analyze,deliver,act,release=()=>{},valid=()=>true,busy=()=>false,local=()=>false,onEvent=()=>{},onError=()=>{},now=()=>Date.now(),schedule=setTimeout,cancel=clearTimeout}={}){
  const sessions=new Map();let closed=false,inferenceOwner=null;
  const safe=s=>({id:s.id,key:s.context.key,accountId:s.context.accountId,personaId:s.context.personaId,target:s.options.target,captureSource:s.options.captureSource||'host',mode:s.options.mode,url:s.options.url||'',windowId:s.options.windowId||'',control:s.options.control===true,sourceLabel:s.options.sourceLabel||'',profile:s.options.profile||'balanced',status:s.status,backend:s.local?'local':'api',startedAt:s.startedAt,observedAt:s.latest?.capturedAt||s.lastFrame?.capturedAt||0,analyzing:!!s.inferenceTask,analyzedAt:s.analyzedAt||0,captures:s.captures,analyses:s.analyses,reactions:s.reactions,actions:s.actions,dropped:s.dropped,priorityWait:s.priorityWait,sourceWait:s.sourceWait||'',error:s.error||'',coverage:s.latest?.coverage||'',messages:(s.messages||[]).slice(-12),pendingInputs:(s.pendingInputs||[]).length,budget:s.budget,events:s.events.slice(-12)});
  function event(s,type,extra={}){const row={at:now(),type,...extra};s.events.push(row);s.events=s.events.slice(-30);try{onEvent(safe(s),row,s.context);}catch{}}
@@ -62,9 +62,10 @@ export function createVisualSessions({capture,analyze,deliver,act,release=()=>{}
    if(frame.pending){s.sourceWait=String(frame.reason||'').slice(0,160);if(s.sourceWait)s.error='';return;}s.sourceWait='';
    if(frame.ended){suspend(s,'ended');return;}
    frame.capturedAt=Number(frame.capturedAt)||now();frame.digest=frame.digest||createHash('sha256').update(frame.data||JSON.stringify(frame.signature||frame)).digest('hex');
+   if(observeAudio&&s.options.audio===true){frame.hearing=observeAudio(frame.audioChunk,s.context,s.options);delete frame.audioChunk;}
    if(frame.audioChunk)s.pendingAudio=frame.audioChunk;if(s.pendingAudio&&now()-s.pendingAudio.at<12000)frame.audioChunk=s.pendingAudio;
    if(s.latest)s.dropped++;s.latest=frame;s.captures++;
-   if(!chatBusy&&!inferenceOwner&&!s.inferenceTask&&(s.pendingInputs.length||now()-s.lastInfer>=s.budget.inferMs)&&(s.pendingInputs.length||s.options.mode==='game'&&s.options.control||visualDistance(frame,s.lastFrame)>6||frame.subtitle!==s.lastFrame?.subtitle||frame.audioChunk?.at&&frame.audioChunk.at!==s.lastFrame?.audioChunk?.at))launch(s);
+   if(!chatBusy&&!inferenceOwner&&!s.inferenceTask&&(s.pendingInputs.length||now()-s.lastInfer>=s.budget.inferMs)&&(s.pendingInputs.length||s.options.mode==='game'&&s.options.control||visualDistance(frame,s.lastFrame)>6||frame.subtitle!==s.lastFrame?.subtitle||frame.hearing?.sourceCapturedAt&&frame.hearing.sourceCapturedAt!==s.lastFrame?.hearing?.sourceCapturedAt||frame.audioChunk?.at&&frame.audioChunk.at!==s.lastFrame?.audioChunk?.at))launch(s);
   }catch(e){failure(s,e);}finally{if(s.captureController===captureController)s.captureController=null;s.captureBusy=false;arm(s);}
  }
  function launch(s){

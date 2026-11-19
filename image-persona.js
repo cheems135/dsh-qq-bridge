@@ -30,13 +30,16 @@ export function matchesPersonaSubject(request,{name='',appearance=''}={}) {
 }
 export function personaCamera(text, ownPortrait) {
   text=String(text);
-  const positive=re=>{for(const m of text.matchAll(new RegExp(re.source,'gi')))if(!/(?:不要|避免|禁止|不用|别|不是|不需要|no |not )[^，,。；;!?！？\n]{0,5}$/i.test(text.slice(Math.max(0,m.index-14),m.index)))return true;return false;};
+  const positive=re=>{for(const m of text.matchAll(new RegExp(re.source,'gi')))if(!/(?:不要|避免|禁止|不用|无需|别|不是|不需要|非|no |not )[^，,。；;!?！？\n]{0,5}$/i.test(text.slice(Math.max(0,m.index-14),m.index)))return true;return false;};
   const rear=positive(/后置|后镜|后摄|rear.?camera|first.person|第一人称|我的视角|你的视角/);
-  const mirror=positive(/对镜|镜子.{0,5}自拍|mirror selfie/);
-  const external=positive(/第三人称|他拍|旁拍|旁观视角|他人拍摄|外部视角|别人.{0,4}(?:拍|镜头)|摄影师|third.person|external view|taken by (?:someone|a friend)/);
+  const mirror=positive(/对镜(?!头)|镜子.{0,5}自拍|mirror selfie/);
+  const external=positive(/第三人称|他拍|旁拍|旁观视角|他人拍摄|外部视角|固定机位|三脚架|别人.{0,4}(?:拍|镜头)|摄影师|third.person|external view|taken by (?:someone|a friend)|tripod|fixed camera/);
   const front=positive(/前置|前镜|前摄|front.?camera|自拍|selfie/);
-  const noSelf=/(?:不要|别|避免|不需要).{0,3}(?:自拍|selfie)/i.test(text);
-  const camera=external?'external':mirror?'mirror':rear?'rear':(front||ownPortrait&&!noSelf)?'front':'scene';
+  const noSelf=/(?:不要|别|避免|不需要|不用|无需|不是|非)[^，,。；;!?！？\n]{0,3}(?:自拍|selfie)/i.test(text);
+  // A designated subject-facing angle implies an external camera unless the
+  // person explicitly asked to achieve it with their own selfie lens.
+  const angle=positive(/背对(?:着)?(?:镜头|相机)|背影(?:照)?|(?:从|由)(?:人物|角色|她|你)?(?:的)?(?:正后方|斜后方|背后|身后|后面|侧面|侧后方|上方|下方)[^，,。；;!?！？\n]{0,8}(?:拍|取景|看)|侧拍|侧面(?:视角|拍摄|照)|机位(?:在|放在|位于)[^，,。；;!?！？\n]{0,10}(?:背后|身后|侧后|侧面|地面)|back view|from behind|side view|side profile/);
+  const camera=external?'external':mirror?'mirror':rear?'rear':front?'front':angle||ownPortrait&&noSelf?'external':ownPortrait?'front':'scene';
   const english={
     front:'Direct front-facing selfie lens view, showing the character herself from the capturing lens with intimate natural perspective. The capturing device and its support stay entirely outside the image; an arm may extend toward the lens and exit the frame. Preserve the scene-appropriate pose, gaze and contact with nearby objects rather than posing her for an external observer.',
     rear:'First-person rear-facing lens view of what the character sees, with natural everyday framing. The capturing device stays entirely outside the image; the camera holder also remains outside the frame except any explicitly requested hands.',
@@ -58,7 +61,7 @@ const auxiliaryImage=/mask|蒙版|遮罩|背景|background|pose|姿态|depth|深
 export function photoComposition({request='',subject='',cameraPlan,ownPortrait=false,recent=[]}={}){
  const positive=(text,re)=>[...String(text).matchAll(new RegExp(re.source,'gi'))].some(m=>!/(?:不要|别|避免|不用|不是|不需要|no |not )[^，,。；;!?！？\n]{0,5}$/i.test(String(text).slice(Math.max(0,m.index-14),m.index)));
  let view=ownPortrait?personaCamera(request,true):cameraPlan||personaCamera(request||subject,false);
- const explicitCamera=positive(request,/前置|前镜|前摄|自拍|对镜|后置|后摄|后镜|他拍|第三人称|selfie|camera|mirror/);
+ const explicitCamera=view.camera!=='scene'&&view.camera!=='front'||positive(request,/前置|前镜|前摄|自拍|对镜|后置|后摄|后镜|他拍|第三人称|selfie|camera|mirror/);
  const seePerson=positive(request,/脸|长相|样子|本人|全身|半身|穿搭|看看你(?:[，,。！!？?\s]|$)|看一眼你/);
  const viewOnly=positive(request,/窗外|眼前|周围|桌面|风景|景色|手里的|手中|正在吃|正在喝/);
  if(!ownPortrait&&!explicitCamera&&!seePerson&&viewOnly)view=personaCamera('后置',false);
@@ -68,7 +71,8 @@ export function photoComposition({request='',subject='',cameraPlan,ownPortrait=f
  else if(positive(request,/半身|上半身|腰部以上|胸像|upper.body|half.body|waist.up|bust shot/))framing='upper';
  else if(positive(request,/人脸|脸部|只看脸|近脸|大头|face portrait|headshot/))framing='face';
  else if(positive(request,/特写|近景|细节|close.up/))framing='detail';
- else if(ownPortrait||['front','mirror','external'].includes(view.camera)){
+ else if(positive(request,/全景|远景|中景|wide shot|long shot|medium shot/))framing='scene';
+ else if(['front','mirror'].includes(view.camera)){
    if(/穿搭|衣服|换装|outfit/.test(request))framing='upper';
    else framing=[...recent].reverse().find(item=>['face','upper'].includes(item.framing))?.framing==='upper'?'face':'upper';
  }

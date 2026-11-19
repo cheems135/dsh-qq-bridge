@@ -1,7 +1,9 @@
+import {installCompanionAudioCapture} from './ui/companion-audio-capture.js';
 // Browser-owned recent audio and current visual state. No microphone or desktop
 // audio is opened. Unsupported/cross-origin media reports missing audio honestly.
 export async function captureBrowserCompanion(page,context,budget,{audio=false}={}){
- const state=await page.evaluate(({id,audio})=>{
+ if(audio)await page.evaluate(installCompanionAudioCapture);
+ const state=await page.evaluate(({id,audio,windowMs})=>{
   const videos=[...document.querySelectorAll('video')].filter(v=>v.getBoundingClientRect().width>0),video=videos[0];
   let signature=null;
   const source=video||document.querySelector('canvas');
@@ -13,17 +15,13 @@ export async function captureBrowserCompanion(page,context,budget,{audio=false}=
   if(audio&&video){
    let current=globalThis.__bridgeCompanionAudio;
    if(!current){
-    current={id,video,status:'starting',stopped:false,latest:null,stop(){this.stopped=true;clearTimeout(this.timer);try{if(this.recorder?.state==='recording')this.recorder.stop();}catch{}this.stream?.getTracks().forEach(t=>t.stop());this.latest=null;}};
+    current={id,video,status:'starting',stopped:false,latest:null,stop(){this.stopped=true;this.stopCapture?.();this.stream?.getTracks().forEach(t=>t.stop());this.latest=null;}};
     globalThis.__bridgeCompanionAudio=current;
     try{
      const source=video.captureStream?.()||video.mozCaptureStream?.(),tracks=source?.getAudioTracks()||[];
      if(!tracks.length)throw Error('no-player-audio-track');
      current.stream=new MediaStream(tracks);current.status='buffering';
-     const record=()=>{if(current.stopped)return;const chunks=[];const recorder=new MediaRecorder(current.stream,{mimeType:'audio/webm'});current.recorder=recorder;
-      recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-      recorder.onstop=async()=>{if(current.stopped)return;const blob=new Blob(chunks,{type:'audio/webm'});if(blob.size&&blob.size<=512*1024){const bytes=new Uint8Array(await blob.arrayBuffer());if(!current.stopped){let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));current.latest={data:btoa(binary),at:Date.now(),mediaType:'audio/webm'};current.status='captured';}}if(!current.stopped)record();};
-      recorder.onerror=()=>{current.status='unavailable';current.stop();};recorder.start();current.timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},4000);
-     };record();
+     current.stopCapture=globalThis.DSHRecordCompanionTrack(current.stream,windowMs,chunk=>{if(!current.latest||chunk.at>current.latest.at)current.latest=chunk;current.status='captured';},()=>{current.status='unavailable';current.stop();});
     }catch{current.status='unavailable';current.stop();}
    }
    audioState=current.status;audioChunk=current.latest;current.latest=null;
@@ -31,7 +29,7 @@ export async function captureBrowserCompanion(page,context,budget,{audio=false}=
   document.querySelectorAll('canvas').forEach(canvas=>{if(!canvas.hasAttribute('tabindex'))canvas.tabIndex=0;});
   const refs=Array.from(document.querySelectorAll('canvas[data-qqbridge-ref]')).map(e=>({type:'canvas',ref:e.getAttribute('data-qqbridge-ref')}));
   return {url:location.href,title:document.title,signature,subtitle,at:video?Number(video.currentTime)||0:null,ended:video?.ended===true,audioState,audioChunk,elements:refs};
- },{id:context.visualSessionId,audio});
+ },{id:context.visualSessionId,audio,windowMs:budget.inferMs});
  const cdp=await page.context().newCDPSession(page);
  try{
   const {width,height}=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));

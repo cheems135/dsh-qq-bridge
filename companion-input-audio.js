@@ -16,7 +16,9 @@ export async function transcribeCompanionAudio(audio,{localOnly=false,apiOnly=fa
  if(localOnly||!key){
   if(!analysis?.status().transcription)throw Error(localOnly?'本地语音识别尚未就绪；录音没有上传云端，仍可直接打字':'语音识别尚未配置，仍可直接打字');
   const directory=join(cacheDir,'companion-microphone');mkdirSync(directory,{recursive:true});const file=join(directory,randomUUID()+'.'+extension);
-  try{writeFileSync(file,bytes);const result=await analysis.analyze({file,transcribe:true,voiceInput:true},{...context,signal});const hearing=normalizeHearing(result,{source:'local-asr'});if(!hearing.text&&!detailed)throw Error('这次没有识别出可靠文字，请再说一次或直接打字');return detailed?hearing:hearing.text.slice(0,2000);}finally{try{unlinkSync(file);}catch{}}
+  try{writeFileSync(file,bytes);const result=await analysis.analyze({file,transcribe:true,voiceInput:true},{...context,signal});const hearing=normalizeHearing(result,{source:'local-asr'});if(!hearing.text&&!detailed)throw Error('这次没有识别出可靠文字，请再说一次或直接打字');return detailed&&analysis.enrichHearing?analysis.enrichHearing(bytes,hearing,{signal,live:true}):detailed?hearing:hearing.text.slice(0,2000);}finally{try{unlinkSync(file);}catch{}}
  }
- const hearing=await requestAudioTranscription(bytes,media,{signal,fetchImpl,mediaType,filename:'microphone.'+extension});if(!hearing.text&&!detailed)throw Error('这次没有识别出文字，请再试一次或直接打字');return detailed?hearing:hearing.text.slice(0,2000);
+ let hearing;try{hearing=await requestAudioTranscription(bytes,media,{signal,fetchImpl,mediaType,filename:'microphone.'+extension});}catch(error){if(apiOnly||!detailed||!analysis?.enrichHearing||signal?.aborted)throw error;hearing=await analysis.enrichHearing(bytes,normalizeHearing(null,{source:'no-transcript'}),{signal,live:true});if(!hearing.labels?.length)throw error;return hearing;}
+ if(detailed&&!apiOnly&&analysis?.enrichHearing)return analysis.enrichHearing(bytes,hearing,{signal,live:true});
+ if(!hearing.text&&!detailed)throw Error('这次没有识别出文字，请再试一次或直接打字');return detailed?hearing:hearing.text.slice(0,2000);
 }

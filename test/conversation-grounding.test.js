@@ -1,3 +1,4 @@
+import {initiativeConversationHint} from '../operation-context.js';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {selectMediaIntent,mediaIntentHint} from '../media-intent.js';
 import {initiativeGrounding,conversationExecutionGrounding} from '../initiative-grounding.js';
@@ -12,7 +13,7 @@ test('actual API proactive reply receives protected execution facts after planni
   featureProfile:()=>({}),keepSessionAlive:async()=>true,autonomyState:()=>({counts:{chats:0}}),saveState:()=>{},pinApprovalPolicy:async()=>{},installAgentContext:()=>true,
   settings:{activeAccountId:'a',localChat:{enabled:false},owners:['1'],realism:{enabled:true},mood:{}},featureState:{invocations:[],generation:0},activePersona:()=>({id:'p'}),lifeExecution:null,
   consumeMoodHint:()=>({text:''}),currentPersonaMood:()=>({}),operationContext:()=>[],recipientIdentity:()=> '本人',sleepAwarenessHint:()=>'',recentEventsHint:()=>'',websiteReader:null,
-  operationContextHint:()=>'',mediaShareHint:()=>'',withClock:v=>v,sharingExpression:()=> '自然说话',recentDialogueReplies:()=>[],sessionDigests:new Map(),
+  privateInitiativeUnanswered:()=>false,initiativeConversationHint,operationContextHint:()=>'',mediaShareHint:()=>'',withClock:v=>v,sharingExpression:()=> '自然说话',recentDialogueReplies:()=>[],sessionDigests:new Map(),
   promptBudget:{pack(content,{protectedParts}){const facts=content.find(p=>p.text?.startsWith('【经历与执行状态】'));assert.ok(facts);assert.ok(protectedParts.has(facts));}},
   ctx:{get:()=>({get:()=>({followup:async value=>{received=value;}})})},log:()=>{},
  };
