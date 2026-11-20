@@ -4,7 +4,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createDesktopNapCat} from './desktop-napcat.js';
 import {createLocalNapCat} from './mobile-napcat.js';
-import {createMobilePhoneController} from './mobile-phone-controller.js';
+import {createMobilePhoneController,phoneScreenshotFormat} from './mobile-phone-controller.js';
 export const isDesktop=process.platform==='win32';
 export const platform={
   python:isDesktop?join(homedir(),'.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/python/python.exe'):'/root/projects/.dsh/tools/qq-bridge-mobile-media/bin/python',
@@ -16,7 +16,7 @@ export function createPlatformPhoneController(options){
   const pending=new Set();
   return{
     async status(){try{return {...await options.peer()?.phoneRequest({action:'status'}),backend:'usb-dsh-go-native'};}catch{return{installed:true,enabled:options.getConfig().enabled,connected:false,backend:'usb-dsh-go-native',devices:[],inputNote:'连接已配对的安卓手机并打开DSH Go，即可通过数据线操作手机。'};}},
-    async act(body,context={}){context.signal?.throwIfAborted();if(!options.authorize(context,body.action))throw Error('当前会话没有手机操作权限');if(!options.getConfig().enabled)throw Error('手机操作已关闭');const peer=options.peer();if(!peer)throw Error('设备同步尚未就绪');const controller=new AbortController(),stop=()=>controller.abort(context.signal?.reason);pending.add(controller);context.signal?.addEventListener('abort',stop,{once:true});try{context.signal?.throwIfAborted();const result=await peer.phoneRequest(body,{signal:controller.signal});controller.signal.throwIfAborted();if(!options.authorize(context,body.action))throw Error('手机操作期间权限已改变，未提交旧结果');if(result?.imageTransfer){const image=result.imageTransfer,bytes=Buffer.from(String(image.data||''),'base64');if(bytes.length>8*1024*1024||bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('手机返回的截图无效');const dir=join(options.getCacheDir(),'phone');mkdirSync(dir,{recursive:true});const file=join(dir,'peer-'+randomUUID()+'.png');writeFileSync(file,bytes);delete result.imageTransfer;result.file=file;}return result;}finally{context.signal?.removeEventListener('abort',stop);pending.delete(controller);}},
+    async act(body,context={}){context.signal?.throwIfAborted();if(!options.authorize(context,body.action))throw Error('当前会话没有手机操作权限');if(!options.getConfig().enabled)throw Error('手机操作已关闭');const peer=options.peer();if(!peer)throw Error('设备同步尚未就绪');const controller=new AbortController(),stop=()=>controller.abort(context.signal?.reason);pending.add(controller);context.signal?.addEventListener('abort',stop,{once:true});try{context.signal?.throwIfAborted();const result=await peer.phoneRequest(body,{signal:controller.signal});controller.signal.throwIfAborted();if(!options.authorize(context,body.action))throw Error('手机操作期间权限已改变，未提交旧结果');if(result?.imageTransfer){const image=result.imageTransfer,bytes=Buffer.from(String(image.data||''),'base64'),format=phoneScreenshotFormat(bytes);if(!format||image.mediaType&&image.mediaType!==format.mediaType)throw Error('手机返回的截图无效');const dir=join(options.getCacheDir(),'phone');mkdirSync(dir,{recursive:true});const file=join(dir,'peer-'+randomUUID()+'.'+format.extension);writeFileSync(file,bytes);delete result.imageTransfer;result.file=file;}return result;}finally{context.signal?.removeEventListener('abort',stop);pending.delete(controller);}},
     cancel(){for(const controller of pending)controller.abort();},
   };
 }

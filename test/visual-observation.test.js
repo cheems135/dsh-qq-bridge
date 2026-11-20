@@ -41,3 +41,31 @@ test('permission loss and navigation after capture cannot submit old evidence',a
  f.browser.captureVideo=async()=>({url:'https://example.org/other',data:'invalid'});
  await assert.rejects(f.read(),/切换视频/);
 });
+test('the DSH player observation can reuse one scoped hearing receipt from its actual audio',async()=>{
+ const f=fixture();
+ let captures=0,listens=0;
+ const clip=Buffer.from('1a45dfa30000','hex');
+ f.browser.captureVideoAudio=async(_context,source,at)=>{
+  assert.equal(source,url);
+  captures++;
+  return {start:at,end:at+5,data:clip.toString('base64')};
+ };
+ const listenWindow=async({clip:bytes,start,end})=>{
+  listens++;
+  assert.deepEqual(bytes,clip);
+  return {status:'transcribed',start,end,segments:[{start,end,text:'这是一段实际台词'}]};
+ };
+ const preview=await f.read();
+ assert.ok(preview.frames.length);
+ assert.equal(captures,0);
+ const context={key:'private:owner',personaId:'p',accountId:'a'};
+ const listen=()=>readBrowserVideo({browser:f.browser,args:{url,audio:true},context,scope:'test',listenWindow});
+ const first=await listen();
+ assert.equal(first.audio.segments[0].text,'这是一段实际台词');
+ assert.match(first.coverage,/音轨听写/);
+ f.setAt(11);
+ const second=await listen();
+ assert.equal(second.audio,first.audio);
+ assert.equal(captures,1);
+ assert.equal(listens,1);
+});

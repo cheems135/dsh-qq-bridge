@@ -82,7 +82,7 @@ export async function readBrowserVideo({browser,args={},context={},scope='',prev
    }
   }
  }
- const heard=audio?'；音轨实测 '+audio.start.toFixed(1)+'–'+audio.end.toFixed(1)+' 秒':'；这次未取得音轨';
+ const heard=audio?'；'+(audio.status==='transcribed'?'音轨听写 ':'音轨实测 ')+audio.start.toFixed(1)+'–'+audio.end.toFixed(1)+' 秒':'；这次未取得音轨';
  return {ok:true,observationMode:'latest-frame',visualRevision:'20261111-latest-on-demand-v1',visualBudget:policy,url,finalUrl:pageUrl,status,mode:'browser',backend:'configured-browser',browserExecutable:executable,sessionId,continuous:false,realtimeCapture:true,requiresNext:status!=='ended',reactionMode:'on-demand',substantive:true,cursor:to,duration:state.duration,
   coverage:'通过设置中的浏览器观察真实播放器，当前画面 '+from.toFixed(1)+'–'+to.toFixed(1)+' 秒'+heard,
   observed:{deliveredFrom:from,deliveredTo:to,gap:!!previous&&previous.scope===scope&&Number(previous.at)<from-2,complete:false},

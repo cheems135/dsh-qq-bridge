@@ -11,6 +11,7 @@ export function passiveConsoleRequest(method,url,payload){
   '/im-bridge/features/companion':['snapshot'],
   '/im-bridge/features/memory-hub':['snapshot','evidence','search'],
   '/im-bridge/website-mcp':['list','schema'],
+  '/im-bridge/visual-session':['observe'],
  };
  return (reads[url]||[]).includes(payload?.action);
 }

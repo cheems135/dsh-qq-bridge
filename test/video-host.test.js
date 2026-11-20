@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {join} from 'node:path';import {pathToFileURL} from 'node:url';
-import {createVideoTasks,VIDEO_PARAMETERS} from '../video-tasks.js';import {buildVideoPrompt,videoConfig} from '../video-prompt.js';
+import {createVideoTasks,VIDEO_PARAMETERS} from '../video-tasks.js';import {buildVideoPrompt,videoConfig,videoParameters} from '../video-prompt.js';
+import {runningHubVideo} from '../video-api.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8').replaceAll('import.meta.url',JSON.stringify('file:///fixture/index.js'));
 function extract(name,deps={}){const start=source.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0);for(let end=source.indexOf('}',start);end>=0;end=source.indexOf('}',end+1)){let fn;try{fn=Function(...Object.keys(deps),'return ('+source.slice(start,end+1)+');');}catch(error){if(error instanceof SyntaxError)continue;throw error;}return fn(...Object.values(deps));}throw Error(name);}
 test('image and video call the same full image prompt preparer with wardrobe, schedule and real reference',async()=>{
@@ -13,7 +14,34 @@ test('registered API video tool really connects generation to a video QQ segment
  let registered;const chat={key:'private:12345',sessionId:'session',kind:'private',chatId:'12345',turns:new Map([['turn',{meta:{auditId:'audit',kind:'user'}}]])},featureState={},queued=[],recorded=[];
  const settings={activeAccountId:'account',videogen:{enabled:true,profileId:'video',seconds:8,size:'720x1280',action:'默认眨眼'},imagegen:{promptLanguage:'zh'}};
  const deps={promptPreferences:{snapshot:()=>({values:{}})},videoTasks:undefined,createVideoTasks,featureState,saveFeatures:()=>true,apiInvocationAllowed:()=>true,mediaInvocationAllowed:()=>true,serviceSource:()=>'legacy',videoProfile:()=>({videoModel:'any'}),videoConfig,settings,invocationScope:()=>({accountId:'account',personaId:'persona'}),prepareConnectionVisual:async()=>({prepared:{prompt:'白裙蓝色发饰，海边背景'},reference:{file:'portrait.png'},plan:{appearanceContext:'white dress',lifeContext:'beach',promptLanguage:'zh'}}),buildVideoPrompt,readFileSync:()=>Buffer.from('real reference bytes'),sniffImage:()=> 'image/png',connectionVideo:async(_p,options)=>{assert.equal(options.reference.bytes.toString(),'real reference bytes');assert.match(options.prompt,/白裙蓝色发饰，海边背景/);assert.match(options.prompt,/帮我拍挥手的视频/);assert.match(options.prompt,/默认动作（仅在本轮未指定动作时参考）：默认眨眼/);await options.onJob({id:'remote',status:'completed'});return {bytes:Buffer.from('actual video result')};},apiModeController:new AbortController(),generatedDir:()=> 'output',mkdirSync:()=>{},join,writeFileSync:(_file,bytes)=>assert.equal(bytes.toString(),'actual video result'),queueOutgoing:(c,segments)=>{queued.push({c,segments});return 'qq-delivery';},personaContextIdentity:()=> 'persona-version',pathToFileURL,recordInvocation:(...args)=>recorded.push(args)};
- const getVideoTasks=extract('getVideoTasks',deps);
+ const getVideoTasks=extract('getVideoTasks',{...deps,auditById:()=>({userWords:'帮我拍挥手的视频'}),videoParameters});
  const register=extract('registerVideoTool',{videoToolRegistered:false,featureState,ctx:{get:()=>({register:d=>{registered=d;return()=>{};}}),effect:()=>{}},VIDEO_PARAMETERS,chats:new Map([['session',chat]]),qqReadToolDenial:()=>undefined,qqTurnMeta:actor=>[...actor.turns.values()].at(-1)?.meta,invocationScope:deps.invocationScope,videoStamp:()=> 'stamp',getVideoTasks,settings,randomUUID:()=> 'record-id'});
  assert.equal(register(),true);assert.equal(registered.name,'bridge_video');const args={action:'generate',prompt:'帮我拍挥手的视频',},exec={agent:{id:'session'},signal:new AbortController().signal};const result=await registered.execute(args,exec);assert.equal(result.deliveryId,'qq-delivery');assert.equal(queued[0].segments[0].type,'video');assert.match(queued[0].segments[0].data.file,/video-/);assert.equal(queued[0].c.auditId,'audit');assert.equal(queued[0].c.expectedAccountId,'account');await registered.execute(args,exec);assert.equal(queued.length,1);assert(recorded.some(([r])=>r.preparedPrompt?.includes('日程场景')));
+});
+test('a RunningHub clip submits the real portrait binding and requested parameters once, then resumes by task id',async()=>{
+ const config=videoConfig({provider:'runninghub',seconds:10,aspectRatio:'9:16'});
+ const params=videoParameters('时长12秒，横屏16:9，前2秒挥手',{seconds:10},config,'runninghub');
+ assert.deepEqual(params,{seconds:12,aspectRatio:'16:9',size:''});
+ assert.equal(videoParameters('前 2 秒挥手，之后往镜头看',{prompt:'拍挥手'},config,'runninghub').seconds,10);
+ const prompt=buildVideoPrompt('咖啡馆窗边',{...params,reference:true,action:'前两秒看向镜头，随后轻轻挥手'});
+ const state=[],routes=[],uploads=[],mp4=Buffer.alloc(18);mp4.write('ftyp',4);
+ const options={...params,prompt,reference:'saved-persona.png',neutral:'blank.png',onJob:j=>state.push(j),assertCurrent:()=>{}};
+ const deps={
+  upload:async file=>{uploads.push(file);return file;},
+  request:async(_cfg,route,payload)=>{
+   routes.push(route);
+   if(route.includes('/run/')){
+    const n=Object.fromEntries(payload.nodeInfoList.map(node=>[node.nodeId,node.fieldValue]));
+    assert.equal(n['181'],'saved-persona.png');assert.equal(n['343'],'blank.png');assert.equal(n['172'],'16:9');assert.equal(n['218'],'12');
+    assert.match(n['216'],/@图片1.*身份/);assert.match(n['216'],/轻轻挥手/);
+    return {taskId:'123456'};
+   }
+   assert.equal(payload.taskId,'123456');return {status:'SUCCESS',results:[{url:'https://result.example/render.mp4'}]};
+  },
+  download:async()=>({status:200,bytes:mp4}),
+ };
+ assert.equal((await runningHubVideo({},options,deps)).jobId,'123456');
+ assert.equal((await runningHubVideo({},{...options,job:state.at(-1)},deps)).jobId,'123456');
+ assert.equal(routes.filter(s=>s.includes('/run/')).length,1);
+ assert.deepEqual(uploads,['blank.png','saved-persona.png']);
 });

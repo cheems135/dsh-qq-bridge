@@ -16,6 +16,17 @@ test('actual app metadata permits one identity image with the None secondary inp
  const resolved=await scope.resolveImageWorkflow('',false,{file:'identity.png'});
  assert.deepEqual(JSON.parse(JSON.stringify(resolved.personaReferenceInputs)),[{nodeId:'470',fieldName:'image'}]);
 });
+test('the known Qwen app requests canvas inputs for new scenes and requires real sources for explicit editing',async()=>{
+ const discovery=analyzeRunningHubMetadata(raw,'app','2102644452430008321');
+ const config={mode:'app',webappId:'2102644452430008321',autoDetect:false,extraNodes:[{nodeId:'475',fieldName:'image',fieldValue:'user-source.png'}],discovery};
+ const source=readFileSync(new URL('../index.js',import.meta.url),'utf8'),a=source.indexOf('async function resolveImageWorkflow('),b=source.indexOf('const REFERENCE_PREFIX_RE',a);
+ const scope={settings:{imagegen:{runninghub:{}}},normalizeRunningHub:()=>({activeWorkflowId:'fixture'}),chooseRunningHub:()=>structuredClone(config),parseRunningHubTarget:(id,mode)=>({id,mode}),referenceBindings,referenceReuseBindings,emptyReferenceInputs,studioClean:String};
+ vm.createContext(scope);vm.runInContext(source.slice(a,b),scope);
+ const resolved=await scope.resolveImageWorkflow('',false,null,'画一个蓝色杯子');
+ assert.deepEqual(Array.from(resolved.canvasInputs,n=>n.nodeId),['470']);
+ assert.equal(resolved.extraNodes[0].fieldValue,'user-source.png');
+ await assert.rejects(scope.resolveImageWorkflow('',false,null,'把这张图换个背景'),e=>e.code==='IMAGE_REQUIRED_INPUTS');
+});
 test('an explicit mandatory image remains required even when its schema contains None',()=>{
  const input=structuredClone(raw);input.data.nodeInfoList.find(n=>n.nodeId==='475').required=true;
  const d=analyzeRunningHubMetadata(input,'app','123');assert(d.requiredFields.some(f=>f.nodeId==='475'));

@@ -1,8 +1,8 @@
 import {normalizeHearing,createLiveHearing,hasHearingEvidence} from './hearing-evidence.js';
-import {createMobileOverlayBridge} from './mobile-overlay-bridge.js';
+import {createMobileOverlayBridge,serveMobileOverlayApk} from './mobile-overlay-bridge.js';
 import {createDesktopCompanion} from './desktop-companion.js';
 import {normalizeSharedFrame,sharedTokenMatches} from './shared-visual-input.js';
-import {mkdirSync,writeFileSync,unlinkSync,readFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,unlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {createVisualSessions,visualCompanionIntent} from './visual-session.js';
@@ -82,13 +82,23 @@ export function installVisualCompanion({ctx,browser,desktop,phone,audio,cacheDir
    const canvas=page.elements.find(e=>e.type==='canvas');
    return browser.act({...action,...(action.action==='press'?{ref:canvas.ref}: {})},context);
   },
-  release:async(options,context)=>{initialized.delete(context.visualSessionId);history.delete(context.visualSessionId);liveHearing.release(context.visualSessionId);shared.delete(context.visualSessionId);if(options.target==='browser')await browser.stopCompanion(context);},
+  release:async(options,context)=>{initialized.delete(context.visualSessionId);history.delete(context.visualSessionId);liveHearing.release(context.visualSessionId);shared.delete(context.visualSessionId);if(options.captureSource==='native')mobileOverlay.resetCapture(context.visualSessionId);if(options.target==='browser')await browser.stopCompanion(context);},
   onEvent:(session,event,context)=>{if(['started','paused','stopped','ended','error','reaction','action','input'].includes(event.type))record(session,event,context);},
   onError:async(context,error)=>{record({id:context.visualSessionId},{type:'halted',error},context);if(valid(context,manager.list().find(s=>s.id===context.visualSessionId)||{}))await notifyError(context,error);}
  });
  function command(args,context,{fromPanel=false}={}){
+  if(args.action==='observe'){
+   if(platform==='win32'||!valid(context,{target:'phone'}))throw Error('当前会话没有手机屏幕共享权限');
+   const session=manager.list().find(s=>s.key===context.key&&s.accountId===context.accountId&&s.personaId===context.personaId);
+   const observationContext={...context,visualSessionId:session?.id};
+   if(session?.captureSource!=='native'||!manager.authorizes(observationContext))throw Error('请先连接屏幕陪伴组件，并在手机选择共享画面');
+   const frame=mobileOverlay.capture({},observationContext,session.budget);
+   if(frame.pending)throw Error(frame.reason||'组件已连接，正在等待第一张系统共享画面');
+   return {ok:true,source:'android-media-projection',sessionId:session.id,capturedAt:frame.sourceCapturedAt||frame.capturedAt,audioState:frame.audioState,coverage:frame.coverage,
+    frames:[{at:frame.sourceCapturedAt||frame.capturedAt,part:{type:'image',data:frame.data,mediaType:frame.mediaType}}]};
+  }
   if(['open-window','close-window'].includes(args.action)){
-   if(platform!=='win32')throw Error('独立桌面悬浮窗仅在电脑版可用');
+   if(platform!=='win32')throw Error('请在手机 QQ 桥接的陪看面板连接安卓悬浮球，再选择要共享的应用');
    if(!valid(context,{target:'screen'}))throw Error('当前账号或桌面观察权限已关闭');
    if(args.action==='close-window'){const current=manager.list().find(s=>s.key===context.key);if(current&&current.accountId===context.accountId&&current.personaId===context.personaId)manager.control(context.key,'stop');desktopCompanion.closeWindow(context.key);return {ok:true};}
    const port=Number(ctx.get('webServer')?.port);
@@ -96,7 +106,7 @@ export function installVisualCompanion({ctx,browser,desktop,phone,audio,cacheDir
    return desktopCompanion.open({baseUrl:'http://127.0.0.1:'+port,key:context.key,context}).then(window=>({ok:true,window,started:false,note:'悬浮窗已打开；尚未开始识屏，可在窗口选择来源并启动，或继续调用start指定来源'}));
   }
   if(args.action==='start'){
-   const options={captureSource:platform!=='win32'&&args.captureSource==='native'?'native':'host',profile:['saver','balanced','detail'].includes(args.profile)?args.profile:'balanced',target:args.target||'browser',mode:args.mode||'watch',url:args.url,windowId:String(args.windowId||''),audio:args.audio===true,control:args.control===true,sourceLabel:String(args.sourceLabel||'').replace(/[\x00-\x1f]/g,'').slice(0,120)};
+   const options={captureSource:platform!=='win32'&&args.captureSource==='native'?'native':'host',profile:['saver','balanced','detail'].includes(args.profile)?args.profile:'balanced',target:args.target||(platform==='win32'?'browser':'phone'),mode:args.mode||'watch',url:args.url,windowId:String(args.windowId||''),audio:args.audio===true,control:args.control===true,sourceLabel:String(args.sourceLabel||'').replace(/[\x00-\x1f]/g,'').slice(0,120)};
    if(options.target==='shared'&&!fromPanel)throw Error('请在陪伴面板点击选择屏幕或窗口；系统选择器需要本人选择来源');
 
    if(platform!=='win32'&&options.target!=='phone')throw Error('手机版陪伴请使用本机屏幕，不使用电脑共享或桌面浏览器');
@@ -109,20 +119,33 @@ export function installVisualCompanion({ctx,browser,desktop,phone,audio,cacheDir
   if(args.id&&existing&&args.id!==existing.id)throw Error('视听目标已经切换，旧页面不能控制新会话');
   if(args.action==='input'){const intent=visualCompanionIntent(args.text);if(intent&&['pause','stop'].includes(intent.action))return manager.control(context.key,intent.action);return manager.submit(context.key,args.text);}
   if(args.action==='resume'&&existing?.target==='shared')throw Error('请重新选择共享画面后继续；暂停已释放屏幕与声音采集');
+  if(args.action==='resume'&&existing?.captureSource==='native'&&existing.status!=='running')mobileOverlay.resetCapture(existing.id);
   return manager.control(context.key,args.action||'status');
  }
  const mobileOverlay=createMobileOverlayBridge({panelContext,valid,command,list:()=>manager.list(),transcribe,platform});
  const server=ctx.get('webServer');
- if(server&&platform!=='win32')ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/mobile-overlay',handler:mobileOverlay.handler}));
- if(server&&platform!=='win32')ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/mobile-overlay.apk',handler(req,res){
-  if(req.method!=='GET'){res.writeHead(405);res.end();return;}
-  try{const bytes=readFileSync(new URL('./assets/mobile-companion.apk',import.meta.url));res.writeHead(200,{'content-type':'application/vnd.android.package-archive','content-disposition':'attachment; filename="DSH-Companion.apk"','cache-control':'no-cache','x-content-type-options':'nosniff'});res.end(bytes);}catch{res.writeHead(404,{'content-type':'text/plain; charset=utf-8'});res.end('当前包尚未附带安卓组件，请安装包含组件的完整插件包');}
- }}));
+ if(server&&platform!=='win32')ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/mobile-overlay.apk',handler:serveMobileOverlayApk}));
  if(server)ctx.effect(()=>server.register({kind:'exact',path:'/im-bridge/visual-session',handler(req,res){
   const send=(code,value)=>{res.writeHead(code,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value));};
   try{if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host||req.headers['sec-fetch-site']==='cross-site')return send(403,{error:'拒绝跨站操作'});}catch{return send(403,{error:'来源无效'});}
   if(req.headers['x-dsh-companion']&&!desktopCompanion.acceptsToken(req.headers['x-dsh-companion']))return send(403,{error:'独立悬浮窗所属账号或会话已改变，请重新打开'});
-  if(req.method==='GET')return send(200,{nativeDesktop:platform==='win32',nativeMobile:platform!=='win32'?mobileOverlay.status():undefined,sessions:manager.list().filter(s=>{try{const c=panelContext(s.key);return c.accountId===s.accountId&&c.personaId===s.personaId;}catch{return false;}}),desktop:platform==='win32',captureMode:platform==='win32'?'shared-stream-or-browser':mobileOverlay.status().connected?'android-media-projection':'native-snapshot',continuousStream:platform==='win32',crossAppOverlay:platform!=='win32'&&mobileOverlay.status().connected});
+  if(req.method==='GET'){
+   const desktop=platform==='win32';
+   const nativeMobile=desktop?undefined:mobileOverlay.status();
+   const sessions=manager.list().flatMap(session=>{
+    try{
+     const context=panelContext(session.key);
+     if(context.accountId!==session.accountId||context.personaId!==session.personaId)return [];
+     return [session.captureSource==='native'?{...session,nativeCapture:mobileOverlay.status(context)}:session];
+    }catch{return [];}
+   });
+   void mobileOverlay.installer().catch(()=>({available:false})).then(installer=>send(200,{
+    nativeDesktop:desktop,nativeMobile,installer:desktop?undefined:installer,sessions,desktop,
+    captureMode:desktop?'shared-stream-or-browser':nativeMobile.connected?'android-media-projection':'native-snapshot',
+    continuousStream:desktop,crossAppOverlay:nativeMobile?.connected===true
+   }));
+   return;
+  }
   if(req.method!=='POST')return send(405,{error:'请使用GET或POST'});
   let body='',large=false;req.setEncoding('utf8');req.on('data',part=>{if(large)return;body+=part;if(body.length>2400000){large=true;body='';}});req.on('end',()=>{void(async()=>{try{if(large)throw Error('请求过长');const args=JSON.parse(body||'{}');
      if(args.action==='frame'){
@@ -130,6 +153,11 @@ export function installVisualCompanion({ctx,browser,desktop,phone,audio,cacheDir
       const frame=normalizeSharedFrame(args.frame,source.budget);if(source.latest&&frame.capturedAt<=source.latest.capturedAt)return send(200,{ok:true,accepted:false});source.latest=frame;return send(200,{ok:true,accepted:true});
      }
      const context=panelContext(args.key);
+     if(args.action==='observe'){
+      const result=command(args,context,{fromPanel:true});
+      const {frames,...metadata}=result;
+      return send(200,{...metadata,preview:'data:image/jpeg;base64,'+frames[0].part.data,modelCalled:false});
+     }
      if(['sources','probe','open-window','close-window'].includes(args.action)){
       if(platform!=='win32')throw Error('这些桌面识屏操作仅在电脑版可用');
       if(!valid(context,{target:'screen'}))throw Error('当前账号或桌面观察权限已关闭');
@@ -142,10 +170,10 @@ export function installVisualCompanion({ctx,browser,desktop,phone,audio,cacheDir
      }
 if(args.action==='windows'&&platform!=='win32')throw Error('手机版没有电脑窗口列表');if(args.action==='windows')return send(200,await desktop.act({action:'windows'},{...context,visualDiscovery:true}));
      if(args.action==='transcribe'){if(!transcribe)throw Error('当前没有语音识别接口');const session=manager.list().find(s=>s.key===context.key);if(!session||session.id!==args.id||session.accountId!==context.accountId||session.personaId!==context.personaId||!manager.authorizes({...context,visualSessionId:session.id}))throw Error('陪伴会话已改变，请重新录音');const text=await transcribe(args.audio,context);return send(200,{ok:true,text});}
-     if(args.action==='pair-native'){if(platform==='win32')throw Error('请在手机版连接手机悬浮球');return send(200,mobileOverlay.pair(context,'http://127.0.0.1:'+server.port));}
-     if(args.action==='start'&&args.target==='phone'&&args.captureSource!=='native'){if(!valid(context,{target:'phone'}))throw Error('手机陪伴尚未启用：请检查桥接状态、号主和手机工具开关');const capability=await phone?.status(context);if(!capability?.connected)throw Error(capability?.inputNote||'DSH Go 原生手机识屏未就绪，请先开启手机操控并在号主私聊载入手机工具');}
+     if(args.action==='pair-native'){if(platform==='win32')throw Error('请在手机版连接手机悬浮球');return send(200,await mobileOverlay.pair(context));}
+     if(args.action==='start'&&platform!=='win32'&&(!args.target||args.target==='phone')&&args.captureSource!=='native'){if(!valid(context,{target:'phone'}))throw Error('手机陪伴尚未启用：请检查桥接状态、号主和手机工具开关');const capability=await phone?.status({...context,ensurePhoneAgent:true});if(!capability?.connected)throw Error(capability?.inputNote||'DSH Go 原生手机识屏未就绪，请检查手机操控与无障碍服务');}
      const value=await command(args,context,{fromPanel:true}),{shareToken,...session}=value;send(200,{ok:true,session,...(shareToken?{shareToken}:{})});}catch(e){send(400,{error:String(e.message)});}})();});
  }}));
  ctx.effect(()=>()=>{manager.close();desktopCompanion.close();mobileOverlay.close();});
- return {...manager,command};
+ return {...manager,command,overlayStatus:()=>mobileOverlay.status()};
 }

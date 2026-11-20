@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import sys
 import tempfile
+import wave
 
 spec = importlib.util.spec_from_file_location('video_plus', Path(__file__).resolve().parents[1] / 'tools/video_plus.py')
 module = importlib.util.module_from_spec(spec)
@@ -48,4 +49,22 @@ with tempfile.TemporaryDirectory(prefix='audio-evidence-') as folder:
     req['runtime']['mobile'] = True
     assert module.main(req)['audio']['status'] == 'unavailable'
     assert calls == [], 'mobile must never run local ASR'
-print('PASS: confident repeats, weak repeats, malformed segments, acoustic conflict, CPU-only VAD and mobile isolation')
+
+    spec = importlib.util.spec_from_file_location('audio_inspect', Path(__file__).resolve().parents[1] / 'tools/audio-inspect.py')
+    inspect = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inspect)
+    def run_audio(args, *unused):
+        if args[0] == 'ffprobe':
+            return SimpleNamespace(stdout=json.dumps({'format': {'duration': '3'}, 'streams': [{'codec_type': 'audio'}]}))
+        with wave.open(args[-1], 'wb') as wav:
+            wav.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+            wav.writeframes(b'\x40\x20' * 16000)
+    def optional_audio_dependency(*unused):
+        raise SystemExit('requires NumPy')
+    inspect.run = run_audio
+    inspect.load = optional_audio_dependency
+    sound = inspect.main({'runtime':{'ffmpegPath':'ffmpeg','ffprobePath':'ffprobe','allowSoundEvents':False},
+                          'file':str(media),'cacheDir':folder,'start':0,'end':3,'videoSound':True})
+    assert sound['ok'] and sound['end'] == 1
+    assert sound['acoustic']['confidence'] == 'level-only'
+print('PASS: confident repeats, weak repeats, malformed segments, acoustic conflict, CPU-only VAD, and mobile PCM without NumPy')

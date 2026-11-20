@@ -176,9 +176,9 @@ html[data-device-ui="phone"] .page-diary .diary-shelf{padding:12px}
 .device-ui-bar>.statusbox{padding:0;border:0;background:transparent;display:flex;align-items:center;margin:0}
 .device-ui-bar>.statusbox .chips{display:none}
 .device-ui-bar>.statusbox .pill{font-size:12px;white-space:nowrap}
-html[data-device-ui="phone"] .mobile-returnbar{grid-template-columns:1fr 1fr;min-height:48px;padding:6px 14px;background:var(--bg)}
-html[data-device-ui="phone"] .mobile-returnbar #returnDsh{grid-column:1;grid-row:1;justify-self:start;border:0;background:transparent;padding:6px 0;min-height:36px}
-html[data-device-ui="phone"] .mobile-returnbar #returnOverview{grid-column:2;grid-row:1;justify-self:end;border:0;background:transparent;min-height:36px}
+html[data-device-ui="phone"] .mobile-returnbar{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);min-height:48px;padding:6px 14px;background:var(--bg)}
+html[data-device-ui="phone"] .mobile-returnbar #returnDsh{grid-column:2;grid-row:1;justify-self:center;border:0;background:transparent;padding:6px 12px;min-height:44px;white-space:nowrap}
+html[data-device-ui="phone"] .mobile-returnbar #returnOverview{grid-column:3;grid-row:1;justify-self:end;border:0;background:transparent;min-height:36px}
 html[data-device-ui="phone"] .device-ui-bar{display:flex;flex-wrap:wrap;gap:6px 12px;padding:12px 16px}
 html[data-device-ui="phone"] .device-ui-title{flex:1 1 170px}
 html[data-device-ui="phone"] .device-ui-bar>.statusbox{order:3;width:100%}

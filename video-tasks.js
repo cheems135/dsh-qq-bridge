@@ -37,4 +37,4 @@ export function createVideoTasks({jobs,save,prepare,generate,deliver,authorize,r
  }
  return {run};
 }
-export const VIDEO_PARAMETERS={type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['generate','status','resume']},prompt:{type:'string',description:'完整视频需求；沿用当前人物、服装、头饰与日程背景'},seconds:{type:'number',exclusiveMinimum:0},actionPrompt:{type:'string',description:'画面动作及具体时序，例如前2秒抬手，之后挥手'},cameraMotion:{type:'string'},id:{type:'string',description:'resume使用status返回的当前对话任务ID'}},required:['action']};
+export const VIDEO_PARAMETERS={type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['generate','status','resume']},prompt:{type:'string',description:'完整视频需求，保留场景、构图和指定人物'},seconds:{type:'number',exclusiveMinimum:0,description:'整段视频的时长'},aspectRatio:{type:'string',description:'画幅，例如横屏 16:9，竖屏 9:16'},size:{type:'string',description:'兼容视频 API 的宽x高，RunningHub 不填此字段'},actionPrompt:{type:'string',description:'按时间写肢体动作、镜头变化、台词、环境声及收尾'},cameraMotion:{type:'string'},id:{type:'string',description:'resume使用status返回的当前对话任务ID'}},required:['action']};

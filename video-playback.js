@@ -289,6 +289,7 @@ export function createVideoPlayback({
 
     const args=[
       '-hide_banner','-loglevel','error','-re',
+      ...session.inputOptions,
       '-ss',String(start),
       '-i',session.file,
       '-an',
@@ -348,7 +349,7 @@ export function createVideoPlayback({
   }
 
   function start(options={}){
-    const{id,scope,file,ffmpegPath,duration,start:startValue=0,cleanup=()=>{}}=options;
+    const{id,scope,file,inputOptions=[],ffmpegPath,duration,start:startValue=0,cleanup=()=>{}}=options;
     assertSessionId(id);
     const existing=sessions.get(id);
     if(existing){
@@ -371,6 +372,7 @@ export function createVideoPlayback({
       id,
       scope,
       file,
+      inputOptions,
       ffmpegPath,
       duration,
       at:safeStart,

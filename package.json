@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.62.112",
+  "version": "1.62.127",
   "private": true,
   "type": "module",
   "description": "QQ 桥接：手机与电脑共用 API 核心，电脑版另支持本地",
@@ -15,6 +15,7 @@
     "check": "node tools/check-syntax.mjs"
   },
   "files": [
+    "cover-library.js",
     "qq-turn-context.js",
     "life-conversation-context.js",
     "incoming-batch.js",
@@ -52,6 +53,7 @@
     "memory-engine.js",
     "conversation-care.js",
     "video-reader.js",
+    "bilibili-range.js",
     "vendor/minisearch.js",
     "vendor/minisearch.LICENSE.txt",
     "tools/media-runtime.json",

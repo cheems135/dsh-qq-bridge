@@ -81,7 +81,7 @@ export function createConnectionAdapter({connections,attachments,fetchImpl=fetch
     },
   };
 }
-export async function connectionMedia(profile,kind,{prompt,text,instructions,reference,signal}={},fetchImpl=fetch){
+export async function connectionMedia(profile,kind,{prompt,text,instructions,reference,signal,size}={},fetchImpl=fetch){
   if(profile.type!=='openai')throw Error('此连接的图片/语音暂不支持通用执行，请选择 OpenAI 兼容接口或原有服务');
   let body,endpoint,headers=connectionHeaders(profile);
   if(kind==='speech'){
@@ -91,8 +91,8 @@ export async function connectionMedia(profile,kind,{prompt,text,instructions,ref
     if(reference&&profile.imageMode!=='edits')throw Error('这个图片连接目前只配置了文生图，无法传入人设图。请改用支持参考图的编辑接口或本地工作流');
     endpoint='images/'+(profile.imageMode==='edits'?'edits':'generations');
     if(profile.imageMode==='edits'){
-      if(!reference)throw Error('此图片连接需要参考图，请先设置人设图');body=new FormData();body.append('model',profile.imageModel);body.append('prompt',prompt);body.append('n','1');body.append('response_format','b64_json');body.append('image',new Blob([reference.bytes],{type:reference.mediaType||'image/png'}),'reference.png');
-    }else{headers['content-type']='application/json';body=JSON.stringify({model:profile.imageModel,prompt,n:1,response_format:'b64_json'});}
+      if(!reference)throw Error('此图片连接需要参考图，请先设置人设图');body=new FormData();body.append('model',profile.imageModel);body.append('prompt',prompt);body.append('n','1');body.append('response_format','b64_json');if(size)body.append('size',size);body.append('image',new Blob([reference.bytes],{type:reference.mediaType||'image/png'}),'reference.png');
+    }else{headers['content-type']='application/json';body=JSON.stringify({model:profile.imageModel,prompt,n:1,response_format:'b64_json',...(size?{size}:{})});}
   }
   try{
     const response=await fetchImpl(connectionRequestUrl(profile,kind,endpoint),{method:'POST',headers,body,redirect:'error',signal:AbortSignal.any([AbortSignal.timeout(300000),...(signal?[signal]:[])])});

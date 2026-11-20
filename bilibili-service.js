@@ -46,14 +46,15 @@ function biliMediaUrl(value){
 function biliMediaCandidates(candidate){
   const backup=candidate?.backup_url??candidate?.backupUrl;
   const values=[candidate?.url,candidate?.baseUrl,candidate?.base_url,...(Array.isArray(backup)?backup:backup?[backup]:[])];
-  const seen=new Set(),result=[];
+  const seen=new Set(),hosts=new Set(),result=[],sameHost=[];
   for(const value of values){
     const url=biliMediaUrl(value);
     if(!url||seen.has(url.href))continue;
-    seen.add(url.href);result.push(url);
-    if(result.length===3)break;
+    seen.add(url.href);
+    if(hosts.has(url.hostname)){sameHost.push(url);continue;}
+    hosts.add(url.hostname);result.push(url);
   }
-  return result;
+  return [...result,...sameHost].slice(0,3);
 }
 function mediaAttempt(url,{status,code,ok}){
   const attempt={host:url.hostname,ok};
@@ -141,13 +142,15 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
   function publicLogin(s){return s.login?{status:s.login.status,expiresAt:s.login.at+180000,...(s.login.at+180000>now()?{qrImage:s.login.qrImage}: {})}:null;}
   function state(s){return {ok:true,settings:{commentPublishEnabled:s.state.commentPublishEnabled===true},account:{loggedIn:!!s.credential.SESSDATA,uid:s.credential.DedeUserID||'',name:s.state.accountName||'',validatedAt:s.state.validatedAt||0},history:s.state.history.slice(-30).reverse(),drafts:s.state.drafts.slice(-30).reverse().map(d=>({...d,images:(d.images||[]).map(({file,...image})=>image),accountMismatch:!!d.authorUid&&d.authorUid!==s.credential.DedeUserID})),login:publicLogin(s)};}
   async function info(s,c,bvid){const result=await api(s,c,'/x/web-interface/view',{bvid});return {...videoRow(result.data),aid:result.data.aid,cid:result.data.cid,pages:(result.data.pages||[]).map(p=>({page:p.page,cid:p.cid,title:text(p.part),duration:p.duration}))};}
-  async function comments(s,c,bvid,page=1){
-    const video=await info(s,c,bvid),result=await api(s,c,'/x/v2/reply',{type:1,oid:video.aid,pn:page,ps:10,sort:2});
+  async function comments(s,c,bvid,page=1,video){
+    video??=await info(s,c,bvid);
+    const result=await api(s,c,'/x/v2/reply',{type:1,oid:video.aid,pn:page,ps:10,sort:2});
     const observed=[];for(const row of result.data.replies||[]){observed.push({bvid,id:String(row.rpid),root:String(row.rpid),parent:String(row.rpid),author:text(row.member?.uname),text:text(row.content?.message)});for(const child of row.replies||[])observed.push({bvid,id:String(child.rpid),root:String(row.rpid),parent:String(child.rpid),author:text(child.member?.uname),text:text(child.content?.message)});}s.state.observedComments=(s.state.observedComments||[]).filter(r=>r.bvid!==bvid).concat(observed).slice(-300);save(s);
     return {video,page,comments:(result.data.replies||[]).slice(0,10).map(row=>({id:String(row.rpid),author:text(row.member?.uname),text:text(row.content?.message).slice(0,1000),likes:row.like,replies:(row.replies||[]).slice(0,3).map(r=>({id:String(r.rpid),root:String(row.rpid),author:text(r.member?.uname),text:text(r.content?.message).slice(0,600)}))})),total:result.data.page?.count||0};
   }
-  async function subtitles(s,c,bvid,page=1){
-    const video=await info(s,c,bvid),part=video.pages.find(p=>p.page===page);if(!part)throw Error('该视频没有这个分 P');
+  async function subtitles(s,c,bvid,page=1,video){
+    video??=await info(s,c,bvid);
+    const part=video.pages.find(p=>p.page===page);if(!part)throw Error('该视频没有这个分 P');
     const result=await api(s,c,'/x/player/wbi/v2',{bvid,cid:part.cid},{signed:true});
     const tracks=result.data?.subtitle?.subtitles||[],selected=tracks.find(t=>t.lan==='zh-CN')||tracks.find(t=>/zh/.test(t.lan))||tracks[0];
     if(!selected)return {video,page,segments:[],coverage:'没有取得可用字幕；未分析画面或音轨'};
@@ -160,16 +163,22 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     let size=0;const segments=[];for(const row of all){if(size+row.text.length>14000||segments.length>=200)break;segments.push(row);size+=row.text.length;}
     return {video,page,language:selected.lan,segments,totalSegments:all.length,partial:segments.length<all.length,coverage:'实际字幕'+(segments.length<all.length?'片段':'文字')+'；未分析画面或音轨，不代表完整观看'};
   }
-  async function frames(s,c,bvid,page=1){
+  async function frames(s,c,bvid,page=1,video){
     if(typeof watchVideo==='function'){
-      const sample=await watchVideo({url:'https://www.bilibili.com/video/'+bvid+(page>1?'?p='+page:''),...c.videoOptions},c);check(c);
-      if(sample){
-        if(!sample.frames?.length&&!['paused','ended'].includes(sample.status))throw Error('指定浏览器没有取得实际视频画面');
-        return {...sample,bvid,page,video:{bvid,url:'https://www.bilibili.com/video/'+bvid},resourceAttempts:[]};
+      try{
+        const sample=await watchVideo({url:'https://www.bilibili.com/video/'+bvid+(page>1?'?p='+page:''),...c.videoOptions},c);check(c);
+        if(sample){
+          if(!sample.frames?.length&&!['paused','ended'].includes(sample.status))throw Error('指定浏览器没有取得实际视频画面');
+          return {...sample,bvid,page,video:{bvid,url:'https://www.bilibili.com/video/'+bvid},resourceAttempts:[]};
+        }
+      }catch(error){
+        check(c);
+        if(typeof readVideo!=='function'||!/未取得可播放的视频|没有取得实际视频画面|没有返回实际画面/.test(error.message))throw error;
       }
     }
     if(typeof readVideo!=='function')throw Error('视频抽帧服务尚未接入');
-    const video=await info(s,c,bvid),part=video.pages.find(p=>p.page===page);if(!part)throw Error('该视频没有这个分P');
+    video??=await info(s,c,bvid);
+    const part=video.pages.find(p=>p.page===page);if(!part)throw Error('该视频没有这个分P');
     const response=await api(s,c,'/x/player/wbi/playurl',{bvid,cid:part.cid,qn:32,fnval:0,fnver:0,fourk:0},{signed:true});check(c);
     const data=response.data||{},streams=data.durl||[],dash=data.dash?.video||[];
     if(streams.length>1)throw Error('该视频返回了分段资源，暂不能把单段当成完整视频');
@@ -181,11 +190,11 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     for(const url of candidates){
       check(c);
       try{
-        const sample=await readVideo({source:'bilibili',url:url.href,signal:c.signal,start:c.videoOptions?.start,window:c.videoOptions?.window,maxFrames:c.videoOptions?.maxFrames,restart:c.videoOptions?.restart,positionSource:c.videoOptions?.positionSource,mediaId:'bilibili:'+bvid+':'+part.cid},c);
+        const sample=await readVideo({source:'bilibili',url:url.href,signal:c.signal,start:c.videoOptions?.start,window:c.videoOptions?.window,maxFrames:c.videoOptions?.maxFrames,restart:c.videoOptions?.restart,positionSource:c.videoOptions?.positionSource,audio:c.videoOptions?.audio===true,transcribe:c.videoOptions?.transcribe===true,mediaId:'bilibili:'+bvid+':'+part.cid,...(c.mobileVideo&&url!==candidates.at(-1)?{resourceTimeout:9000}:{})},c);
         check(c);
         if(!sample?.frames?.length&&!['paused','ended'].includes(sample?.status))throw Error('没有取得实际视频画面');
         attempts.push(mediaAttempt(url,{ok:true}));
-        return {ok:true,video,page,bvid,status:sample.status,sessionId:sample.sessionId,continuous:sample.continuous===true,cursor:sample.cursor,frameRate:sample.frameRate,observed:sample.coverage,duration:sample.duration,frames:sample.frames||[],audio:sample.audio||null,audioDecoded:sample.audioDecoded===true,window:sample.window||null,resourceAttempts:attempts,coverage:(sample.continuous?'按播放时间连续读取，当前窗口 '+(sample.window?.start??0)+'–'+(sample.window?.end??0)+' 秒；':'实际抽样 ')+sample.frames.length+' 张视频画面，时间点 '+sample.frames.map(f=>f.at+'秒').join('、')+'；'+(sample.audioDecoded?'音轨覆盖以音轨结果为准':'尚未读取音轨')+'，不代表完整观看'};
+        return {ok:true,video,page,bvid,status:sample.status,sessionId:sample.sessionId,continuous:sample.continuous===true,cursor:sample.cursor,frameRate:sample.frameRate,observed:sample.coverage,duration:sample.duration,frames:sample.frames||[],audio:sample.audio||null,audioDecoded:sample.audioDecoded===true,audioIssue:sample.audioIssue||'',window:sample.window||null,resourceAttempts:attempts,coverage:(sample.continuous?'按播放时间连续读取，当前窗口 '+(sample.window?.start??0)+'–'+(sample.window?.end??0)+' 秒；':'实际抽样 ')+sample.frames.length+' 张视频画面，时间点 '+sample.frames.map(f=>f.at+'秒').join('、')+'；'+(sample.audioDecoded?'音轨覆盖以音轨结果为准':'尚未读取音轨')+'，不代表完整观看'};
       }catch(error){
         check(c);
         const status=Number(error?.httpStatus);
@@ -198,11 +207,12 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     throw mediaFailure(lastError,attempts);
   }
   async function read(s,c,bvid,page=1){
-    const material={bvid,url:'https://www.bilibili.com/video/'+bvid,page,errors:[]};
-    try{const result=await subtitles(s,c,bvid,page);Object.assign(material,result);}catch(error){check(c);material.errors.push(error.message);material.video=await info(s,c,bvid);material.segments=[];}
-    try{material.comments=(await comments(s,c,bvid)).comments;}catch(error){check(c);material.errors.push(error.message);material.comments=[];}
+    const video=await info(s,c,bvid);
+    const material={bvid,url:'https://www.bilibili.com/video/'+bvid,page,errors:[],video};
+    try{const result=await subtitles(s,c,bvid,page,video);Object.assign(material,result);}catch(error){check(c);material.errors.push(error.message);material.segments=[];}
+    try{material.comments=(await comments(s,c,bvid,1,video)).comments;}catch(error){check(c);material.errors.push(error.message);material.comments=[];}
     check(c);material.coverage=material.segments.length?'已取得实际字幕与可取得的评论；未分析画面、音轨或完整观看':material.comments.length?'仅视频信息与实际评论；没有取得视频内容':'仅视频信息；没有取得视频内容';
-    if(typeof readVideo==='function'||typeof watchVideo==='function')try{const visual=await frames(s,c,bvid,page);Object.assign(material,{frames:visual.frames,duration:visual.duration,audio:visual.audio,audioDecoded:visual.audioDecoded,window:visual.window,status:visual.status,sessionId:visual.sessionId,continuous:visual.continuous,cursor:visual.cursor,observed:visual.observed,resourceAttempts:visual.resourceAttempts,backend:visual.backend,browserExecutable:visual.browserExecutable});material.coverage=visual.coverage+(material.segments.length?'；另有实际字幕':'');}catch(error){check(c);if(Array.isArray(error.resourceAttempts))material.resourceAttempts=error.resourceAttempts.map(item=>({...item}));material.errors.push('画面未取得：'+String(error.message).slice(0,180));}
+    if(typeof readVideo==='function'||typeof watchVideo==='function')try{const visual=await frames(s,c,bvid,page,video);Object.assign(material,{frames:visual.frames,duration:visual.duration,audio:visual.audio,audioDecoded:visual.audioDecoded,window:visual.window,status:visual.status,sessionId:visual.sessionId,continuous:visual.continuous,cursor:visual.cursor,observed:visual.observed,resourceAttempts:visual.resourceAttempts,backend:visual.backend,browserExecutable:visual.browserExecutable});material.coverage=visual.coverage+(material.segments.length?'；另有实际字幕':'');}catch(error){check(c);if(Array.isArray(error.resourceAttempts))material.resourceAttempts=error.resourceAttempts.map(item=>({...item}));material.errors.push('画面未取得：'+String(error.message).slice(0,180));}
     if(material.continuous&&material.window){material.subtitleTotal=material.segments.length;material.segments=material.segments.filter(r=>r.start<=material.window.end&&r.end>=material.window.start);material.partial=true;}
     const prior=s.state.history.find(h=>h.bvid===bvid&&h.page===page);
     const row={id:prior?.id||randomUUID(),bvid,page,title:material.video?.title||bvid,url:material.url,at:now(),coverage:material.coverage,subtitleSegments:material.segments.length,comments:material.comments.length};

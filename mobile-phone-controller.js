@@ -4,7 +4,14 @@ import {randomUUID} from 'node:crypto';
 
 // Use the host's registered phone MCP tools. The app keeps its own permission,
 // caller, observation and handoff checks; no direct socket or shell transport.
-export function createMobilePhoneController({getConfig,getDataDir,getCacheDir,authorize=()=>true,getTools,getAgent}={}){
+export function phoneScreenshotFormat(bytes){
+ if(!bytes?.length||bytes.length>8*1024*1024)return null;
+ if(bytes.subarray(0,8).toString('hex')==='89504e470d0a1a0a')return {extension:'png',mediaType:'image/png'};
+ if(bytes[0]===255&&bytes[1]===216&&bytes[2]===255)return {extension:'jpg',mediaType:'image/jpeg'};
+ if(bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP')return {extension:'webp',mediaType:'image/webp'};
+ return null;
+}
+export function createMobilePhoneController({getConfig,getDataDir,getCacheDir,authorize=()=>true,getTools,getAgent,readAttachment,runAsAgent=(_agent,execute)=>execute()}={}){
  let busy=false,controller=null;
  const backend='dsh-go-native';
  async function discovery(context={}){
@@ -50,14 +57,36 @@ export function createMobilePhoneController({getConfig,getDataDir,getCacheDir,au
   const stop=()=>controller?.abort(context.signal?.reason);context.signal?.addEventListener('abort',stop,{once:true});
   try{
    context.signal?.throwIfAborted();
-   const result=await tools.execute({name,arguments:args,agent,signal:controller.signal,parent:context.exec,callId:'bridge-phone-'+randomUUID()});
+   let result;
+   try{
+    const callId='bridge-phone-'+randomUUID();
+    const execution={name,arguments:args,agent,signal:controller.signal,parent:context.exec,callId,
+      calls:[{type:'tool-call',id:callId,name,arguments:JSON.stringify(args)}]};
+    const response=await runAsAgent(agent,()=>tools.execute(execution),{name,callId,context});
+    result=Array.isArray(response?.results)?response.results.find(row=>row.callId===callId)?.result:response;
+    if(!result)throw Error('宿主未返回此工具调用的结果');
+   }catch(error){
+    controller.signal.throwIfAborted();
+    const cause=String(error?.cause?.message||error?.message||'宿主工具未返回回执').replace(/https?:\/\/\S+/g,'[链接]').replace(/Bearer\s+\S+/gi,'Bearer [已隐藏]').slice(0,220);
+    throw Error('DSH Go 手机工具执行失败：'+cause);
+   }
    controller.signal.throwIfAborted();
    if(!authorize(context,body.action))throw Error('手机操作期间权限已改变，未提交旧结果');
    if(result.isError)throw Error(result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')||'DSH Go 手机工具未完成，请检查手机端提示');
    const content=result.content||[],text=content.filter(c=>c.type==='text').map(c=>c.text).join('\n');
    const output={ok:true,backend,nativeTool:name,completed:false,ui:text,nativeContent:content,nativeResult:result.value,note:'以 DSH Go 返回内容为准；操作回话不代表目标业务已经完成。'};
-   const image=content.find(c=>c.type==='image'&&typeof c.data==='string'&&['image/png','image/jpeg','image/webp'].includes(c.mimeType));
-   if(image){const bytes=Buffer.from(image.data,'base64'),kind=bytes.subarray(0,8).toString('hex')==='89504e470d0a1a0a'?'png':bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'jpg':bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP'?'webp':'';if(bytes.length<=8*1024*1024&&kind){const dir=join(getCacheDir(),'phone');mkdirSync(dir,{recursive:true});output.file=join(dir,'go-'+randomUUID()+'.'+kind);writeFileSync(output.file,bytes);}}
+   const image=content.find(c=>c.type==='image'&&(c.attachment&&readAttachment||typeof c.data==='string'&&['image/png','image/jpeg','image/webp'].includes(c.mimeType)));
+   if(image){
+    const stored=image.attachment&&readAttachment?await readAttachment(image.attachment,controller.signal):null;
+    const bytes=stored?.data?Buffer.from(stored.data):typeof image.data==='string'?Buffer.from(image.data,'base64'):null;
+    const format=phoneScreenshotFormat(bytes),declared=stored?.ref?.mediaType||image.mimeType;
+    controller.signal.throwIfAborted();
+    if(!authorize(context,body.action))throw Error('手机操作期间权限已改变，未提交旧截图');
+    if(format&&(!declared||declared===format.mediaType)){
+     const dir=join(getCacheDir(),'phone');mkdirSync(dir,{recursive:true});
+     output.file=join(dir,'go-'+randomUUID()+'.'+format.extension);writeFileSync(output.file,bytes);
+    }
+   }
    return output;
   }finally{context.signal?.removeEventListener('abort',stop);busy=false;controller=null;}
  }

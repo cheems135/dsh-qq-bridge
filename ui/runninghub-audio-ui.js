@@ -35,7 +35,11 @@ export function mountRunningHubAudio(root,{settings,api,esc}){
       '<label class="check-field"><input name="allowLocal" type="checkbox"'+(config.allowLocal?' checked':'')+'>本地聊天也允许使用此云端工作流</label>'+
       '<label class="field">'+(kind==='sing'?'试听歌词（歌曲素材翻唱可留空）':'试听台词')+'<textarea name="text" rows="2"></textarea></label>'+
       '<div class="btnrow"><button type="button" data-save>保存'+label+'工作流</button><button type="button" data-preview>用已保存配置试听（计费）</button></div>'+
-      '<p class="muted" role="status"></p><audio controls preload="metadata" hidden></audio></section>';
+      '<p class="muted" role="status"></p><audio controls preload="metadata" hidden></audio>'+
+      (kind==='sing'?'<div class="btnrow"><button type="button" data-save-cover disabled>保存这次翻唱</button></div>'+
+        '<h3>翻唱库</h3><p class="muted">保存后在 QQ 私聊说「播放《歌名》」，可直接发送已保存的音频。双端资料同步会一起带上音频。</p>'+
+        '<label class="field">歌曲或片段名<input name="coverTitle" maxlength="80" placeholder="例如：晴天（副歌）"></label>'+
+        '<div data-cover-library></div>':'')+'</section>';
   }).join('');
 
   for(const card of root.querySelectorAll('[data-rh-kind]')){
@@ -43,13 +47,13 @@ export function mountRunningHubAudio(root,{settings,api,esc}){
     const input=name=>card.querySelector('[name="'+name+'"]');
     const status=card.querySelector('[role="status"]'),audio=card.querySelector('audio');
     const actions=[...card.querySelectorAll('button,input[type=file]')];
-    let busy=false;
+    let busy=false,previewJob='';
     const run=async(operation)=>{
       if(busy)return;
       busy=true;actions.forEach(el=>el.disabled=true);
       try{await operation();}
       catch(error){status.textContent=error.message;}
-      finally{busy=false;actions.forEach(el=>el.disabled=false);}
+      finally{busy=false;actions.forEach(el=>el.disabled=false);const save=card.querySelector('[data-save-cover]');if(save)save.disabled=!previewJob;}
     };
     for(const picker of card.querySelectorAll('[data-upload]'))picker.onchange=()=>run(async()=>{
       const file=picker.files[0];
@@ -85,11 +89,36 @@ export function mountRunningHubAudio(root,{settings,api,esc}){
     card.querySelector('[data-preview]').onclick=()=>run(async()=>{
       status.textContent='正在提交 RunningHub，等待音频生成…';
       audio.hidden=true;
+      previewJob='';
       let result=await api('POST','/im-bridge/voice/preview',{runningHub:true,performance:kind,text:input('text').value.trim()});
       result=await waitForAudioPreview(api,result,taskId=>{if(taskId)status.textContent='RunningHub 已提交，任务 '+taskId+' 正在生成…';});
       audio.src='/im-bridge/audio?name='+encodeURIComponent(result.name);
       audio.hidden=false;
+      if(kind==='sing')previewJob=result.jobId||'';
       status.textContent='音频已生成，可以试听。';
     });
+    if(kind==='sing'){
+      const library=card.querySelector('[data-cover-library]');
+      const call=body=>api('POST','/im-bridge/features/cover-library',body);
+      async function loadCovers(){
+        const result=await call({action:'list'});
+        if(!card.isConnected)return;
+        library.innerHTML=(result.covers||[]).map(row=>'<p><strong>'+esc(row.title)+'</strong></p><audio controls preload="none" src="/im-bridge/saved-cover?id='+encodeURIComponent(row.id)+'"></audio>').join('')||
+          '<p class="muted">还没有保存的翻唱。</p>';
+        if(result.recent?.length)library.insertAdjacentHTML('beforeend','<details><summary>最近生成的翻唱</summary>'+
+          result.recent.map(row=>'<div><p>'+esc(new Date(row.at).toLocaleString())+'</p><audio controls preload="none" src="/im-bridge/audio?name='+encodeURIComponent(row.name)+'"></audio> '+
+            '<button type="button" data-cover-invocation="'+esc(row.id)+'">用上方歌名保存</button></div>').join('')+'</details>');
+      }
+      async function saveCover(source){
+        const title=input('coverTitle').value.trim();
+        if(!title)throw Error('请先填写歌曲或片段名');
+        const result=await call({action:'save',title,...source});
+        await loadCovers();
+        status.textContent='已保存《'+result.cover.title+'》。';
+      }
+      card.querySelector('[data-save-cover]').onclick=()=>run(()=>saveCover({jobId:previewJob}));
+      library.onclick=event=>{const button=event.target.closest('[data-cover-invocation]');if(button)void run(()=>saveCover({invocationId:button.dataset.coverInvocation}));};
+      void loadCovers().catch(error=>{library.textContent=error.message;});
+    }
   }
 }

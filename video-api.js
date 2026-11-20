@@ -1,6 +1,8 @@
 import {setTimeout as delay} from 'node:timers/promises';
 import {connectionRequestUrl,connectionHeaders,readConnectionText,cleanConnectionError} from './service-connections.js';
 import {requestWebsite} from './website-mcp-http.js';
+import {RUNNINGHUB_VIDEO_APP} from './video-prompt.js';
+import {runningHubTaskId} from './image-api-contract.js';
 
 export function videoJobUrl(profile,kind,id){
  if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,299}$/.test(String(id)))throw Error('视频任务编号格式无效');
@@ -18,6 +20,55 @@ async function readBytes(response){
 }
 export function validateVideo(bytes){
  bytes=Buffer.from(bytes);if(bytes.length<16||bytes.toString('ascii',4,8)!=='ftyp')throw Error('视频接口未返回可确认的MP4文件；可能返回了错误页面');return {bytes,extension:'mp4'};
+}
+export function runningHubVideoNodes({prompt,seconds,aspectRatio,primary,neutral}){
+ if(!primary||!neutral||!prompt?.trim())throw Error('RunningHub 视频缺少素材或动态脚本');
+ return [
+  ['181','image',primary],['191','index','1'],['172','aspect_ratio',aspectRatio],
+  ['219','index','4'],['218','value',String(seconds)],['169','index','1'],['217','index','0'],['216','text',prompt],
+  ...['140','129','130','133','178','198','342','343'].map(id=>[id,'image',neutral]),
+  ...['193','194','195'].map(id=>[id,'audio','None']),
+ ].map(([nodeId,fieldName,fieldValue])=>({nodeId,fieldName,fieldValue}));
+}
+
+export async function runningHubVideo(config,{prompt,seconds,aspectRatio,reference,neutral,signal,job,onJob,assertCurrent,pollMs=5000,waitMs=1800000},{request,upload,download=requestWebsite,sleep=delay}){
+ const deadline=AbortSignal.any([AbortSignal.timeout(waitMs),...(signal?[signal]:[])]);
+ const check=()=>{deadline.throwIfAborted();assertCurrent();};
+ const call=(route,body)=>{check();return request(config,route,body,'POST',{signal:deadline,acceptTaskFailure:true});};
+ let id=String(job?.id||''),state;
+ if(!job){
+  check();
+  const blank=await upload(neutral,{signal:deadline});
+  check();
+  const primary=reference?await upload(reference,{signal:deadline}):blank;
+  const nodeInfoList=runningHubVideoNodes({prompt,seconds,aspectRatio,primary,neutral:blank});
+  await onJob({id:'',status:'submitting'});
+  state=await call('/openapi/v2/run/ai-app/'+RUNNINGHUB_VIDEO_APP,{nodeInfoList,instanceType:'default',usePersonalQueue:'false'});
+  id=runningHubTaskId(state);
+  if(/^\d+$/.test(id))await onJob({id,status:'queued'});
+ }
+ if(!/^\d+$/.test(id))throw Error('未取得 RunningHub 视频任务编号，请核对平台记录，原任务不会重复提交');
+ for(;;){
+  state=await call('/openapi/v2/query',{taskId:id});
+  const status=String(state.status??state.data?.status??'').toUpperCase();
+  if((status.toLowerCase()||'pending')!==job?.status||state.usage){
+   job={id,status:status.toLowerCase()||'pending',...(state.usage?{usage:state.usage}:{})};
+   await onJob(job);
+  }
+  if(['FAILED','ERROR','CANCELLED','CANCELED','REJECTED'].includes(status))throw Error('RunningHub 视频任务 '+id+' '+cleanConnectionError(state.failedReason?.exception_message||state.errorMessage||status,config.apiKey));
+  if(['SUCCESS','SUCCEEDED','COMPLETED'].includes(status)){
+   const outputs=state.results??state.outputs??state.data?.results??state.data?.outputs??[];
+   const output=Array.isArray(outputs)&&outputs.find(item=>/mp4|video/i.test(item.outputType||item.fileType||'')||/\.mp4(?:[?#]|$)/i.test(item.url||item.fileUrl||''));
+   if(!output)throw Error('RunningHub 视频任务 '+id+' 没有返回 MP4 产物');
+   const url=new URL(output.url||output.fileUrl);
+   if(url.protocol!=='https:'||url.username||url.password)throw Error('RunningHub 视频结果地址无效');
+   const result=await download(url.href,{signal:deadline,maxBytes:256*1024*1024,binary:true,timeoutMs:120000});
+   if(result.status!==200)throw Error('RunningHub 视频已生成，暂未下载成功，可用原任务恢复');
+   check();
+   return {...validateVideo(result.bytes),jobId:id};
+  }
+  await sleep(pollMs,undefined,{signal:deadline});
+ }
 }
 /** Submit once; resume uses the saved job and never sends another generation POST. */
 export async function connectionVideo(profile,{prompt,reference,seconds=8,size='720x1280',signal,job,onJob=()=>{},pollMs=4000,waitMs=1800000,assertCurrent=()=>{}}={},fetchImpl=fetch,{download=requestWebsite,sleep=delay}={}){

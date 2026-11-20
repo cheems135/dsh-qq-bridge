@@ -304,14 +304,14 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
   }
   function receipt(result,context){const id=randomUUID();previewCache.set(id,{result,context:signature(context),at:now()});if(previewCache.size>40)previewCache.delete(previewCache.keys().next().value);return id;}
   function consume(id,context){const found=previewCache.get(id);if(!found||now()-found.at>10*60_000||found.context!==signature(context))throw Error('提示词预览已过期或配置已改变，请重新润色');return structuredClone(found.result);}
-  async function upload({data,name='reference.png',type='image',apiKey=''}={}){
+  async function upload({data,name='reference.png',type='image',apiKey='',signal}={}){
     if(!['image','audio','video'].includes(type))throw Error('不支持的素材类型');
     const config={...(getConfig()?.runninghub||{})};if(apiKey)config.apiKey=apiKey;if(!config.apiKey)throw Error('请先填写或保存 RunningHub API Key');
     if(typeof data!=='string'||data.length>22*1024*1024||!/^[A-Za-z0-9+/=\s]+$/.test(data))throw Error('素材编码无效或超过 16MB');
     const bytes=Buffer.from(data,'base64');if(!bytes.length||bytes.length>16*1024*1024)throw Error('素材为空或超过 16MB');
     const filename=clip(name,120).replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_');
     const form=new FormData();form.append('apiKey',config.apiKey);form.append('fileType','input');form.append('file',new Blob([bytes]),filename);
-    const response=await fetchImpl(serviceUrl(config,'/task/openapi/upload').href,{method:'POST',headers:{authorization:'Bearer '+config.apiKey},body:form,redirect:'error',signal:AbortSignal.timeout(60000)});
+    const response=await fetchImpl(serviceUrl(config,'/task/openapi/upload').href,{method:'POST',headers:{authorization:'Bearer '+config.apiKey},body:form,redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(60000)]):AbortSignal.timeout(60000)});
     let result;try{result=await response.json();}catch{throw Error('素材上传没有返回有效结果');}
     const file=result?.data?.fileName;if(!response.ok||String(result.code)!=='0'||!file)throw Error('素材上传失败，请检查文件格式与账户权限');return{fileName:clip(file,500),type};
   }

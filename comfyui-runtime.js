@@ -6,7 +6,8 @@ import {createHash, randomUUID} from 'node:crypto';
 import {existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync} from 'node:fs';
 import {extname, isAbsolute, join, resolve} from 'node:path';
 import {applyLocalGpuPolicy} from './local-gpu-policy.js';
-import {applyWorkflowParameters} from './workflow-parameters.js';
+import {applyWorkflowParameters,describeWorkflowParameters,validateParameterOverrides} from './workflow-parameters.js';
+import {imageDimensions} from './image-api-contract.js';
 import {appendWorkflowTriggerWords,prepareMediaWorkflow} from './local-workflow-mode.js';
 import {readComfyContext} from './local-context.js';
 import {describeLocalWorkflow} from './local-workflow-diagnostics.js';
@@ -369,6 +370,16 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
       }
       for (const [key, value] of Object.entries(args.params || {})) setField(workflow, spec.inputs, key, value);
       applyWorkflowParameters(workflow,spec);
+      if(spec.output?.kind==='image'&&(args.aspectRatio||args.size)){
+        const info=await callJson(c.baseUrl,'/object_info',{},signal);
+        const description=describeWorkflowParameters(workflow,info,spec);
+        const widths=description.parameters.filter(p=>p.field==='width'&&typeof p.value==='number'&&description.parameters.some(h=>h.node===p.node&&h.field==='height'&&typeof h.value==='number'));
+        if(widths.length!==1)throw Error('本地工作流需要一个明确连到输出的宽高节点，才能调整单次画幅');
+        const width=widths[0],height=description.parameters.find(p=>p.node===width.node&&p.field==='height');
+        const [w,h]=imageDimensions(args,width.value+'x'+height.value).split('x').map(Number);
+        const changes=validateParameterOverrides([{node:width.node,field:'width',value:w},{node:height.node,field:'height',value:h}],description);
+        applyWorkflowParameters(workflow,{...spec,parameterOverrides:changes});
+      }
       applyLocalGpuPolicy(workflow,{memoryProfile:c.memoryProfile||'workflow',kind,vision:kind==='caption'||!!args.image||!!args.imageFiles?.length,fastDialogue:args.fastDialogue===true});
       if(args.requirePersonaReference===true){
         const bound=describeLocalWorkflow(workflow,spec,kind).imageBinding;

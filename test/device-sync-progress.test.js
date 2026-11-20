@@ -44,3 +44,24 @@ test('data-only synchronization verifies before runtime normalization or profile
  const f=await fixture(t,{sameVersion:true,reloadWrites:true});const result=await f.pc.synchronize();assert.equal(result.ok,true);assert.equal(result.codeReloadRequired,false);assert.equal((await f.pc.local.status()).progress.status,'completed');
  for(const opts of [f.pcOptions,f.phoneOptions])assert.equal(JSON.parse(fs.readFileSync(path.join(opts.dataDir,'settings.json')))._loadedByRuntime,true);
 });
+
+test('the bridge refreshes messages from synchronized disk data before settings can prune the monitor',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ const source=fs.readFileSync(new URL('../index.js',import.meta.url),'utf8');
+ const begin=source.indexOf('reload:async()=>{profilesReloading=true;');
+ const end=source.indexOf(',\n    credential:async',begin);
+ assert.ok(begin>=0&&end>begin);
+ const load=source.slice(begin+'reload:'.length,end);
+ const incoming=Array.from({length:580},(_,i)=>({id:i}));
+ const settings={};
+ const context={settings,profilesReloading:false,messages:[{id:'old'}],usage:{},stickerNotes:{},personaImages:{},
+  loadSettings:()=>({monitor:{maxMessages:600},toggles:{},accounts:[]}),
+  loadMessages:()=>incoming.slice(-settings.monitor.maxMessages),
+  saveSettings:()=>assert.deepEqual(context.messages,incoming),
+  loadUsage:()=>({}),loadStickerNotes:()=>({}),readFileSync:()=>'{ }',personaImageManifest:'',
+  cfg:{},defaults:{},wallet:null,loadState:()=>({}),log:()=>{},state:{},saveState:()=>{},
+  featureFile:'',featureState:{},saveFeatures:()=>{},chats:new Map(),panelChats:new Map(),
+  lifeMemory:null,learningMemory:null,websiteReader:null,personaGrowth:null,memoryHub:null,configuredModels:new Map(),deviceProfiles:null};
+ await runInNewContext('('+load+')',context)();
+ assert.equal(context.messages.length,580);
+});

@@ -12,7 +12,8 @@ export function serviceSourceOverview({settings={},connections={},sources={},mod
     const isLocal=source==='local'||legacyLocalVoice,field=kind==='chat'?'chatModel':kind+'Model';
     let selected=source.startsWith('profile:')?profiles.find(p=>p.id===source.slice(8)):null;
     if(!selected&&kind==='chat'&&!isLocal)selected=profiles.find(p=>model.provider==='qq-connection-'+p.id);
-    if(!selected&&kind==='video'&&!isLocal&&source==='legacy')selected=profiles.find(p=>p.id===settings.videogen?.profileId);
+    const runningHubVideo=kind==='video'&&source==='legacy'&&settings.videogen?.provider==='runninghub';
+    if(!selected&&kind==='video'&&!isLocal&&source==='legacy'&&!runningHubVideo)selected=profiles.find(p=>p.id===settings.videogen?.profileId);
     let connection='',chosen='',origin='',from='',enabled=true,configured=true;
     if(isLocal){
       connection=kind==='speech'?'本地语音服务':kind==='chat'?(local.backend==='comfyui'?'ComfyUI 聊天工作流':'本地模型服务'):'本地 ComfyUI';
@@ -35,6 +36,9 @@ export function serviceSourceOverview({settings={},connections={},sources={},mod
       connection=text(settings.imagegen?.provider)||'siliconflow';chosen=text(settings.imagegen?.model)||'按图片页工作流及本次需求选择';
       origin=endpoint(settings.imagegen?.baseUrl);from='图像生成设置';
       configured=connection==='pollinations'||!!(connection==='runninghub'?settings.imagegen?.runninghub?.apiKey:settings.imagegen?.apiKey);
+    }else if(runningHubVideo){
+      connection='RunningHub';chosen='MiniMax H3';origin=endpoint(settings.imagegen?.runninghub?.baseUrl||'https://www.runninghub.cn');from='视频生成设置';
+      configured=!!settings.imagegen?.runninghub?.apiKey;
     }else if(kind==='speech'){
       connection=voiceEngine==='none'?'尚未选择语音服务':text(voiceEngine);
       chosen=text(voiceEngine==='breeze'?settings.voice?.breeze?.model:voiceEngine==='minimax'?settings.voice?.minimax?.model:'');configured=voiceEngine!=='none';from='语音设置';

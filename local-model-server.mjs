@@ -16,6 +16,7 @@ import {localGroupReplyRisk} from './local-group-quality.js';
 import {createBridgeIssues,unresolvedLocalReceipts} from './bridge-issues.js';
 import {selectLocalVoice,voiceServiceState,serviceVoices,requestLocalSpeech,releaseVoiceService} from './local-voice.js';
 import {prepareLocalImagePrompt,assertReferenceInput,localImageReferenceMode,explicitlyRequiresReference} from './local-image-prompt.js';
+import {imageParameters} from './image-api-contract.js';
 import {createInvocationJournal,invocationKind} from './invocation-journal.js';
 import {understandLocalTurn} from './local-understanding.js';
 // Local AI gateway, independent of DSH. It exposes an ordinary OpenAI-compatible
@@ -730,6 +731,7 @@ export function createLocalModelServer({
           if(beforeMedia)await beforeMedia(kind,args,options);
           if(kind==='video'){const preference=promptPreferenceRule('video',presentationPreferences);if(preference)args={...args,prompt:String(args.prompt||'')+'\n'+preference};}
           if(kind==='image'&&prepareImage)args=await prepareImage(args,selected,options);
+          if(kind==='image')args={...args,...imageParameters(imageRequest,args)};
           if(needsIdentity&&args.image!==personaReference.file)throw Error('人设参考图在提示词准备后发生变化，未提交缺失或替换参考图的任务');
           if(!textOnly&&['image','video'].includes(kind)&&personaReference&&(!args.image||needsIdentity&&!(kind==='image'&&prepareImage))){
             assertReferenceInput(selected);
@@ -846,7 +848,7 @@ export function createLocalModelServer({
         onCheckpoint:checkpoint=>onProgress({phase:'invocation',invocation:{id:'local-checkpoint:'+(scope.auditId||randomUUID())+':'+checkpoint.phase,tool:'local.task.checkpoint',kind:'tool',status:'returned',purpose:'保存本地多步任务进度',result:checkpoint}}),
         executeTool:(name,args,execute)=>{if(name==='image'&&imageExecutionInquiry(request))throw Error('当前是在询问已有图片的生成过程，不执行新的生图任务');if(name==='video'&&!turnContext.mediaOnly&&localVideoObservationRequest(request))throw Error('当前要求观看已有视频，不能调用生成视频工作流；应使用 bridge_watch');return Object.hasOwn(externalTools,name)?execute():scheduleToolBreaker.run(turnContext.scheduleScope,name,args,execute);},
         model:async options=>{
-          if(turnContext.mediaOnly){if(mediaOnlyIssued)return {content:JSON.stringify({action:'final',text:''})};mediaOnlyIssued=true;const task=turnContext.mediaOnly;return {content:JSON.stringify({action:task.kind,arguments:task.kind==='speech'?{text:task.prompt}:{prompt:task.prompt,...(task.workflowId?{workflowId:task.workflowId}:{})}})};}
+          if(turnContext.mediaOnly){if(mediaOnlyIssued)return {content:JSON.stringify({action:'final',text:''})};mediaOnlyIssued=true;const task=turnContext.mediaOnly;return {content:JSON.stringify({action:task.kind,arguments:task.kind==='speech'?{text:task.prompt}:{prompt:task.prompt,...(task.workflowId?{workflowId:task.workflowId}:{}),...(task.aspectRatio?{aspectRatio:task.aspectRatio}:{}),...(task.size?{size:task.size}:{})}})};}
           const result=await modelRunner({...options,protocol:fast?(config.dialoguePriority==='quality'?QUALITY_DIALOGUE_RULES:FAST_DIALOGUE_RULES):options.protocol+'\n'+WAIT_NOTICE_RULE+(recentWaitNotices.length?'\n最近的等待提示（本轮不要复用）：'+JSON.stringify(recentWaitNotices):''),...(fast?{fastDialogue:true,outputTokens:plan.outputTokens,...(onEvent&&!groupContext.isGroup&&!asksOutfit(request)&&config.streamDialogue&&options.purpose!=='repair'?{onText:delta=>stream.feed(delta)}:{})}:{})});
           if(fast){const message=result?.choices?.[0]?.message||result?.message||result,raw=typeof result==='string'?result:contentText(message.content);if(message?.tool_calls?.length||/"action"\s*:\s*"(?!final")/.test(raw))throw Object.assign(Error('转完整工具模式'),{code:'LOCAL_FAST_TOOLS'});}
           return result;

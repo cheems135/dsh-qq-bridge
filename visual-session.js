@@ -1,6 +1,6 @@
 import {randomUUID,createHash} from 'node:crypto';
 
-export function visualCompanionIntent(words=''){
+export function visualCompanionIntent(words='',{mobile=false}={}){
  const text=String(words).trim();
  if(/[“”「」`]/.test(text)||/^(?:例如|比如|假设|如果|能不能解释|什么是)/.test(text))return null;
  if(/^(?:先)?(?:暂停|停止|结束|关闭)(?:一下)?(?:陪看|陪玩|陪伴|持续观察|视听)[吧了。！!\s]*$/.test(text))return {action:/暂停/.test(text)?'pause':'stop'};
@@ -8,7 +8,7 @@ export function visualCompanionIntent(words=''){
  if(/不要|不用|不想|别陪|别看|先别/.test(text))return null;
  if(/^(?:帮我|给我|请|你)?(?:打开|开启|显示)(?:一下)?(?:陪我看|陪看|识屏|视听)?(?:的)?(?:悬浮窗|悬浮球)(?:功能)?[吧。！!\s]*$/.test(text))return {action:'open-window'};
  const url=text.match(/https?:\/\/[^\s<>“”]+/i)?.[0]?.replace(/[，。！？）]+$/,'');
- if(!url||!/(?:一起看|陪我看|陪我玩|一起玩|帮我玩|替我玩|你来玩)/.test(text))return null;
+ if(mobile||!url||!/(?:一起看|陪我看|陪我玩|一起玩|帮我玩|替我玩|你来玩)/.test(text))return null;
  return {action:'start',target:'browser',url,mode:/陪我玩|一起玩|帮我玩|替我玩|你来玩/.test(text)?'game':'watch',audio:true,control:/帮我玩|替我玩|你来玩|你来操作/.test(text)};
 }
 
@@ -59,7 +59,12 @@ export function createVisualSessions({capture,observeAudio,analyze,deliver,act,r
   try{
    const frame=await capture(s.options,{...s.context,signal:captureController.signal},s.budget);
    if(!current(s)||captureController.signal.aborted)return;
-   if(frame.pending){s.sourceWait=String(frame.reason||'').slice(0,160);if(s.sourceWait)s.error='';return;}s.sourceWait='';
+   if(frame.pending){
+    s.sourceWait=String(frame.reason||'').slice(0,160);
+    if(s.sourceWait){s.latest=null;s.pendingAudio=null;s.inference?.abort();s.error='';}
+    return;
+   }
+   s.sourceWait='';
    if(frame.ended){suspend(s,'ended');return;}
    frame.capturedAt=Number(frame.capturedAt)||now();frame.digest=frame.digest||createHash('sha256').update(frame.data||JSON.stringify(frame.signature||frame)).digest('hex');
    if(observeAudio&&s.options.audio===true){frame.hearing=observeAudio(frame.audioChunk,s.context,s.options);delete frame.audioChunk;}

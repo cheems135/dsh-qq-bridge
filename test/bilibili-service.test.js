@@ -7,7 +7,7 @@ import {createBilibiliService,BILIBILI_TOOL_PARAMETERS,biliVideoId} from '../bil
 import {createQrDataUrl} from '../qr-renderer.js';
 
 const BV='BV1xx411c7mD',context={accountId:'qq-a',personaId:'p-a',key:'private:owner'};
-function fixture(){
+function fixture(media={}){
   const directory=mkdtempSync(join(tmpdir(),'bilibili-')),calls=[];let time=Date.now(),allowed=true,writeMode='success',pollMode='success',beforeView=null,beforeNav=null;
   const image='https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',sub='https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png';
   const fetchImpl=async(url,options={})=>{
@@ -28,6 +28,7 @@ function fixture(){
     else if(u.pathname.endsWith('/view'))data={bvid:BV,title:'实际视频',aid:170001,cid:99,owner:{name:'测试 UP'},duration:5,pages:[{page:1,cid:99,part:'第一 P',duration:5}]};
     else if(u.pathname.endsWith('/v2/reply'))data={page:{count:1},replies:[{rpid:7,member:{uname:'用户甲'},content:{message:'真实评论'},like:2,replies:[]}]};
     else if(u.pathname.endsWith('/player/wbi/v2'))data={subtitle:{subtitles:[{lan:'zh-CN',subtitle_url:'https://aisubtitle.hdslb.com/bfs/subtitle/test.json'}]}};
+    else if(u.pathname.endsWith('/playurl'))data={durl:[{url:'https://upos.example.bilivideo.com/video/test.mp4'}]};
     else if(u.pathname.endsWith('/reply/add')){
       if(writeMode==='unknown')throw Object.assign(Error('socket reset after write'),{code:'ECONNRESET'});
       data={rpid:12345};
@@ -35,11 +36,25 @@ function fixture(){
     else data={list:[{bvid:BV,title:'推荐视频',owner:{name:'测试 UP'}}]};
     return Response.json({code:0,data});
   };
-  const options={directory,fetchImpl,makeQr:createQrDataUrl,now:()=>time+=1000,authorize:()=>allowed};
+  const options={directory,fetchImpl,makeQr:createQrDataUrl,now:()=>time+=1000,authorize:()=>allowed,...media};
   let service=createBilibiliService(options);
   return {directory,calls,get service(){return service;},setBeforeView:value=>beforeView=value,setBeforeNav:value=>beforeNav=value,setAllowed:value=>allowed=value,setWriteMode:value=>writeMode=value,setPollMode:value=>pollMode=value,restart:()=>{service.close();service=createBilibiliService(options);},close:()=>{service.close();rmSync(directory,{recursive:true,force:true});}};
 }
 async function login(f){await f.service.act({action:'login'},context);return f.service.act({action:'login-status'},context);}
+
+test('Bilibili panel falls back to the signed media endpoint when the configured player fails to load',async()=>{
+  let frames=0;
+  const f=fixture({
+    watchVideo:async()=>{throw Error('指定浏览器已打开，但未取得可播放的视频');},
+    readVideo:async data=>{assert.equal(data.source,'bilibili');assert.equal(data.start,2);frames++;return {status:'streaming',frames:[{at:2}],duration:5};},
+  });
+  try{
+    const result=await f.service.act({action:'frames',bvid:BV},{...context,videoOptions:{start:2}});
+    assert.equal(result.frames.length,1);
+    assert.equal(result.resourceAttempts[0].ok,true);
+    assert.equal(frames,1);
+  }finally{f.close();}
+});
 
 test('QR login validates fresh credentials, scopes accounts and never returns secrets',async()=>{
   const f=fixture();try{

@@ -8,7 +8,14 @@ export async function capturePhoneCompanion(options,context,budget,{phone,runtim
  if(options.target!=='phone')throw Error('请选择手机屏幕');
  if(!phone?.act)throw Error('DSH Go 原生手机工具尚未接入');
  const ffmpeg=resolveVideoRuntime(runtime).ffmpegPath;if(!ffmpeg)throw Error('手机画面缩放需要已有的 FFmpeg 环境');
- let result;try{result=await phone.act({action:'observe',detail:false},context);}catch(error){if(/另一个手机操作正在进行|手机工具.*忙碌/.test(String(error.message)))return {pending:true};throw error;}
+ let result;
+ try{result=await phone.act({action:'observe',detail:false},context);}
+ catch(error){
+  const message=String(error.message);
+  if(/另一个手机操作正在进行|手机工具.*忙碌/.test(message))return {pending:true};
+  if(/DSH(?: Go)? 自己的界面|DSH Go 自身/.test(message))return {pending:true,reason:'请切到要陪看的应用，等待下一张屏幕画面'};
+  throw error;
+ }
  const capturedAt=Date.now();
  try{
   context.signal?.throwIfAborted();

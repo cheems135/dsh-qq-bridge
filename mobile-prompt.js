@@ -14,9 +14,9 @@ const compact={
 };
 export function mobileRule(name,fallback,apiOnly=false){return apiOnly?(compact[name]||fallback):fallback;}
 const toolDescriptions={
- bridge_companion:'手机持续识屏陪伴，仅用API。start使用target=phone、mode=watch，profile可选saver省流、balanced均衡、detail细看；手机取图与模型分析分开，只处理最新画面，聊天和主动提问优先。pause/resume/stop/status暂停、继续、结束、查看真实状态；工具接收不代表已看懂。未取得系统音轨就不声称听见。手机浮球是插件页面控件，不能声称跨应用悬浮或连续视频流。',
+ bridge_companion:'手机持续识屏陪伴，仅用API。start使用target=phone、mode=watch；pause/resume/stop/status控制会话。系统共享需本人在组件选择来源；以实际收到的画面为准。聊天和提问优先。未取得音轨时只用画面与字幕。',
  bridge_browser:'操作内部独立真实浏览器。默认复用同账号人设的登录与标签页；snapshot原地观察，页面变化后再用新ref操作，不反复navigate/刷新/重开。navigate打开，click/fill/press/scroll操作，play/pause播放，subtitles取真实字幕，screenshot取图，tabs/switch切页。先观察→操作→核对；标题/播放不等于看懂全片，音轨未读不声称听过。show仅明确桌面模式。登录缺扫码/系统验证时请本人完成对应一步；付款仍准确确认，评论按独立选择。',
- bridge_device:'操作手机真实设备，target=phone。先capabilities取得DSH Go原生mcp__phone__工具及参数，再native传tool及arguments；observe可读屏，launch打开应用。screen和observation必须来自当前真实屏幕，不能猜测。授权、敏感步骤交接和锁屏由DSH Go处理，派发不等于完成。',
+ bridge_device:'操作手机真实设备，target=phone。看正在共享的画面用observe-shared，直接复用陪伴组件最新一帧。要点按、输入则先用observe读DSH Go原生屏幕号；capabilities查原生工具，native传tool及arguments，launch打开应用。共享画面不提供点按坐标。授权、敏感步骤与锁屏由DSH Go处理。',
  bridge_qq_profile:'QQ签名与空间：signature改签名，qzone发布，status查记录/登录，check-session只读检查，friends选允许好友，feed传uin浏览动态（省略看自己），comment传已读tid/uin/text评论；想逛时才读，不持续轮询。comments传实际tid/uin读取评论，reply传已读的commentId/commentUin与text准确回复，verify按记录id读回核对。images只用bridge_social_image准备的实际file；可搜图/截图/生成/画作，上传失败不降纯文字。公开内容不泄露私聊；评论按独立开关/手动选择，未核实不报成功。',
  bridge_life_share:'分享实际图片、音频/其他作品文件或已读链接；文件走QQ上传接口，不把未核对说成QQ不支持。targets看允许对象；send省略target为当前对话，其他对象使用targets的完整key；作品或网页须真实核实。caption按当前人设、关系与最近聊天写配话，不作摘要或制作复盘；图片缺配话会补齐，本轮明确只要图时可省略。配话未就绪时补caption后分享现有file，不重画。status按deliveryId查QQ发送证据，排队不等于送达；不要求日程任务。',
  bridge_life_qq:'QQ日常：targets查允许对象，recent读近期文字，历史原图用bridge_qq_read history；send发自然消息，status按deliveryId核对实际发送。可以不说话，不群发、不联系列表外对象，排队不算送达。',

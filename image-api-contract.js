@@ -1,5 +1,50 @@
 export const IMAGE_CONTRACT_REVISION='20261114-node-contract-v2';
 const id=n=>String(n.nodeId)+':'+n.fieldName;
+export function imageParameters(request,args={}){
+ const raw=String(request||'').replace(/：(?=\d)/g,':');
+ const ratio=raw.match(/(?<![\d:：])(1:1|3:2|4:3|16:9|2:3|3:4|9:16|21:9|9:21)(?![\d:：])/);
+ const dimensions=raw.match(/(?<!\d)(\d{2,5})\s*[xX×]\s*(\d{2,5})(?!\d)/);
+ const aspectRatio=ratio?.[1]||String(args.aspectRatio||'');
+ const size=dimensions?dimensions[1]+'x'+dimensions[2]:String(args.size||'');
+ if(aspectRatio&&!/^\d{1,2}:\d{1,2}$/.test(aspectRatio)||size&&!/^\d{2,5}x\d{2,5}$/.test(size))throw Error('请填写形如 4:3 的画幅或 1024x768 的尺寸');
+ const [width,height]=size.split('x').map(Number),[a,b]=aspectRatio.split(':').map(Number);
+ if((size&&(!width||!height))||(aspectRatio&&(!a||!b)))throw Error('图片比例及尺寸必须大于零');
+ if(size&&aspectRatio&&width*b!==height*a)throw Error('图片像素尺寸和画幅比例不一致');
+ return {aspectRatio,size};
+}
+
+export function imageDimensions(parameters={},fallback='1024x1024'){
+ const {aspectRatio='',size=''}=parameters;
+ if(size||!aspectRatio)return size||fallback;
+ const [width,height]=fallback.split('x').map(Number);
+ const [a,b]=aspectRatio.split(':').map(Number);
+ if(width*b===height*a)return fallback;
+ if(height*b===width*a)return height+'x'+width;
+ const scale=Math.max(8,Math.round(Math.min(width,height)/Math.min(a,b)/8)*8);
+ return a*scale+'x'+b*scale;
+}
+
+export function applyRunningHubImageParameters(config,{aspectRatio='',size=''}={}){
+ if(!aspectRatio&&!size)return config;
+ const fields=config.discovery?.fields||[];
+ const choose=(matches,label)=>{
+  if(matches.length!==1)throw Error(matches.length?'工作流有多个'+label+'节点，请在图像生成页指定':'工作流未开放'+label+'，本次没有提交生图');
+  return matches[0];
+ };
+ const overrides=[];
+ if(aspectRatio){
+  const field=choose(fields.filter(f=>/^(?:aspect[_ ]?ratio|比例|画幅比例)$/i.test(f.fieldName)),'画幅比例');
+  overrides.push({...field,fieldValue:aspectRatio});
+ }
+ if(size){
+  const width=choose(fields.filter(f=>/^width$/i.test(f.fieldName)&&fields.some(h=>String(h.nodeId)===String(f.nodeId)&&/^height$/i.test(h.fieldName))),'图片宽高');
+  const height=fields.find(f=>String(f.nodeId)===String(width.nodeId)&&/^height$/i.test(f.fieldName));
+  const [w,h]=size.split('x').map(Number);
+  overrides.push({...width,fieldValue:w},{...height,fieldValue:h});
+ }
+ const checked=checkedImageNodes(overrides.map(({nodeId,fieldName,fieldValue})=>({nodeId,fieldName,fieldValue})),config.discovery);
+ return {...config,extraNodes:[...(config.extraNodes||[]).filter(n=>!checked.some(f=>id(f)===id(n))),...checked]};
+}
 export function checkedImageNodes(nodes,discovery){
  const fields=new Map((discovery?.fields||[]).map(f=>[id(f),f]));
  return nodes.map(node=>{

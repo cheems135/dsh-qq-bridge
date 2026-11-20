@@ -1,4 +1,5 @@
 import sys,json,subprocess,importlib.util,math,tempfile,zipfile
+from array import array
 from pathlib import Path
 from uuid import uuid4
 def load(name,path):
@@ -7,6 +8,14 @@ def run(args,timeout=40):
     result=subprocess.run(args,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=timeout)
     if result.returncode:raise ValueError('本地音频解码失败')
     return result
+def pcm_level(file):
+    import wave
+    with wave.open(str(file)) as clip:
+        samples=array('h',clip.readframes(clip.getnframes()))
+    if sys.byteorder!='little':samples.byteswap()
+    if not samples:raise ValueError('这段音轨未取得采样')
+    rms=math.sqrt(sum(sample*sample for sample in samples)/len(samples))/32768
+    return {'kind':'接近静音' if rms<0.003 else '检测到音频信号','confidence':'level-only','note':'仅核对实际音量，未识别声源、歌词或说话内容'}
 def main(req):
     runtime=req['runtime'];source=Path(req['file']).resolve()
     if not source.is_file() or source.stat().st_size>128*1024*1024:raise ValueError('音频不可读取或超过128MB')
@@ -28,8 +37,11 @@ def main(req):
         run([ffmpeg,'-v','error','-protocol_whitelist','file,pipe','-ss',str(start),'-i',str(source),'-t',str(end-start),'-vn','-ac','1','-ar','22050' if req.get('music') else '16000','-y',str(wav)],90)
         root=Path(__file__).resolve().parent.parent
         model=Path(runtime.get('hearingModelPath') or Path(req['cacheDir']).parent/'hearing-models'/'yamnet.tflite')
-        acoustic=load('bridge_audio_probe',root/'vendor/video-watch-plus/scripts/audio_probe.py')
-        features=acoustic.features(acoustic.decode_mono(str(wav),ffmpeg));verdict=acoustic.verdict(features)
+        if req.get('videoSound') and runtime.get('allowSoundEvents') is False:
+            verdict=pcm_level(wav)
+        else:
+            acoustic=load('bridge_audio_probe',root/'vendor/video-watch-plus/scripts/audio_probe.py')
+            features=acoustic.features(acoustic.decode_mono(str(wav),ffmpeg));verdict=acoustic.verdict(features)
         result={'ok':True,'duration':duration,'start':start,'end':end,'partial':start>0 or end<duration,'channels':stream.get('channels'),'sampleRate':stream.get('sample_rate'),'acoustic':verdict,'transcription':{'status':'not-requested','segments':[]},'coverage':'仅本机抽样音频测量；不能据此猜测具体乐器、情绪或完整歌词'}
         if req.get('videoSound'):
             import wave

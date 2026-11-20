@@ -1,5 +1,5 @@
 import {visualObservationPolicy,currentVisualFrames} from './visual-observation.js';
-export const VIDEO_READER_REVISION='20261106-continuous-playback-v1';
+export const VIDEO_READER_REVISION='20261120-video-dialogue-v1';
 // Bounded local FFmpeg sampling. The base path has no Python dependency; the
 // optional video-watch-plus pass only adds audio analysis and cut detection.
 import {readFileSync,writeFileSync,mkdirSync,statSync,unlinkSync,rmdirSync,existsSync,readdirSync,realpathSync} from 'node:fs';
@@ -9,6 +9,7 @@ import {spawn} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
 import {resolveVideoRuntime} from './video-runtime.js';
 const {createVideoPlayback}=await import(new URL('./video-playback.js'+new URL(import.meta.url).search,import.meta.url));
+const {openBilibiliRange}=await import(new URL('./bilibili-range.js'+new URL(import.meta.url).search,import.meta.url));
 import {BILI_BROWSER_UA} from './bilibili-login.js';
 
 const MAX_BYTES=32*1024*1024;
@@ -139,13 +140,13 @@ function run(exe,args,{timeout=10000,allowFailure=false,spawnImpl=spawn,signal,i
   });
 }
 
-async function fetchBytes(url,{fetchImpl,signal,timeout=30000,maxBytes,headers={}}={}){
+async function fetchBytes(url,{fetchImpl,signal,timeout=30000,maxBytes,headers={},validateResponse}={}){
   throwIfAborted(signal);
   const host=sourceHost(url);
   const scope=timeoutScope(signal,timeout);
-  let reader=null;
+  let reader=null,response;
   try{
-    const response=await fetchImpl(url,{redirect:'error',headers,signal:scope.signal,credentials:'omit'});
+    response=await fetchImpl(url,{redirect:'error',headers,signal:scope.signal,credentials:'omit'});
     if(!response.ok){
       const status=Number(response.status);
       const error=videoError('视频附件下载失败（HTTP '+status+(host?'，来源 '+host:'')+'）','VIDEO_RESOURCE');
@@ -153,6 +154,7 @@ async function fetchBytes(url,{fetchImpl,signal,timeout=30000,maxBytes,headers={
       if(host)error.sourceHost=host;
       throw error;
     }
+    validateResponse?.(response);
     const declared=Number(response.headers?.get?.('content-length'));
     if(Number.isFinite(declared)&&declared>maxBytes){
       const error=videoError('视频超过下载大小限制','VIDEO_RESOURCE');
@@ -199,16 +201,38 @@ async function fetchBytes(url,{fetchImpl,signal,timeout=30000,maxBytes,headers={
     if(host)fetchError.sourceHost=host;
     throw fetchError;
   }finally{
-    try{await reader?.cancel();}catch{}
+    try{if(reader)await reader.cancel();else if(!response?.bodyUsed)await response?.body?.cancel();}catch{}
     scope.cleanup();
   }
 }
 
 function assertVideoContainer(bytes){
-  if(bytes.subarray(4,8).toString()==='ftyp'
-    ||bytes.subarray(0,4).equals(Buffer.from('1a45dfa3','hex'))
-    ||bytes.subarray(0,4).toString()==='RIFF')return;
+  if(bytes.subarray(4,8).toString()==='ftyp')return 'mov';
+  if(bytes.subarray(0,4).equals(Buffer.from('1a45dfa3','hex')))return 'matroska';
+  if(bytes.subarray(0,4).toString()==='RIFF')return 'avi';
   throw videoError('附件不是支持的 MP4、MOV、WebM 或 AVI 视频','VIDEO_INVALID');
+}
+
+async function loadBilibiliChunk(url,start,end,{fetchImpl,signal,timeout}){
+  let total,expected;
+  const bytes=await fetchBytes(url,{
+    fetchImpl,signal,timeout,maxBytes:end-start+1,
+    headers:{Referer:BILIBILI_REFERER,'User-Agent':BILI_BROWSER_UA,Range:'bytes='+start+'-'+end,'Accept-Encoding':'identity'},
+    validateResponse(response){
+      const encoding=response.headers.get('content-encoding');
+      if(encoding&&encoding.toLowerCase()!=='identity')throw videoError('B站资源返回了不支持的字节编码','VIDEO_RESOURCE');
+      if(response.status===200&&start===0)return; // A small, complete response is usable too.
+      const range=response.headers.get('content-range')?.match(/^bytes (\d+)-(\d+)\/(\d+)$/i);
+      if(range)total=Number(range[3]);
+      if(response.status!==206||!range||!Number.isSafeInteger(total)||total>ENHANCED_MAX_BYTES
+        ||Number(range[1])!==start||Number(range[2])!==Math.min(end,total-1)||total<=start){
+        throw videoError('B站资源没有返回有效的分段数据','VIDEO_RESOURCE');
+      }
+      expected=Math.min(end,total-1)-start+1;
+    },
+  });
+  if(!bytes.length||(expected!==undefined&&bytes.length!==expected))throw videoError('B站分段数据不完整','VIDEO_RESOURCE');
+  return {bytes,total:total??bytes.length};
 }
 
 function platformReferences(value){
@@ -261,7 +285,7 @@ async function loadMedia(data,{getPlatformFile,fetchImpl,signal,maxBytes}){
   if(source==='bilibili'){
     if(!directUrl||!bilibiliMedia(directUrl))throw videoError('Bilibili 只接受已解析的 HTTPS 媒体直链','VIDEO_INVALID');
     const bytes=await fetchBytes(directUrl,{
-      fetchImpl,signal,timeout:30000,maxBytes,
+      fetchImpl,signal,timeout:Math.min(30000,Math.max(3000,Number(data.resourceTimeout)||30000)),maxBytes,
       headers:{Referer:BILIBILI_REFERER,'User-Agent':BILI_BROWSER_UA,Range:'bytes=0-'},
     });
     if(!bytes.length)throw videoError('视频为空','VIDEO_RESOURCE');
@@ -459,7 +483,7 @@ export function createVideoReader({
       maxBytes:enhanced?ENHANCED_MAX_BYTES:MAX_BYTES,
       maxFrames:enhanced?8:4,
       maxDurationSeconds:MAX_DURATION_SECONDS,
-      audioAnalysis:enhanced&&!isMobile(config),
+      audioAnalysis:enhanced&&(!isMobile(config)||typeof listenWindow==='function'),
       source:continuous?'ffmpeg-realtime':enhanced?'video-watch-plus-local':'ffmpeg-local',
       whisper,
     };
@@ -531,11 +555,18 @@ export function createVideoReader({
   }
   async function prepareStream(data,{signal,id,scope}){
     const runtime=runtimeNow(),config=configNow();if(!runtime.basicAvailable)throw videoError('视频抽帧工具未安装','VIDEO_RUNTIME');
-    const directory=join(getCacheDir(),'videos','playback-'+randomUUID());mkdirSync(directory,{recursive:true});let ownedFile='',started=false;
-    const cleanup=()=>{try{if(ownedFile&&existsSync(ownedFile))unlinkSync(ownedFile);}catch{}try{rmdirSync(directory);}catch{}};
+    const directory=join(getCacheDir(),'videos','playback-'+randomUUID());mkdirSync(directory,{recursive:true});let ownedFile='',started=false,remote;
+    const cleanup=()=>{remote?.close();try{if(ownedFile&&existsSync(ownedFile))unlinkSync(ownedFile);}catch{}try{rmdirSync(directory);}catch{}};
     try{
       let file='';
-      if(data.web===true&&data.source!=='bilibili'){
+      if(data.source==='bilibili'){
+        if(!bilibiliMedia(data.url))throw videoError('Bilibili 只接受已解析的 HTTPS 媒体直链','VIDEO_INVALID');
+        const timeout=Math.min(12000,Math.max(3000,Number(data.resourceTimeout)||12000));
+        remote=await openBilibiliRange({signal,formatOf:assertVideoContainer,
+          loadChunk:(start,end,chunkSignal)=>loadBilibiliChunk(data.url,start,end,{fetchImpl,signal:chunkSignal,timeout}),
+        });
+        file=remote.url;
+      }else if(data.web===true){
         if(!enhancedReady(runtime,config))throw videoError('这个网站的视频需要可用的下载组件','VIDEO_ENHANCEMENT');
         const request={outDir:directory,runtime:{...config,ffmpegPath:runtime.ffmpegPath,ffprobePath:runtime.ffprobePath,allowWhisper:false,mobile:isMobile(config)},cacheDir:join(getCacheDir(),'videos','watch-cache'),url:data.url,resolveOnly:true};
         const output=await run(runtime.videoPlusPythonPath,[fileURLToPath(new URL('./tools/video_plus.py',import.meta.url))],{spawnImpl,signal,input:JSON.stringify(request),timeout:Math.min(180000,Number(config.analysisTimeoutMs)||90000)});
@@ -546,43 +577,101 @@ export function createVideoReader({
         const material=await loadMedia(data,{getPlatformFile,fetchImpl,signal,maxBytes:ENHANCED_MAX_BYTES});throwIfAborted(signal);
         ownedFile=join(directory,'input.mp4');writeFileSync(ownedFile,material.bytes);file=ownedFile;
       }
-      const metadata=await run(runtime.ffmpegPath,['-hide_banner','-loglevel','info','-protocol_whitelist','file,pipe','-i',file],{spawnImpl,signal,timeout:10000,allowFailure:true});
-      const m=metadata.stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/),duration=m?Number(m[1])*3600+Number(m[2])*60+Number(m[3]):0;if(!duration||duration>MAX_DURATION_SECONDS)throw videoError('未取得可支持的视频时长','VIDEO_INVALID');throwIfAborted(signal);
+      const inputOptions=remote?.inputOptions||['-protocol_whitelist','file,pipe'];
+      const metadata=await run(runtime.ffmpegPath,['-hide_banner','-loglevel','info',...inputOptions,'-i',file],{spawnImpl,signal,timeout:10000,allowFailure:true});
+      const m=metadata.stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/),duration=m?Number(m[1])*3600+Number(m[2])*60+Number(m[3]):0;
+      if(!duration||duration>MAX_DURATION_SECONDS)throw remote?.lastError()||videoError('未取得可支持的视频时长','VIDEO_INVALID');
+      throwIfAborted(signal);
       if(closed)throw abortError();
       // Incoming requests replace old sources in this conversation; keep decode resources bounded.
       const old=activeByScope.get(scope);if(old&&old!==id)discard(old);
       const max=isMobile(config)?2:4;while(streams.size>=max){const oldest=[...streams.values()].sort((a,b)=>a.usedAt-b.usedAt)[0];discard(oldest.id);}
-      playback.start({id,scope,file,ffmpegPath:runtime.ffmpegPath,duration,start:Number(data.start)||0,cleanup});started=true;
-      const entry={id,scope,file,hasAudio:/Audio:\s/i.test(metadata.stderr),cursor:-Infinity,usedAt:Date.now()};streams.set(id,entry);activeByScope.set(scope,id);return entry;
+      playback.start({id,scope,file,inputOptions:remote?.inputOptions,ffmpegPath:runtime.ffmpegPath,duration,start:Number(data.start)||0,cleanup});started=true;
+      const entry={id,scope,file,remote,ffmpegPath:runtime.ffmpegPath,hasAudio:/Audio:\s/i.test(metadata.stderr),cursor:-Infinity,usedAt:Date.now()};
+      streams.set(id,entry);activeByScope.set(scope,id);return entry;
     }finally{if(!started)cleanup();}
+  }
+  async function decodeAudioWindow({ffmpegPath,source,input,inputOptions=['-protocol_whitelist','file,pipe'],seek=[],seconds},signal){
+    const directory=join(getCacheDir(),'videos');
+    mkdirSync(directory,{recursive:true});
+    const target=join(directory,'sound-'+randomUUID()+'.wav');
+    try{
+      await run(ffmpegPath,[
+        '-hide_banner','-loglevel','error',...inputOptions,...seek,'-i',source,
+        '-t',String(seconds),'-map','0:a:0','-ac','1','-ar','16000','-c:a','pcm_s16le','-fflags','+bitexact',target,
+      ],{spawnImpl,signal,input,timeout:12000});
+      const clip=readFileSync(target);
+      if(clip.length<=44||clip.toString('ascii',36,40)!=='data'||clip.readUInt32LE(40)!==clip.length-44){
+        throw videoError('视频音轨没有有效的 PCM 样本','VIDEO_DECODE');
+      }
+      return clip;
+    }finally{try{unlinkSync(target);}catch{}}
+  }
+  async function listenStreamWindow(entry,start,end,transcribe,signal){
+    if(!entry.remote&&!transcribe)return listenWindow({file:entry.file,start,end},entry.scope,signal);
+    const clip=await decodeAudioWindow({ffmpegPath:entry.ffmpegPath,source:entry.file,inputOptions:entry.remote?.inputOptions,seek:['-ss',String(start)],seconds:end-start},signal);
+    const decodedEnd=Math.min(end,start+(clip.length-44)/32000);
+    return listenWindow({clip,start,end:decodedEnd,transcribe},entry.scope,signal);
+  }
+  async function listenPlayerAudio({clip,start,end},scope,signal){
+    const {ffmpegPath}=runtimeNow(),seconds=end-start;
+    if(!listenWindow||closed||!ffmpegPath||!Number.isFinite(start)||start<0||!Number.isFinite(seconds)||seconds<=0||seconds>6.5||
+      !Buffer.isBuffer(clip)||clip.length>512*1024||clip.subarray(0,4).toString('hex')!=='1a45dfa3')return null;
+    const wav=await decodeAudioWindow({ffmpegPath,source:'pipe:0',input:clip,inputOptions:['-protocol_whitelist','pipe','-f','webm'],seconds},signal);
+    return listenWindow({clip:wav,start,end:Math.min(end,start+(wav.length-44)/32000),transcribe:true},scope,signal);
   }
   async function readContinuous(data={},options={}){
     const signal=options.signal||data.signal;throwIfAborted(signal);if(closed)throw abortError();
     const {scope,id}=streamIdentity(data);if(data.restart===true&&streams.has(id))discard(id);let entry=streams.get(id);
     if(!entry){let pending=preparing.get(id);if(!pending){const controller=new AbortController(),combined=signal?AbortSignal.any([signal,controller.signal]):controller.signal;pending={controller,promise:null};pending.promise=prepareStream(data,{signal:combined,id,scope}).finally(()=>{if(preparing.get(id)===pending)preparing.delete(id);});preparing.set(id,pending);}entry=await pending.promise;}
     throwIfAborted(signal);entry.usedAt=Date.now();
-    if(Number.isFinite(Number(data.start))&&data.start!==undefined){const snap=playback.snapshot(id,scope);if(snap&&Math.abs((Number(snap.at)||0)-Number(data.start))>2){playback.control(id,'seek',{scope,at:Number(data.start)});entry.cursor=-Infinity;}}
-    const result=await playback.read(id,{scope,after:entry.cursor,waitMs:Math.min(5000,Math.max(0,Number(data.waitMs)||2200)),minFrames:1,signal});
-    if(result.status==='failed'){discard(id);throw videoError('视频连续解码失败','VIDEO_DECODE');}
+    const onPhone=isMobile(configNow()),transcribe=onPhone&&data.transcribe===true;
+    const requestedStart=data.start===undefined?NaN:Number(data.start);
+    if(Number.isFinite(requestedStart)){
+      const snap=playback.snapshot(id,scope);
+      if(snap&&(Math.abs((Number(snap.at)||0)-requestedStart)>2||transcribe&&entry.cursor!==-Infinity)){
+        playback.control(id,'seek',{scope,at:requestedStart});
+        entry.cursor=-Infinity;
+      }
+    }
+    const waitMs=Math.min(5000,Math.max(0,Number(data.waitMs)||(entry.remote?5000:2200)));
+    const result=await playback.read(id,{scope,after:entry.cursor,waitMs,minFrames:1,signal});
+    if(result.status==='failed'||(entry.remote&&entry.cursor===-Infinity&&!result.frames.length&&result.status==='streaming')){
+      const error=entry.remote?.lastError()||(result.status==='failed'?videoError('视频连续解码失败',entry.remote?'VIDEO_RESOURCE':'VIDEO_DECODE'):videoError('等待 B站首帧超时','VIDEO_TIMEOUT'));
+      discard(id);throw error;
+    }
     if(Number.isFinite(result.cursor))entry.cursor=result.cursor;
     const selected=currentVisualFrames(result.frames,data);
-    let audio=null;
-    if(!mobile&&entry.hasAudio&&listenWindow&&selected.length){
-      const seconds=data.visualBackend==='local'?8:6;
-      const from=Math.floor(selected.at(-1).at/seconds)*seconds;
+    let audio=null,audioIssue='';
+    const audioRequested=!onPhone||data.audio===true||transcribe;
+    if(audioRequested&&selected.length&&listenWindow&&!entry.hasAudio)audioIssue='no-audio-track';
+    if(audioRequested&&entry.hasAudio&&listenWindow&&selected.length){
+      const seconds=!transcribe&&data.visualBackend==='local'?8:6;
+      const audioAt=transcribe&&Number.isFinite(requestedStart)?Math.max(0,requestedStart):selected.at(-1).at;
+      const from=Math.floor(audioAt/seconds)*seconds;
       const end=Math.min(result.duration,from+seconds);
-      if(entry.sound?.from===from)audio=entry.sound.audio;
-      else if(!entry.listening&&end>from){
-        entry.listening=true;
-        try{audio=await listenWindow({file:entry.file,start:from,end},scope,signal);if(audio)entry.sound={from,audio};}
-        catch(error){throwIfAborted(signal);}
-        finally{entry.listening=false;}
+      if(entry.sound?.from===from&&(!transcribe||entry.sound.speechAttempted))audio=entry.sound.audio;
+      else if(end>from){
+        entry.listening||={from,transcribe,task:listenStreamWindow(entry,from,end,transcribe,signal)};
+        const pending=entry.listening;
+        if(pending.from===from&&(!transcribe||pending.transcribe)){
+          try{
+            audio=await pending.task;
+            if(audio)entry.sound={from,audio,speechAttempted:['transcribed','empty'].includes(audio.speechStatus)};
+            else audioIssue='analysis-unavailable';
+          }catch(error){
+            throwIfAborted(signal);
+            audioIssue=error?.code==='VIDEO_TIMEOUT'?'decode-timeout':error?.code==='VIDEO_DECODE'?'decode-failed':'analysis-failed';
+          }finally{
+            if(entry.listening===pending)entry.listening=null;
+          }
+        }
       }
       throwIfAborted(signal);
       if(streams.get(id)!==entry)throw abortError();
     }
-    return {...result,frames:selected,observationMode:'playback-clock',visualBudget:visualObservationPolicy(data),source:'ffmpeg-realtime',mode:'continuous',continuous:true,positionSource:data.positionSource||'decoder-clock',audioDecoded:!!audio,audio};
+    return {...result,frames:selected,observationMode:'playback-clock',visualBudget:visualObservationPolicy(data),source:'ffmpeg-realtime',mode:'continuous',continuous:true,positionSource:data.positionSource||'decoder-clock',audioDecoded:!!audio,audio,...(audioIssue?{audioIssue}:{})};
   }
 
-  return{read:readContinuous,status,control,close,reset};
+  return{read:readContinuous,listenPlayerAudio,status,control,close,reset};
 }
