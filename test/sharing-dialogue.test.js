@@ -54,3 +54,14 @@ test('mixed audio artifact and chapter validate both inputs and concurrent retri
  assert.equal(first.deliveryId,repeat.deliveryId);assert.equal(f.job.shares.length,1);
  assert.deepEqual(f.sent.map(r=>r.segments[0].type),['file','text']);assert.match(f.sent[1].segments[0].data.text,/chapter/);
 });
+test('an ordinary tool-result reply bypasses the artifact-share rewriter',async()=>{
+ const start=source.indexOf('  async function refineDialogueReply('),end=source.indexOf('\n  /* ---------------- outbound',start);
+ assert.ok(start>=0&&end>start);
+ let artifactRewrites=0;
+ const deps={socialReplyForChat:async()=>{artifactRewrites++;return '我先去找找';},sharedUrls:()=>[],
+   removeDuplicatePassages:answer=>answer,recentDialogueReplies:()=>[],replyRepetition:()=>false};
+ const refine=Function(...Object.keys(deps),'return ('+source.slice(start,end).trim()+');')(...Object.values(deps));
+ const receipt='查过索引了，背景音乐插件没有确切匹配。这个包返回 404，这次没有安装。';
+ assert.equal(await refine({key:'private:12345'},{kind:'user',text:'找这个插件装上'},receipt),receipt);
+ assert.equal(artifactRewrites,0);
+});

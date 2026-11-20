@@ -215,3 +215,40 @@ test('a planned-only slot preserves quiet while allowing an explicit resume or p
   }finally{await engine.close();}
  }
 });
+test('scheduled rest is tracked even when ordinary-message filtering is disabled',async()=>{
+ const meta={accountId:'a',personaId:'p',ownerId:'12345'};
+ let now=Date.parse('2026-11-20T00:20:00+08:00'),state;
+ const scene={date:'2026-11-20',start:'00:00',end:'06:00',activity:'安静睡觉',taskKind:'sleep',planOnly:true};
+ let dispatched=0;
+ const engine=createLifeExecution({storage:{read:()=>state,write:x=>{state=structuredClone(x);}},
+  config:()=>({enabled:true,execute:true,sleep:false}),roles:()=>[{meta}],sceneFor:()=>scene,allowed:()=>true,
+  dispatch:async()=>{dispatched++;return 'unexpected';},now:()=>now});
+ try{
+  await engine.tick();
+  assert.equal(engine.resting(meta),true);
+  assert.equal(engine.asleep(meta),false);
+  assert.equal(engine.snapshot(meta).sleeping,true);
+  assert.equal(engine.snapshot(meta).filteringOrdinaryMessages,false);
+  assert.equal(engine.snapshot(meta).jobs[0].status,'sleeping');
+  engine.wake(meta,{minutes:15});
+  assert.equal(engine.resting(meta),false);
+  const done=engine.holdAwake(meta);
+  now+=16*60_000;
+  assert.equal(engine.resting(meta),false);
+  done();
+  now+=16*60_000;
+  assert.equal(engine.resting(meta),true);
+  assert.equal(engine.asleep(meta),false);
+  assert.equal(dispatched,0);
+ }finally{await engine.close();}
+});
+test('the non-blocking sleep entry wakes for direct owner chat without dropping the message',()=>{
+ const start=source.indexOf('  function sleepingPayload('),end=source.indexOf('\n  const sleepInbox=',start);
+ assert.ok(start>=0&&end>start);
+ let woken=0;
+ const deps={calendarMeta:()=>({}),activePersona:()=>({id:'p'}),segmentsOf:value=>value,
+  settings:{owners:['12345']},recordsAllowed:()=>true,lifeExecution:{asleep:()=>false,resting:()=>true,wake:()=>{woken++;}}};
+ const handle=Function(...Object.keys(deps),'return ('+source.slice(start,end).trim()+');')(...Object.values(deps));
+ assert.equal(handle({message_type:'private',user_id:'12345',message:[{type:'text',data:{text:'你在吗'}}]}),false);
+ assert.equal(woken,1);
+});

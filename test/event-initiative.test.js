@@ -103,8 +103,8 @@ test('actual API cadence reads account/persona scoped input and consumes only th
 test('actual final QQ send gate supports API and local delivery while retaining scope and whitelist checks',()=>{
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
  const code=source.slice(source.indexOf('  function outgoingJobDenial('),source.indexOf('  function outboundWait('));
- const rows=[],settings={activeAccountId:'a',localChat:{enabled:true}};let allowed=true,personaId='p';
- const deps={proactiveCheck:job=>proactiveDenial(job,rows,now-minute,now),settings,nonpaymentOpen:()=>true,autonomyConfig:()=>({enabled:true,initiate:true}),inDnd:()=>false,initiativeWindow:()=>true,recipientDenial:()=>'',privateInitiativeAllowed:()=>true,wrongOwnerAddress:()=>false,groupAddressConflict:()=>false,groupStopped:()=>false,auditById:()=>null,featureState:{outbox:[]},recordsAllowed:()=>allowed,activePersona:()=>({id:personaId})};
+ const rows=[],settings={activeAccountId:'a',localChat:{enabled:true}};let allowed=true,personaId='p',resting=false;
+ const deps={lifeExecution:{resting:()=>resting},calendarMeta:()=>({}),proactiveCheck:job=>proactiveDenial(job,rows,now-minute,now),settings,nonpaymentOpen:()=>true,autonomyConfig:()=>({enabled:true,initiate:true}),inDnd:()=>false,initiativeWindow:()=>true,recipientDenial:()=>'',privateInitiativeAllowed:()=>true,wrongOwnerAddress:()=>false,groupAddressConflict:()=>false,groupStopped:()=>false,auditById:()=>null,featureState:{outbox:[]},recordsAllowed:()=>allowed,activePersona:()=>({id:personaId})};
  const denial=Function(...Object.keys(deps),code+';return outgoingJobDenial;')(...Object.values(deps));
  const first={initiative:true,accountId:'a',personaId:'p',chat:'private:1',chatId:'1',kind:'private',proactiveEpisode:'first',segments:[{type:'text',data:{text:'刚把画布整理好了'}}]};reserveProactive(first,rows,now-minute,now-100);
  for(const [episode,deliveryKey] of [['api','api:initiative:test'],['local','local:initiative:test']]){
@@ -115,6 +115,7 @@ test('actual final QQ send gate supports API and local delivery while retaining 
   rows.splice(1);
  }
  assert.match(denial({...first,proactiveEpisode:'duplicate'}),/相同内容/);
+ resting=true;assert.match(denial(first),/休息中/);assert.equal(denial({...first,initiative:false}),'');
 });
 
 test('fresh event recipient wins over an unrelated idle topic with a longer history',async()=>{

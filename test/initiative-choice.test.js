@@ -56,3 +56,20 @@ test('runtime reserves cadence immediately before model call',async()=>{
  assert.match(part,/if\(!manual&&!selectInitiative\(\[pick\],auto,config\)\)/);
  assert.match(part,/effectiveGroups\(\)\.includes\(String\(pick.groupId\)\)/);
 });
+test('one private proactive decision can select image or voice for the same contact',async()=>{
+ const {decideInitiative}=await import('../api-initiative.js');
+ const target='12345',chat={action:'chat',target},voice={action:'share',kind:'voice',target},image={action:'share',kind:'image',target};
+ const offered=initiativeOptions([chat,voice,image],{},initiativePolicy({},true),chat);
+ const choices=offered.map(initiativeChoiceId);
+ for(const [medium,event] of [[voice,'一句有必要亲口说的话'],[image,'刚聊到一处具体画面']]){
+  let calls=0;
+  const picked=await decideInitiative({system:'按语境择一，没合适的就保持安静',input:event,actions:choices,ask:async(system,input)=>{
+   calls++;
+   assert.equal(input,event);
+   assert.ok(system.includes(initiativeChoiceId(voice))&&system.includes(initiativeChoiceId(image)));
+   return JSON.stringify({action:initiativeChoiceId(medium),text:event});
+  }});
+  assert.equal(calls,1);
+  assert.equal(offered.find(item=>initiativeChoiceId(item)===picked.decision.action),medium);
+ }
+});

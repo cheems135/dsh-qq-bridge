@@ -194,11 +194,12 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  }
  const awakeHolds=new Map();
  const observeState=meta=>{try{onStateChange(meta);}catch{/* observation must never prevent waking or task cleanup */}};
- function asleep(meta){if(closed||!cfg().enabled||!cfg().sleep)return false;const scene=sleepScene(meta);if(!scene)return false;const override=state.wake[scope(meta)];return !override||(!(awakeHolds.get(scope(meta))>0)&&!!(override.until&&override.until<=now()));}
+ function resting(meta){if(closed||!cfg().enabled)return false;const scene=sleepScene(meta);if(!scene)return false;const override=state.wake[scope(meta)];return !override||(!(awakeHolds.get(scope(meta))>0)&&!!(override.until&&override.until<=now()));}
+ function asleep(meta){return cfg().sleep&&resting(meta);}
  function wake(meta,{minutes=20,reason='本轮明确请求'}={}){observeState(meta);const scene=sleepScene(meta),duration=Math.max(1,Math.min(30,Number(minutes)||20))*60_000;state.wake[scope(meta)]={sceneId:scene?hash([scene.date,scene.start,scene.activity]):'',at:now(),duration,until:now()+duration,reason:text(reason,160)};save();observeState(meta);return {ok:true,awake:true,until:state.wake[scope(meta)].until};}
  function touchAwake(meta){const override=state.wake[scope(meta)];if(!override||asleep(meta))return false;override.duration||=Math.max(60_000,(override.until||0)-override.at)||20*60_000;override.until=now()+override.duration;override.lastInteraction=now();save();return true;}
  function holdAwake(meta){const key=scope(meta);if(asleep(meta)||!state.wake[key])return()=>{};awakeHolds.set(key,(awakeHolds.get(key)||0)+1);let released=false;return()=>{if(released)return;released=true;const count=(awakeHolds.get(key)||1)-1;if(count>0)awakeHolds.set(key,count);else{awakeHolds.delete(key);if(state.wake[key]){state.wake[key].until=now()+(state.wake[key].duration||20*60_000);save();}}};}
- function rest(meta){observeState(meta);delete state.wake[scope(meta)];save();observeState(meta);return {ok:true,sleeping:asleep(meta)};}
+ function rest(meta){observeState(meta);delete state.wake[scope(meta)];save();observeState(meta);return {ok:true,sleeping:resting(meta)};}
  // taskKind==='group' is a participation window, not a model task: at the slot
  // start the listed groups accept her without @; the window closes when the
  // slot ends, the schedule sleeps, or her own leaveWhen condition is met.
@@ -279,8 +280,8 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
  function resume(id,meta,{observed=false}={}){if(!cfg().execute)throw Error('执行实际任务已关闭，先开启后再继续日程任务');const j=job(id,meta);if(j.status==='waiting_user')throw Error('先等待对应问题的真实回答');if(j.status==='needs_reconcile'&&!observed)throw Error('先观察并核对上次操作结果');if(!['paused','interrupted','needs_reconcile','incomplete'].includes(j.status))throw Error('任务不能在当前状态恢复');if((j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)))throw Error('仍有结果未知的步骤，不能恢复执行');j.status='paused';j.resume=true;j.nextDispatchAt=0;j.resumeRequestedAt=now();j.resumeObserved=observed;j.reason='从保留的进度恢复，先重新观察';save();return {ok:true,id};}
  async function syncState(meta){
   if(closed||!liveRole(meta))return;
-  const sleeping=asleep(meta),key=scope(meta);
-  if(state.sleep[key]!==sleeping){state.sleep[key]=sleeping;save();observeState(meta);if(sleeping){for(const j of jobs(meta))if(j.group?.open)await closeGroupWindow(meta,j,'日程进入休息，结束群参与');await stop(meta);}}
+  const sleeping=resting(meta),key=scope(meta);
+  if(state.sleep[key]!==sleeping){state.sleep[key]=sleeping;save();observeState(meta);if(sleeping){for(const j of jobs(meta))if(j.group?.open)await closeGroupWindow(meta,j,'日程进入休息，结束群参与');if(cfg().sleep)await stop(meta);}}
  }
  async function enforceExecution(){
   if(cfg().enabled&&cfg().execute){let changed=false;for(const j of state.jobs)if(j.status==='paused'&&j.pausedByExecutionSwitch){delete j.pausedByExecutionSwitch;j.resumeOnIdle=true;changed=true;}if(changed)save();return;}
@@ -314,7 +315,8 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
     for(const old of jobs(role.meta))if(old.group?.open)await closeGroupWindow(old.meta,old,'设备离线或等待更新日程，结束群参与');
     continue;
    }
-   const sleeping=asleep(role.meta),key=scope(role.meta);if(state.sleep[key]!==sleeping){state.sleep[key]=sleeping;save();observeState(role.meta);if(sleeping)await stop(role.meta);}
+   await syncState(role.meta);
+   const sleeping=resting(role.meta),key=scope(role.meta);
    // A failed execution must not start again under a minute-shifted self-plan.
    const blockedSlot=jobs(role.meta).find(j=>['needs_reconcile','failed'].includes(j.status)&&j.scene?.date===sc.date&&j.scene?.end>calendarNow(now()).clock&&(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)));
    if(blockedSlot&&!sc.requested)continue;
@@ -459,8 +461,8 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
   if(removed)save();
   return {removed,left:state.jobs.length};
  }
- function snapshot(meta){return {config:cfg(),sleeping:asleep(meta),wake:state.wake[scope(meta)]?{...state.wake[scope(meta)],held:(awakeHolds.get(scope(meta))||0)>0}:null,scene:asleep(meta)?sleepScene(meta):activityFor(liveRole(meta)||{meta}),plan:current(meta),frequency:{checkEveryMs:60000,emptyRetryBackoffMs:[60000,120000,240000],servicePollMinMs:60000},jobs:jobs(meta).slice(-25).reverse().map(j=>({...j,...taskCompletion(j),details:scheduleJobDetails({...j,...taskCompletion(j)})})),pending:question(meta),waiting:jobs(meta).filter(j=>j.status==='waiting_user'),recoverable:jobs(meta).filter(j=>['paused','needs_reconcile','interrupted','incomplete'].includes(j.status)).map(j=>({id:j.id,status:j.status,activity:j.scene?.activity,checkpoint:j.checkpoint,reason:j.reason}))};}
- return {compact,evidenceJobs:meta=>jobs(meta).map(j=>({...j,...taskCompletion(j)})),tick,enforceExecution,syncState,reserveFinalReply,asleep,wake,touchAwake,holdAwake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};retireOrdinaryQuestions();reconcileArtifactRejections(state,operationJournal(),now());if(reconcileDeliveredLifeShares(state,operationJournal(),deliveryJournal(),now()))try{onReconcile();}catch{}reconcileVerifiedLifeOperations(state,operationJournal(),deliveryJournal(),now());save();}catch{}}};
+ function snapshot(meta){return {config:cfg(),sleeping:resting(meta),filteringOrdinaryMessages:asleep(meta),wake:state.wake[scope(meta)]?{...state.wake[scope(meta)],held:(awakeHolds.get(scope(meta))||0)>0}:null,scene:resting(meta)?sleepScene(meta):activityFor(liveRole(meta)||{meta}),plan:current(meta),frequency:{checkEveryMs:60000,emptyRetryBackoffMs:[60000,120000,240000],servicePollMinMs:60000},jobs:jobs(meta).slice(-25).reverse().map(j=>({...j,...taskCompletion(j),details:scheduleJobDetails({...j,...taskCompletion(j)})})),pending:question(meta),waiting:jobs(meta).filter(j=>j.status==='waiting_user'),recoverable:jobs(meta).filter(j=>['paused','needs_reconcile','interrupted','incomplete'].includes(j.status)).map(j=>({id:j.id,status:j.status,activity:j.scene?.activity,checkpoint:j.checkpoint,reason:j.reason}))};}
+ return {compact,evidenceJobs:meta=>jobs(meta).map(j=>({...j,...taskCompletion(j)})),tick,enforceExecution,syncState,reserveFinalReply,resting,asleep,wake,touchAwake,holdAwake,rest,interruptForRequest,record,checkpoint,beginStep,settleStep,resume,finish,request,answer,question,snapshot,job,ended,markShare,deliveryReceipt,close:async()=>{closed=true;for(const j of state.jobs.filter(x=>x.group?.open))if(groupWindow)try{await groupWindow(j.meta,{open:false,scene:j.scene,groupIds:j.group.ids||[],reason:'日程执行已关闭'});}catch{}},reload(){try{state=storage.read();state.wake||={};state.sleep||={};retireOrdinaryQuestions();reconcileArtifactRejections(state,operationJournal(),now());if(reconcileDeliveredLifeShares(state,operationJournal(),deliveryJournal(),now()))try{onReconcile();}catch{}reconcileVerifiedLifeOperations(state,operationJournal(),deliveryJournal(),now());save();}catch{}}};
 }
 
 

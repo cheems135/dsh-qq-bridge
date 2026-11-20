@@ -2391,7 +2391,7 @@ export function apply(ctx, rawConfig) {
   }
 
   /** True inside the do-not-disturb window; only self-initiated messages are suppressed. */
-  function inDnd(now) {return lifeExecution?.asleep(calendarMeta('',activePersona().id))===true;}
+  function inDnd(now) {return lifeExecution?.resting?.(calendarMeta('',activePersona().id))===true;}
 
   /* ---------- spend estimate ---------- */
 
@@ -5113,7 +5113,7 @@ export function apply(ctx, rawConfig) {
     if(settings.localChat?.enabled&&!localInitiativeContext().allowed)return false;
     const accountId=settings.activeAccountId||'',rows=featureState.qzoneDailyOffers||=([]);if(dailySpaceOffer(rows,accountId))return false;
     const owner=settings.owners.find(id=>privateInitiativeAllowed('private:'+id,settings)&&!pausedConversation('private:'+id));if(!owner)return false;
-    const key='private:'+owner,personaId=activePersona(key).id;if(lifeExecution?.asleep(calendarMeta('',personaId)))return false;
+    const key='private:'+owner,personaId=activePersona(key).id;if(lifeExecution?.resting?.(calendarMeta('',personaId)))return false;
     const base={key,kind:'private',chatId:owner,userId:owner,isOwner:true};let chat=base;if(!settings.localChat?.enabled){const id=await ensureSession(base);if(!chats.has(id))attachChat(id,base);chat=chats.get(id);}if(!chat||chat.turns?.size||chat.pendingTurns?.length)return false;
     const offer=claimSpaceOffer(rows,{accountId,personaId,token:randomUUID()});if(!offer)return false;if(!saveFeatures())throw Error('每日空间提醒未保存，没有发起');
     const accepted=await nudge(chat,QZONE_DAILY_CUE,'qzone-interest',{qzoneOnly:true,qzoneVisitToken:offer.token});offer.queued=accepted===true;saveFeatures();return true;
@@ -5132,7 +5132,7 @@ export function apply(ctx, rawConfig) {
     let best=null;
     for(const user of users){
       const key='private:'+user,personaId=activePersona(key).id,accountId=settings.activeAccountId||'';
-      if(target&&target!==key||pausedConversation(key)||lifeExecution?.asleep(calendarMeta('',personaId)))continue;
+      if(target&&target!==key||pausedConversation(key)||lifeExecution?.resting?.(calendarMeta('',personaId)))continue;
       const lastIn=messages.filter(entry=>entry.chat===key&&entry.dir==='in'&&(entry.accountId||'')===accountId&&entry.personaId===personaId).at(-1);
       if(!lastIn)continue;
       if(proactiveCheck({initiative:true,chat:key,accountId,personaId}))continue;
@@ -5153,7 +5153,7 @@ export function apply(ctx, rawConfig) {
     if (!config.enabled && !manual) return { skipped: 'disabled' };
     if(!manual&&!config.enabled)return {skipped:'disabled'};
     if(!manual&&(stopped||accountPaused||inDnd(new Date())||!initiativeWindow(config,Date.now())))return {skipped:'quiet-or-offline'};
-    if(!manual&&lifeExecution?.asleep(calendarMeta('',activePersona('').id)))return {skipped:'asleep'};
+    if(!manual&&lifeExecution?.resting?.(calendarMeta('',activePersona('').id)))return {skipped:'asleep'};
     if(!manual&&((featureState.inbox||[]).some(j=>['queued','processing'].includes(j.status))||(featureState.outbox||[]).some(j=>['queued','sending'].includes(j.status))||[...chats.values()].some(c=>c.turns?.size||c.pendingTurns?.length)))return {skipped:'qq-priority'};
     if(!options.dryRun&&await offerDailyQzone())return {action:'qzone-interest',reminded:true};
     if(!manual&&!options.dryRun){const cadence=initiativeCadenceGate();if(!cadence.ok)return {action:'none',reason:cadence.reason};}
@@ -5184,6 +5184,7 @@ export function apply(ctx, rawConfig) {
     const countsView = options.budget ?? (options.freshBudget === true ? { chats: 0, qzone: 0, signature: 0, nickname: 0 } : auto.counts);
     if(config.shareMedia.enabled&&config.shareMedia.idle&&(config.unrestricted||(countsView.chats||0)<config.maxPerDay.chats)){
       const targets=initiativeUsers.map(user=>{const key='private:'+user,last=messages.filter(m=>m.chat===key&&m.dir==='in'&&(m.accountId||'')===(settings.activeAccountId||'')).at(-1);return{user,key,last,idle:last?(Date.now()-last.time)/60000:Infinity};}).filter(item=>item.last&&item.idle>=config.chatIdleMinutes&&['voice','image'].some(kind=>mediaShareAvailable(kind,item.key,true))).sort((a,b)=>b.idle-a.idle);
+      let mediaTargets=0;
       for(const target of targets){
         const role=calendarRole(activePersona(target.key).id);
         if(config.shareMedia.schedule&&settings.life.enabled)try{await lifeMemory?.ensureLife(role);}catch{log('scheduled sharing scene unavailable');}
@@ -5192,9 +5193,10 @@ export function apply(ctx, rawConfig) {
         if(!config.unrestricted&&!scene&&target.idle>24*60)continue;
         const available=['image','voice'].filter(kind=>mediaShareAvailable(kind,target.key,true));
         const last=mediaLedger().log.filter(e=>e.key===target.key&&e.personaId===role.meta.personaId&&['queued','sent'].includes(e.status)).at(-1);
-        const kind=available.find(k=>k!==last?.kind)||available[0];
-        if(kind)candidates.push({action:'share',target:target.user,kind,scene});
-        if(candidates.filter(candidate=>candidate.action==='share').length>=2)break;
+        if(!available.length)continue;
+        available.sort((a,b)=>Number(a===last?.kind)-Number(b===last?.kind));
+        for(const kind of available)candidates.push({action:'share',target:target.user,kind,scene});
+        if(++mediaTargets>=2)break;
       }
     }
     if(settings.phone.enabled&&settings.phone.autonomous&&phoneLastStatus.connected&&(settings.realism?.unlimitedProactive===true||phoneInitiativeState().count<(Number(settings.phone.maxAutonomousPerDay)||2))&&(config.unrestricted||(countsView.chats||0)<config.maxPerDay.chats)){
@@ -5247,16 +5249,18 @@ export function apply(ctx, rawConfig) {
       const key=candidateKey(c),persona=activePersona(key),scene=c.scene||lifeMemory?.lifeScene(calendarRole(persona.id).meta);
       const recipient=c.action==='group'?`群 ${c.groupId}${c.chat?.title?'（'+String(c.chat.title).slice(0,24)+'）':''}`:c.target?`${settings.userNotes[c.target]||'QQ 尾号'+String(c.target).slice(-4)}（${settings.owners.includes(String(c.target))?'号主':'其他联系人'}）`:'公开内容或个人资料';
       const recent=c.action==='group'?groupTranscriptLines(key).slice(-300):null;
-      return {choice:initiativeChoiceId(c),recipient,persona:persona.name||persona.id,recent:recent||undefined,comment:c.comment?{text:String(c.comment.text||'').slice(0,400),tid:c.comment.tid,id:c.comment.id}:undefined,idleMinutes:Number.isFinite(c.minutes)?c.minutes:undefined,scene:scene?{activity:String(scene.activity||'').slice(0,100),actual:scene.actual===true}:undefined,event:c.event===true||undefined};
+      return {choice:initiativeChoiceId(c),...(c.action==='share'?{medium:c.kind}:{}),recipient,persona:persona.name||persona.id,recent:recent||undefined,comment:c.comment?{text:String(c.comment.text||'').slice(0,400),tid:c.comment.tid,id:c.comment.id}:undefined,idleMinutes:Number.isFinite(c.minutes)?c.minutes:undefined,scene:scene?{activity:String(scene.activity||'').slice(0,100),actual:scene.actual===true}:undefined,event:c.event===true||undefined};
     });
     const candidateSnapshots=offered.map(c=>{const key=candidateKey(c);return {key,persona:personaContextIdentity(key),context:operationContextStamp(operationContext(key))};});
     const candidatesCurrent=()=>candidateSnapshots.every(snapshot=>snapshot.persona===personaContextIdentity(snapshot.key)&&snapshot.context===operationContextStamp(operationContext(snapshot.key)));
     const choices = [];
-    for(const pick of offered.filter((candidate,index,list)=>list.findIndex(other=>other.action===candidate.action)===index)){
+    for(const pick of offered.filter((candidate,index,list)=>list.findIndex(other=>other.action===candidate.action&&(candidate.action!=='share'||other.kind===candidate.kind))===index)){
     if (pick.action === 'signature') choices.push('- signature：改个性签名（一句话，20 字内，像人随手写的）');
     if (pick.action === 'qzone') choices.push('- qzone：发表有具体细节的动态，正文可一小段或自然分段，最多600字；可以按内容选择搜索图片、实际截图、生成图或自己的画作，imagePrompt只写可选画面意向，后续由你使用真实工具选择配图，没必要就不配图。不发私聊内容。');
-    if (pick.action === 'chat') choices.push('- chat：只向当前允许的人发一条自然的文字，聊一个有来由的念头或感受。若真实任务受阻且确实需要本人提供信息或操作，可以问一个具体问题；可自行安全核对或替代时优先选 explore 继续做。不要把意向说成已经做过。');
-    if(pick.action==='share')choices.push('- share：这次实际分享'+(pick.kind==='image'?'一张角色图片':'一段语音')+'，结合当前模拟日程、这个人的近期话题和情绪，写出具体主题；不要只说想分享却不发送。没有贴切内容可选none。');
+    if (pick.action === 'chat') choices.push('- chat：当一句文字就能接住话题，发一句自然的话，表达一个有来由的念头或感受。若真实任务受阻且确实需要本人提供信息或操作，可以问一个具体问题；可自行安全核对或替代时优先选 explore 继续做。不要把意向说成已经做过。');
+    if(pick.action==='share')choices.push(pick.kind==='voice'
+      ?'- share · voice：如果语气能多传达一层意思，例如轻松逗一下、温柔接住情绪或有一句真想亲口说的，就选语音。text写实际想说的话。'
+      :'- share · image：如果话题有值得让对方看一眼的画面、作品或具体细节，就选图片。text写想展示什么、为何适合这个人此刻看。');
     if(pick.action==='group')choices.push('- group：在群里自然接一句或起个话题；只有确实需要对某个人说话、提醒或邀请时才@，先核对目标QQ身份，不用@刷存在感；只有确实想聊才发，没话说选 none。');
     if(pick.action==='webshare')choices.push('- webshare：根据已经读到的自定义网页资料，选择是否给当前号主分享一个真实链接和一句具体感受；没有想分享的选none，不假装看过视频。');
     if(pick.action==='qzoneReply')choices.push('- qzoneReply：回应自己动态下刚刚实际读到的一条评论，只回应这条具体内容，不重复动态文案，不带入私聊资料。不想回复可none。');
@@ -5280,6 +5284,7 @@ export function apply(ctx, rawConfig) {
       candidateRoleNotes.length>1?'【不同目标对应的人设卡】'+JSON.stringify(candidateRoleNotes):'',
       consumeMoodHint(currentPersonaMood(contextKey),{config:settings.mood,contextOnly:true,publicContext:['group','qzone','qzoneReply','signature'].includes(pick.action)}).text,
       `现在时间：${options.clock ?? clockStamp()}`,
+      ...(privateDecision&&offered.some(c=>c.action==='share')?['【亲近感与主动分享】先从对方最新原话、回复状态或有证据的新事件找一个值得接住的点，再比较文字、语音和图片能表达什么。语气或节奏有意义时优先考虑语音，能通过画面让对方更直观地接住话题时优先考虑图片。只有计划、内部进度或对方还没回时，别拿媒体当催促或汇报；无合适切入点就选 none。一次只选一个候选，不为轮换而发。']:[]),
       '动作说明：',
       ...choices,
       '本轮可选的 choice（只能填其中一个完整选择键；每项是一种动作和一个确定收件人）：'+JSON.stringify(candidateDetails),
@@ -7448,7 +7453,6 @@ export function apply(ctx, rawConfig) {
     return result;
   }
   async function refineDialogueReply(chat,meta,answer,audit) {
-    answer=await socialReplyForChat(answer,chat.key,{request:meta?.text||audit?.userWords||''});
     if(sharedUrls(answer).length)answer=await naturalizeLinkForChat(answer,chat.key,{request:meta?.text||'',sharing:meta?.kind==='proactive'});
     answer=removeDuplicatePassages(answer,meta?.text||chat.lastText||'');
     const previous=recentDialogueReplies(chat.key),risk=replyRepetition(answer,previous,meta?.text||'');
@@ -7828,7 +7832,7 @@ export function apply(ctx, rawConfig) {
       const hint=settings.realism?.enabled?'':replyTurnHint(recentDialogueReplies(chat.key),{includeRules:false});
       const scene='',playfulContext='',learned='',mood=consumeMoodHint(currentPersonaMood(chat.key),{config:settings.mood,contextOnly:true,publicContext:kind==='qzone-interest'||chat.kind==='group'}).text;
       const demanded=mediaIntent?await readConversationContext(chat,{action:'get',topics:sharingPlan.kind==='image'?['image','outfit','scene']:['voice'],query:sharingPlan.request||''}):null;
-      const shareInstruction=mediaIntent?'【本轮自主分享执行】这次是你结合日程和对话主动选择分享，不是用户新发的要求。'+(sharingPlan.kind==='image'?'请实际输出 [图:贴合此刻日程的角色前置自拍画面，用户已明确指定其他构图时沿用指定构图]，衣服发型结合当前聊天变化。':'请实际输出 [语音:适合此刻情绪的语气]具体要说的话，不照念日程表。')+'图片要同时有你想对当前这个人说的配话：按当前人设、关系和刚才的话题表达展示的念头；不只发图片，不默认写作品点评或制作复盘，不编返工次数。本人本轮明确只要图片时才省略配话。语音按真实台词表达，避免重复。程序仍会检查自主开关、分享频率和额度；没有新内容可用 [skip]。':'';
+      const shareInstruction=mediaIntent?'【本轮自主分享执行】这次是你结合日程和对话主动选择分享，不是用户新发的要求。'+(sharingPlan.kind==='image'?'请实际输出 [图:贴合此刻日程的角色前置自拍画面，用户已明确指定其他构图时沿用指定构图]，衣服发型结合当前聊天变化。配一句自然的话给对方，说明想让对方看哪一点。本人明确只要图片时省略配话。':'请实际输出 [语音:适合此刻情绪的语气]具体要说的话。把自然开场和正文都放在语音标记后，直接说给对方听，不另发一条文字开场。')+'不照念日程或制作步骤，不编未发生的结果。程序仍会检查分享开关、频率和额度；没有新内容可用 [skip]。':'';
       const lifeOperationRows=options.lifeJob?currentLifeChatTurns(operationContext(chat.key)):operationContext(chat.key);
       const privateContact=!options.lifeJob&&!options.commitment&&kind!=='qzone-interest'&&chat.kind==='private';
       const conversationHint=privateContact?initiativeConversationHint(lifeOperationRows,privateInitiativeUnanswered(chat.key)):operationContextHint(lifeOperationRows);
@@ -8706,7 +8710,10 @@ export function apply(ctx, rawConfig) {
     for(const job of rows)logDelivery(job);void flushOutbox();
   }
   function outgoingJobDenial(job){
-    if(job.initiative){const pacing=proactiveCheck(job);if(pacing)return pacing;}
+    if(job.initiative){
+      if(!job.manualInitiative&&lifeExecution?.resting?.(calendarMeta('',job.personaId)))return '自主休息中，暂不发送主动消息';
+      const pacing=proactiveCheck(job);if(pacing)return pacing;
+    }
     if(String(job.deliveryKey||'').startsWith('local:initiative:')&&(!settings.localChat?.enabled||(!nonpaymentOpen(settings)&&settings.localChat.initiativeEnabled===false)||!autonomyConfig().initiate||inDnd(new Date())||!initiativeWindow(autonomyConfig(),Date.now())))return '本地主动聊天已关闭或进入免打扰时段';
     const recipient=recipientDenial({kind:job.kind,chatId:job.chatId,key:job.chat},settings);if(recipient)return recipient;
     if(job.initiative&&job.kind==='private'&&!privateInitiativeAllowed(job.chat,settings))return '该联系人未单独允许主动联系';
@@ -8895,7 +8902,8 @@ export function apply(ctx, rawConfig) {
     if(!lifeExecution?.asleep(meta)){
       if(own&&direct){
         if(/^(?:你)?(?:继续睡|回去睡|接着睡|去睡吧|不用陪我了[，, ]*去睡)(?:吧|觉|啦|了|啊|哦|[。！!～~\s])*$/u.test(text.trim())){lifeExecution?.rest(meta);return true;}
-        lifeExecution?.touchAwake(meta);
+        if(lifeExecution?.resting?.(meta))lifeExecution.wake(meta,{minutes:15,reason:'收到号主私聊，暂时醒来'});
+        else lifeExecution?.touchAwake(meta);
       }
       return false;
     }
@@ -12822,7 +12830,7 @@ export function apply(ctx, rawConfig) {
   let rechargeConsidering=false;
   async function considerRecharge(){
     if(rechargeConsidering||stopped||accountPaused||!socket?.ready||!settings.wallet.enabled||!settings.wallet.reactions||!settings.autonomy.enabled||!settings.agency.enabled||!settings.agency.autonomous)return;
-    const owner=settings.owners.find(id=>privateInitiativeAllowed('private:'+id,settings));if(!owner)return;const key='private:'+owner,personaId=activePersona(key).id;if(lifeExecution?.asleep(calendarMeta('',personaId)))return;
+    const owner=settings.owners.find(id=>privateInitiativeAllowed('private:'+id,settings));if(!owner)return;const key='private:'+owner,personaId=activePersona(key).id;if(lifeExecution?.resting?.(calendarMeta('',personaId)))return;
     const scope=textHash(JSON.stringify([settings.activeAccountId||'',personaId,key])),prior=featureState.rechargeConsidered?.[scope];if(prior&&Date.now()-prior<24*3600000)return;
     rechargeConsidering=true;try{
       const a=ctx.get('deepseekAccount');if(!a?.getBalance)return;const stamp=JSON.stringify([settings.activeAccountId,personaId,featureState.generation||0]),entry=nativeRechargeEntry(await a.getState()),entries=nativeWalletEntries(await a.getBalance(walletClient()));

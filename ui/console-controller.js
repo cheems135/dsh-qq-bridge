@@ -4841,7 +4841,7 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
   function slotGroupNote(slot){var ids=Array.isArray(slot.groupIds)?slot.groupIds:[],parts=[];if(ids.length)parts.push('群 '+ids.slice(0,3).join('、')+(ids.length>3?' 等 '+ids.length+' 个':''));if(slot.leaveWhen)parts.push('离开：'+slot.leaveWhen);return parts.join(' · ');}
   function slotRealState(c,slot){
     var originals=slot._displaySlots||[slot],jobs=originals.map(function(s){return slotJob(c,s);}).filter(Boolean),active=originals.find(function(s){return s.state==='current';}),job=active?slotJob(c,active):jobs.at(-1);
-    if(c.sleep&&slot.state==='current')return '睡眠中，不参与普通聊天或主动任务';
+    if(c.sleep&&slot.state==='current')return c.life.filteringOrdinaryMessages?'睡眠中，明确请求可以唤醒':'正在休息，你发私聊仍能接话';
     if(slot.state==='current'&&c.life.scene?.conversation)return c.life.scene.activity+(c.life.scene.topic?' · 话题：'+c.life.scene.topic:'')+'；原计划暂缓，未记为完成';
     if(job){
       if(job.group)return job.group.open?'群参与已开启'+((job.group.ids||[]).length?' · '+job.group.ids.length+' 个群':''):'群参与已结束'+(job.group.reason?' · '+job.group.reason:'');
