@@ -104,7 +104,7 @@ export function createSleepAwareness({storage, now = () => Date.now(), runtimeId
     const previous = value.history.at(-2);
     const contiguous = previous && last && Math.abs(previous.endedAt - last.startedAt) < 1000 && previous.kind !== last.kind;
     const facts = [contiguous && describe(previous), last && describe(last), value.current && describe(value.current)].filter(Boolean).join('；');
-    return `【实际睡眠与离线】当前${value.mode === 'awake' ? '清醒' : value.mode === 'scheduled_sleep' ? '按日程休息' : '离线'}。${facts}。这是状态资料，不要求汇报；按当前话题自然回应。离线原因不明时不要说是自己想睡，也不要假装期间看过消息或完成任务。`;
+    return `【实际睡眠与离线】角色当前${value.mode === 'awake' ? '清醒' : value.mode === 'scheduled_sleep' ? '按日程休息' : '离线'}。${facts}。这是状态资料，不要求汇报；按当前话题自然回应。离线原因不明时不要说是自己想睡，也不要假装期间看过消息或完成任务。`;
   }
 
   function close() {

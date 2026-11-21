@@ -23,21 +23,31 @@ export function initiativeHint(config={}){
 export function conversationStep(previous={},text='',{now=Date.now(),personaId=''}={}){
   const input=String(text).trim().slice(0,900),old=previous.personaId===personaId&&now-(previous.lastSeen||0)<2*3600_000?previous:{};
   const leaving=/^(?:好[的吧]?[,，。\s]*)?(?:我(?:先|要|得)?(?:去忙|忙(?:一?会儿?|一下|了)?(?=[，,。！!；;\s]|$)|睡(?:觉)?了|去睡|下线|走了|开会|上课)|先不聊|回头聊|晚安|别(?:再)?(?:发(?:消息)?|回复|打扰)|不要(?:再)?(?:发消息|回复|打扰)|安静一会|等我(?:回来|忙完))/u.test(input);
+  const stanceCorrection=/(?:^|[，,。！!]\s*)我(?:并|可|真)?(?:没(?:有)?|不是)(?:嫌你|怪你|催你|生气|在生气)/u.test(input);
+  const repeatedLine=/(?:^|[，,。！!]\s*)(?:我(?:只|就)?是说\s*)?你(?:是不是)?(?:只会|只记得|又在说|又说|老说|一直说|总(?:是)?(?:说|重复))(?:这句|同一句|同样的话)/u.test(input);
   const correction=/不是这个|答非所问|说错|不对|你没懂|跑题|复读|别发癫|认真点|正经点|我问的是|不是让你/.test(input);
   const redirect=/换个?话题|先不说这个|先别继续|不用了|算了|取消刚才|先别生成/.test(input);
   const supporting=/我.{0,12}(?:难受|难过|委屈|焦虑|紧张|害怕|失落|好累|很累|烦死)|(?:有点|特别|好|很)(?:难过|难受|焦虑|紧张)|想哭|心情不好/.test(input);
   const celebrating=/考过了|通过了|录取了|升职了|中奖|成功了|好消息|太开心|好开心/.test(input)&&!/没|没有|还没|没能/.test(input);
   const question=/[?？]|怎么|为什么|如何|多少|哪个|能不能|是否|是什么|什么意思|帮我|给我|发张|看看|查一下/.test(input);
   const storytelling=/今天|刚才|刚刚|后来|结果|遇到|发生|跟你说/.test(input);
-  const intent=leaving?'closing':correction?'repair':redirect?'redirect':supporting?'support':celebrating?'celebrate':question?'answer':storytelling?'listen':'chat';
-  const affect=supporting?'low':celebrating?'happy':correction?'frustrated':old.userAffect&&now-(old.affectAt||0)<20*60_000&&!question?old.userAffect:'neutral';
+  const intent=leaving?'closing':correction?'repair':redirect?'redirect':stanceCorrection||repeatedLine?'reframe':supporting?'support':celebrating?'celebrate':question?'answer':storytelling?'listen':'chat';
+  const affect=supporting?'low':celebrating?'happy':correction?'frustrated':intent==='reframe'?'neutral':old.userAffect&&now-(old.affectAt||0)<20*60_000&&!question?old.userAffect:'neutral';
   return{personaId,lastSeen:now,intent,userAffect:affect,affectAt:affect===old.userAffect?old.affectAt||now:now,pauseUntil:leaving?now+8*3600_000:0,
+    ...(intent==='reframe'?{feedback:{repeatedLine,stanceCorrection}}:{}),
     previousTopic:old.lastTopic||'',lastTopic:input,lastReplyAt:old.lastReplyAt||0};
 }
 export function conversationHint(state,{config={},now=Date.now()}={}){
   const c=companionConfig(config);if(!c.enabled)return '';
-  const directions={closing:'对方正在结束或暂停聊天，按你们的习惯自然收尾，等他回来再聊。',repair:'对方正在纠正具体问题，先把事情改对；仍可保留角色的说话习惯，不用切换成检讨模板。',redirect:'对方在撤回旧要求或换话题，停止延伸上件事，接住现在这句话。此前未发出的旧草稿不算已经跟对方说过，不要追发它们。',support:'接住他具体遇到的事和感受，用你自己的话回应；按情况决定陪他聊还是给建议。',celebrate:'接住他这件具体的好事，可以兴奋、打趣或跟着高兴，不必只说模板恭喜。',answer:'直接回答这次问题或完成请求；能把答案讲清就可以保留逗趣和亲近的口吻。',listen:'回应故事里刚发生的具体细节，让他有继续说的空间，不擅自另编后续。',chat:'按当前角色自然接话，可以有自己的偏好、情绪和判断，也可以开玩笑、互怼或撒娇，不必事事附和。'};
-  return ['【本轮相处方式】'+directions[state.intent],
+  const directions={closing:'对方正在结束或暂停聊天，按你们的习惯自然收尾，等他回来再聊。',repair:'先把事情改对，按对方纠正后的意思接话。别重复旧话、猜他在生气或转成检讨。',redirect:'对方在撤回旧要求或换话题，停止延伸上件事，接住现在这句话。此前未发出的旧草稿不算已经跟对方说过，不要追发它们。',support:'接住他具体遇到的事和感受，用你自己的话回应；按情况决定陪他聊还是给建议。',celebrate:'接住他这件具体的好事，可以兴奋、打趣或跟着高兴，不必只说模板恭喜。',answer:'直接回答这次问题或完成请求；能把答案讲清就可以保留逗趣和亲近的口吻。',listen:'回应故事里刚发生的具体细节，让他有继续说的空间，不擅自另编后续。',chat:'按当前角色自然接话，可以有自己的偏好、情绪和判断，也可以开玩笑、互怼或撒娇，不必事事附和。'};
+  let direction=directions[state.intent];
+  if(state.intent==='reframe'){
+    const {repeatedLine,stanceCorrection}=state.feedback||{};
+    if(repeatedLine&&stanceCorrection)direction='同时接住两层意思：对方指出你在重复一句话，也澄清他并未嫌你烦。重复的说法仍要改。简短接过，别反复解释自己或继续旧追问。';
+    else if(repeatedLine)direction='接住对方指出的重复。话说重复了就换个落点，简短接过即可，别猜他为什么介意。';
+    else direction='接住对方新说明的意思。照他的澄清理解他的态度，别继续猜他生气、反复解释自己或沿用旧追问。';
+  }
+  return ['【本轮相处方式】'+direction,
     c.continuity&&state.userAffect==='low'?'对方近期情绪低落：语气柔和，但新问题仍直接回答，不反复翻旧事。':'',
   ].filter(Boolean).join('\n');
 }

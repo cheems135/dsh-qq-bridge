@@ -4,6 +4,7 @@ import {chooseLocalRoute} from './local-routing.js';
 import {prepareLocalReply,localRepeatRisk} from './local-repetition.js';
 import {invocationErrorStatus} from './model-invocation-audit.js';
 import {eventInitiativeCadence} from './initiative-events.js';
+import {routineFollowupDenial} from './conversation-timing.js';
 
 const minute=60000;
 const instruction='【本地主动开口】现在没有用户新消息。结合角色、近期对话、记忆与当前日程，判断有没有具体想分享或适合跟进的内容；没有就安静。不要定时问在不在、催回复、重复口头禅或硬编话题。不替对方编发言，不把日程计划说成已实际完成，不声称执行了任何工具。本轮只允许文字，不生成图片、语音或视频。想主动提起尚未提供的衣着、详细日程或过去记忆时，先返回JSON {"speak":false,"contextTopics":["outfit"],"contextQuery":"想确认的事实"}申请真实资料；可选分类outfit/scene/schedule/memory/learning/memes/expression，不凭旧对话猜今天状态。资料返回后再决定说不说，不再重复申请。只返回JSON：{"speak":false,"text":"","reason":"简短原因"}。想说时speak=true，text为自然的人设口吻，可自然分段，不加播报式开头。';
@@ -40,7 +41,7 @@ export function createLocalInitiative({context,probe,infer,deliver,act,readConte
    const outputTokens=Math.min(512,Number(snapshot?.maxOutputTokens)||512);
    const decisionInstruction=(canAct?instruction.replace('本轮只允许文字，不生成图片、语音或视频。','本轮先做决定，不直接操作。你也可以按兴趣、近期心情或未完成的念头自己定一个具体活动，发现并组合工具完成它，不局限在固定菜单。想留下真实经历可用bridge_diary写私人日记，也可不写。想行动时返回 {"speak":false,"activity":"一个具体活动及目标","reason":"为什么想做"}，程序将另开真实工具执行轮次。不要把活动说成已完成。不选发空间或刷评论：空间另有每日一次机会。'):instruction)
      +(cadence.event?.kind==='task-blocker'?' 这次事件是已落盘任务的真实障碍。先判断能否用可核对的方法继续；能继续就给出具体活动目标。确实缺少本人才能提供的信息或操作时，再用人设口吻问一个明确问题，并说明目前实际进度；不要把报错原文当聊天发出。':'');
-   const source={system:c.persona||'',systemSections:[{kind:'persona',text:c.persona||''},{kind:'memory',text:c.memory||''},{kind:'instruction',text:decisionInstruction+' 先理解对方最新一句。按回复状态区分已回和未回，沉默不表示答应。可以自然聊新的具体想法，也可以留白。事件仅作事实线索。'+(c.contactHold?' 现在先留白，speak=false；有合适的自主活动可以照常决定。':'')}],history:c.history||[],user:JSON.stringify({clock:c.clock,trigger:event?cadence.event?.kind==='mood'?'有近期情绪变化':cadence.event?.kind==='task-blocker'?'有真实任务受阻，决定继续排查还是具体求助':'有新的活动线索或实际进展':'空闲时自然想聊',event:cadence.event,replyState:c.replyState,scene:c.scene||null})};
+   const source={system:c.persona||'',systemSections:[{kind:'persona',text:c.persona||''},{kind:'memory',text:c.memory||''},{kind:'instruction',text:decisionInstruction+' 方括号是对话实际发言时间。沉默不表示答应，也不能推断作息。按语境问候，有具体的新细节或感受就直接分享，说完可以留白。事件仅作事实线索。'+(c.contactHold?' 现在先留白，speak=false；有合适的自主活动可以照常决定。':'')}],history:c.history||[],user:JSON.stringify({clock:c.clock,trigger:event?cadence.event?.kind==='mood'?'有近期情绪变化':cadence.event?.kind==='task-blocker'?'有真实任务受阻，决定继续排查还是具体求助':'有新的活动线索或实际进展':'空闲时自然想聊',event:cadence.event,replyState:c.replyState,scene:c.scene||null})};
    const packed=optimizeLocalContext(source,{window:Number(snapshot?.contextWindow)||4096,maxTokens:Number(snapshot?.maxOutputTokens)||512,continuity:true});
    const messages=[{role:'system',content:packed.system},...packed.history,{role:'user',content:packed.user}];
    const decision=chooseLocalRoute(snapshot,{text:true,json:true,inputTokens:messages.reduce((sum,m)=>sum+estimateTokens(m.content),0),outputTokens},{apiComplement:false});
@@ -87,6 +88,12 @@ export function createLocalInitiative({context,probe,infer,deliver,act,readConte
    }
    const text=prepareLocalReply(typeof result.text==='string'?result.text:'');
    if(scene)state.sceneSeen=scene;
+   const followupDenial=routineFollowupDenial(text,c.lastUser);
+   if(followupDenial){
+    state.lastResult='quiet';save(c.id,state);
+    record({...invocation,status:'returned',result:{decision:'quiet',reason:followupDenial}});
+    return update('quiet',followupDenial);
+   }
    const repeats=localRepeatRisk(text,{messages:[...(c.history||[]),{role:'user',content:'【自主开口】'}]})||(c.recent||[]).some(t=>key(t)===key(text))||!!state.lastText&&key(state.lastText)===key(text);
    if(c.contactHold||result.speak!==true||!text||text==='[skip]'||repeats||text.length>1600||/\[bridge_tools\]|"(?:tool_calls|tool|action)"\s*:/.test(text)){
     state.lastResult='quiet';save(c.id,state);record({...invocation,status:'returned',result:{...result,decision:'quiet',suppressedRepeat:!!repeats}});return update('quiet','这次没有新的话想说，保持安静');

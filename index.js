@@ -185,6 +185,7 @@ import {createDesktopController} from './desktop-controller.js';
 import {createAudioAnalysis} from './audio-analysis.js';
 import {moodConfig,moodState,shouldJudgeMood,applyMood,consumeMoodHint,moodDelivery,moodPlanningContext} from './companion-mood.js';
 import {recentOperationContext,recentReplyAnchor,replyAnchorHint,initiativeConversation,initiativeConversationHint,operationContextStamp,operationContextHint,operationText,parseOperationReview,OPERATION_CONTEXT_RULES} from './operation-context.js';
+import {conversationTime,conversationTimingHint,routineFollowupDenial} from './conversation-timing.js';
 import {websiteConfig,websiteSource,createWebsiteReading} from './website-reading.js';
 import {personIdentity,speakerIdentity,allowedPrivateUsers,privateInitiativeAllowed,recipientIdentity,recipientDenial,wrongOwnerAddress,whitelistCommandAllowed} from './contact-policy.js';
 import {naturalPersonaText,HUMAN_DIALOGUE_STYLE,ownerToolDenial,toolActorIsOwner,directOwnerOperation,cosplayPrompt} from './dialogue-persona.js';
@@ -4718,10 +4719,9 @@ export function apply(ctx, rawConfig) {
 
   /** 给她一个真实的「现在」，而不是让她猜。 */
   function clockStamp() {
-    const now = new Date();
+    const {day,clock}=conversationTime(Date.now());
     const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const pad = (value) => String(value).padStart(2, '0');
-    return `（现在是 ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} ${weekdays[now.getDay()]}）`;
+    return '（现在是 '+day+' '+clock+' '+weekdays[new Date(day+'T00:00:00Z').getUTCDay()]+'）';
   }
 
   /**
@@ -5585,6 +5585,10 @@ export function apply(ctx, rawConfig) {
     let body = (generatedReply?stripUnrequestedActions(String(text ?? ''),{request:chat.turnKind==='proactive'?'':generatedAudit?.userWords||''}):String(text??'')).trim();
     const cover=chat.turnKind==='user'&&(chat.runningHubCover===true||!chat.mediaIntentHandled&&generatedAudit?.mediaIntent?.cover===true);
     if ((body === '' || generatedReply&&/^\[skip\]$/i.test(body))&&!cover) return;
+    if(chat.turnKind==='proactive'&&chat.kind==='private'&&!chat.manualInitiative&&!deliveryCommitmentId(chat)){
+      const reason=routineFollowupDenial(body,operationContext(chat.key).findLast(row=>row.role==='user'));
+      if(reason){log('主动消息暂缓：'+reason);return;}
+    }
     if(recipientDenial(chat,settings)||wrongOwnerAddress(body,chat.key,settings)){markReplyDelivery(chat,'withheld','收件人权限或称呼不匹配，未转发到QQ');log('reply suppressed: recipient or owner-address mismatch');return;}
     if(/\[收藏表情\]/.test(body)){
       void saveIncomingSticker(chat).catch(()=>{});
@@ -6604,11 +6608,11 @@ export function apply(ctx, rawConfig) {
     const floor=Math.max(featureState.floors?.[key]||0,Number(memories[key]?.contextAfter)||0),rows=messages.filter(r=>r.chat===key&&(r.accountId||'')===scope.accountId&&r.personaId===scope.personaId&&r.time>floor&&(!r.delivery||r.dir==='in'||r.delivery==='sent'));
     const lastIncoming=Number(rows.filter(r=>r.dir==='in').at(-1)?.time)||0,now=calendarNow(Date.now(),'Asia/Shanghai'),persona=activePersona(key);
     const contactHold=proactiveCheck({initiative:true,accountId:scope.accountId,personaId:scope.personaId,chat:key});
-    const recent=initiativeConversation(operationContext(key),privateInitiativeUnanswered(key));
+    const operations=operationContext(key),recent=initiativeConversation(operations,privateInitiativeUnanswered(key));
     let scene=null;try{scene=lifeMemory?.lifeScene(meta)||null;}catch{}
     if(scene)scene={date:scene.date,start:scene.start,phase:scene.phase,activity:scene.activity,actual:scene.actual};
     const memory=[CONTEXT_RULES,sleepAwarenessHint(key),consumeMoodHint(currentPersonaMood(key),{config:settings.mood,contextOnly:true}).text||''].filter(Boolean).join('\n');
-    return {allowed:true,activitiesEnabled:settings.life?.execute===true&&settings.agency?.enabled===true&&settings.agency?.autonomous===true,unrestricted:nonpaymentOpen(settings),id:textHash(localScopeKey(scope)),signature:JSON.stringify([localScopeKey(scope),featureState.generation||0,localForegroundAt,lastIncoming,floor,contactHold,rows.at(-1)?.localId||rows.at(-1)?.messageId||rows.at(-1)?.time]),...scope,chat,day:now.day,clock:now.day+' '+now.clock,lastIncoming,contactHold,replyState:recent.replyState,event:initiativeEventFor(key),scene,persona:[settings.basePersona||'',personaPromptText(persona)].filter(Boolean).join('\n'),memory,history:recent.turns.map(([side,text])=>({role:side==='对方'?'user':'assistant',content:text})),recent:rows.filter(r=>r.dir==='out').slice(-6).map(r=>r.text)};
+    return {allowed:true,activitiesEnabled:settings.life?.execute===true&&settings.agency?.enabled===true&&settings.agency?.autonomous===true,unrestricted:nonpaymentOpen(settings),id:textHash(localScopeKey(scope)),signature:JSON.stringify([localScopeKey(scope),featureState.generation||0,localForegroundAt,lastIncoming,floor,contactHold,rows.at(-1)?.localId||rows.at(-1)?.messageId||rows.at(-1)?.time]),...scope,chat,day:now.day,clock:now.day+' '+now.clock,lastIncoming,lastUser:operations.findLast(row=>row.role==='user'),contactHold,replyState:recent.replyState,event:initiativeEventFor(key),scene,persona:[settings.basePersona||'',personaPromptText(persona)].filter(Boolean).join('\n'),memory,history:recent.turns.map(([side,text,at])=>({role:side==='对方'?'user':'assistant',content:at?'['+at+'] '+text:text})),recent:rows.filter(r=>r.dir==='out').slice(-6).map(r=>r.text)};
   }
   async function runLocalInitiativeTick(){
     localInitiative||=createLocalInitiative({context:localInitiativeContext,
@@ -6643,8 +6647,16 @@ export function apply(ctx, rawConfig) {
       try{
         localContext.signal=deadline.signal;localContext.workspaceLease=workspaceLeases.resolve(localContext);
         const tools={...agencyTools.localTools(localContext),...localQqTools(chat,active),...apiAssistTools(chat,active,localContext)};
-        const history=(options.lifeJob?currentLifeChatTurns(operationContext(chat.key)):operationContext(chat.key)).map(row=>({role:row.role,content:row.text}));
-        await serviceMediaScope.run({foreground:true,initiativeParent:deliveryKey},()=>executeLocalAutonomy({context:{id:deliveryKey,expectAction:['life','idle-activity','qzone-interest'].includes(kind),recipient:recipientIdentity(chat.key,settings),persona:[settings.basePersona||'',personaPromptText(activePersona(chat.key))].filter(Boolean).join('\n'),lifeJob:options.lifeJob?briefLifeJob(options.lifeJob):null,rules:options.lifeJob?'':kind==='qzone-interest'?QZONE_DAILY_CUE:'结合当前日程与真实兴趣选择一个小目标；不要没有依据地发空间。',cue:withClock(options.lifeJob?'按当前任务与已保存进度继续实际行动。':cue)+'\n'+conversationExecutionHint(chat)+'\n'+sleepAwarenessHint(chat.key)+'\n'+consumeMoodHint(currentPersonaMood(chat.key),{config:settings.mood,contextOnly:true,publicContext:kind==='qzone-interest'}).text+(tools.bridge_api_assist?'\n【已开启任务协作】搜索、网页阅读或观察视频时优先调用bridge_api_assist，task写具体目标和已知链接。API只做后台任务并给你事实，你再结合人设和自己的想法决定是否分享；partial表示只完成一部分，不能说整项日程已完成。':''),history,signal:deadline.signal,turnContext:{autonomyId:deliveryKey,announceTaskBefore:false,scheduleScope:currentScheduleScope(chat.key),promptPreferences:promptPreferences.snapshot().values,features:{},recordScope:{accountId:scope.accountId,personaId:scope.personaId,chat:chat.key}}},assertCurrent,record,getLifeJob:currentLifeJob,
+        const rows=operationContext(chat.key);
+        const history=(options.lifeJob?currentLifeChatTurns(rows):rows).map(row=>({role:row.role,content:row.text}));
+        const contactState=options.lifeJob||options.commitment||kind==='qzone-interest'?'':initiativeConversation(rows,privateInitiativeUnanswered(chat.key)).replyState;
+        const activityCue=[
+          withClock(options.lifeJob?'按当前任务与已保存进度继续实际行动。':cue),
+          conversationExecutionHint(chat),sleepAwarenessHint(chat.key),contactState,
+          consumeMoodHint(currentPersonaMood(chat.key),{config:settings.mood,contextOnly:true,publicContext:kind==='qzone-interest'}).text,
+          tools.bridge_api_assist?'【已开启任务协作】搜索、网页阅读或观察视频时优先调用bridge_api_assist，task写具体目标和已知链接。API只做后台任务并给你事实，你再结合人设和自己的想法决定是否分享；partial表示只完成一部分，不能说整项日程已完成。':'',
+        ].filter(Boolean).join('\n');
+        await serviceMediaScope.run({foreground:true,initiativeParent:deliveryKey},()=>executeLocalAutonomy({context:{id:deliveryKey,expectAction:['life','idle-activity','qzone-interest'].includes(kind),recipient:recipientIdentity(chat.key,settings),persona:[settings.basePersona||'',personaPromptText(activePersona(chat.key))].filter(Boolean).join('\n'),lifeJob:options.lifeJob?briefLifeJob(options.lifeJob):null,rules:options.lifeJob?'':kind==='qzone-interest'?QZONE_DAILY_CUE:'结合当前日程与真实兴趣选择一个小目标；不要没有依据地发空间。',cue:activityCue,history,signal:deadline.signal,turnContext:{autonomyId:deliveryKey,announceTaskBefore:false,scheduleScope:currentScheduleScope(chat.key),promptPreferences:promptPreferences.snapshot().values,features:{},recordScope:{accountId:scope.accountId,personaId:scope.personaId,chat:chat.key}}},assertCurrent,record,getLifeJob:currentLifeJob,
           run:input=>runWithHostTools({...input,baseUrl:String(settings.localChat.baseUrl||'http://127.0.0.1:8777').replace(/\/+$/,''),tools}),
           guardTool:(name,args,execute)=>runScheduledTool(chat.key,name==='bridge_tools'&&args.action==='call'?args.name:name,name==='bridge_tools'&&args.action==='call'?args.arguments:args,execute,meta),
           deliver:async result=>{assertCurrent();if(meta.qzoneOnly||meta.directTextSent||scheduledChatHeld(meta))return;const segments=[];for(const a of (result.attachments||[])){const valid=validateLocalAttachment(a);segments.push({type:valid.kind==='speech'?'record':valid.kind,data:{file:pathToFileURL(valid.file).href}});}let text=prepareLocalReply(String(result.text||''));if(options.lifeJob)assertScheduleReading(text,currentLifeJob());text=await socialReplyForChat(text,chat.key,{scene:options.lifeJob?.scene||null,signal:deadline.signal});if(options.lifeJob)assertScheduleReading(text,currentLifeJob());if(segments.some(segment=>segment.type==='image')&&!segments.some(segment=>segment.type==='record'))text=await imageCaptionForChat(text==='[skip]'?'':text,chat.key,{evidence:{coverage:'本轮实际返回的图片附件'},scene:options.lifeJob?.scene||null,signal:deadline.signal});assertCurrent();if(options.lifeJob)assertScheduleReading(text,currentLifeJob());if(text&&text!=='[skip]')for(const part of splitBursts(text,replyCharLimit(),{shareLinks:true,maxBubbles:0,automaticBreaks:false}))segments.push({type:'text',data:{text:part}});if(segments.length&&!queueOutgoing({...chat,mediaCaptionHandled:true,deliveryKey,turnKind:'proactive',expectedAccountId:scope.accountId,expectedPersonaVersion:scope.personaVersion},segments))throw Error('主动分享未进入发送队列');},
@@ -6731,7 +6743,7 @@ export function apply(ctx, rawConfig) {
 
     const persona=activePersona(chat.key);
     const preset=settings.presetPrompts?.[persona.id]||persona.prompt||readPresetPrompt(persona.preset)||'';
-    const system=[settings.basePersona||'',preset,CONTEXT_RULES,CORE_CONTEXT_RULES,stickerAvailabilityHint(),'这是当前 QQ 对话。按当前角色自然地回应，不强制短句，也不禁止 emoji；只有确实想用语音、图片或视频时才调用本轮已配置的本地工具。工具失败时必须依据真实回执说明，不能假装已经生成或发送。'].filter(Boolean).join('\n\n');
+    const system=[settings.basePersona||'',preset,BRIEF_RULES.human,CONTEXT_RULES,CORE_CONTEXT_RULES,stickerAvailabilityHint(),'这是当前 QQ 对话。按当前角色自然地回应，不强制短句，也不禁止 emoji；只有确实想用语音、图片或视频时才调用本轮已配置的本地工具。工具失败时必须依据真实回执说明，不能假装已经生成或发送。'].filter(Boolean).join('\n\n');
     const parts=[];
     if(payload._bridgeVisualState)parts.push({type:'text',text:'【持续视听实际状态】'+JSON.stringify(payload._bridgeVisualState)});
     if(String(text||'').trim())parts.push({type:'text',text:String(text)});
@@ -7897,10 +7909,7 @@ export function apply(ctx, rawConfig) {
 
   /** Nudge cues carry the wall clock so time-of-day behaviour can fire. */
   function withClock(cue) {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    return `（现在是 ${hh}:${mm}）${cue}`;
+    return clockStamp()+cue;
   }
 
   /** Ask the model to say something on its own; `[skip]` means it stayed quiet. */
@@ -8496,6 +8505,8 @@ export function apply(ctx, rawConfig) {
   }
   const pausedConversation=key=>!nudgeAllowed(conversationStates()[key],settings.companion,Date.now());
   function enrichConversation(chat,payload,content,text,nativePersona=false){
+    const timing=conversationTimingHint(payload._bridgeMemoryUserText??text,{receivedAt:payload._bridgeReceivedAt||Number(payload.time)*1000});
+    if(timing)content.push({type:'text',_bridgeContext:'conversationTiming',text:timing});
     const sleepFacts=sleepAwarenessHint(chat.key,payload._bridgeMemoryUserText||text);if(sleepFacts)content.push({type:'text',_bridgeContext:'sleepAwareness',text:sleepFacts});
     try{const files=qqFileTransfer.list({...qqReadScope(chat.key),key:chat.key}).files;if(files.length)content.push({type:'text',_bridgeContext:'qqFiles',text:'【本对话文件】'+JSON.stringify(files.slice(0,4).map(({id,name,state})=>({id,name,state})))+'；需要文件时用bridge_qq_file list/download/send/status，不把收到说成读过。'});}catch{}
     const commitmentActor={speakerId:String(payload.user_id||''),kind:'user'};
@@ -8779,7 +8790,10 @@ export function apply(ctx, rawConfig) {
   function proactiveCheck(job){
     if(job.initiative&&!job.proactiveEpisode)job.proactiveEpisode=job.auditId||job.bubbleBatchId||String(job.deliveryKey||'').replace(/:part:\d+$/,'')||job.id||'';
     const lastIncoming=proactiveIncoming(job.chat);
-    return proactiveDenial(job,featureState.proactiveContacts||[],lastIncoming,Date.now(),settings.autonomy?.privateMinGapMinutes);
+    const pacing=proactiveDenial(job,featureState.proactiveContacts||[],lastIncoming,Date.now(),settings.autonomy?.privateMinGapMinutes);
+    if(pacing||!job.segments||!job.initiative||job.manualInitiative||job.commitmentId||!job.chat?.startsWith('private:'))return pacing;
+    const words=job.proactiveParagraphText||job.segments.filter(segment=>segment.type==='text').map(segment=>segment.data?.text||'').join('\n')||job.localTranscript;
+    return words?routineFollowupDenial(words,operationContext(job.chat).findLast(row=>row.role==='user')):'';
   }
   function privateInitiativeUnanswered(key){
     return unansweredPrivateInitiative({initiative:true,chat:key,accountId:settings.activeAccountId||''},featureState.outbox||[],messages,proactiveIncoming(key));

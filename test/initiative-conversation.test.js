@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {initiativeConversation,initiativeConversationHint,recentOperationContext} from '../operation-context.js';
+import {routineFollowupDenial} from '../conversation-timing.js';
 import {unansweredPrivateInitiative,proactiveDenial} from '../social-pacing.js';
 import {createLocalInitiative} from '../local-initiative.js';
 
@@ -48,16 +49,25 @@ test('actual API send gate enforces spacing but allows a new topic after the con
   const start=source.indexOf('  function proactiveCheck('),end=source.indexOf('\n  function privateInitiativeUnanswered(',start);
   assert.ok(start>=0&&end>start);
   let lastIncoming=at-70_000,now=last.sentAt+59*60_000;
-  const deps={proactiveDenial,featureState:{proactiveContacts:[{...last,episode:last.proactiveEpisode,at:last.sentAt}]},proactiveIncoming:()=>lastIncoming,settings:{autonomy:{privateMinGapMinutes:60}},Date:{now:()=>now}};
+  let userTurn={role:'user',at:lastIncoming,text:'等一下我修'};
+  const deps={proactiveDenial,routineFollowupDenial,operationContext:()=>[userTurn],featureState:{proactiveContacts:[{...last,episode:last.proactiveEpisode,at:last.sentAt}]},proactiveIncoming:()=>lastIncoming,settings:{autonomy:{privateMinGapMinutes:60}},Date:{now:()=>now}};
   const check=Function(...Object.keys(deps),source.slice(start,end)+'\nreturn proactiveCheck;')(...Object.values(deps));
   assert.match(check({...actor}),/间隔/);
   now=last.sentAt+60*60_000;
   assert.equal(unansweredPrivateInitiative(actor,[last],[],lastIncoming),true);
   assert.equal(check({...actor}),'');
+  const draft=words=>({...actor,segments:[{type:'text',data:{text:words}}]});
+  const repairCheck=draft('修好了没嘛？');
+  assert.match(check(repairCheck),/未要求追问/);
+  assert.equal(check(draft('刚发现一首吉他编曲，副歌突然安静下来很有意思。')),'');
+  assert.equal(check({...repairCheck,manualInitiative:true}),'');
+  assert.equal(check({...repairCheck,commitmentId:'agreed'}),'');
   assert.equal(check({...actor,commitmentId:'user-reminder'}),'');
   assert.equal(check({...actor,initiative:false}),'');
   lastIncoming=at-20_000;
+  userTurn={role:'user',at:lastIncoming,text:'我修好了，想聊点别的。'};
   assert.equal(check({...actor}),'');
+  assert.equal(check(repairCheck),'');
 });
 
 test('local pacing skips inference during the interval, then keeps reply status alongside a fresh draft',async()=>{
@@ -73,4 +83,18 @@ test('local pacing skips inference during the interval, then keeps reply status 
   c={...c,contactHold:'',replyState:'上一条主动私聊后未收到对方的新消息'};
   assert.equal((await local.tick()).status,'cancelled');
   assert.equal(inferences,1);assert.equal(sent,0);
+});
+
+test('local initiative leaves a stale check-in quiet without a failed-send record',async()=>{
+  const latest={role:'user',at:at-8*3600000,text:'等一下我修'};
+  const c={id:'p',key:chat,accountId,personaId,signature:'old',allowed:true,lastIncoming:latest.at,lastUser:latest,
+    day:'2026-11-19',clock:'16:04',history:[{role:'user',content:'等一下我修'}]};
+  const audited=[];
+  const local=createLocalInitiative({context:()=>c,now:()=>at,
+    probe:async()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:{text:{supported:true},json:{supported:true}}}),
+    infer:async()=>'{"speak":true,"text":"修好了没嘛？"}',
+    deliver:async()=>assert.fail('the draft must not enter the queue'),
+    record:row=>audited.push(row)});
+  assert.equal((await local.tick()).status,'quiet');
+  assert.equal(audited.at(-1).result.decision,'quiet');
 });

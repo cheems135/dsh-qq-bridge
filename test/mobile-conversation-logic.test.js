@@ -11,6 +11,20 @@ test('phone API context carries the previous topic and accepts a correction befo
  const second=conversationStep(first,'不是白色，是蓝色的花盆',{personaId:'p',now:2000});assert.equal(second.previousTopic,'今天把那盆花放到窗边了');assert.equal(second.lastTopic,'不是白色，是蓝色的花盆');
  const repair=conversationStep(second,'你说错了，我刚说的是蓝色',{personaId:'p',now:3000});assert.equal(repair.intent,'repair');assert.match(conversationHint(repair),/改对/);
 });
+test('feedback about a repeated line and a correction of tone update the exchange',()=>{
+ const context={personaId:'p',now:1000};
+ const repeated=conversationStep({},'你只会这句了是吧',context);
+ assert.equal(repeated.intent,'reframe');
+ assert.match(conversationHint(repeated),/话说重复了就换个落点/);
+ const corrected=conversationStep({...repeated,userAffect:'frustrated'},'我没有嫌你烦',{...context,now:2000});
+ assert.equal(corrected.intent,'reframe');
+ assert.equal(corrected.userAffect,'neutral');
+ assert.equal(corrected.pauseUntil,0);
+ assert.match(conversationHint(corrected),/接住对方新说明的意思/);
+ const both=conversationStep(corrected,'我是说你总重复这句，我没有嫌你烦。',{...context,now:3000});
+ assert.deepEqual(both.feedback,{repeatedLine:true,stanceCorrection:true});
+ assert.match(conversationHint(both),/重复的说法仍要改/);
+});
 test('phone memory recalls actual previous turns, retains speaker identity and keeps private user words out of a group',async()=>{
  const hub=createMemoryHub({storage:memoryStorage(),allowed:()=>true,now:()=>10000});const p={accountId:'a',key:'private:12345',personaId:'p',personaVersion:'v'},g={...p,key:'group:67890'};
  try{hub.record(p,{id:'private-flower',at:1000,role:'user',speakerId:'12345',text:'我的私人花盆藏在书房，颜色是蓝色',actual:true});hub.record(g,{id:'group-cat',at:2000,role:'user',speakerId:'54321',text:'我家的猫叫小米',actual:true});

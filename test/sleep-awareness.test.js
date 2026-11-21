@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {conversationTimingHint} from '../conversation-timing.js';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createSleepAwareness} from '../sleep-awareness.js';
@@ -107,11 +108,15 @@ test('the common conversation enrichment reaches API, local and both chat scopes
   const start=source.indexOf('  function enrichConversation('),end=source.indexOf('    try{const files=qqFileTransfer',start);
   const head=source.slice(start,end)+'\n}';
   const f=fixture(),tracker=f.open();tracker.observe(meta,sleep);f.advance(60000);tracker.observe(meta,online);
-  const enrich=Function('sleepAwarenessHint','return ('+head+');')((_key,question)=>tracker.hint(meta,{question}));
+  const enrich=Function('sleepAwarenessHint','conversationTimingHint','return ('+head+');')((_key,question)=>tracker.hint(meta,{question}),conversationTimingHint);
   for(const kind of ['private','group']){
     const parts=[];enrich({key:kind+':1'}, {}, parts,'醒了吗',true);
     assert.equal(parts.length,1);assert.match(parts[0].text,/主动睡眠/);
     const packed=localSharedContext(parts,{maxChars:100});assert.equal(packed.messages[0].content,parts[0].text);
     assert.ok(parts[0].text.length<450);assert.match(parts[0].text,/不要求汇报/);
+    const waking=[];enrich({key:kind+':1'}, {_bridgeMemoryUserText:'刚刚睡醒呢'}, waking,'刚刚睡醒呢',true);
+    assert.match(waking.find(part=>part._bridgeContext==='conversationTiming').text,/对方说自己刚醒/);
+    assert.match(waking.find(part=>part._bridgeContext==='sleepAwareness').text,/角色当前/);
+    assert.equal(localSharedContext(waking,{maxChars:100}).messages.length,2);
   }
 });

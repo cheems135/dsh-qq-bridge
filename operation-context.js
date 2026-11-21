@@ -2,6 +2,7 @@
 import {createHash} from 'node:crypto';
 import {normalizeVoiceMood} from './voice-studio.js';
 import {isShortAcknowledgement} from './background-cost-policy.js';
+import {conversationTime,initiativeTimingHint} from './conversation-timing.js';
 export const OPERATION_CONTEXT_SIZE=8;
 // A picture is usually the start of a topic, not a one-turn attachment: keep the
 // latest received image visible for a while even when the assistant itself sends
@@ -44,7 +45,7 @@ export function replyAnchorHint(anchor){
  return '【短回复承接】'+(anchor.quoted?'对方明确引用了':'当前对话刚实际送达')+'这一句：'+
    JSON.stringify(anchor.text)+'。优先接这件事。若只是简短确认，顺着接一句即可。旧日程和你更早的问题仅是历史。';
 }
-export function initiativeConversation(context=[],previousInitiativeUnanswered=false){
+export function initiativeConversation(context=[],previousInitiativeUnanswered=false,now=Date.now()){
  const lastHuman=context.findLast(row=>row.role==='user'),lastDelivered=context.findLast(row=>row.role==='assistant');
  const ordered=context.slice(-4);
  if(lastHuman&&!ordered.includes(lastHuman))ordered.splice(0,1,lastHuman);
@@ -52,12 +53,19 @@ export function initiativeConversation(context=[],previousInitiativeUnanswered=f
  const replyState=!lastDelivered?'没有可核对的已发出消息':!lastHuman||lastHuman.at<=lastDelivered.at
   ?'上次发出之后没有新的对方消息'
   :'上次发出后有新的对方消息，按原话判断是否接上或已换题';
- return {replyState:(previousInitiativeUnanswered?'上一条主动私聊之后还没有收到对方的新消息。 ':'')+replyState,turns:ordered.map(({role,text})=>[role==='user'?'对方':'你',operationText(text,120)])};
+ const day=conversationTime(now).day;
+ const turns=ordered.map(({role,text,at})=>{
+  const timestamp=Number(at);
+  const stamp=Number.isFinite(timestamp)&&timestamp>0?conversationTime(timestamp):null;
+  const time=stamp?(stamp.day===day?stamp.clock:stamp.day+' '+stamp.clock):'';
+  return [role==='user'?'对方':'你',operationText(text,120),time];
+ });
+ return {replyState:[previousInitiativeUnanswered?'上一条主动私聊之后还没有收到对方的新消息。':'',replyState+'。',initiativeTimingHint(lastHuman,now)].filter(Boolean).join(' '),turns};
 }
-export function initiativeConversationHint(context,previousInitiativeUnanswered=false){
- const recent=initiativeConversation(context,previousInitiativeUnanswered);
+export function initiativeConversationHint(context,previousInitiativeUnanswered=false,now=Date.now()){
+ const recent=initiativeConversation(context,previousInitiativeUnanswered,now);
  return '【主动开口前的实际私聊】'+JSON.stringify(recent)
-  +'。先接住对方最新一句的意思。沉默不表示答应、听过或看过。对方已换话题时沿用新话题。有具体的新想法可以自然开口，不催回复；也可以留白。原话仅作语境。';
+  +'。每条带实际发言时间。沉默不表示答应、听过或看过。按时段和语境自然问候，晚安留给休息或道别。有具体的新想法可以自然开口，直接说细节或感受。简单分享说完就停，不催回复，也可以留白。原话仅作语境。';
 }
 export function operationContextStamp(context){return createHash('sha256').update(JSON.stringify(context)).digest('hex');}
 export function operationContextHint(context){return '【操作前最近8条对话】\n'+OPERATION_CONTEXT_RULES+'\n'+JSON.stringify(context);}
