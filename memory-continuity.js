@@ -81,6 +81,45 @@ export function continuityTokens(value){
   const pairs=terms.flatMap(t=>/^[\u3400-\u9fff]{3,12}$/.test(t)?Array.from({length:t.length-1},(_,i)=>t.slice(i,i+2)):[]);
   return [...new Set([...terms,...pairs,...aliases.filter(([,re])=>re.test(raw)).map(([id])=>id)])];
 }
+
+const conversationalFillers=new Set('然后 但是 还是 最近 其实 真的 怎么办 终于 果然 应该 已经 可能 大概 不过 刚刚 感觉 一点 突然 发现 现在 这次 那次 上次 上回 昨晚 刚好 顺便 原来 事情 东西 刚才 时候 那个 昨天 今天 以前 之前 咱们 自己 好像 这么 那么 怎么样 这两天 这件 那件 这家 那家 晚上 明天 早上 对了 说起 说实话 那边 这边 帮我 愿意 一起 不用 重新 特别 感谢 好吃 好喝 好看 好听'.split(' '));
+const resuming=/(?:上次|上回|之前|前几天|昨天(?:说|聊|提)|后来|说起|说到|接着聊|你(?:还记得|问过)|我(?:提过|说过)|又(?:去|得|要|在|来)|那(?:家|只|个|件|场|本|趟|台|次|条))/u;
+const amending=/^(?:(?:哦|啊|等下|对了)[，, ]*)?(?:不对|我(?:刚|刚才)?(?:记错|说错|写错)|更正|改成|改到|已经改成|现在改成)/u;
+
+// Only an authentic private reply or a user statement can supply the detail.
+// Matching is bounded, literal and local. A loose shared category is insufficient.
+export function sharedDialogueDetail(rows,query,{at=Date.now(),maxChars=210}={}){
+ const words=String(query||'').trim();
+ if(words.length<4||words.length>400||amending.test(words)||unsafeOperation.test(words))return '';
+ const terms=memoryTokens(words).filter(t=>!stop.has(t)&&!conversationalFillers.has(t)&&!/^\d+$/.test(t)&&words.toLowerCase().includes(t));
+ if(!terms.length)return '';
+ const refer=resuming.test(words);
+ const matches=text=>{
+  const hits=terms.filter(t=>text.toLowerCase().includes(t));
+  return hits.length>=2||refer&&hits.length===1;
+ };
+ const safe=row=>row&&row.text&&row.text.length<=400&&!row.partial&&!sensitive.test(row.text)&&!unsafeOperation.test(row.text);
+ const tail=rows.slice(-220);
+ for(let i=tail.length-1;i>=0;i--){
+  const row=tail[i];if(row.role!=='user'||!safe(row)||/[？?]\s*$/u.test(row.text))continue;
+  const earlier=tail[i-1];
+  const answered=safe(earlier)&&earlier.role==='assistant'&&row.at-earlier.at<=12*60000&&/[？?]|(?:叫什么|叫啥|哪个|几点|哪天|多少|吗|嘛)[。！!]*$/u.test(earlier.text);
+  // A correction in the immediately following turn can replace an older answer
+  // even when it only supplies the new value without repeating the subject.
+  const fixing=amending.test(row.text)&&safe(earlier)&&row.at-earlier.at<=12*60000;
+  let prompt=(answered||fixing)?earlier.text:'';
+  if(fixing&&earlier.role==='assistant'&&!answered&&!matches(prompt)){
+   const previous=tail[i-2];
+   if(safe(previous)&&previous.role==='user'&&row.at-previous.at<=12*60000&&earlier.text.length<=20)prompt=previous.text;
+  }
+  if(!matches(row.text)&&!(prompt&&matches(prompt)))continue;
+  if(i>=tail.length-4&&at-row.at<15*60000)return '';
+  const excerpt=String(row.text).trim();if(excerpt.length>128)return '';
+  const snippet='【同一私聊的原话】'+calendarNow(row.at).day+' '+(prompt&&!fixing?'你问'+JSON.stringify(prompt.slice(0,52))+'，':'')+'对方说'+JSON.stringify(excerpt)+'。与眼下有关再接，已经答过的细节不用重问；以对方现在说的为准。';
+  return snippet.length<=Math.min(210,maxChars)?snippet:'';
+ }
+ return '';
+}
 export function memoryTimeRange(query,at=Date.now()){
   const text=String(query||''),day=calendarNow(at).day;
   const explicit=text.match(/(20\d{2})[-年/](\d{1,2})[-月/](\d{1,2})日?/);

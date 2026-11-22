@@ -1,3 +1,4 @@
+import {naturalBubbleParts} from '../chat-bubbles.js';
 import {scheduledChatHeld,scheduledChatReceipt} from '../schedule-continuity.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
 import {assertScheduleReading,scheduleReadingEvidence,unsupportedScheduleReading} from '../schedule-reading.js';import {executeLocalAutonomy} from '../local-autonomy.js';import {briefLifeJob} from '../prompt-budget.js';
@@ -56,6 +57,6 @@ test('tool-time reading proof is refreshed instead of rejecting a task that just
 
 test('actual native artwork share blocks invented reading before queuing image or caption',async()=>{
  const existing=fs.readFileSync(new URL('./sharing-dialogue.test.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');let fixture=existing.slice(existing.indexOf('function shareFixture('),existing.indexOf("test('actual native image sharing prepares"));fixture=fixture.replace('const deps={','const deps={assertScheduleReading,scheduledChatHeld,scheduledChatReceipt,').replace("'先给你看看这只小鲸鱼。'",JSON.stringify(failedSample));
- const make=new Function('source','assertScheduleReading','scheduledChatHeld','scheduledChatReceipt','crypto','assert',fixture+';return shareFixture;')(source,assertScheduleReading,scheduledChatHeld,scheduledChatReceipt,crypto,assert),f=make();f.context.meta= {kind:'user',lifeJobId:'j'};await assert.rejects(f.callback({action:'send',file:f.file},f.context),e=>e.code==='SCHEDULE_READING_EVIDENCE_REQUIRED');assert.equal(f.sent.length,0);
+ const make=new Function('source','assertScheduleReading','scheduledChatHeld','scheduledChatReceipt','crypto','assert','naturalBubbleParts',fixture+';return shareFixture;')(source,assertScheduleReading,scheduledChatHeld,scheduledChatReceipt,crypto,assert,naturalBubbleParts),f=make();f.context.meta= {kind:'user',lifeJobId:'j'};await assert.rejects(f.callback({action:'send',file:f.file},f.context),e=>e.code==='SCHEDULE_READING_EVIDENCE_REQUIRED');assert.equal(f.sent.length,0);
  const valid=make();valid.context.meta= {kind:'user',lifeJobId:'j'};valid.job.evidence=[read];assert((await valid.callback({action:'send',file:valid.file},valid.context)).ok);assert.equal(valid.sent.length,2);
 });

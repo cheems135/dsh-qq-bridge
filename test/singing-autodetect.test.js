@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {cleanGeneratedReplyDividers} from '../local-reply.js';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {requestsSinging,requestsDifferentCover,selectMediaIntent,mediaIntentHint,completeMediaReply,directMediaIntent,imageFirstReply,independentRequestedVoice} from '../media-intent.js';
@@ -63,7 +64,7 @@ test('the real QQ reply dispatcher starts one configured cover on plain text and
   const deps={settings:{voice:{enabled:true,emotion:'auto'}},featureState:{generation:0,outbox:[]},state:{chats:{[key]:{sessionId:'s'}}},chats:new Map([['s',live]]),
     groupStopped:()=>false,recipientDenial:()=>false,wrongOwnerAddress:()=>false,auditById:id=>id===audit.id?audit:null,
     stripUnrequestedActions,completeMediaReply,directMediaIntent,requestsSinging,explicitlyRequestsImage:()=>false,removeDuplicatePassages:value=>value,imageFirstReply,independentRequestedVoice,
-    splitBursts:(v,_n,options)=>naturalBubbleParts(v,options),replyCharLimit:()=>2000,companionSettings:()=>({}), cfg:{plainText:false},
+    naturalBubbleParts,cleanGeneratedReplyDividers,companionSettings:()=>({}), cfg:{plainText:false},
     stopped:false,accountPaused:false,lifeExecution:null,isDesktop:true,activePersona:()=>({id:'p'}),calendarMeta:()=>({}),setTimeout:fn=>queueMicrotask(fn),
     beginMediaTask:()=>({task:{id:'task',status:'pending',auditId:audit.id}}),recordMediaTask:()=>{},finishMediaTask:(task,status,extra)=>Object.assign(task,extra,{status}),
     completeMediaShare:()=>{},saveSettings:()=>{},saveFeatures:()=>{},generationBlocked:()=>false,beginGeneration:()=>{},endGeneration:()=>{},featureProfile:()=>({}),conversationScope:()=>key,

@@ -1,4 +1,5 @@
 import {imageExecutionInquiry} from './media-intent.js';
+import {isShortClarification} from './background-cost-policy.js';
 import {localMediaText,localMediaCancelled} from './local-media-task.js';
 const content=value=>typeof value==='string'?value:Array.isArray(value)?value.filter(p=>p.type==='text').map(p=>p.text||'').join('\n'):'';
 export function localVideoObservationRequest(request=''){
@@ -10,7 +11,7 @@ export function localVideoObservationRequest(request=''){
 }
 export function localMediaPlanningCandidate(request=''){
  const raw=String(request).trim(),text=localMediaText(raw);
- if(localVideoObservationRequest(raw)||imageExecutionInquiry(raw))return false;
+ if(isShortClarification(raw)||localVideoObservationRequest(raw)||imageExecutionInquiry(raw))return false;
  if(/(?:屏幕|截图|桌面|终端|命令|文件|浏览器|搜索|网页|B站)/.test(text)&&!/(?:生成|制作|发给我|发张|拍张|用语音|说给我听)/.test(text))return false;
  return /(?:瞅|瞧|照片|图片|相片|自拍|语音|声音|听|视频|短片|拍|发|再来|再做|看下|看一下|给我看|让我看)/.test(text)&&! /^(?:他说|她说|引用|转发|例如|假如|教程)/.test(raw)&&!/(?:为什么|报错|提示词|怎么写|教程|代码|原理)/.test(text)&&!['image','speech','video'].some(kind=>localMediaCancelled(text,kind));
 }

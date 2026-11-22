@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
-import {API_CONTEXT_REVISION,summarySourceKey,planConversationSummary,apiContextRotation,conversationHistory,conversationSeed,checkedConversationSummary} from '../api-conversation-context.js';
+import {API_CONTEXT_REVISION,summarySourceKey,planConversationSummary,apiContextRotation,conversationHistory,conversationSeed,checkedConversationSummary,qqRecallTarget} from '../api-conversation-context.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 const ready={turns:new Map(),pendingTurns:[]};
 test('old oversized history rotates even above the former 100 percent cutoff; an active turn never rotates',()=>{const rec={sessionId:'old',contextTokens:360000};assert.equal(apiContextRotation(rec,ready).rotate,true);assert.equal(apiContextRotation(rec,{...ready,turns:new Map([['task',{}]])},{force:true}).rotate,false);assert.equal(apiContextRotation(rec,{...ready,pendingTurns:[{}]}).rotate,false);});
@@ -31,4 +31,39 @@ test('handoff reuses a successful unchanged source set, including speaker and ti
  await f.run({key:'private:1',chatId:'1',kind:'private'});
  assert.equal(f.summaryCalls,0);assert.deepEqual(f.state.chats['private:1'].contextSummary.items,known.items);
  assert.notEqual(summarySourceKey([{speaker:'我',at:1,text:'收到'}]),summarySourceKey([{speaker:'你',at:1,text:'收到'}]));
+});
+
+test('withdrawals stay out of recent lines, older evidence and restored summaries',()=>{
+ const rows=Array.from({length:36},(_,i)=>({chat:'private:12345',accountId:'a',personaId:'p',dir:'in',messageId:String(10+i),time:i+1,text:'旧消息'+i}));
+ const scope={key:'private:12345',accountId:'a',personaId:'p'};
+ rows[1].text='已撤回的起点';rows[34].text='已撤回的终点';rows[35].text='更正为周日下午';
+ const before=conversationHistory(rows,scope);
+ const previous={items:[{text:'旧摘要写入已撤回的起点',sourceIds:['s2']}],method:'evidence-summary',coveredSourceCount:before.older.length,sourceKey:summarySourceKey(before.older)};
+ assert.match(conversationSeed(previous,before.recent,before.older),/旧摘要/);
+ rows[1].retracted=true;rows[34].retracted=true;
+ const after=conversationHistory(rows,scope),seed=conversationSeed(previous,after.recent,after.older);
+ assert.match(seed,/更正为周日下午/);assert.doesNotMatch(seed,/已撤回|旧摘要/);
+ const plan=planConversationSummary(after.older,previous);
+ assert.equal(plan.reuse,false);assert.equal(plan.prior,undefined);assert.doesNotMatch(JSON.stringify(plan.sources),/已撤回/);
+});
+
+test('QQ recall routes and ledger updates isolate account and chat, including a delayed combined input',()=>{
+ const key='private:12345',selfId='67890',event={post_type:'notice',notice_type:'friend_recall',self_id:selfId,user_id:'12345',message_id:-73};
+ assert.deepEqual(qqRecallTarget(event,selfId),{key,id:'-73'});
+ assert.deepEqual(qqRecallTarget({...event,notice_type:'group_recall',group_id:'12345'},selfId),{key:'group:12345',id:'-73'});
+ for(const change of [{self_id:'88888'},{user_id:selfId},{message_id:0},{post_type:'message'}])assert.equal(qqRecallTarget({...event,...change},selfId),null);
+ const original={chat:key,accountId:'a',personaId:'p',dir:'in',messageId:'-71',sourceMessageIds:['-71','-73'],text:'两句合并的原话'};
+ const deps={settings:{activeAccountId:'a'},recordsStored:()=>true,recordsAllowed:()=>true,activePersona:()=>({id:'p'}),messages:[original,{...original,accountId:'b'},{...original,chat:'group:12345'}],state:{chats:{[key]:{sessionId:'s',preset:'p'}}},sessionDigests:new Map([['s','旧预载']]),recentWithdrawals:new Set(),withdrawalKey:(a,k,id)=>JSON.stringify([a,k,String(id)]),pruneMonitor:()=>{},recordCalendarRow:()=>{},log:()=>{}};
+ const mark=extract('markQqWithdrawal',deps);mark(key,'b','-73');assert.equal(original.retracted,undefined);
+ mark(key,'a','-73');mark(key,'a','-73');
+ assert.deepEqual(deps.messages.map(r=>!!r.retracted),[true,false,false]);assert.equal(deps.state.chats[key].recallRevision,1);assert.equal(deps.sessionDigests.has('s'),false);
+ const record=extract('logMessage',deps);mark(key,'a','-99');record({chat:key,dir:'in',messageId:'-98',sourceMessageIds:['-98','-99'],text:'通知先于合并写入'});
+ assert.equal(deps.messages.at(-1).retracted,true);
+});
+
+test('a withdrawal while the summary is being generated prevents installing its old evidence',async()=>{
+ const f=fixture();
+ f.deps.askModel=async()=>{f.old.recallRevision=1;return '{"items":[{"text":"过时的摘要","sourceIds":["s1"]}]}';};
+ assert.equal(await extract('rotateApiConversation',f.deps)({key:'private:1',chatId:'1',kind:'private'}),null);
+ assert.equal(f.newSessions,0);
 });

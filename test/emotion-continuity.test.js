@@ -16,6 +16,8 @@ test('different grounded reactions persist and reach voice direction without a f
 test('salient event requests assessment immediately, disabled and empty do not',()=>{
  for(const turns of [1,2,3])assert(shouldJudgeMood({turns},words));
  assert(!shouldJudgeMood({turns:1},'今天的天气还好'));assert(!shouldJudgeMood({turns:3},''));assert(!shouldJudgeMood({turns:1},words,{enabled:false}));
+ for(const words of ['对呀','嗯','啊？','我没听清'])assert.equal(shouldJudgeMood({turns:3},words),false,words);
+ assert.equal(shouldJudgeMood({turns:3},'对呀，今天真的很开心！'),true);
 });
 test('cause survives consumption and fading; public projection excludes private cause',()=>{
  const hurt=applyMood(moodState({},now),negative,words,{now}).state;
@@ -40,6 +42,19 @@ test('a grounded mood change becomes one delayed initiative cue without exposing
  const scene={date:'2026-11-16',start:'09:00',activity:'读书',actual:false};
  assert.equal(initiativeEvent({scene,mood:hurt,now:at+60000}).kind,'mood');
  assert.equal(initiativeEvent({scene,mood:hurt,jobs:[{id:'job',evidence:[{ok:true,substantive:true,tool:'read',at:at+2*60000}]}],now:at+3*60000}).kind,'progress');
+});
+
+test('casual turns keep the tone and leave the old episode available for a real follow-up',()=>{
+ const hurt=applyMood({},negative,words,{now}).state;
+ const opts={now:now+1000};
+ const casual=consumeMoodHint(hurt,{...opts,turnWords:'我选红茶，你呢？'});
+ assert.match(casual.text,/当前情绪底色/);
+ assert.doesNotMatch(casual.text,/明确贬低|不想理你/);
+ assert.match(consumeMoodHint(casual.state,{...opts,turnWords:'你还在生气吗？'}).text,/明确贬低/);
+ assert.match(consumeMoodHint(casual.state,{...opts,turnWords:'我刚才把话说重了'}).text,/明确贬低/);
+ for(const turnWords of ['室友和朋友和好了','她说“对不起”','你觉得他还在生气吗？'])
+   assert.doesNotMatch(consumeMoodHint(hurt,{...opts,turnWords}).text,/明确贬低|不想理你/);
+ assert.doesNotMatch(consumeMoodHint(hurt,{...opts,turnWords:'你还在生气吗？',publicContext:true}).text,/明确贬低|不想理你/);
 });
 test('schedule mood projection is compact and never includes the private cause',()=>{
  const hurt=applyMood({},negative,words,{now}).state;

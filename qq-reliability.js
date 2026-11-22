@@ -1,20 +1,26 @@
 import {createHash} from 'node:crypto';
+import {naturalBubbleParts,normalizeReplyNewlines} from './chat-bubbles.js';
+import {cleanGeneratedReplyDividers,requestsLiteralText,trimConversationHintEcho} from './local-reply.js';
 
 // Only internal delivery syntax is removed. Ordinary links, numbers and short
 // acknowledgements remain intact; private diagnostics never become chat prose.
-export function cleanOutgoingText(value='',{chatStyle=false}={}) {
+export function cleanOutgoingText(value='',{chatStyle=false,generatedRequest,formatRequest=generatedRequest}={}) {
   if(/"nodeInfoList"\s*:|"generation_job_id"\s*:/.test(String(value)))return '';
-  let text=String(value).replace(/(?:\[|【)(?:语音|声音)(?:[:：\]】]|$)[\s\S]*/g,'')
+  const body=normalizeReplyNewlines(value);
+  let text=(formatRequest===undefined?body:trimConversationHintEcho(body,formatRequest)).replace(/(?:\[|【)(?:语音|声音)(?:[:：\]】]|$)[\s\S]*/g,'')
     .replace(/\[(?:图|图片|照片)[:：][^\]]*\]/g,'')
     .replace(/\[(?:发送|群发|定时|设置|查|收藏表情)[:：][^\]]*\]/g,'')
     // 内部提示词块与签名标记绝不能出现在对话里
     .replace(/⟦\/?qqctx[^⟧]*⟧/g, '')
-    .replace(/(?:^|\n)[ \t]*【(?:当前情绪底色|近期心情|本轮相处方式|本轮群聊分寸|对方现在|你刚才想接的话|说话方式|自然对话与留白|群聊自主参与|群聊表达|图片语境)[^】]*】[^\n]*/g, '')
-    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/(?:^|\n)[ \t]*【(?:当前情绪底色|近期心情|本轮相处方式|本轮群聊分寸|对方现在|你刚才想接的话|说话方式|自然对话与留白|群聊自主参与|群聊表达|图片语境)[^】]*】[^\n]*/g, '');
+  const literal=requestsLiteralText(formatRequest);
+  if(!literal)text=text.replace(/[ \t]{2,}/g, ' ')
     // Emoji pictographs render as QQ's yellow faces and are not part of her
     // text voice; kaomoji and ordinary punctuation are untouched.
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,'');
-  text=text.split(/\r?\n/).filter(line=>!/^\s*(?:\{?\s*"(?:nodeInfoList|fieldName|fieldValue|apiKey|authorization|generation_job_id)"\s*:|(?:file:\/\/\/)?[A-Z]:[\\/].*(?:photos[\\/](?:gen|requests)|voice[\\/]|speech[\\/]))/i.test(line)).join('\n');
+  if(generatedRequest!==undefined)text=cleanGeneratedReplyDividers(text,{request:generatedRequest});
+  text=text.split('\n').filter(line=>!/^\s*(?:\{?\s*"(?:nodeInfoList|fieldName|fieldValue|apiKey|authorization|generation_job_id)"\s*:|(?:file:\/\/\/)?[A-Z]:[\\/].*(?:photos[\\/](?:gen|requests)|voice[\\/]|speech[\\/]))/i.test(line)).join('\n');
+  if(literal)return text.trim();
   return (chatStyle?formatQqChatText(text):text).replace(/\n{3,}/g,'\n\n').trim();
 }
 
@@ -32,12 +38,14 @@ export function existingDelivery(jobs, candidate) {
 
 export function removeDuplicatePassages(value='',request='') {
   if(/再(?:说|讲|发|念|读)(?:一遍|一次)|复述|逐字|歌词|唱|绕口令|repeat/i.test(request))return String(value);
+  const text=String(value).trim(),parts=naturalBubbleParts(text);
   const seen=new Set();
-  return String(value).split(/(\n\s*\n|\|\|\|)/).filter(part=>{
+  const unique=parts.filter(part=>{
     const key=part.normalize('NFKC').replace(/[\s\p{P}\p{S}]/gu,'');
     if(key.length<16)return true;
     if(seen.has(key))return false;seen.add(key);return true;
-  }).join('').replace(/(?:\|\|\|\s*){2,}/g,'|||').replace(/\n{3,}/g,'\n\n').trim();
+  });
+  return unique.length===parts.length?text:unique.join('\n');
 }
 
 export function parseQzoneResponse(raw='') {
@@ -64,31 +72,24 @@ export function qqActionResult(name,result) {
 // Applied only to outgoing QQ text, never to model prompts or spoken audio.
 export function formatQqChatText(value=''){
  const protectedParts=[];
- let text=String(value).replace(/```[\s\S]*?(?:```|$)|`[^`\n]+`|https?:\/\/[^\s<>]+|(?:[A-Za-z]:[\\/])[^\n]+/g,part=>{protectedParts.push(part);return '\uE130'+(protectedParts.length-1)+'\uE131';});
+ let text=normalizeReplyNewlines(value).replace(/```[\s\S]*?(?:```|$)|`[^`\n]+`|https?:\/\/[^\s<>]+|(?:[A-Za-z]:[\\/])[^\n]+/g,part=>{protectedParts.push(part);return '\uE130'+(protectedParts.length-1)+'\uE131';});
  // JSON and other structured payloads retain literal punctuation.
  if(/^\s*[{[]/.test(text)){try{JSON.parse(text);return String(value);}catch{}}
- text=text.replace(/\\r\\n|\\n|\\r/g,'\n').replace(/\r\n?/g,'\n');
  text=text.split('\n').map(line=>{
   if(/^\s*(?:[-*•]\s|\d+[.)、]\s|#{1,6}\s)/.test(line))return line.replace(/。/g,'');
-  let count=0;
-  return line.replace(/。|(?<![\p{L}\p{N}.])\.(?![\p{L}\p{N}.])|(?<=[\p{L}\p{N}])\.(?=\s|$)|[，,；;！？!?～~]/gu,(mark,offset)=>{
-   const prior=line.slice(count,offset),length=prior.trim().length;
-   const period=mark==='。'||mark==='.';
-   if(length>=32&&line.slice(offset+mark.length).trim().length>=12){count=offset+mark.length;return (period?'':mark)+'\n';}
-   return period?'':mark;
-  });
+  return line.replace(/。|(?<![\p{L}\p{N}.])\.(?![\p{L}\p{N}.])|(?<=[\p{L}\p{N}])\.(?=\s|$)/gu,'');
  }).join('\n');
  return text.replace(/\uE130(\d+)\uE131/g,(_m,i)=>protectedParts[Number(i)]).replace(/\n[ \t]+/g,'\n').split('\n').map(line=>line.trimEnd().replace(/[，,]+(?=[”」』"]?$)/g,'')).join('\n').trim();
 }
 
 // Split pure text/mention messages at the final delivery boundary. Keep code,
 // JSON, lists and media batches in their original structure.
-export function qqParagraphGroups(segments=[]){
+export function qqParagraphGroups(segments=[], options){
  if(!segments.length||segments.some(s=>!['text','at','reply'].includes(s.type)))return [segments];
  const text=segments.filter(s=>s.type==='text').map(s=>String(s.data?.text||'')).join('');
- if(/```|^\s*(?:[{[]|#{1,6}\s|[-*•]\s|\d+[.)、]\s)/m.test(text))return [segments];
- const lines=text.split(/\r\n?|\n/).map(line=>line.trim().replace(/[，,]+(?=[”」』"]?$)/g,'')).filter(Boolean);
+ const lines=naturalBubbleParts(text,options);
  if(!lines.length)return [];
+ if(lines.length===1)return [segments];
  const mentions=segments.filter(s=>s.type==='at'||s.type==='reply');
  return lines.map((line,index)=>[...(index===0?mentions:[]),{type:'text',data:{text:line}}]);
 }

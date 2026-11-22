@@ -26,7 +26,7 @@ function fixture(media={}){
       return Response.json({code:0,data:{code:0,url:'https://www.bilibili.com/'}},{headers:{'set-cookie':'SESSDATA=PRIVATE_SESSION; Path=/; Secure, bili_jct=PRIVATE_CSRF; Path=/; Secure, DedeUserID=42; Path=/; Secure'}});
     }else if(u.pathname.endsWith('/nav'))data={isLogin:true,uname:'测试账号',mid:42,wbi_img:{img_url:image,sub_url:sub}};
     else if(u.pathname.endsWith('/view'))data={bvid:BV,title:'实际视频',aid:170001,cid:99,owner:{name:'测试 UP'},duration:5,pages:[{page:1,cid:99,part:'第一 P',duration:5}]};
-    else if(u.pathname.endsWith('/v2/reply'))data={page:{count:1},replies:[{rpid:7,member:{uname:'用户甲'},content:{message:'真实评论'},like:2,replies:[]}]};
+    else if(u.pathname.endsWith('/v2/reply'))data={page:{count:1},replies:[{rpid:7,member:{uname:'用户甲'},content:{message:'真实评论'},like:2,replies:[{rpid:8,member:{uname:'用户乙'},content:{message:'接上一楼的梗'}}]}]};
     else if(u.pathname.endsWith('/player/wbi/v2'))data={subtitle:{subtitles:[{lan:'zh-CN',subtitle_url:'https://aisubtitle.hdslb.com/bfs/subtitle/test.json'}]}};
     else if(u.pathname.endsWith('/playurl'))data={durl:[{url:'https://upos.example.bilivideo.com/video/test.mp4'}]};
     else if(u.pathname.endsWith('/reply/add')){
@@ -41,6 +41,26 @@ function fixture(media={}){
   return {directory,calls,get service(){return service;},setBeforeView:value=>beforeView=value,setBeforeNav:value=>beforeNav=value,setAllowed:value=>allowed=value,setWriteMode:value=>writeMode=value,setPollMode:value=>pollMode=value,restart:()=>{service.close();service=createBilibiliService(options);},close:()=>{service.close();rmSync(directory,{recursive:true,force:true});}};
 }
 async function login(f){await f.service.act({action:'login'},context);return f.service.act({action:'login-status'},context);}
+
+test('expression learning reads cached public comments with their parent and without another request',async()=>{
+  const f=fixture();
+  try{
+    assert.deepEqual(f.service.commentSamples(context),[]);
+    await f.service.act({action:'comments',bvid:BV},context);
+    const calls=f.calls.length;
+    f.restart();
+    const samples=f.service.commentSamples(context);
+    assert.deepEqual(samples,[
+      {role:'user',source:'bilibili',id:BV+':7',text:'真实评论',context:''},
+      {role:'user',source:'bilibili',id:BV+':8',text:'接上一楼的梗',context:'真实评论'},
+    ]);
+    assert.equal(f.calls.length,calls);
+    assert.deepEqual(f.service.commentSamples({...context,personaId:'other-persona'}),[]);
+    assert.deepEqual(f.service.commentSamples({...context,accountId:'other-account'}),[]);
+    f.setAllowed(false);
+    assert.throws(()=>f.service.commentSamples(context),/操作停止/);
+  }finally{f.close();}
+});
 
 test('Bilibili panel falls back to the signed media endpoint when the configured player fails to load',async()=>{
   let frames=0;

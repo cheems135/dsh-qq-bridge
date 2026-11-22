@@ -15,11 +15,37 @@ async function fixture(extra,run){
  try{await run('http://127.0.0.1:'+service.server.address().port,directory);}finally{service.server.closeAllConnections();await service.close();rmSync(directory,{recursive:true,force:true});}
 }
 
-test('actual gateway transport exposes a sentence before generation finishes, with no tool JSON',async()=>{
- let finish,first;const early=new Promise(resolve=>first=resolve),events=[];
- await fixture({model:async options=>{assert.deepEqual(options.tools,[]);assert.equal(options.outputTokens,256);assert.equal(options.fastDialogue,true);options.onText('今天已经很辛苦了，先歇一会儿。');await new Promise(resolve=>finish=resolve);options.onText('坐下来聊聊吧。');return '今天已经很辛苦了，先歇一会儿。坐下来聊聊吧。';}},async base=>{
-  let completed=false;const result=requestLocalJson(base+'/v1/local/turn',{method:'POST',body:{stream:true,messages:[{role:'user',content:'今天有点累，陪我聊两句'}]},onEvent:event=>{events.push(event);first();}}).then(value=>(completed=true,value));
-  await early;assert.equal(completed,false);assert.equal(events[0].index,0);assert.match(events[0].text,/辛苦/);finish();const body=await result;assert.equal(body.ok,true);assert.equal(body.body.streamedParts,2);assert.equal(events.length,2);
+test('actual gateway streams a completed line as soon as its newline arrives',{timeout:10000},async()=>{
+ const firstLine='今天已经很辛苦了，先歇一会儿。要我陪你吗？';
+ const lastLine='坐下来聊聊吧。';
+ let finish,first;
+ const early=new Promise(resolve=>first=resolve);
+ const events=[];
+ await fixture({model:async options=>{
+  assert.deepEqual(options.tools,[]);
+  assert.equal(options.outputTokens,256);
+  assert.equal(options.fastDialogue,true);
+  options.onText(firstLine+'\r\n');
+  await new Promise(resolve=>finish=resolve);
+  options.onText(lastLine);
+  return firstLine+'\r\n'+lastLine;
+ }},async base=>{
+  let completed=false;
+  const result=requestLocalJson(base+'/v1/local/turn',{method:'POST',timeoutMs:5000,
+   body:{stream:true,messages:[{role:'user',content:'今天有点累，陪我聊两句'}]},
+   onEvent:event=>{if(event.event==='text'){events.push(event);first();}},
+  }).then(value=>(completed=true,value));
+  try{
+   await Promise.race([early,result.then(()=>assert.fail('No newline was streamed'))]);
+   assert.equal(completed,false);
+   assert.equal(events[0].index,0);
+   assert.equal(events[0].text,firstLine);
+  }finally{finish?.();}
+  const body=await result;
+  assert.equal(body.ok,true);
+  assert.equal(body.body.streamedParts,1);
+  assert.equal(body.body.text,firstLine+'\n'+lastLine);
+  assert.equal(events.length,1);
  });
 });
 

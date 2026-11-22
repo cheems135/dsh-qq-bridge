@@ -87,9 +87,19 @@ export function createSleepAwareness({storage, now = () => Date.now(), runtimeId
     if (changed) save();
   }
 
-  function hint(meta, {question = '', at = now()} = {}) {
+  function hint(meta, {question = '', at = now(), dialogue = false} = {}) {
+    if (dialogue) {
+      const clauses=String(question).replace(/“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"/gu,'').split(/[，,。！!；;\n]/u);
+      const directed=/(?:你(?!的?(?:室友|朋友|同事|同学|家人))|桥接|机器人|插件|服务)(?:是|怎么|为什么|刚才|刚刚|刚|今天|昨天|昨晚|之前|这会儿|现在|到底|到底是|又|还|也|已经|还没|一直|几时|几点|什么时候|是不是|有没有|都|才|就|从几点)*(?:醒|睡|在线|不在|没在|离线|掉线|重启|关机|开机|没回|没理|断[线开])/u;
+      const bareState=/^(?:还|刚|昨晚|之前|刚才|又|已经|是不是|怎么|为什么|什么时候|几点)*(?:睡醒|睡着|睡觉|醒|睡|离线|掉线|断线|重启|关机|开机|在线)/u;
+      const asks=clauses.some(part=>{
+        const clause=part.trim();
+        return directed.test(clause)||bareState.test(clause)&&/[?？]|吗|嘛|么|没|多久|多长|几点|怎么|什么时候|是不是/u.test(clause);
+      });
+      if (!asks) return '';
+    }
     const value = snapshot(meta), last = value.lastRest;
-    const relevant = /睡|醒|离线|掉线|关机|开机|断线|重启|不在|没在线/.test(question);
+    const relevant = dialogue || /睡|醒|离线|掉线|关机|开机|断线|重启|不在|没在线/.test(question);
     // Brief recent recovery facts are shared by private/group, API/local. Older
     // facts are retrieved on demand instead of adding a permanent long prompt.
     if (!value.current && (!last || (!relevant && at - last.endedAt > 30 * 60000))) return '';

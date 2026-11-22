@@ -53,7 +53,7 @@ import {
 import {createComfyRuntime} from './comfyui-runtime.js';
 import {localRequiredDataTools} from './local-search-task.js';
 import {reconcileLocalToolAudio} from './local-audio-evidence.js';
-import {formatLocalChatParagraphs,cleanLocalReply,latestUserText,localDialogueInstruction,needsDialogueRepair,requestedFormatting} from './local-reply.js';
+import {cleanLocalReply,latestUserText,localDialogueInstruction,needsDialogueRepair,requestedFormatting} from './local-reply.js';
 import {localMoodInstruction,normalizeLocalMood,literalLocalMood} from './local-chat-context.js';
 import {applyMood,moodDelivery} from './companion-mood.js';
 import {modelBillions} from './local-gpu-policy.js';
@@ -840,7 +840,7 @@ export function createLocalModelServer({
         }catch(error){if(signal?.aborted||error.name==='AbortError')throw error;log('local understanding deferred; original input preserved');}
       }
       if(!turnContext.autonomous&&config.dialoguePriority==='quality'&&!plan.fast)prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:QUALITY_CONVERSATION_RULES});
-      const stream=createDialogueStream({request,messages,paragraphs:config.dialoguePriority==='quality',emit:(text,index)=>onEvent?.({type:'text',text,index})});
+      const stream=createDialogueStream({request,messages,emit:(text,index)=>onEvent?.({type:'text',text,index})});
       onProgress({priority:config.dialoguePriority,mode:plan.fast?'dialogue':'tools',outputTokens:plan.fast?plan.outputTokens:config.maxTokens});
       let mediaOnlyIssued=false;
       const makeAgent=fast=>createLocalAgent({
@@ -895,7 +895,7 @@ export function createLocalModelServer({
       for(const row of failed)issues.record({id:row.invocationId?'local:'+row.invocationId:'local:'+scope.auditId+':'+row.tool+':'+(row.at||''),kind:row.tool,message:row.error},scope);
       if(result.error)issues.record({id:'local:partial:'+scope.auditId,kind:'chat',message:result.error},scope);
       if(failed.length||result.error)result={...result,text:''};
-      result={...result,text:formatLocalChatParagraphs(alignOutfitReply(result.text,request,turnContext.personaState),{request})};
+      result={...result,text:alignOutfitReply(result.text,request,turnContext.personaState)};
       const delivered=stream.finish(cleanLocalReply(result.text,{request}));
       if(!delivered.consistent){result={...result,text:stream.parts.join('\n'),partial:true};}
       result.streamedParts=stream.parts.length;

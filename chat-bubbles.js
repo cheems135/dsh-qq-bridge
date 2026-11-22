@@ -1,27 +1,69 @@
-// Preserve deliberate chat rhythm without splitting explanations, lists or code.
-export function naturalBubbleParts(value,{maxBubbles=0,richInput=false,automaticBreaks=true}={}){
-  const text=String(value??'').trim();if(!text)return [];
-  const requested=Number(maxBubbles),cap=Number.isFinite(requested)&&requested>0?Math.min(12,Math.round(requested)):Infinity;
-  let parts=text.split(/\|\|\|/).map(s=>s.trim()).filter(Boolean);
-  // Every line break is an intentional bubble boundary, including when
-  // sentence-based splitting is disabled. Keep lists, code, URLs and media
-  // commands intact.
-  parts=parts.flatMap(part=>{
-    const protectedPart=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(part)||/https?:\/\/|\[(?:发送|群发|定时|语音)[:：\]]|\uE200PIC/.test(part);
-    return protectedPart?[part]:part.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  });
-  const commands=/\[(?:发送|群发|定时|语音|表情包)[:：\]]|\uE200PIC/.test(text);
-  const structured=/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(text)||/https?:\/\//i.test(text);
-  if(automaticBreaks&&parts.length===1&&cap>1&&!commands&&!structured&&text.length<=500){
-    const lines=text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-    if(lines.length>1&&lines.every(s=>s.length<=140))parts=lines;
-    else if(richInput&&text.length<=240){
-      const sentences=text.match(/[^。！？!?]+[。！？!?]+[”’"」』]*|[^。！？!?]+$/gu)||[text];
-      if(sentences.length>1&&sentences.length<=6&&sentences.every(s=>s.length<=100))parts=sentences.map(s=>s.trim()).filter(Boolean);
-    }
+export const QQ_LINE_BREAK_RULE='要另发一条 QQ 消息就直接回车换行，每行一个气泡。不要用竖线或转义字符充当分隔符。';
+
+const blockSyntax=/```|^[ \t]*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m;
+const tableSeparator=/^[ \t]*\|?(?:[ \t]*:?-{2,}:?[ \t]*\|)+[ \t]*:?-{2,}:?[ \t]*\|?[ \t]*\r?$/m;
+
+export function normalizeReplyNewlines(value){
+  return String(value??'').replace(/\r\n?/g,'\n');
+}
+
+function jsonBlock(text){
+  if(!/^\s*[\[{]/.test(text))return false;
+  try{JSON.parse(text);return true;}catch{return false;}
+}
+
+function structuredReply(text){
+  return blockSyntax.test(text)||tableSeparator.test(text)||jsonBlock(text);
+}
+
+export function stripReplyDividers(value=''){
+  const text=String(value);
+  if(!/(?:[|｜]{2,}|[‖∥])/.test(text)||tableSeparator.test(text)||jsonBlock(text))return text;
+  // Literal code, addresses and action arguments keep their own syntax.
+  return text.replace(/(```[\s\S]*?(?:```|$)|`+[^\x60\r\n]+`+|https?:\/\/[^\s<>|｜‖∥]+|[A-Za-z]:[\\/][^\s|｜‖∥]+|\[(?:发送|群发|定时|语音|声音|表情包?|图|图片|照片|设置|查|收藏表情)(?:[:：][^\]]*)?\])|[ \t]*(?:[|｜]{2,}|[‖∥]+)[ \t]*/giu,(_match,literal)=>literal??' ');
+}
+
+function replyLines(text){
+  const lines=[];
+  let start=0;
+  // A relay or reminder may itself contain multiple lines of message text.
+  for(const match of text.matchAll(/\[(?:发送|群发|定时)[:：][^\]]*\]|\n/g)){
+    if(match[0].startsWith('['))continue;
+    const line=text.slice(start,match.index).trim();
+    if(line)lines.push(line);
+    start=match.index+match[0].length;
   }
-  if(commands)return parts;
-  return parts.length<=cap?parts:[...parts.slice(0,cap-1),parts.slice(cap-1).join('\n')];
+  const tail=text.slice(start).trim();
+  if(tail)lines.push(tail);
+  return lines;
+}
+
+function structuredReplyParts(text){
+  const parts=[];
+  let start=0;
+  const append=part=>{
+    const block=part.trim();
+    if(block)parts.push(...(structuredReply(block)?[block]:replyLines(block)));
+  };
+  // A media line still has its own delivery when a caption contains a list or code.
+  const mediaLines=/```[\s\S]*?(?:```|$)|\[(?:发送|群发|定时)[:：][^\]]*\]|^[ \t]*(\uE200PIC\d+\uE201|\[(?:图|图片|照片)[:：][^\]\r\n]+\]|\[语音(?:[:：][^\]\r\n]+)?\][^\r\n]*)[ \t]*$/gm;
+  for(const match of text.matchAll(mediaLines)){
+    if(!match[1])continue;
+    append(text.slice(start,match.index));
+    parts.push(match[1].trim());
+    start=match.index+match[0].length;
+  }
+  append(text.slice(start));
+  return parts;
+}
+
+// Preserve deliberate chat rhythm without splitting lists, code or relay bodies.
+export function naturalBubbleParts(value,{maxBubbles=0}={}){
+  const text=normalizeReplyNewlines(value).trim();if(!text)return [];
+  const requested=Number(maxBubbles),cap=Number.isFinite(requested)&&requested>0?Math.min(12,Math.round(requested)):Infinity;
+  const parts=structuredReply(text)?structuredReplyParts(text):replyLines(text);
+  const commands=/\[(?:发送|群发|定时|语音|表情包|图|图片|照片)[:：\]]|\uE200PIC/.test(text);
+  return commands||parts.length<=cap?parts:[...parts.slice(0,cap-1),parts.slice(cap-1).join('\n')];
 }
 
 // An actual sticker image is its own message; QQ's inline face remains with text.
@@ -30,25 +72,6 @@ export function stickerMessageGroups(segments=[]){
   const flush=()=>{if(text.length){groups.push([...mentions,...text]);text=[];}};
   for(const segment of segments){if(segment.type==='at')continue;if(segment.type==='image'){flush();groups.push([...mentions,segment]);}else text.push(segment);}
   flush();return groups;
-}
-
-// Sharing preserves each URL verbatim while allowing the surrounding speech
-// to keep its deliberate paragraphs and conversational pauses.
-export function shareBubbleParts(value){
- const text=String(value??'').trim();if(!text)return [];
- if(/```|^\s*(?:#{1,6}\s|[-*•]\s|\d+[.)、]\s?)/m.test(text))return naturalBubbleParts(text,{automaticBreaks:false});
- const result=[];
- for(const fragment of text.split(/(https?:\/\/[^\s<>]+)/gi)){
-  if(!fragment.trim())continue;
-  if(/^https?:\/\//i.test(fragment)){result.push(fragment);continue;}
-  for(const paragraph of naturalBubbleParts(fragment,{automaticBreaks:false})){
-   const sentences=paragraph.match(/[^。！？!?]+[。！？!?]+[”’"」』]*|[^。！？!?]+$/gu)||[paragraph];
-   let current='',count=0;
-   for(const sentence of sentences){if(current&&(current.length+sentence.length>120||count>=2)){result.push(current.trim());current='';count=0;}current+=sentence;count++;}
-   if(current.trim())result.push(current.trim());
-  }
- }
- return result;
 }
 
 // Discard clear captions or attributed translations before a sticker reply is sent.
@@ -61,16 +84,37 @@ function stickerNarration(text){
   return describesPose.test(line)&&!/(?:逗笑|好笑|可爱|乐了|像我|我也|把我|害我|我倒|我反而|我想|想逗)/u.test(line);
 }
 
-export function stickerReplyText(text){
-  const paragraphs=String(text??'').split(/\s*\|\|\|\s*|\r?\n/u);
+function filterStickerSentences(text,omit,breaks){
+  const paragraphs=normalizeReplyNewlines(text).split('\n');
   let changed=false;
   const visible=paragraphs.map(paragraph=>{
     const sentences=paragraph.match(/(?:“[^”]*”|「[^」]*」|『[^』]*』|"[^"]*"|[^。！？!?；])+[。！？!?；]*|[。！？!?；]+/gu)||[];
     return sentences.filter(sentence=>{
-      if(!stickerNarration(sentence))return true;
+      if(!omit(sentence))return true;
       changed=true;
       return false;
     }).join('').trim();
   }).filter(Boolean);
-  return changed?visible.join('\n\n'):text;
+  return changed?visible.join(breaks):text;
+}
+
+export function stickerReplyText(text){
+  return filterStickerSentences(text,stickerNarration,'\n\n');
+}
+
+function attributesStickerArtToSender(sentence){
+  const spoken=sentence.replace(/“[^”]*”|「[^」]*」|『[^』]*』|"[^"]*"/gu,'').trim();
+  const claim=/(?:你|您)(?:(?:亲手|自己|刚刚?|刚才|之前|亲自|又|还|也)\s*){0,3}(?:画(?=的|得|了|过|完|出来|这|那|它|姿势|动作|表情|图|画|[一两几三]张)|(?:手绘|绘制|创作|制作)(?=的|得|了|这|那|库存|作品|表情)|的(?:手绘库存|手绘作品|原创表情|画作))|出自你手/u.exec(spoken);
+  if(!claim)return false;
+  const lead=spoken.slice(0,claim.index);
+  if(/(?:不是|分不清是不是|不确定是不是|不能说是|不能确定是|以为是?|误认为是?|误当成|误认成|错当成|误会成)\s*$/u.test(lead))return false;
+  const openQuestion=/(?:是不是|(?:这|那)(?:张|幅|个)?(?:表情包?|动图|图)?\s*是|^是)?(?:你|您)(?:(?:自己|亲手)\s*)?(?:画|手绘|绘制|创作|制作)的(?:(?:吗|么|嘛)[？?]*|[？?]+)\s*$/u;
+  return !openQuestion.test(spoken);
+}
+
+export function stickerAuthorshipReply(text,request=''){
+  if(/逐字|原样|照抄|翻译|(?:图[上里中](?:的)?字)|读一下字/u.test(request))return text;
+  const grounded=filterStickerSentences(text,attributesStickerArtToSender,'\n');
+  if(grounded||grounded===text)return grounded;
+  return /作者|出处|来源|谁(?:画|手绘|绘制|创作|做)/u.test(request)?'这张是你发来的表情包，作者我认不出来。':'[skip]';
 }

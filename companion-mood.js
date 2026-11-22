@@ -1,3 +1,5 @@
+import {isShortAcknowledgement,isShortClarification} from './background-cost-policy.js';
+
 // Independent adaptation of feiyu-mood's confidence and decay design.
 // A conversational state estimate, never a claim of subjective human feelings.
 export const MOOD_DIMS=['happy','calm','sweet','heartache','worry','sad','jealous','angry','curious','excited','disappointed','relieved','proud','bored'];
@@ -11,9 +13,10 @@ export function moodState(v={},now=Date.now(),config={}){
 }
 export function shouldJudgeMood(v,words,config={}){
  const c=moodConfig(config),text=String(words||'').trim();
+ if(!c.enabled||!text||isShortAcknowledgement(text)||isShortClarification(text))return false;
  // These cues request an assessment, never assign the emotion themselves.
  const salient=/谢谢|喜欢你|想你|开心|难过|委屈|对不起|生气|不对|说错|答非所问|辛苦|成功了|没用|废物|讨厌你|滚开|闭嘴|不想理你|别理我|不在乎|失望|伤心|伤人|原谅|和好|抱歉|话说重|不是嫌弃|不是你的错|别自责/;
- return c.enabled&&!!text&&((Number(v?.turns)||0)%c.everyTurns===0||salient.test(text));
+ return (Number(v?.turns)||0)%c.everyTurns===0||salient.test(text);
 }
 export function applyMood(v,raw,words,{now=Date.now(),config={}}={}){
   const state=moodState(v,now,config),c=moodConfig(config),quote=clean(raw?.evidenceQuote,160),reason=clean(raw?.reason,180),number=Number(raw?.confidence),confidence=number>=0&&number<=1?number*100:number;
@@ -67,12 +70,23 @@ export function moodPlanningContext(v,{now=Date.now(),config={}}={}){
  if(!recent.length)return null;
  return {tone:moodDelivery(state,{now,config}).tone||'',events:recent};
 }
-export function consumeMoodHint(v,{now=Date.now(),config={},contextOnly=false,publicContext=false}={}){
+function revisitsMood(words){
+ const clauses=String(words).replace(/“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"/gu,'').split(/[，,。！？!?；;\n]/u);
+ // Direct questions about the character, or the speaker addressing a previous
+ // disagreement. A quoted apology or a story about a friend is not a reunion.
+ const aboutYou=/^(?:那|所以|对了|可是|不过)?(?:你|咱俩|我们俩)(?:的|还|在|现在|今天|之前|刚才|一直|是不是|有没有|会不会|有点|怎么|这么|为什么|不|太)*(?:心[情事]|感受|生气|气我|难过|委屈|介意|在意|高兴|开心|怎么了|怎么啦|不说话)/u;
+ const makingUp=/^(?:(?:我|是我|我们|咱们|刚才|刚刚|之前|那天|上次|真的|想跟你|想向你|还是|的话|那句话|把话|我把话|有点|有些|太|说得|说的)\s*)*(?:对不起|对不住|原谅我|和好|抱歉|说重了|过分了|别自责|不怪你|不是你的错)/u;
+ return clauses.some(part=>aboutYou.test(part.trim())||makingUp.test(part.trim()));
+}
+export function consumeMoodHint(v,{now=Date.now(),config={},contextOnly=false,publicContext=false,turnWords}={}){
   const state=moodState(v,now,config),c=moodConfig(config),e=state.event;
   if(!c.enabled)return{state,text:''};
   const tone=moodDelivery(state,{now,config}).tone;
   const baseline=tone?'【当前情绪底色】'+tone+'。自然体现在措辞和节奏里，按当前事情决定表达强弱，不重复旧事，也不因为切到群聊就重置心情。':'';
-  const continuity=moodContinuity(state,{now,config,publicContext});
+  // Keep the character's tone between turns. Reintroduce the underlying
+  // episode into ordinary chat only when the speaker actually returns to it.
+  const revisit=turnWords===undefined||revisitsMood(turnWords);
+  const continuity=revisit?moodContinuity(state,{now,config,publicContext}):'';
   if(contextOnly||!e||e.id===state.consumed||state.saidAt.length>=c.maxHintsPerDay||now-e.at>2*3600000)return{state,text:[baseline,continuity].filter(Boolean).join('\n')};
   state.consumed=e.id;state.saidAt.push(now);
   return{state,text:[baseline,continuity].filter(Boolean).join('\n')};

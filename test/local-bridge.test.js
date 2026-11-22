@@ -1,8 +1,9 @@
 import {initiativeConversation,recentOperationContext} from '../operation-context.js';
+import {interestHint} from '../website-reading.js';
 import {conversationTimingHint} from '../conversation-timing.js';
 import {BRIEF_RULES} from '../prompt-budget.js';
 import {qqHumanWords} from '../qq-poke.js';
-import {isShortAcknowledgement} from '../background-cost-policy.js';
+import {isShortAcknowledgement,isShortClarification} from '../background-cost-policy.js';
 import {recentReplyAnchor,replyAnchorHint} from '../operation-context.js';
 import {qqTaskEvidence} from '../qq-task-evidence.js';
 import {conversationExecutionGrounding} from '../initiative-grounding.js';
@@ -27,11 +28,12 @@ import {createHash,randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {join} from 'node:path';
 import {validateLocalAttachment} from '../local-config.js';
-import {cleanLocalReply,formatLocalChatParagraphs} from '../local-reply.js';
+import {cleanLocalReply,cleanGeneratedReplyDividers} from '../local-reply.js';
 import {hasHearingEvidence} from '../hearing-evidence.js';
 import {dialogueReceiptHint} from '../api-conversation-context.js';
 import {prepareLocalReply} from '../local-repetition.js';
-import {naturalBubbleParts,stickerReplyText} from '../chat-bubbles.js';
+import {naturalBubbleParts,stickerMessageGroups,stickerReplyText,stickerAuthorshipReply} from '../chat-bubbles.js';
+import {cosplayPrompt,naturalPersonaText} from '../dialogue-persona.js';
 import {localImageRequest,mediaIntentHint,requestsDifferentCover,requestsSinging,selectMediaIntent} from '../media-intent.js';
 import {isRunningHubCover} from '../runninghub-audio.js';
 import {removeStreamedPrefix} from '../local-fast-chat.js';
@@ -49,16 +51,17 @@ import {localRequirements,chooseLocalRoute,waitForLocalRoute} from '../local-rou
 
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 const anchorSource=source.slice(source.indexOf('  function chatReplyAnchor('),source.indexOf('  async function understandMediaRequest('));
+const personaSource=source.slice(source.indexOf('  function personaCardText('),source.indexOf('  function activePersona('));
 const localSource=source.slice(source.indexOf('  function localTurnScope(chat)'),source.indexOf('\n  async function handlePayloadCore('));
 const inboundSource=source.slice(source.indexOf('  function handlePayload(payload,'),source.indexOf('\n  async function drainInbox('));
 assert.ok(localSource.length>1000&&inboundSource.length>1000);
 
 function setup(){
   const queued=[],logged=[],calls=[],issues=[];
-  const sandbox={musicContextByChat:new Map(),prepareMusicEvidence:async()=>{},hasHearingEvidence,dialogueReceiptHint,recordsAllowed:()=>true,qqHumanWords,isShortAcknowledgement,recentReplyAnchor,replyAnchorHint,requestsSinging,voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,formatLocalChatParagraphs,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
-    BRIEF_RULES,conversationTimingHint,foldAuxiliaryUsage,usage:{},invocationCost:()=>0,saveUsage:()=>{},splitBursts:(value,limit,options)=>naturalBubbleParts(value,options),replyCharLimit:()=>2000,
-    settings:{activeAccountId:'a',presetPrompts:{p:'角色设定'},basePersona:'完整系统提示词',memory:{enabled:false},localChat:{enabled:true,baseUrl:'http://127.0.0.1:8777'},owners:['12345'],reliability:{}},
-    persona:{id:'p'},version:'v1',featureState:{floors:{},inbox:[],outbox:[],audits:[]},memories:{},messages:[],memoryHub:null,localTurns:new Map(),stopped:false,accountPaused:false,
+  const sandbox={musicContextByChat:new Map(),prepareMusicEvidence:async()=>{},hasHearingEvidence,dialogueReceiptHint,recordsAllowed:()=>true,qqHumanWords,isShortAcknowledgement,recentReplyAnchor,replyAnchorHint,requestsSinging,voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,cleanGeneratedReplyDividers,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
+    BRIEF_RULES,conversationTimingHint,foldAuxiliaryUsage,usage:{},invocationCost:()=>0,saveUsage:()=>{},naturalBubbleParts,stickerMessageGroups,cosplayPrompt,naturalPersonaText,
+    settings:{activeAccountId:'a',presetPrompts:{p:'角色设定'},personae:[],basePersona:'完整系统提示词',memory:{enabled:false},localChat:{enabled:true,baseUrl:'http://127.0.0.1:8777'},owners:['12345'],reliability:{}},
+    persona:{id:'p',name:'测试角色',preset:'whale'},version:'v1',featureState:{floors:{},inbox:[],outbox:[],audits:[]},memories:{},messages:[],memoryHub:null,localTurns:new Map(),stopped:false,accountPaused:false,
     state:{chats:{}},ctx:{get:()=>undefined,effect:()=>{},sessionController:{cancel:()=>{}}},
     soul:{mood:moodState()},soulFor:()=>sandbox.soul,currentPersonaMood:()=>sandbox.soul.mood,
     enrichConversation:()=>{},prepareCalendarContext:async()=>{},imageTurnHint:()=>'',isSoloStickerTurn:()=>false,
@@ -78,11 +81,15 @@ function setup(){
   sandbox.requestLocalJson=async(url,options)=>{if(url.endsWith('/v1/local/priority'))return {ok:true,status:200,body:{ok:true}};const response=await sandbox.fetch(url,{...options,body:JSON.stringify(options.body)});return {ok:response.ok,status:response.status,body:await response.json()};};
   sandbox.invocationJournal=createInvocationJournal({getRows:()=>sandbox.featureState.invocations||[],setRows:rows=>sandbox.featureState.invocations=rows});
   vm.createContext(sandbox);
+  sandbox.interestHint=interestHint;
+  sandbox.websiteReader=null;
+  vm.runInContext(source.slice(source.indexOf('  function privateReadingInterest('),source.indexOf('  function initiativeEventFor(')),sandbox);
+  sandbox.isShortClarification=isShortClarification;
   sandbox.conversationExecutionGrounding=conversationExecutionGrounding;
   vm.runInContext(source.slice(source.indexOf('  function conversationExecutionHint('),source.indexOf('  async function nudge(')),sandbox);
   const invocationSource=source.slice(source.indexOf('  function recordInvocation(event,scope)'),source.indexOf('\n  function invocationScope('));
   const identitySource=source.slice(source.indexOf('  function groupBindingFor(chat)'),source.indexOf('  function sendText(chat,text)'));
-  vm.runInContext(anchorSource+'\n'+identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
+  vm.runInContext(anchorSource+'\n'+personaSource+'\n'+identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
   sandbox.getLocalCapabilities=async()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:Object.fromEntries(['text','json','tools','vision','asr','speech','image','video'].map(key=>[key,{supported:true}]))});
   return {sandbox,queued,logged,calls,issues,...sandbox.review,chat:{key:'private:12345',kind:'private',isOwner:true,chatId:'12345',userId:'12345',incomingImages:[]}};
 }
@@ -104,6 +111,43 @@ test('actual bridge function preserves account/persona/chat scope and current in
   assert.equal(h.logged.filter(r=>r.text==='本条请求').length,1);
   assert.equal(h.queued.length,1);
   assert.ok(h.queued[0].chat.deliveryKey);
+});
+
+test('local chat keeps active growth in the prompt with a manually edited role card',async()=>{
+ const h=setup(),growth='最近几天喜欢翻纸质漫画。';
+ h.sandbox.persona.growthHint=growth;
+ await h.handleLocalChatTurn(h.chat,'你最近喜欢些什么',false,{message_id:591});
+ const system=h.calls[0].body.messages.filter(row=>row.role==='system').map(row=>row.content).join('\n');
+ assert.ok(system.includes('完整系统提示词'));
+ assert.ok(system.includes('角色设定'));
+ assert.equal(system.split(growth).length,2);
+});
+
+test('a local chat line and its inline QQ face share one bubble',async()=>{
+ const h=setup(),line='这句我听到了[表情:微笑]后来呢';
+ const combined=[
+  {type:'text',data:{text:'这句我听到了'}},
+  {type:'face',data:{id:'14'}},
+  {type:'text',data:{text:'后来呢'}},
+ ];
+ h.sandbox.burstSegments=text=>text===line?combined:[{type:'text',data:{text}}];
+ h.sandbox.fetch=async()=>Response.json({text:line+'\n我还想听',attachments:[],receipts:[]});
+ await h.handleLocalChatTurn(h.chat,'我跟你讲个事',false,{message_id:592});
+ assert.deepEqual(h.queued.map(job=>job.segments),[combined,[{type:'text',data:{text:'我还想听'}}]]);
+});
+
+test('actual local short clarification keeps its last delivered line on the dialogue path and respects a local reset',async()=>{
+ const time=Date.now()-1000;
+ for(const reset of [false,true]){
+  const h=setup(),s=h.sandbox;
+  s.messages.push({chat:h.chat.key,accountId:'a',personaId:'p',time,dir:'out',delivery:'sent',text:'我说的是楼下那棵桂花树。'});
+  if(reset)s.featureState.localContextFloors={[s.textHash(JSON.stringify(['a','p','v1',h.chat.key]))]:time};
+  await h.handleLocalChatTurn(h.chat,'啊？',false,{message_id:1853});
+  assert.equal(h.calls.length,1);
+  const anchor=h.calls[0].body.messages.find(r=>String(r.content).includes('【短回复承接】'));
+  if(reset)assert.equal(anchor,undefined);
+  else assert.match(anchor.content,/楼下那棵桂花树/);
+ }
 });
 
 test('actual private and group bridge turns share only current outfit and preserve the same color',async()=>{
@@ -522,6 +566,25 @@ test('actual local sticker turn buffers narration and only rewrites a discarded 
     assert.equal(repairs,Number(shouldRepair));
     assert.deepEqual(h.queued.map(entry=>entry.segments[0].data.text),[natural]);
   }
+});
+
+test('actual local text followup filters an unsupported sticker author before any bubble is sent',async()=>{
+  const h=setup(),words='这个真有意思';
+  const bad='爸爸你画姿势都这么夸张的。',good='这梗我刚才没接住。';
+  const audit=h.sandbox.auditForTurn;
+  Object.assign(h.sandbox,{
+    stickerAuthorshipReply,
+    auditForTurn:(chat,text,payload,parts)=>Object.assign(audit(chat,text,payload,parts),{stickerSource:payload._bridgeStickerSource,userWords:words}),
+    requestLocalJson:async(_url,options)=>{
+      options.onEvent({event:'text',index:0,text:bad});
+      options.onEvent({event:'text',index:1,text:good});
+      assert.equal(h.queued.length,0);
+      return {ok:true,status:200,body:{text:bad+'\n'+good,attachments:[],receipts:[]}};
+    },
+  });
+  await h.handleLocalChatTurn(h.chat,words,false,{message_id:722,_bridgeStickerSource:'unknown',message:[{type:'text',data:{text:words}}]});
+  assert.deepEqual(h.queued.map(entry=>entry.segments[0].data.text),[good]);
+  assert.equal(h.sandbox.featureState.audits.at(-1).answer,good);
 });
 
 test('actual local QQ turn queues a configured cover after a text answer without a second tool request',async()=>{

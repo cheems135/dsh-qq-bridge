@@ -1,3 +1,4 @@
+import {naturalBubbleParts} from '../chat-bubbles.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
 import {recentOperationContext} from '../operation-context.js';import {socialShareReply,socialRewriteNeeded} from '../social-sharing.js';import {prepareQqFileUpload,fileUploadAccepted} from '../qq-file-sharing.js';import {createQqNativeCapabilities} from '../qq-native-capabilities.js';
 const technical='十秒那版做完了，鼓点卡96bpm正好十六拍，接缝磨到0.0025，我听着像一口气不断。';
@@ -51,7 +52,7 @@ test('file upload timeout is unknown, never automatically resubmitted; changed f
 });
 test('actual artifact file share queues original audio and dialogue once, not a download-folder fallback',async()=>{
  const existing=fs.readFileSync(new URL('./sharing-dialogue.test.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');let body=existing.slice(existing.indexOf('function shareFixture('),existing.indexOf("test('actual native image sharing prepares"));body=body.replace('const deps={',"const deps={verifiedSharedFile:()=>({file,sha256:'hash',bytes:1200}),socialReplyForChat:async()=> '这段想给你先听听。',").replace("const file='fixture.png'","const file='fixture.mp3'").replace("Buffer.from('89504e470d0a1a0a00','hex')","Buffer.from('ID3'+'.'.repeat(1200))");
- const make=new Function('source','assert','crypto',body+';return shareFixture;')(source,assert,crypto),f=make();assert((await f.callback({action:'send',file:f.file},f.context)).ok);assert.equal(f.sent[0].segments[0].type,'file');assert.equal(f.sent[0].segments[0].data.sha256,'hash');assert.equal(f.sent[1].segments[0].data.text,'这段想给你先听听。');await f.callback({action:'send',file:f.file},f.context);assert.equal(f.sent.length,2);
+ const make=new Function('source','assert','crypto','naturalBubbleParts',body+';return shareFixture;')(source,assert,crypto,naturalBubbleParts),f=make();assert((await f.callback({action:'send',file:f.file},f.context)).ok);assert.equal(f.sent[0].segments[0].type,'file');assert.equal(f.sent[0].segments[0].data.sha256,'hash');assert.equal(f.sent[1].segments[0].data.text,'这段想给你先听听。');await f.callback({action:'send',file:f.file},f.context);assert.equal(f.sent.length,2);
 });
 
 test('standalone music-making recap is covered even when numbers are written as Chinese words',()=>{

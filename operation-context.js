@@ -1,7 +1,7 @@
 // Local context is sent only to the dialogue model, never wholesale to media vendors.
 import {createHash} from 'node:crypto';
 import {normalizeVoiceMood} from './voice-studio.js';
-import {isShortAcknowledgement} from './background-cost-policy.js';
+import {isShortAcknowledgement,isShortClarification} from './background-cost-policy.js';
 import {conversationTime,initiativeTimingHint} from './conversation-timing.js';
 export const OPERATION_CONTEXT_SIZE=8;
 // A picture is usually the start of a topic, not a one-turn attachment: keep the
@@ -22,7 +22,8 @@ export function recentOperationContext(rows,{key='',accountId='',personaId='',fl
  return selected.map(row=>({id:String(row.messageId||row.localId||row.time),role:row.dir==='in'?'user':'assistant',at:row.time,...(imageBearing(row)?{hasImage:true}:{}),...(row===anchor&&row!==latestUser?{imageAnchor:true}:{}),text:operationText(row.dir==='in'?(row.userText||row.text):row.text,900)||((row.image||row.file||row.files?.length)?'[图片或语音附件]':'[空消息]')}));
 }
 export function recentReplyAnchor(rows,{key='',accountId='',personaId='',words='',replyId='',excludeIds=[],floor=0,at=Date.now()}={}){
- if(!key||!isShortAcknowledgement(words))return null;
+ const clarification=isShortClarification(words);
+ if(!key||!clarification&&!isShortAcknowledgement(words))return null;
  const quotedId=String(replyId||'');
  if(!quotedId&&!key.startsWith('private:'))return null;
  const excluded=new Set(excludeIds.filter(id=>id!=null&&id!=='').map(String));
@@ -37,19 +38,30 @@ export function recentReplyAnchor(rows,{key='',accountId='',personaId='',words='
  }
  if(latest?.dir!=='out'||!quotedId&&at-latest.time>20*60_000)return null;
  const text=operationText(latest.text,220);
- return text?{role:'assistant',text,at:latest.time,quoted:Boolean(quotedId)}:null;
+ return text?{role:'assistant',text,at:latest.time,quoted:Boolean(quotedId),...(clarification?{clarification:true}:{})}:null;
 }
 
 export function replyAnchorHint(anchor){
  if(!anchor)return '';
+ if(anchor.clarification)return '【短回复承接】'+(anchor.quoted?'对方引用了你说的':'你上一条实际发给对方的是')+JSON.stringify(anchor.text)+'。这声可能是在反问、惊讶或没听清。贴着原话接，有需要就换个说法。它没有应下邀约或要求执行操作。';
  return '【短回复承接】'+(anchor.quoted?'对方明确引用了':'当前对话刚实际送达')+'这一句：'+
    JSON.stringify(anchor.text)+'。优先接这件事。若只是简短确认，顺着接一句即可。旧日程和你更早的问题仅是历史。';
 }
 export function initiativeConversation(context=[],previousInitiativeUnanswered=false,now=Date.now()){
- const lastHuman=context.findLast(row=>row.role==='user'),lastDelivered=context.findLast(row=>row.role==='assistant');
+ const humanIndex=context.findLastIndex(row=>row.role==='user');
+ const lastHuman=context[humanIndex],lastDelivered=context.findLast(row=>row.role==='assistant');
+ // A series of outgoing bubbles can otherwise push the unreturned question out
+ // of the four-turn snapshot, even though the bot still has the original.
+ const pendingQuestion=context.slice(humanIndex+1).findLast(row=>row.role==='assistant'&&
+   /(?:[？?]|(?:吗|嘛|要不要|怎么样))[~～\s]*$/u.test(String(row.text||'').replace(/“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"/gu,'').trim()));
  const ordered=context.slice(-4);
- if(lastHuman&&!ordered.includes(lastHuman))ordered.splice(0,1,lastHuman);
- else if(lastDelivered&&!ordered.includes(lastDelivered))ordered.splice(0,1,lastDelivered);
+ const anchors=[lastHuman,lastDelivered,pendingQuestion].filter(Boolean);
+ for(const anchor of anchors){
+  if(ordered.includes(anchor))continue;
+  const replace=ordered.findIndex(row=>!anchors.includes(row));
+  if(replace>=0)ordered[replace]=anchor;
+ }
+ ordered.sort((a,b)=>a.at-b.at);
  const replyState=!lastDelivered?'没有可核对的已发出消息':!lastHuman||lastHuman.at<=lastDelivered.at
   ?'上次发出之后没有新的对方消息'
   :'上次发出后有新的对方消息，按原话判断是否接上或已换题';
@@ -60,7 +72,7 @@ export function initiativeConversation(context=[],previousInitiativeUnanswered=f
   const time=stamp?(stamp.day===day?stamp.clock:stamp.day+' '+stamp.clock):'';
   return [role==='user'?'对方':'你',operationText(text,120),time];
  });
- return {replyState:[previousInitiativeUnanswered?'上一条主动私聊之后还没有收到对方的新消息。':'',replyState+'。',initiativeTimingHint(lastHuman,now)].filter(Boolean).join(' '),turns};
+ return {replyState:[previousInitiativeUnanswered?'上一条主动私聊之后还没有收到对方的新消息。':'',replyState+'。',pendingQuestion?'你上次提问后对方还没发言。可以聊新的，别把同一个问题换个说法再问。':'',initiativeTimingHint(lastHuman,now)].filter(Boolean).join(' '),turns};
 }
 export function initiativeConversationHint(context,previousInitiativeUnanswered=false,now=Date.now()){
  const recent=initiativeConversation(context,previousInitiativeUnanswered,now);

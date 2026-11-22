@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {isShortAcknowledgement,mediaPreviewNeeded} from '../background-cost-policy.js';
+import {isShortAcknowledgement,isShortClarification,mediaPreviewNeeded} from '../background-cost-policy.js';
 import {recentReplyAnchor,replyAnchorHint} from '../operation-context.js';
+import {localMediaPlanningCandidate} from '../local-media-planner.js';
 
 const scope={key:'private:12345',accountId:'local-account',personaId:'voice',words:'好',at:16_000};
 const message=(fields={})=>({chat:scope.key,accountId:scope.accountId,personaId:scope.personaId,dir:'out',delivery:'sent',time:10_000,...fields});
@@ -37,6 +38,26 @@ test('implicit acknowledgement cannot bind an old private line or an unrelated g
  assert.equal(recentReplyAnchor([row],{...scope,replyId:'missing'}),null);
 });
 
+test('a bare repair or surprised question refers to the delivered line without accepting a media offer',()=>{
+ const offer=message({text:'要不要给你唱一小段？',messageId:'offered'});
+ for(const words of ['啊？','嗯?','？？','没听清','你刚说什么来着？','啥意思']){
+  const anchor=recentReplyAnchor([offer],{...scope,words});
+  assert.equal(anchor.text,offer.text);
+  assert.equal(anchor.clarification,true);
+  assert.match(replyAnchorHint(anchor),/没有应下/);
+  assert.equal(isShortAcknowledgement(words),false);
+  assert.equal(mediaPreviewNeeded(words,[anchor]),false);
+  assert.equal(localMediaPlanningCandidate(words),false);
+ }
+ for(const words of ['啊','什么牌子的？','啊？给我发张照片','没听清，请再发段语音']){
+  assert.equal(recentReplyAnchor([offer],{...scope,words}),null);
+ }
+ assert.equal(recentReplyAnchor([offer],{...scope,words:'嗯？',at:offer.time+21*60_000}),null);
+ const group={...offer,chat:'group:12345'};
+ assert.equal(recentReplyAnchor([group],{...scope,key:group.chat,words:'啊？'}),null);
+ assert.equal(recentReplyAnchor([group],{...scope,key:group.chat,words:'啊？',replyId:'offered'}).quoted,true);
+});
+
 test('ordinary mentions and withdrawn media offers avoid the auxiliary model, active invitations still use it',()=>{
  const said=text=>({role:'assistant',text});
  assert.equal(mediaPreviewNeeded('好',[said('刚才看到一篇关于语音表达的文章。')]),false);
@@ -54,7 +75,7 @@ test('the installed decision entry uses the supplied delivery anchor and does no
  const a=source.indexOf('  function singingWorkflowFor('),b=source.indexOf('  function voiceRuntimeReadiness(',a);
  assert.ok(a>=0&&b>a);
  let calls=0;
- const deps={isShortAcknowledgement,mediaPreviewNeeded,settings:{voice:{enabled:true},imagegen:{enabled:true}},requestsSinging:()=>false,
+ const deps={isShortAcknowledgement,isShortClarification,mediaPreviewNeeded,settings:{voice:{enabled:true},imagegen:{enabled:true}},requestsSinging:()=>false,
   voiceRuntimeReadiness:()=>({available:true}),selectMediaIntent:(_w,form)=>({kinds:form.form==='voice'?['voice']:[]}),
   operationContext:()=>{throw Error('must not scan the general media history for a short acknowledgement');},
   operationText:s=>s,activePersona:()=>({prompt:'角色'}),effectiveModel:()=> 'local-test',
@@ -62,6 +83,7 @@ test('the installed decision entry uses the supplied delivery anchor and does no
  const run=Function(...Object.keys(deps),source.slice(a,b)+';return previewMediaForm;')(...Object.values(deps));
  assert.deepEqual((await run('好',scope.key,true,{role:'assistant',text:'我刚读到一段语音教程'})).kinds,[]);
  assert.deepEqual((await run('好',scope.key,true,null)).kinds,[]);
+ assert.deepEqual((await run('啊？',scope.key,true,{role:'assistant',text:'要不要给你唱一小段？',clarification:true})).kinds,[]);
  assert.equal(calls,0);
  assert.deepEqual((await run('好',scope.key,true,{role:'assistant',text:'要不要发个语音？'})).kinds,['voice']);
  assert.equal(calls,1);

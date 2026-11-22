@@ -157,11 +157,13 @@ export async function naturalLinkReply(answer,{evidenceFor,ask,currentRequest=''
  const shouldRewrite=sharing===true||tooLong||fakeExperience||machineReport(plain);
  if(!shouldRewrite)return answer;
 
+ const ownLineUrls=new Set(String(answer).split(/\r\n?|\n/).slice(1).map(line=>line.trim()));
+ const attachUrls=(text='')=>urls.reduce((reply,url)=>reply?reply+(ownLineUrls.has(url)?'\n':' ')+url:url,text);
  const fallback=()=>{
-  if(directLinkRequest)return urls.join('\n');
+  if(directLinkRequest)return attachUrls();
   if(urls.length>1)return '[skip]';
   const clause=safeExistingClause(plain,facts);
-  return clause?`${clause}\n${urls[0]}`:'[skip]';
+  return clause?attachUrls(clause):'[skip]';
  };
  if(signal?.aborted||typeof ask!=='function')return fallback();
 
@@ -181,9 +183,9 @@ export async function naturalLinkReply(answer,{evidenceFor,ask,currentRequest=''
   return fallback();
  }
  const cleaned=cleanText(rewritten);
- if(cleaned==='[skip]')return directLinkRequest?urls.join('\n'):'[skip]';
+ if(cleaned==='[skip]')return directLinkRequest?attachUrls():'[skip]';
  if(!cleaned)return fallback();
  const text=validRewrite(cleaned,facts);
  if(!text)return fallback();
- return [text,...urls].join('\n');
+ return attachUrls(text);
 }

@@ -1,4 +1,5 @@
 import {initiativeConversationHint} from '../operation-context.js';
+import {interestHint} from '../website-reading.js';
 import test from 'node:test';import assert from 'node:assert/strict';
 import {selectMediaIntent,mediaIntentHint} from '../media-intent.js';
 import {initiativeGrounding,conversationExecutionGrounding} from '../initiative-grounding.js';
@@ -13,12 +14,14 @@ test('actual API proactive reply receives protected execution facts after planni
   featureProfile:()=>({}),keepSessionAlive:async()=>true,autonomyState:()=>({counts:{chats:0}}),saveState:()=>{},pinApprovalPolicy:async()=>{},installAgentContext:()=>true,
   settings:{activeAccountId:'a',localChat:{enabled:false},owners:['1'],realism:{enabled:true},mood:{}},featureState:{invocations:[],generation:0},activePersona:()=>({id:'p'}),lifeExecution:null,
   consumeMoodHint:()=>({text:''}),currentPersonaMood:()=>({}),operationContext:()=>[],recipientIdentity:()=> '本人',sleepAwarenessHint:()=>'',recentEventsHint:()=>'',websiteReader:null,
+  interestHint,privateReadingInterest:key=>{assert.equal(key,chat.key);return {detail:'贝斯在鼓前面进了半拍'};},
   privateInitiativeUnanswered:()=>false,initiativeConversationHint,operationContextHint:()=>'',mediaShareHint:()=>'',withClock:v=>v,sharingExpression:()=> '自然说话',recentDialogueReplies:()=>[],sessionDigests:new Map(),
   promptBudget:{pack(content,{protectedParts}){const facts=content.find(p=>p.text?.startsWith('【经历与执行状态】'));assert.ok(facts);assert.ok(protectedParts.has(facts));}},
   ctx:{get:()=>({get:()=>({followup:async value=>{received=value;}})})},log:()=>{},
  };
  vm.createContext(sandbox);vm.runInContext(source.slice(source.indexOf('  function conversationExecutionHint('),source.indexOf('  /** He went quiet mid-conversation:')),sandbox);
  assert.equal(await sandbox.nudge(chat,'想和对方分享音乐','autonomy'),true);
+ assert.ok(received.content.some(part=>part.text?.includes('贝斯在鼓前面进了半拍')));
  const text=received.content.map(p=>p.text||'').join('\n');assert.match(text,/音乐分享与语音合成是不同操作/);assert.match(text,/没调用不是失败/);assert.match(text,/想和对方分享音乐/);assert.match(text,/当前运行在电脑/);assert.match(text,/由你自己推进/);
 });
 test('media planning cannot replace user words with an invented reply',()=>{

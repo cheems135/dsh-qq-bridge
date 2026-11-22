@@ -1,54 +1,51 @@
-import test from 'node:test';import assert from 'node:assert/strict';
-import {formatLocalChatParagraphs} from '../local-reply.js';import {naturalBubbleParts} from '../chat-bubbles.js';
-import {createLocalModelServer} from '../local-model-server.mjs';import {listenLocalServer} from './local-server-listen.js';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {fileURLToPath} from 'node:url';import {join} from 'node:path';
-const raw='今天先去楼下走一小圈就好，别一开始把目标定得太满。走到路口看看树，回来喝点水，慢慢找到舒服的节奏。偶尔漏一天也没关系，第二天照常出门就好。你更喜欢早上出去，还是傍晚凉快的时候？';
-test('continuous plain chat becomes multiple QQ bubbles without losing or repeating any content',()=>{
- const text=formatLocalChatParagraphs(raw),parts=naturalBubbleParts(text,{maxBubbles:0,automaticBreaks:false});assert.ok(parts.length>=2);assert.ok(parts.length<=4);assert.equal(parts.join('').replace(/\s/g,''),raw.replace(/\s/g,''));assert.ok(parts.every(p=>p.length>=12));
-});
-test('conversational tilde boundaries do not detach greetings or every short sentence',()=>{
- const text='嘿嘿，今天终于把那幅小画画到一半啦！窗边的光刚好落在桌子上，颜色看起来特别温暖～ 等画好以后就挂在书架旁边，每天路过都能看见嘛～ 你想先看看现在的进度吗？';
- const parts=formatLocalChatParagraphs(text).split('\n');assert.ok(parts.length>1);assert.ok(parts.every(p=>p.length>=12));assert.equal(parts.join('').replace(/\s/g,''),text.replace(/\s/g,''));assert.equal(formatLocalChatParagraphs('好呀～那明天一起去。'),'好呀～那明天一起去。');const greeting='朋友～今天那幅窗边的小画已经画到一半，准备画好以后挂在书架旁边，每天路过都能看到嘛～ 你要不要先看看现在的进度呀？';assert.ok(formatLocalChatParagraphs(greeting).includes('\n'));
-});
-test('explicit breaks, single-paragraph requests, URLs, code, JSON and requested stories keep their formatting',()=>{
- for(const [text,request]of [[raw+'\n第二段。',''],[raw,'请用一段话，不要分段'],['https://example.com '+raw,''],['```js\n'+raw+'\n```',''],[JSON.stringify({text:raw}),''],[raw,'写一篇故事']])assert.equal(formatLocalChatParagraphs(text,{request}),text);
-});
-test('actual gateway formats a noncompliant model answer once and the QQ splitter sees the new boundaries',async()=>{
- const dir=mkdtempSync(fileURLToPath(new URL('../.paragraph-fallback-',import.meta.url))),configFile=join(dir,'config.json');writeFileSync(configFile,JSON.stringify({voiceEnabled:false,fastDialogue:false}));let models=0;
- const service=createLocalModelServer({configFile,env:{LOCAL_AI_WORK_DIR:dir,LOCAL_AI_LOG_FILE:join(dir,'test.log')},logger:()=>{},model:async()=>{models++;return raw;},runtime:{status:async()=>({reachable:true}),release:async()=>({freed:true})}});
- try{const base=await listenLocalServer(service),res=await fetch(base+'/v1/local/turn',{method:'POST',body:JSON.stringify({messages:[{role:'user',content:'我想开始散步，漏了一天怎么办？'}]})}),out=await res.json();assert.equal(res.status,200,JSON.stringify(out));assert.equal(models,1);const parts=naturalBubbleParts(out.text,{maxBubbles:0,automaticBreaks:false});assert.ok(parts.length>1);assert.equal(parts.join('').replace(/\s/g,''),raw.replace(/\s/g,''));assert.equal(out.qqDelivered,false);
- }finally{service.server.closeAllConnections();await service.close();rmSync(dir,{recursive:true,force:true});}
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {naturalBubbleParts} from '../chat-bubbles.js';
+import {cleanLocalReply} from '../local-reply.js';
+import {createLocalModelServer} from '../local-model-server.mjs';
+import {listenLocalServer} from './local-server-listen.js';
+
+const continuous='今天先去楼下走一小圈就好，别一开始把目标定得太满。走到路口看看树，回来喝点水，慢慢找到舒服的节奏。偶尔漏一天也没关系，第二天照常出门就好。你更喜欢早上出去，还是傍晚凉快的时候？';
+
+test('local dialogue keeps one line across punctuation, inline links and literal newline escapes',()=>{
+  const singleLine=continuous+'～ 然后看看 https://example.org/walk，记一下\\n这个符号。';
+  assert.deepEqual(naturalBubbleParts(cleanLocalReply(singleLine)),[singleLine]);
 });
 
-test('long conversational clauses can break at a transition even without full stops',()=>{
- const text='嗯～今天先把桌面上常用的书本分出来，按照最近要看的顺序放好，剩下的再放到下面的抽屉里面，然后把杯子挪到另一边，留出写字的位置，这样找东西就不用每次都翻半天啦！';
- const result=formatLocalChatParagraphs(text);assert.ok(result.includes('\n'));assert.equal(result.replace(/\s/g,''),text.replace(/\s/g,''));
+test('local dialogue filters leaked dividers around real line breaks',()=>{
+  const text='先关窗||然后泡茶\r\n‖\r稍等｜｜马上就好\n最后留灯';
+  assert.deepEqual(naturalBubbleParts(cleanLocalReply(text)),['先关窗 然后泡茶','稍等 马上就好','最后留灯']);
 });
 
-test('persona wave punctuation separates full ideas without requiring a following space',()=>{
- const text='纸质书可以直接拿起来翻看，而且不用充电，放在书桌旁边随时都能读～电子书可以存放很多本书，出门只带一个阅读器，放进包里也不占地方～不过如果想认真做批注，也可以看看自己更习惯哪种方式～';
- const result=formatLocalChatParagraphs(text);assert.ok(result.includes('\n'));assert.equal(result.replace(/\s/g,''),text.replace(/\s/g,''));assert.ok(result.split('\n').every(p=>p.length>=12));
-});
-test('short casual replies with several comma pauses use at most one balanced split',()=>{
- const sample='我今天打算在附近走走，买点吃的，回来刚好能看看那本书，你晚上要不要一起看';
- const result=formatLocalChatParagraphs(sample),parts=naturalBubbleParts(result,{automaticBreaks:false});
- assert.equal(parts.length,2);
- assert.equal(parts.join(''),sample);
- assert.equal(formatLocalChatParagraphs(sample,{request:'别分段'}),sample);
- assert.equal(formatLocalChatParagraphs('好呀，你先去吧'),'好呀，你先去吧');
- assert.equal(formatLocalChatParagraphs(sample+'[表情包:开心]'),sample+'[表情包:开心]');
-});
-test('short replies with distinct clauses are split once, while a short acknowledgment stays intact',()=>{
- for(const text of [
-  '我先把窗关上，等我收拾完桌子，再回来看你发来的消息',
-  '我刚把窗户关好，外面下雨的声音好近，明天再出门走走',
-  '窗外雨已经停了。等我把手里的书收好就出去转一圈。',
- ]){
-  const formatted=formatLocalChatParagraphs(text);
-  assert.equal(formatted.split('\n').length,2);
-  assert.equal(formatted.replaceAll('\n',''),text);
-  assert.equal(formatLocalChatParagraphs(text,{request:'请用一段话回答'}),text);
-  assert.equal(formatLocalChatParagraphs(text,{request:'你看到这一段有什么感想'}),formatted);
- }
- assert.equal(formatLocalChatParagraphs('嗯嗯，好呀，我这就来'),'嗯嗯，好呀，我这就来');
+test('actual local gateway preserves authored newlines using a single model call per turn',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'qq-bridge-newline-'));
+  const configFile=join(dir,'config.json');
+  writeFileSync(configFile,JSON.stringify({voiceEnabled:false,fastDialogue:false}));
+  const modelReplies=[continuous,'先关窗||然后泡茶\r\n明天再出去'];
+  let models=0;
+  const service=createLocalModelServer({
+    configFile,
+    env:{LOCAL_AI_WORK_DIR:dir,LOCAL_AI_LOG_FILE:join(dir,'test.log')},
+    logger:()=>{},
+    model:async()=>modelReplies[models++],
+    runtime:{status:async()=>({reachable:true}),release:async()=>({freed:true})},
+  });
+  try{
+    const base=await listenLocalServer(service);
+    for(const [index,expected] of [[continuous],['先关窗 然后泡茶','明天再出去']].entries()){
+      const res=await fetch(base+'/v1/local/turn',{method:'POST',body:JSON.stringify({messages:[{role:'user',content:'我想开始散步，漏了一天怎么办？'}]})});
+      const out=await res.json();
+      assert.equal(res.status,200,JSON.stringify(out));
+      assert.equal(models,index+1);
+      assert.deepEqual(naturalBubbleParts(out.text),expected);
+      assert.equal(out.qqDelivered,false);
+    }
+  }finally{
+    service.server.closeAllConnections();
+    await service.close();
+    rmSync(dir,{recursive:true,force:true});
+  }
 });

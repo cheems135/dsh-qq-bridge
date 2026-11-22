@@ -5,6 +5,12 @@ import {initiativeConversation} from '../operation-context.js';
 
 const noon = Date.parse('2026-08-17T12:27:00+08:00');
 
+test('a farewell or greeting before a new question leaves the floor open', () => {
+  for(const words of ['晚安，对了你明天想吃什么？','早安，我上班要带什么？','我先去睡了，车票要怎么买？']) {
+    assert.equal(conversationTimingHint(words,{now:noon}),'',words);
+  }
+});
+
 test('someone who just woke at noon can be greeted without guessing their meals or sleep schedule', () => {
   const hint = conversationTimingHint('刚刚睡醒呢', {now:noon});
   assert.match(hint, /12:27/);

@@ -108,7 +108,7 @@ test('the common conversation enrichment reaches API, local and both chat scopes
   const start=source.indexOf('  function enrichConversation('),end=source.indexOf('    try{const files=qqFileTransfer',start);
   const head=source.slice(start,end)+'\n}';
   const f=fixture(),tracker=f.open();tracker.observe(meta,sleep);f.advance(60000);tracker.observe(meta,online);
-  const enrich=Function('sleepAwarenessHint','conversationTimingHint','return ('+head+');')((_key,question)=>tracker.hint(meta,{question}),conversationTimingHint);
+  const enrich=Function('sleepAwarenessHint','conversationTimingHint','return ('+head+');')((_key,question,options)=>tracker.hint(meta,{...options,question}),conversationTimingHint);
   for(const kind of ['private','group']){
     const parts=[];enrich({key:kind+':1'}, {}, parts,'醒了吗',true);
     assert.equal(parts.length,1);assert.match(parts[0].text,/主动睡眠/);
@@ -116,7 +116,13 @@ test('the common conversation enrichment reaches API, local and both chat scopes
     assert.ok(parts[0].text.length<450);assert.match(parts[0].text,/不要求汇报/);
     const waking=[];enrich({key:kind+':1'}, {_bridgeMemoryUserText:'刚刚睡醒呢'}, waking,'刚刚睡醒呢',true);
     assert.match(waking.find(part=>part._bridgeContext==='conversationTiming').text,/对方说自己刚醒/);
-    assert.match(waking.find(part=>part._bridgeContext==='sleepAwareness').text,/角色当前/);
-    assert.equal(localSharedContext(waking,{maxChars:100}).messages.length,2);
+    assert.ok(!waking.some(part=>part._bridgeContext==='sleepAwareness'));
+    assert.equal(localSharedContext(waking,{maxChars:100}).messages.length,1);
+    for(const words of ['算了放过你吧','我室友醒了','刚刚睡醒呢','你觉得我今晚几点睡好？','她刚刚说“你睡了多久”']){
+      assert.equal(tracker.hint(meta,{dialogue:true,question:words}),'',words);
+    }
+    for(const words of ['你之前睡了多久','刚才掉线了吗','醒了没','你刚才为什么没回我']){
+      assert.match(tracker.hint(meta,{dialogue:true,question:words}),/实际睡眠与离线/,words);
+    }
   }
 });

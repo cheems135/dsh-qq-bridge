@@ -141,6 +141,15 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
   async function api(s,c,path,params,options){return network(s,c,API,path,params,options);}
   function publicLogin(s){return s.login?{status:s.login.status,expiresAt:s.login.at+180000,...(s.login.at+180000>now()?{qrImage:s.login.qrImage}: {})}:null;}
   function state(s){return {ok:true,settings:{commentPublishEnabled:s.state.commentPublishEnabled===true},account:{loggedIn:!!s.credential.SESSDATA,uid:s.credential.DedeUserID||'',name:s.state.accountName||'',validatedAt:s.state.validatedAt||0},history:s.state.history.slice(-30).reverse(),drafts:s.state.drafts.slice(-30).reverse().map(d=>({...d,images:(d.images||[]).map(({file,...image})=>image),accountMismatch:!!d.authorUid&&d.authorUid!==s.credential.DedeUserID})),login:publicLogin(s)};}
+  function commentSamples(context){
+    const s=slot(context),observed=s.state.observedComments||[];
+    const authored=new Set(s.state.drafts.map(draft=>String(draft.rpid||'')));
+    const byId=new Map(observed.map(row=>[row.bvid+':'+row.id,row]));
+    return observed.filter(row=>row.id&&row.text&&!authored.has(row.id)).slice(-12).map(row=>({
+      role:'user',source:'bilibili',id:row.bvid+':'+row.id,text:row.text,
+      context:row.root!==row.id?byId.get(row.bvid+':'+row.root)?.text||'':'',
+    }));
+  }
   async function info(s,c,bvid){const result=await api(s,c,'/x/web-interface/view',{bvid});return {...videoRow(result.data),aid:result.data.aid,cid:result.data.cid,pages:(result.data.pages||[]).map(p=>({page:p.page,cid:p.cid,title:text(p.part),duration:p.duration}))};}
   async function comments(s,c,bvid,page=1,video){
     video??=await info(s,c,bvid);
@@ -346,7 +355,7 @@ export function createBilibiliService({directory,fetchImpl=fetch,makeQr,now=Date
     throw Error('未知 B站操作');
   }
   async function act(args,context){return losslessValue(await runAct(args,context));}
-  return {act,close(){closed=true;slots.clear();}};
+  return {act,commentSamples,close(){closed=true;slots.clear();}};
 }
 
 export const BILIBILI_TOOL_PARAMETERS={type:'object',properties:{action:{type:'string',enum:['status','login','login-status','popular','recommend','search','video','comments','subtitles','frames','read','browse','draft']},query:{type:'string',maxLength:120},bvid:{type:'string',maxLength:200},page:{type:'integer',minimum:1,maximum:100},limit:{type:'integer',minimum:1,maximum:3},text:{type:'string',maxLength:1000},root:{type:'string',maxLength:30},parent:{type:'string',maxLength:30},replyId:{type:'string',maxLength:30},images:{type:'array',maxItems:3,items:{type:'string',description:'当前角色已生成图片的路径'}}},required:['action'],additionalProperties:false};

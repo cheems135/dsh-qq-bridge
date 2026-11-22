@@ -7,6 +7,12 @@ export function isShortAcknowledgement(words){
  return shortAcknowledgement.test(String(words||'').trim());
 }
 
+export function isShortClarification(words){
+ const text=String(words||'').trim();
+ return /^(?:啊|嗯|诶|啥|什么)?[？?]{1,3}$/u.test(text)||
+  /^(?:(?:你)?(?:刚才|刚刚|刚)?说(?:啥|什么)(?:呢|来着)?|(?:啥|什么)意思|(?:我)?没(?:听清(?:楚)?|听懂|明白你(?:的)?意思))[呀啊哦呢]?[。.!！?？]*$/u.test(text);
+}
+
 export function mediaPreviewNeeded(words,context=[]){
  const text=String(words||'').trim();
  if(isShortAcknowledgement(text)){

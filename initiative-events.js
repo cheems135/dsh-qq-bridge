@@ -71,7 +71,9 @@ export function initiativeEvent({scene=null,jobs=[],mood=null,moodEnabled=true,n
  return events.sort((a,b)=>b.at-a.at)[0]||null;
 }
 export function eventInitiativeCadence(record,base,now,{event=null,commit=false}={}){
- const seen=[...(record?.seenEventIds||[]),record?.eventId].filter(Boolean);
+ // Older records may already contain repeated IDs. Idle decisions must not
+ // evict a distinct event just by observing the last one again.
+ const seen=[...new Set([...(record?.seenEventIds||[]),record?.eventId].filter(Boolean))].slice(-12);
  // A calendar scene is background for the next ordinary decision. It is not
  // a new observation and must not buy an extra model call when the slot moves.
  const realEvent=event&&['mood','task-blocker','progress','social-followup','message'].includes(event.kind);

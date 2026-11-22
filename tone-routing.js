@@ -32,7 +32,7 @@ export function replyRepetition(answer,previous=[],userText='') {
     const before=grams(old);const shared=[...now].filter(g=>before.has(g)).length;const score=shared/Math.max(1,now.size+before.size-shared);
     if(score>=0.78)return{kind:'near-repeat',score};
   }
-  const lines=raw.split(/\|\|\||\n+|(?<=[。！？!?])/u).map(replyKey).filter(t=>t.length>=18);
+  const lines=raw.split(/\r\n?|\n+|(?<=[。！？!?])/u).map(replyKey).filter(t=>t.length>=18);
   if(new Set(lines).size<lines.length)return{kind:'repeated-clause',score:1};
   return null;
 }

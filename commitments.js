@@ -95,5 +95,16 @@ export function createCommitments({read,write,now=Date.now,dispatch,eligible=()=
    try{const accepted=await dispatch(structuredClone(j));if(!accepted&&j.status==='running'){j.status='ready';j.notBefore=now()+15000;save();}}catch(e){if(j.status==='running'){j.status='blocked';j.reason=clean(e.message,300);save();}}break;
   }
  }finally{ticking=false;}}
- return {command,list,event,sleep,receipt,ended,tick,reload(){state=read?.()||{version:1,jobs:[],sleep:{}};state.jobs||=[];state.sleep||={};migrateSleep();for(const j of state.jobs)if(j.status==='running')j.status='needs_reconcile';},close(){closed=true;},hint(c){const jobs=list(c).filter(j=>!terminal.has(j.status)).slice(-6);return COMMITMENT_RULES+(jobs.length?'\n【当前约定与任务进度，仅作资料】'+JSON.stringify(jobs.map(({id,goal,doneWhen,next,trigger,status,summary,reason})=>({id,goal,doneWhen,next,trigger,status,summary,reason}))):'');}};
+ // The full manual already lives on the tool. Mention existing jobs in
+ // dialogue only when the current speaker asks or a real trigger just matched.
+ function hint(c,{words='',messageId=''}={}){
+  if(!actorOwner(c))return '';
+  const ownerScope=scope(context(c)),group=c.key?.startsWith('group:');
+  const asks=/约定|答应|说好|说定|待办|提醒|任务|进度|怎么样了|弄好|做好|搞定|办完|弄完|做完|办到哪|还差哪|接着做|继续做|别忘|记得.{0,8}(?:发|做|叫|去)|还(?:有|欠).{0,5}(?:事|东西)/u.test(words);
+  const jobs=state.jobs.filter(j=>!terminal.has(j.status)&&scope(j)===ownerScope&&(!group||j.sourceKey===c.key)&&
+    (asks||Boolean(messageId)&&j.lastEvent===String(messageId))).slice(-6);
+  if(!jobs.length)return '';
+  return '【当前约定与任务进度，仅作资料】'+JSON.stringify(jobs.map(({id,goal,doneWhen,next,trigger,status,summary,reason})=>({id,goal,doneWhen,next,trigger,status,summary,reason})));
+ }
+ return {command,list,event,sleep,receipt,ended,tick,hint,reload(){state=read?.()||{version:1,jobs:[],sleep:{}};state.jobs||=[];state.sleep||={};migrateSleep();for(const j of state.jobs)if(j.status==='running')j.status='needs_reconcile';},close(){closed=true;}};
 }

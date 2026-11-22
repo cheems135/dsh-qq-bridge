@@ -56,6 +56,47 @@ test('cross-place continuity never transfers another persona or private relation
  hub.record(privateMeta,{dir:'out',delivery:'sent',messageId:'p2',time:clock,text:'我刚读完一本绘画书'});
  const publicText=hub.continuity({...privateMeta,key:'group:200000001'},'绘画');assert.match(publicText,/绘画书/);assert(!publicText.includes('私人礼物'));assert.equal(hub.continuity({...privateMeta,key:'group:200000001',personaId:'other'},'绘画'),'');hub.close();
 });
+
+test('private ordinary chat reconnects a prior answered detail after a topic switch and a day, with scoped latest corrections',()=>{
+ let at=clock;const hub=createMemoryHub({storage:store(),allowed:()=>true,now:()=>at});
+ const meta={accountId:'a',key:'private:12345',personaId:'p',personaVersion:'v'};
+ const say=(text,out=false,scope=meta)=>{at+=1000;hub.record(scope,{dir:out?'out':'in',delivery:out?'sent':undefined,messageId:String(at),time:at,text});return at;};
+ say('你带去做牙科复诊的那只兔子叫什么？',true);say('叫团子。');
+ for(let i=0;i<8;i++){say('午饭想吃面。');say('那走吧。',true);}
+ assert.match(hub.continuity(meta,'上次做牙科复诊的那只兔子又要出门了'),/你问.*牙科复诊.*对方说.*叫团子/);
+ assert.equal(hub.continuity(meta,'午饭想吃面。'),'','a recent visible turn need not be duplicated');
+ say('团子的牙科复诊订在周五三点。');say('那我记住了。',true);
+ const fixedAt=say('我记错了，改到周五五点。');
+ say('另一个角色觉得周五六点。',false,{...meta,personaId:'q'});
+ at+=86400000;
+ const question='说起团子的牙科复诊，这回可别迟到。';
+ const hint=hub.continuity(meta,question);assert.match(hint,/对方说.*改到周五五点/);assert.doesNotMatch(hint,/三点|六点/);assert.ok(hint.length<=210);
+ assert.equal(hub.continuity(meta,question,{floor:fixedAt}),'');
+ assert.equal(hub.continuity(meta,question,{sameChat:false}),'');
+ assert.equal(hub.continuity({...meta,key:'group:65432'},question),'');
+ assert.equal(hub.continuity({...meta,key:'private:33333'},question),'');
+ assert.equal(hub.continuity({...meta,accountId:'b'},question),'');
+ assert.equal(hub.continuity({...meta,personaVersion:'new'},question),'');
+ assert.equal(hub.continuity(meta,'门口那家新开的面包店买了可颂。'),'');
+ assert.equal(hub.continuity(meta,'我记错了，团子的牙科复诊改成周六。'),'');
+ hub.clear(meta);assert.equal(hub.continuity(meta,question),'');hub.close();
+});
+
+test('current inbound, forgotten private evidence and unrelated cross-room chatter cannot supply an ordinary callback',()=>{
+ let at=clock;const storage=store(),hub=createMemoryHub({storage,allowed:()=>true,now:()=>at});
+ const m={accountId:'a',key:'private:12345',personaId:'p',personaVersion:'v',isOwner:true};
+ const query='上回陶艺课的青瓷碗有消息了。';
+ hub.record({...m,key:'group:65432'},{dir:'in',messageId:'group',time:at,speakerId:'54321',text:'演唱会售票时间公布了。'});
+ assert.equal(hub.continuity(m,query),'','unrelated activity in another room is not a conversational cue');
+ hub.record(m,{dir:'in',messageId:'old',time:at,text:'陶艺课做的青瓷碗在等第二次烧制。'});
+ const old=[...storage.files.values()].find(r=>r.messageId==='old').id;
+ at+=86400000;
+ hub.record(m,{dir:'in',messageId:'current',time:at,text:query});
+ const opts={excludeIds:['current']};
+ assert.match(hub.continuity(m,query,opts),/第二次烧制/);
+ hub.forget(m,old);
+ assert.equal(hub.continuity(m,query,opts),'');hub.close();
+});
 test('full originals are chunked, verified and searchable, and duplicate preservation does not request another analysis',()=>{
  const storage=store(),hub=createMemoryHub({storage,allowed:()=>true,now:()=>clock}),meta={accountId:'a',key:'private:12345',personaId:'p',personaVersion:'v'},text='原始长对话'.repeat(5500);
  assert(hub.preserve(meta,[{dir:'in',time:clock,messageId:'long',text}],'old'));const count=storage.files.size;assert(count>=3);assert(hub.preserve(meta,[{dir:'in',time:clock,messageId:'long',text}],'old'));assert.equal(storage.files.size,count);assert.equal(hub.snapshot(meta).pending,0);hub.close();

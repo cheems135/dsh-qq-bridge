@@ -6,6 +6,39 @@ import {conversationStep,conversationHint} from '../conversation-care.js';
 import {parseGroupDecision,mergeGroupWindow} from '../group-conversation.js';
 const memoryStorage=()=>{const files=new Map();return {list:()=>[...files.keys()],read:key=>{if(!files.has(key))throw Object.assign(Error('missing'),{code:'ENOENT'});return structuredClone(files.get(key));},write:(key,value)=>files.set(key,structuredClone(value)),remove:key=>files.delete(key)};};
 
+test('ordinary topics, quotations and other people do not establish the sender’s mood',()=>{
+ const options={personaId:'p',now:1000};
+ for(const words of ['算了放过你吧','算了，放过你吧','我一个人去上班','结果出来了吗','你说得对不对？','我朋友最近好难过','她说“我好累，晚安”','“我好累”的意思是什么','我不难过','我难过吗？','我好孤独才怪','你为什么会怕？','我开会要带什么？','星期一我要去上课']){
+  const state=conversationStep({},words,options);
+  assert.ok(['listen','chat','answer'].includes(state.intent),words+' -> '+state.intent);
+  assert.equal(state.userAffect,'neutral',words);
+  assert.equal(state.pauseUntil,0,words);
+ }
+ for(const words of ['先别再生成了','先别生成了','算了吧','不用了']) {
+  assert.equal(conversationStep({},words,options).intent,'redirect',words);
+ }
+ assert.ok(conversationStep({},'我要去上课了，回头聊',options).pauseUntil>options.now);
+ assert.ok(conversationStep({},'先别再给我发消息啦',options).pauseUntil>options.now);
+});
+
+test('speakers can ask for company or practical help and then move on',()=>{
+ const options={personaId:'p',now:1000};
+ const step=(words,old={})=>conversationStep(old,words,options);
+ assert.match(conversationHint(step('今天不太顺，我只是想跟你吐槽会儿')),/留点空/);
+ assert.equal(step('我好累，明天要带什么？').intent,'answer');
+ assert.match(conversationHint(step('我心里挺难过的')),/避开列建议/);
+ assert.equal(conversationHint(step('我心里挺难过的'),{config:{enabled:false}}),'');
+ const hard=step('我今天真的好累，有什么办法？');
+ assert.equal(hard.userAffect,'low');
+ assert.match(conversationHint(hard),/主意/);
+ const continued=step('还是刚才那件事',hard);
+ assert.match(conversationHint(continued),/沿用当时的细节/);
+ assert.doesNotMatch(conversationHint(continued,{config:{continuity:false}}),/沿用当时的细节/);
+ const later=step('结果出来了，周六去看球',hard);
+ assert.equal(later.userAffect,'neutral');
+ assert.doesNotMatch(conversationHint(later),/低落|难受/);
+});
+
 test('phone API context carries the previous topic and accepts a correction before the next answer',()=>{
  const first=conversationStep({},'今天把那盆花放到窗边了',{personaId:'p',now:1000});
  const second=conversationStep(first,'不是白色，是蓝色的花盆',{personaId:'p',now:2000});assert.equal(second.previousTopic,'今天把那盆花放到窗边了');assert.equal(second.lastTopic,'不是白色，是蓝色的花盆');

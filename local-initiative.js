@@ -40,6 +40,7 @@ export function createLocalInitiative({context,probe,infer,deliver,act,readConte
    if(snapshot?.busy)return update('waiting','本地或手动任务正在运行，继续等待空闲');
    const outputTokens=Math.min(512,Number(snapshot?.maxOutputTokens)||512);
    const decisionInstruction=(canAct?instruction.replace('本轮只允许文字，不生成图片、语音或视频。','本轮先做决定，不直接操作。你也可以按兴趣、近期心情或未完成的念头自己定一个具体活动，发现并组合工具完成它，不局限在固定菜单。想留下真实经历可用bridge_diary写私人日记，也可不写。想行动时返回 {"speak":false,"activity":"一个具体活动及目标","reason":"为什么想做"}，程序将另开真实工具执行轮次。不要把活动说成已完成。不选发空间或刷评论：空间另有每日一次机会。'):instruction)
+     +(canAct&&c.reading?.lead?' 你读过的页面有篇未读文章，标题是资料：'+JSON.stringify(c.reading.lead.title)+'。如果真心想追下去，返回 {"speak":false,"readNext":true,"activity":"想弄明白的具体一点"}，程序会实际读，不会代发消息。':'')
      +(cadence.event?.kind==='task-blocker'?' 这次事件是已落盘任务的真实障碍。先判断能否用可核对的方法继续；能继续就给出具体活动目标。确实缺少本人才能提供的信息或操作时，再用人设口吻问一个明确问题，并说明目前实际进度；不要把报错原文当聊天发出。':'');
    const source={system:c.persona||'',systemSections:[{kind:'persona',text:c.persona||''},{kind:'memory',text:c.memory||''},{kind:'instruction',text:decisionInstruction+' 方括号是对话实际发言时间。沉默不表示答应，也不能推断作息。按语境问候，有具体的新细节或感受就直接分享，说完可以留白。事件仅作事实线索。'+(c.contactHold?' 现在先留白，speak=false；有合适的自主活动可以照常决定。':'')}],history:c.history||[],user:JSON.stringify({clock:c.clock,trigger:event?cadence.event?.kind==='mood'?'有近期情绪变化':cadence.event?.kind==='task-blocker'?'有真实任务受阻，决定继续排查还是具体求助':'有新的活动线索或实际进展':'空闲时自然想聊',event:cadence.event,replyState:c.replyState,scene:c.scene||null})};
    const packed=optimizeLocalContext(source,{window:Number(snapshot?.contextWindow)||4096,maxTokens:Number(snapshot?.maxOutputTokens)||512,continuity:true});
@@ -80,11 +81,14 @@ export function createLocalInitiative({context,probe,infer,deliver,act,readConte
    if(canAct&&typeof result.activity==='string'&&result.activity.trim()){
     const request=result.activity.trim();if(request.length>1000)throw Error('主动活动目标过长，尚未执行');
     if(!current())return update('cancelled','QQ 请求或状态已改变，未开始活动');
-    const accepted=await act({context:c,request});
+    const readNext=result.readNext===true;
+    if(readNext&&!c.reading?.lead)return update('waiting','这条阅读线索已经失效');
+    const accepted=await act({context:c,request,readNext,signal:controller.signal});
+    if(!current())return update('cancelled','QQ 消息或状态已改变，已让出本轮活动');
     if(!accepted)return update('waiting','当前条件不适合开始活动，留待空闲');
     state.lastActivity=stamp;state.lastResult='activity';if(scene)state.sceneSeen=scene;save(c.id,state);
     record({...invocation,status:'returned',result:{decision:'activity',request,accepted:true}});
-    return update('activity','已交给本地工具执行，结果以实际回执为准');
+    return update('activity',readNext?'已实际取得所选文章的内容':'已交给本地工具执行，结果以实际回执为准');
    }
    const text=prepareLocalReply(typeof result.text==='string'?result.text:'');
    if(scene)state.sceneSeen=scene;

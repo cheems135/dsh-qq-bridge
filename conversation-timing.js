@@ -46,14 +46,17 @@ function routineDeparture(words, turns = clauses(words)) {
 
 export function conversationTimingHint(words, {now = Date.now(), receivedAt = now} = {}) {
   const turns = clauses(words);
+  // clauses() omits questions for routine detection. Keep the actual final clause
+  // here so a sign-off followed by a question cannot close the conversation.
+  const finalClause = withoutQuotes(words).split(/[，,。！!；;\n]/u).map(part => part.trim()).filter(Boolean).at(-1) || '';
   let guidance = '';
   if (turns.some(turn => waking.test(turn))) {
     guidance = '对方说自己刚醒。顺着这句话问候或接个轻松的梗。入睡时间、醒来的原因、睡了多久和是否吃过饭都未知。钟点已给出，留作背景，不用再问几点。';
-  } else if (turns.some(turn => goodnight.test(turn))) {
+  } else if (goodnight.test(finalClause)) {
     guidance = '晚安用于休息或道别。顺着回句晚安，留出结束聊天的空间。省去自己的离线状态、接下来的计划和续聊问题。';
-  } else if (greeting.test(turns[0] || '')) {
+  } else if (greeting.test(finalClause) && turns.length === 1) {
     guidance = '顺着对方回个招呼。早安也可以接刚醒的人，晚上好用于开场。简单问好可以就此停住，自己的近况只提已有依据的，省掉无话找话的追问。';
-  } else if (routineDeparture(words, turns)) {
+  } else if (routineDeparture(words, clauses(finalClause))) {
     guidance = '对方提到接下来要做的事。若话在收尾，接一句就够了。让对方去忙，休息时顺着道别，不布置任务或催他回来。';
   }
   if (!guidance) return '';

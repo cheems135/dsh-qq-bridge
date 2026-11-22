@@ -3,6 +3,7 @@ import {requestedFormatting,cleanLocalReply,needsDialogueRepair,NATURAL_PARAGRAP
 import {localImageRequest,localVideoRequest,requestsVoice} from './media-intent.js';
 import {resolveLocalMediaTask,unverifiedMediaProgress} from './local-media-task.js';
 import {localRepeatRisk,recentAssistantReplies,repeatRequested} from './local-repetition.js';
+import {normalizeReplyNewlines} from './chat-bubbles.js';
 
 export function fastDialoguePlan(request,{messages=[],hasImages=false,pending=false,maxTokens=512,judgeMood=false,priority='speed'}={}){
  const text=String(request).trim();
@@ -47,14 +48,17 @@ export function removeStreamedPrefix(final,parts=[]){
  return current===wanted?{consistent:true,tail:String(final).slice(end).trimStart()}:{consistent:false,tail:''};
 }
 
-export function createDialogueStream({request='',messages=[],emit=()=>{},paragraphs=false}={}){
+export function createDialogueStream({request='',messages=[],emit=()=>{}}={}){
  let raw='',consumed=0,blocked=false;const parts=[],seen=new Set();
  const old=recentAssistantReplies(messages).map(t=>t.replace(/[\p{P}\p{S}\s]/gu,''));
  return {parts,feed(delta){
   raw+=String(delta||'');if(blocked||raw.length>32000)return;
-  const visible=cleanLocalReply(dialoguePrefix(raw),{request});
-  if(needsDialogueRepair(visible,{request}))return;
-  const boundaries=[...visible.matchAll(paragraphs?/\n+/gu:/[。！？!?]+[”」』"]?|\n+/gu)];
+  const prefix=normalizeReplyNewlines(dialoguePrefix(raw));
+  const cleaned=cleanLocalReply(prefix,{request});
+  if(!cleaned||needsDialogueRepair(cleaned,{request}))return;
+  // The cleaner trims the unfinished tail. Keep its actual line ending for streaming.
+  const visible=/\n[ \t]*$/.test(prefix)?cleaned+'\n':cleaned;
+  const boundaries=visible.matchAll(/\n+/g);
   for(const match of boundaries){const end=match.index+match[0].length;if(end<=consumed)continue;
    const prefix=visible.slice(0,end),text=visible.slice(consumed,end).trim();if(!text)continue;
    const normalized=prefix.replace(/[\p{P}\p{S}\s]/gu,'');

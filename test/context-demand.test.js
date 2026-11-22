@@ -36,11 +36,27 @@ function fixture(kind='private'){
  return {chat,deps,read,calls,journal};
 }
 test('ordinary dialogue does not fetch wardrobe, schedule, memory or periodically inject optional context',async()=>{
- const h=fixture();const prepare=extract('prepareCalendarContext',{syncConversationState:()=>{},lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),contextTopicsFor,operationContext:()=>[],readConversationContext:(...args)=>{h.calls.push(args);throw Error('must not read');},log:()=>{}});
+ const h=fixture();const prepare=extract('prepareCalendarContext',{syncConversationState:()=>{},lifeExecution:null,expressionLearning:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),contextTopicsFor,operationContext:()=>[],readConversationContext:(...args)=>{h.calls.push(args);throw Error('must not read');},log:()=>{}});
  for(const text of ['你好呀','今天好累','哈哈哈','谢谢你','这个网页很有意思']){const content=[];await prepare(h.chat,{},content,text);assert.equal(content.length,0);}
  assert.equal(h.calls.length,0);
  const enrich=source.slice(source.indexOf('  function enrichConversation('),source.indexOf('\n  let installedMediaRuntime='));
  assert.doesNotMatch(enrich,/turnNo\s*%|learningMemory\.recall|lifeExecution\?\.snapshot|sensationBlock\(/);
+});
+test('a sticker clarification keeps unrelated expression and schedule material out, while real progress still gets its schedule',async()=>{
+ const h=fixture(),reads=[];
+ const prepare=extract('prepareCalendarContext',{
+  syncConversationState:()=>{},lifeExecution:h.deps.lifeExecution,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),
+  expressionLearning:{hintDetailed:()=>assert.fail('clarification should not recall an expression')},
+  contextTopicsFor,operationContext:()=>[],readConversationContext:async(_chat,args)=>{reads.push(args.topics);return {topics:{schedule:{jobs:[{status:'completed',name:'实际后台任务'}]}}};},log:()=>{},
+ });
+ const clarify=[];
+ await prepare(h.chat,{_bridgeStickerClarification:'赢了'},clarify,'就是你想的那种');
+ assert.deepEqual(clarify,[]);
+ assert.deepEqual(reads,[]);
+ const actual=[];
+ await prepare(h.chat,{},actual,'你刚才那个任务做完了吗？');
+ assert.deepEqual(reads,[['schedule']]);
+ assert.match(actual[0].text,/实际后台任务/);
 });
 test('prefetch detects requested topics and clothing followups without treating all old history as current demand',()=>{
  assert.deepEqual(contextTopicsFor('你现在穿什么？'),['outfit']);

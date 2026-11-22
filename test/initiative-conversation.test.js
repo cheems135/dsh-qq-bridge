@@ -44,6 +44,20 @@ test('initiative context includes their latest real sentence, distinguishes sile
   assert.match(initiativeConversation(recentOperationContext(history,{key:chat,accountId,personaId,now:at})).replyState,/有新的/);
 });
 
+test('proactive decisions retain the last unreturned question across bubbles without enlarging the transcript',()=>{
+  const row={chat,accountId,personaId};
+  const words=['周末再听。','你想听现场版吗','我更喜欢贝斯进来的那一下。','前奏也特别短。','副歌第一拍就进了。','突然想起还有张现场碟。','歌词最后一句是“你愿意吗？”'];
+  const rows=words.map((text,i)=>({...row,dir:i?'out':'in',text,time:at-(words.length-i)*1000,delivery:'sent'}));
+  rows.push({...row,dir:'out',text:'另一件事呢？',time:at-100,delivery:'queued'});
+  const snapshot=()=>initiativeConversation(recentOperationContext(rows,{key:chat,accountId,personaId,now:at}),false,at);
+  const waiting=snapshot();
+  assert.equal(waiting.turns.length,4);
+  assert.deepEqual(waiting.turns.map(turn=>turn[1]),[words[0],words[1],words[5],words[6]]);
+  assert.match(waiting.replyState,/提问后对方还没发言/);
+  rows.push({...row,dir:'in',text:'现场版周末再听吧。',time:at});
+  assert.doesNotMatch(snapshot().replyState,/提问后对方还没发言/);
+});
+
 test('actual API send gate enforces spacing but allows a new topic after the configured interval without a reply',()=>{
   const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
   const start=source.indexOf('  function proactiveCheck('),end=source.indexOf('\n  function privateInitiativeUnanswered(',start);

@@ -136,7 +136,7 @@ export function mediaIntentHint(intent){
     : '【本轮唱歌】用 [语音:唱歌] 另起一段，后面写实际要唱的歌词。是否生成以 RunningHub 的实际回执为准。';
   return (songHint?songHint+'\n':'')+'【本轮媒体表达参考】'+JSON.stringify(intent)+(intent.source==='direct'?'\n对方本轮明确邀请发送媒体。':'\n这是表达形式判断的建议，不是对方明确要求；request仅保留对方原话。先直接回答原问题，自主选择媒体时不改变意思，不把理由或计划当已发生的事实。')+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(!singing&&intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
 }
-export const IMAGE_DELIVERY_RULES='【发图顺序：群聊和私聊相同】先发图片，再发配文、画面描述、感想和语音。图片前可以完全不说话。需要先回答与图片无关的问题时，单独写[即时回复]正文，再用|||隔开[图:具体画面]；依赖图片的配话放图后。如果只想先打一声招呼，可以简短自然地说正在准备。调皮、傲娇等符合当前人设时，也可以先逗一句“就不给你”，但仍实际发图，不把逗弄当作取消请求。不强制使用这些示例，不提前描述画面或声称已经发出。图用单独一行 [图:具体画面]，其余文字和语音放图后。';
+export const IMAGE_DELIVERY_RULES='【发图顺序：群聊和私聊相同】先发图片，再发配文、画面描述、感想和语音。图片前可以完全不说话。需要先回答与图片无关的问题时，单独写[即时回复]正文，下一行写[图:具体画面]。依赖图片的配话放图后。如果只想先打一声招呼，可以简短自然地说正在准备。调皮、傲娇等符合当前人设时，也可以先逗一句“就不给你”，但仍实际发图，不把逗弄当作取消请求。不强制使用这些示例，不提前描述画面或声称已经发出。图用单独一行 [图:具体画面]，其余文字和语音放图后。';
 
 export function imageLeadIn(value=''){
   const text=String(value).trim();if(!text||text.length>32||/\[|https?:|已经|好了|拍完|发了|发给你了|送达/.test(text))return false;
@@ -146,13 +146,13 @@ export function imageLeadIn(value=''){
 // Keep model-written captions intact, but put them behind the actual picture.
 // A lead-in is optional and is never fabricated by the transport.
 export function imageFirstReply(value=''){
-  const body=String(value).trim(),picture=/\[(?:图|图片|照片)[:：]\s*[^\]\n]{1,800}\]/g;
-  if(!picture.test(body))return body;
-  const parts=body.replace(picture,mark=>'\n|||\n'+mark+'\n|||\n').split(/\|\|\|/).map(s=>s.trim()).filter(Boolean);
+  const body=String(value).trim();
+  const parts=body.split(/(\[(?:图|图片|照片)[:：]\s*[^\]\n]{1,800}\])/).map(s=>s.trim()).filter(Boolean);
   const isPicture=s=>/^\[(?:图|图片|照片)[:：][^\]\n]+\]$/.test(s),first=parts.findIndex(isPicture);
-  const prefix=parts.slice(0,first).flatMap(s=>s.split(/\r?\n/)).map(s=>s.trim()).filter(Boolean);
+  if(first<0)return body;
+  const prefix=parts.slice(0,first).flatMap(s=>s.split(/\r\n?|\n/)).map(s=>s.trim()).filter(Boolean);
   const lead=prefix.findIndex(imageLeadIn),pictures=parts.filter(isPicture);
-  return [...(lead<0?[]:[prefix[lead]]),...pictures,...prefix.filter((_,i)=>i!==lead),...parts.slice(first).filter(s=>!isPicture(s))].join('\n|||\n');
+  return [...(lead<0?[]:[prefix[lead]]),...pictures,...prefix.filter((_,i)=>i!==lead),...parts.slice(first).filter(s=>!isPicture(s))].join('\n');
 }
 const speechComparable=value=>String(value||'').replace(/[\s，,。.!！?？“”‘’"'「」『』]/g,'');
 function requestedVoiceQuotes(request=''){
@@ -171,39 +171,39 @@ export function completeMediaReply(value,intent,currentRequest=''){
   // Some models put the requested words inside the marker instead of after it.
   // Recover only verbatim requested speech, never read a mood/direction aloud.
   const quoted=requestedVoiceQuotes(currentRequest||intent?.request);
-  body=body.replace(/\[语音[:：]([^\]\n]{1,800})\]/g,(mark,line)=>quoted.some(text=>speechComparable(text)===speechComparable(line))?'[语音]'+line+'\n|||\n':mark);
+  body=body.replace(/\[语音[:：]([^\]\n]{1,800})\]/g,(mark,line)=>quoted.some(text=>speechComparable(text)===speechComparable(line))?'[语音]'+line+'\n':mark);
   const image=/\[(?:图|图片|照片)[:：][^\]\n]+\]/,voice=/\[语音(?:[:：][^\]\n]+)?\]/;
   if(intent?.kinds?.includes('image')&&!image.test(body)){
     const description=String(intent.request||'当前角色此刻自然想分享的照片，按语境选择近脸、半身或眼前后置视角').replace(/[\[\]\r\n]/g,' ').slice(0,220);
     if(/(?:不能|无法|没法|不支持|发不|没有).{0,16}(?:图|照片|发送|能力|功能)|发不过来/.test(body))body='';
-    body+=(body?'\n|||\n':'')+'[图:'+description+']';
+    body+=(body?'\n':'')+'[图:'+description+']';
   }
   if(cover&&!voice.test(body)){
     if(body.length<=65&&/(?:不能|没法|无法|不支持).{0,12}(?:唱|翻唱)|唱不了/.test(body))body='';
-    body+=(body?'\n|||\n':'')+'[语音:唱歌]';
+    body+=(body?'\n':'')+'[语音:唱歌]';
   }
   /* 只在对方明确点名要语音、而且这句本身就是一句台词时才兜底合成。
      以前不管多长的回复都整段念出来：解析、报错、参数说明全被念，还一直在扣积分。 */
-  const spokenCandidate=body.replace(image,'').replace(/\|\|\|/g,'').trim();
+  const spokenCandidate=body.replace(image,'').trim();
   /* 工作产出不进语音：代码块、表格、频段数字、报错、参数说明这些是给人看的，别念。 */
   const workOutput=/```|\|.*\||(?:\d+\s*(?:hz|khz|db|dbfs|ms|%))|参数|频段|实测|报错|失败|超时|版本|代码|接口|日志|缓存|脚本/i.test(spokenCandidate)
     || (spokenCandidate.match(/[：:]/g)||[]).length>=2
     || /(?:^|\n)\s*(?:[-*•]|\d+[.、])/.test(spokenCandidate);
   const shortLine=spokenCandidate.length<=60&&!workOutput;
   if(intent?.kinds?.includes('voice')&&!voice.test(body)&&intent.direct===true&&!requestsSinging(intent.request)&&shortLine){
-    let spoken=body.replace(image,'').replace(/\|\|\|/g,'').trim();
+    let spoken=spokenCandidate.replace(/\r\n?|\n/g,' ');
     if(/(?:不能|无法|没法|不支持|没有).{0,16}(?:语音|声音|发送|能力|功能)/.test(spoken))spoken='';
     if(!spoken)spoken=/晚安/.test(intent.request||'')?'晚安，好好休息。':/早安/.test(intent.request||'')?'早安。':'嗯，我在听。';
     const pictures=[...body.matchAll(new RegExp(image.source,'g'))].map(m=>m[0]);
-    body='[语音]'+spoken+(pictures.length?'\n|||\n'+pictures.join('\n|||\n'):'');
+    body=['[语音]'+spoken,...pictures].join('\n');
   }
   // 标签可能被写在引子后面：语音必须独占一段开头，否则会把
   // [语音:温柔] 原样当文字发出去；图和语音也拆成各自的消息，保住先后顺序。
   const mark=body.match(voice);
   if(mark&&body.slice(0,mark.index).trim()!==''){
     const before=body.slice(0,mark.index).trim(),after=body.slice(mark.index+mark[0].length).trim();
-    body=before+'\n|||\n'+mark[0]+after;
+    body=before+'\n'+mark[0]+after;
   }
   // Put media in separate platform messages even when the model puts them inline.
-  return body.replace(new RegExp(image.source,'g'),mark=>'\n|||\n'+mark+'\n|||\n').replace(/(?:\s*\|\|\|\s*){2,}/g,'\n|||\n').replace(/^\s*\|\|\|\s*|\s*\|\|\|\s*$/g,'').trim();
+  return body.replace(new RegExp(image.source,'g'),'\n$&\n').trim();
 }

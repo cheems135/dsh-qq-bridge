@@ -16,7 +16,7 @@ export function prepareLocalReply(value,{request='',spoken=[]}={}) {
   if(protectedText(text,request))return text;
   const seen=new Set();
   for(const previous of spoken)for(const clause of clauses(previous)){const k=key(clause);if(plain(k).length>=3)seen.add(k);}
-  return clauses(text.replace(/\|\|\|/g,'\n')).filter(clause=>{
+  return clauses(text).filter(clause=>{
     const k=key(clause);
     if(plain(k).length<3)return true;
     if(seen.has(k))return false;

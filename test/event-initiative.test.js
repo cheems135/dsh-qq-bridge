@@ -49,6 +49,19 @@ test('new events bypass idle wait once, and a quiet decision does not cause paid
  const overdue=eventInitiativeCadence(null,now-180*minute,now,{commit:true});
  assert.equal(eventInitiativeCadence(overdue.record,now-180*minute,now+minute).ok,false);
 });
+test('ordinary idle decisions do not evict previously considered events or trigger another inference for them',()=>{
+ let clock=now,state={base:now-minute,fired:[now],eventId:'b',seenEventIds:['a','b','b']};
+ for(let i=0;i<14;i++){
+   clock+=121*minute;
+   const idle=eventInitiativeCadence(state,state.base,clock,{commit:true});
+   assert.equal(idle.ok,true);
+   state=idle.record;
+ }
+ assert.deepEqual(state.seenEventIds,['a','b']);
+ assert.equal(eventInitiativeCadence(state,state.base,clock+minute,{event:{kind:'progress',id:'a'}}).ok,false);
+ assert.equal(eventInitiativeCadence(state,state.base,clock+minute,{event:{kind:'progress',id:'c'}}).ok,true);
+});
+
 test('scene changes stay background until cadence; only confirmed observations may trigger immediately',()=>{
  const base=now-minute,first={id:'scene-one',kind:'scene'},switched={id:'scene-two',kind:'scene'};
  assert.equal(initiativeEvent({scene:{date:'2026-11-15',start:720,activity:'画画'},now}),null);

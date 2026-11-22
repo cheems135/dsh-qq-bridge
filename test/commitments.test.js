@@ -16,6 +16,19 @@ test('a promise acknowledgement cannot masquerade as the promised QQ operation',
  assert.equal(deliveryCommitmentId({key:'private:123',commitmentId:'job-1'}),'job-1');
 });
 
+test('ordinary dialogue carries only relevant open commitments from a visible source',()=>{
+ const h=harness(),owner=privateContext(),group=groupContext();
+ assert.equal(h.ledger.hint(owner,{words:'我选红茶，你呢？'}),'');
+ const content=plan({kind:'message',phrases:['雨停了']});
+ h.ledger.command(content,owner);
+ assert.equal(h.ledger.hint(owner,{words:'哈哈哈'}),'');
+ assert.match(h.ledger.hint(owner,{words:'约定的进度呢？'}),/把答应的资料发出去/);
+ assert.equal(h.ledger.hint(group,{words:'约定的进度呢？'}),'');
+ h.ledger.event(owner,{kind:'message',id:'rain',text:'雨停了',trusted:true,at:1001});
+ assert.match(h.ledger.hint(owner,{words:'雨停了',messageId:'rain'}),/把答应的资料发出去/);
+ assert.equal(h.ledger.hint(owner,{words:'雨停了',messageId:'another'}),'');
+});
+
 test('owner promise in a group is persisted for the same owner private chat, without leaking to other actors or personae',async()=>{
  const h=harness(),group=groupContext(),owner=privateContext();
  const saved=h.ledger.command(plan({kind:'message',phrases:['资料准备好了']}),group).job;

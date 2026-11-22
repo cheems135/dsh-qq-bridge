@@ -1,4 +1,4 @@
-import {mkdirSync,readFileSync,writeFileSync,readdirSync,existsSync,renameSync,realpathSync,statSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync,readdirSync,existsSync,renameSync,realpathSync,statSync,rmSync} from 'node:fs';
 import {join,dirname,basename,relative,isAbsolute} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -20,18 +20,48 @@ export function createDrawingStudio({getRoot,render=renderDrawing,now=()=>Date.n
  const dir=c=>{const p=join(getRoot(),'drawings',createHash('sha256').update(JSON.stringify([c.accountId,c.personaId])).digest('hex').slice(0,24));mkdirSync(p,{recursive:true});return p;};
  const load=(c,id)=>{if(!/^[a-f\d-]{36}$/.test(id||''))throw Error('请使用当前画本的真实作品id');return JSON.parse(readFileSync(join(dir(c),id+'.json'),'utf8'));};
  const save=(c,p)=>{const file=join(dir(c),p.id+'.json'),tmp=file+'.tmp';writeFileSync(tmp,JSON.stringify(p));renameSync(tmp,file);};
+ function currentExport(p,file){
+  if(!p.shapes.length||!existsSync(file))return false;
+  if(Object.hasOwn(p,'renderedStrokes'))return p.renderedStrokes===p.shapes.length;
+  // Older builds wrote the SVG before the PNG. An interrupted export can leave
+  // a new SVG next to an older PNG, so check both the source and write order.
+  const source=file.slice(0,-4)+'.svg';
+  return existsSync(source)&&statSync(file).mtimeMs>=statSync(source).mtimeMs&&readFileSync(source,'utf8')===drawingSvg(p);
+ }
+ function pngBytes(file){
+  const stat=statSync(file);
+  if(!stat.isFile()||stat.size>16*1024*1024)throw Error('画本没有有效的已导出图片');
+  const bytes=readFileSync(file);
+  if(bytes.length<45||bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||
+     bytes.toString('ascii',12,16)!=='IHDR'||bytes.subarray(-12).toString('hex')!=='0000000049454e44ae426082')throw Error('画本没有有效的已导出图片');
+  return bytes;
+ }
  async function act(args,c){
-  if(args.action==='list')return {ok:true,works:readdirSync(dir(c)).filter(n=>n.endsWith('.json')).map(n=>{const p=load(c,n.slice(0,-5)),file=join(dir(c),p.id+'.png');return {id:p.id,title:p.title,strokes:p.shapes.length,updatedAt:p.updatedAt,...(existsSync(file)?{file}: {})};})};
+  if(args.action==='list')return {ok:true,works:readdirSync(dir(c)).filter(n=>n.endsWith('.json')).map(n=>{const p=load(c,n.slice(0,-5)),file=join(dir(c),p.id+'.png');return {id:p.id,title:p.title,strokes:p.shapes.length,updatedAt:p.updatedAt,...(currentExport(p,file)?{file}:p.shapes.length?{needsRender:true}:{})};})};
   if(args.action==='create'){const p={id:randomUUID(),title:String(args.title||'新画').slice(0,60),width:number(args.width||768,64,2048),height:number(args.height||768,64,2048),background:color(args.background||'#ffffff'),shapes:[],at:now(),updatedAt:now()};save(c,p);return {ok:true,id:p.id,width:p.width,height:p.height,strokes:0,substantive:false,coverage:'已建空白画布，尚未绘制'};}
   const p=load(c,args.id);
-  if(args.action==='draw'){const shapes=Array.isArray(args.shapes)?args.shapes:[];if(!shapes.length||shapes.length>200||p.shapes.length+shapes.length>3000)throw Error('一次添加1到200笔，一幅画最多3000笔');const next={...p,shapes:[...p.shapes,...shapes],updatedAt:now()};drawingSvg(next);save(c,next);return {ok:true,id:p.id,strokes:next.shapes.length,substantive:false,coverage:'实际笔画已写入画本，render可查看并继续修改'};}
-  if(args.action!=='render')throw Error('未知绘画动作');if(!p.shapes.length)throw Error('空白画布不能算已完成作品');const svg=drawingSvg(p),sourceFile=join(dir(c),p.id+'.svg'),file=join(dir(c),p.id+'.png');writeFileSync(sourceFile,svg);await render(svg,file,{...p,tempDir:join(getRoot(),'browser','drawing-renderer')});if(!existsSync(file))throw Error('绘制结果尚未导出');return {ok:true,id:p.id,title:p.title,file,sourceFile,strokes:p.shapes.length,substantive:true,coverage:'真实画布上的'+p.shapes.length+'笔已导出PNG，SVG与画本源文件保留，可继续修改；未自动发送QQ'};
+  if(args.action==='draw'){const shapes=Array.isArray(args.shapes)?args.shapes:[];if(!shapes.length||shapes.length>200||p.shapes.length+shapes.length>3000)throw Error('一次添加1到200笔，一幅画最多3000笔');const next={...p,shapes:[...p.shapes,...shapes],renderedStrokes:0,updatedAt:now()};drawingSvg(next);save(c,next);return {ok:true,id:p.id,strokes:next.shapes.length,substantive:false,coverage:'实际笔画已写入画本，render可查看并继续修改'};}
+  if(args.action!=='render')throw Error('未知绘画动作');
+  if(!p.shapes.length)throw Error('空白画布不能算已完成作品');
+  const svg=drawingSvg(p),sourceFile=join(dir(c),p.id+'.svg'),file=join(dir(c),p.id+'.png');
+  const staging=join(dir(c),randomUUID()+'.tmp.png');
+  try{
+   await render(svg,staging,{...p,tempDir:join(getRoot(),'browser','drawing-renderer')});
+   pngBytes(staging);
+   const current=load(c,p.id);
+   if(drawingSvg(current)!==svg)throw Error('导出期间画本已有新笔画，进度已保存；用原画本 id 重新 render 即可');
+   writeFileSync(sourceFile,svg);
+   renameSync(staging,file);
+   save(c,{...current,renderedStrokes:current.shapes.length});
+  }finally{rmSync(staging,{force:true});}
+  return {ok:true,id:p.id,title:p.title,file,sourceFile,strokes:p.shapes.length,substantive:true,coverage:'真实画布上的'+p.shapes.length+'笔已导出PNG，SVG与画本源文件保留，可继续修改；未自动发送QQ'};
  }
  function verifyArtifact(file,c){
   const base=realpathSync(dir(c)),target=realpathSync(String(file||'')),rel=relative(base,target);
   if(!rel||rel.startsWith('..')||isAbsolute(rel)||dirname(target)!==base||!/^[a-f\d-]{36}\.png$/i.test(basename(target)))throw Error('只能分享当前账号人设画本中的实际作品');
-  const project=load(c,basename(target,'.png')),stat=statSync(target),bytes=readFileSync(target);
-  if(!project.shapes?.length||!stat.isFile()||stat.size>16*1024*1024||bytes.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('画本没有有效的已导出图片');
+  const project=load(c,basename(target,'.png'));
+  if(!currentExport(project,target))throw Error('当前画本尚未导出，请用原画本 id 调用 render，已有笔画保留');
+  const bytes=pngBytes(target);
   return {ok:true,substantive:true,tool:'bridge_drawing',file:target,sha256:createHash('sha256').update(bytes).digest('hex'),title:project.title,coverage:'已核实当前账号人设画本、实际笔画和已导出PNG，可分享既有作品，不要求重新绘制'};
  }
  return {act,verifyArtifact};
