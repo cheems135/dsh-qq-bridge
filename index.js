@@ -176,7 +176,7 @@ import {createMobileEndpoint} from './mobile-endpoint.js';
 import {isLoopbackUrl,validateLocalAttachment,LOCAL_MEDIA_DEFAULT} from './local-config.js';
 import {abortScopedLocalTurn,deliveryScopeCurrent,localScopeCurrent as currentScopedTurn,localScopeKey as scopedTurnKey} from './local-turn-state.js';
 import {companionConfig,conversationStep,conversationHint,expressionHint,initiativeHint,nudgeAllowed,realismConfig,realismHint} from './conversation-care.js';
-import {createQqImageInput,IMAGE_INPUT_REVISION} from './qq-image-input.js';
+import {createQqImageInput,IMAGE_INPUT_REVISION,adaptQqVisionInput} from './qq-image-input.js';
 import {createBrowserController} from './browser-controller.js';
 import {readBrowserVideo} from './browser-video.js';
 import {createNativeDesktop} from './native-desktop.js';
@@ -1055,7 +1055,6 @@ export function apply(ctx, rawConfig) {
   let websiteMcp=null;
   let visualSessions=null;
   let agencyTools=null,browserController=null,desktopController=null,audioAnalysis=null,musicInput=null,drawingStudio=null,comfyuiRuntime=null,gameSessions=null;
-  let skipCatchUpOnce=false;
   let deviceProfiles=null,profilesReloading=false;
   const pairedConfigFile=join(cfg.dataDir,'device-sync','pairing.json');
   const runtimeFile=fileURLToPath(new URL(isDesktop?'./tools/media-runtime-desktop.json':'./tools/media-runtime-mobile.json',import.meta.url));
@@ -3074,7 +3073,7 @@ export function apply(ctx, rawConfig) {
       const ids=row.sourceMessageIds?.length?row.sourceMessageIds:[row.messageId];
       if(ids.some(id=>id!=null&&recentWithdrawals.has(withdrawalKey(row.accountId,row.chat,id))))row.retracted=true;
       if(row.sourceMessageIds?.length<2)delete row.sourceMessageIds;
-      messages.push(row);pruneMonitor();if(!row.retracted)recordCalendarRow(row);return true;
+      messages.push(row);if(row.source==='offline-history')messages.sort((a,b)=>a.time-b.time);pruneMonitor();if(!row.retracted)recordCalendarRow(row);return true;
     }
     catch (error) { log(`monitor write failed: ${error?.message ?? error}`); return false; }
   }
@@ -5963,13 +5962,14 @@ export function apply(ctx, rawConfig) {
       onOpen: () => {
         reconnectDelay = 1000;
         lastDisconnectAt = 0;
-        log('onebot websocket connected');void request('get_login_info',{},10000).then(info=>{if(socket===client&&/^\d{5,20}$/.test(String(info?.user_id||''))){lastSelfId=String(info.user_id);armDeliveryVerification();}}).catch(()=>{});armDeliveryVerification();
+        log('onebot websocket connected');const loginReady=request('get_login_info',{},10000).then(info=>{if(socket===client&&/^\d{5,20}$/.test(String(info?.user_id||''))){lastSelfId=String(info.user_id);armDeliveryVerification();}}).catch(()=>{});armDeliveryVerification();
         qzoneConnectionRevision++;qzoneSessionManager?.invalidate('qq-reconnected');clearTimeout(qzoneWarmTimer);qzoneWarmTimer=setTimeout(()=>{void maintainQzoneSession().then(()=>resumeSocialReadbacks()).catch(()=>{});},2500);qzoneWarmTimer.unref?.();
         void flushOutbox();
         void (async()=>{
           recoverUncertainInbox();
           resumeQueuedInbox();
-          if(skipCatchUpOnce)skipCatchUpOnce=false;else await catchUpMissedMessages();
+          await loginReady;
+          if(socket===client&&client.ready)await catchUpMissedMessages();
         })().catch(error=>log('startup catch-up failed: '+(error?.message??error)));
         client.lastAlive = Date.now();
         heartbeat = setInterval(() => {
@@ -7631,6 +7631,11 @@ export function apply(ctx, rawConfig) {
       }
       if(chat.isOwner&&settings.agency.enabled&&!nativePersona)content.unshift({type:'text',text:'【本轮可使用实际设备】用户当前明确请求优先于默认日程；日程是自己的计划，不是强制命令；自主选择、修改和记录正在做的事，用bridge_life_adjust记录，再实际执行。按当前意图自行决定是否操作。需要浏览网站、刷视频或操控设备时先用bridge_capabilities发现工具，再观察和操作，取得真实反馈；没有要求必须运行固定的phone_learning脚本。'+(isDesktop?'当前宿主是Windows电脑，网页优先使用真实浏览器；只有明确要用手机或本机浏览器不适合时才操控配对手机。':'当前宿主是DSHBox，优先使用手机Pilot原生能力。')});
       const executionFacts={type:'text',text:conversationExecutionHint(chat)};content.unshift(executionFacts);protectedInputParts.add(executionFacts);
+      if(content.some(part=>part.type==='image')){
+        const observation=await adaptQqVisionInput(content,apiChatRoute(effectiveModel(chat.key)),payload._bridgeMemoryUserText||text,askApiModel);
+        if(observation)protectedInputParts.add(observation);
+        if(stopped||accountPaused||admitGeneration!==(featureState.generation||0)||!chats.has(sessionId))throw Error('图片处理期间会话状态已改变，未提交旧消息');
+      }
       const packed=promptBudget.pack(content,{protectedParts:protectedInputParts,executionFacts,nativePersona,identityText:recipientIdentity(chat.key,settings)});
       featureState.inputStats={at:Date.now(),systemChars:(sessionInstructions.get(sessionId)||'').length,contentChars:packed.afterChars,rawContentChars:packed.beforeChars,blocks:content.filter(part=>part?.type==='text').length};
       // The Remote method's second parameter is a caller lifetime; it is a
@@ -9444,48 +9449,48 @@ export function apply(ctx, rawConfig) {
     if (retried || blocked) saveFeatures();
     if (retried || blocked) log(`inbox recovery: ${retried} retried, ${blocked} held for confirmation`);
   }
-  let catchUpRunning = false, lastCatchUpAt = 0;
-  const catchUpUnavailable = new Set();
-  /**
-   * 启动/重连后向 NapCat 拉一次最近历史，把离线期间没送达的消息补进收件箱。
-   * 只补最近 12 小时、每个会话最多 20 条，并用 message_id 去重，避免重启后重复回复。
-   */
+  /** Read allowed conversations oldest-first, using a persisted per-scope scan boundary. */
   async function catchUpMissedMessages() {
-    if (catchUpRunning || stopped || accountPaused || !socket?.ready) return;
-    if (Date.now() - lastCatchUpAt < 5000) return;
-    catchUpRunning = true;
-    lastCatchUpAt = Date.now();
-    const recoveryAccount=settings.activeAccountId||'',recoveryGeneration=featureState.generation||0;
-    const selfId = String(lastSelfId || cfg.napcat.qq || '');
-    if (!/^\d{5,12}$/.test(selfId)) { log('catch-up skipped: account id unknown'); catchUpRunning = false; return; }
-    const targets = [
-      ...effectiveUsers().map(id => ({ kind: 'private', id: String(id) })),
-      ...effectiveGroups().map(id => ({ kind: 'group', id: String(id) })),
-    ].slice(0, 24);
-    let queued = 0;
-    try {
-      for (const target of targets) {
-        if (catchUpUnavailable.has(target.kind)) continue;
-        if (!/^\d{5,20}$/.test(String(target.id || ''))) { log('catch-up skipped: invalid target id'); continue; }
-        const key = `${target.kind}:${target.id}`,recoveryPersona=activePersona(`${target.kind}:${target.id}`).id;
-        const last = messages.filter(m => m.chat === key && m.dir === 'in' && (!m.accountId||m.accountId===(settings.activeAccountId||'')) && (!m.personaId||m.personaId===activePersona(key).id)).at(-1);
-        const since = Math.max(Number(last?.time) || 0,target.kind==='group'?Number(state.groupResumeAt?.[(settings.activeAccountId||'')+'|'+target.id])||0:0, Date.now() - 12 * 3600_000);
-        let data;
-        try {
-          data = await request(
-            target.kind === 'private' ? 'get_friend_msg_history' : 'get_group_msg_history',
-            target.kind === 'private' ? { user_id: Number(target.id) || target.id, count: 20 } : { group_id: Number(target.id) || target.id, count: 20 },
-            8000,
-          );
-        } catch (error) {
-          const message = String(error?.message ?? error);
-          if (/不支持|unknown action|retcode.?1404|retcode.?1200|接口不存在|not implemented/i.test(message)) catchUpUnavailable.add(target.kind);
-          log(`catch-up ${key} history failed: ${message.slice(0, 160)}`);
-          continue;
-        }
-        if(recoveryAccount!==(settings.activeAccountId||'')||recoveryGeneration!==(featureState.generation||0))break;
-        if(recoveryPersona!==activePersona(key).id)continue;
-        const list = (Array.isArray(data) ? data : data?.messages || []).slice().sort((a, b) => (Number(a?.time) || 0) - (Number(b?.time) || 0));
+    const connection=socket;
+    if(stopped||accountPaused||!connection?.ready)return;
+    const account=settings.activeAccountId||'',generation=featureState.generation||0,start=Date.now();
+    const selfId=String(lastSelfId||cfg.napcat.qq||'');
+    if(!/^\d{5,20}$/.test(selfId))return;
+    const current=()=>socket===connection&&connection.ready&&!stopped&&!accountPaused&&account===(settings.activeAccountId||'')&&generation===(featureState.generation||0);
+    const targets=[...effectiveUsers().map(id=>({kind:'private',id:String(id)})),...effectiveGroups().map(id=>({kind:'group',id:String(id)}))];
+    let queued=0;
+    for(const target of targets){
+        if(!current())return;
+        const key=target.kind+':'+target.id;
+        if(!/^\d{5,20}$/.test(target.id)||!recordsAllowed(key)||pausedConversation(key)||groupStopped(key))continue;
+        const persona=activePersona(key).id,scopeKey=JSON.stringify([account,selfId,persona,key]);
+        const allowed=()=>current()&&persona===activePersona(key).id&&recordsAllowed(key)&&!pausedConversation(key)&&!groupStopped(key)&&(target.kind==='group'?effectiveGroups():effectiveUsers()).map(String).includes(target.id);
+        const since=Math.max(Number(state.historyScanAt?.[scopeKey])||start-86400000,target.kind==='group'?Number(state.groupResumeAt?.[account+'|'+target.id])||0:0);
+        const history=new Map();
+        let cursor,covered=false;
+        try{
+          for(let page=0;page<100&&allowed();page++){
+            const params=target.kind==='private'?{user_id:target.id}:{group_id:target.id};
+            const data=await request(target.kind==='private'?'get_friend_msg_history':'get_group_msg_history',{...params,count:100,...(cursor==null?{}:{message_seq:cursor,reverseOrder:true})},12000);
+            const rows=Array.isArray(data)?data:data?.messages;
+            if(!Array.isArray(rows))throw Error('历史接口没有返回消息列表');
+            const ordered=rows.slice().sort((a,b)=>Number(a.time)-Number(b.time));
+            const previousSize=history.size;
+            for(const row of ordered)if(row.message_id!=null)history.set(String(row.message_id),row);
+            if(rows.length<100||Number(ordered[0]?.time)*1000<since){covered=true;break;}
+            const next=ordered[0]?.message_id;
+            if(next==null||next===cursor||history.size===previousSize)break;
+            cursor=next;
+          }
+        }catch(error){log('catch-up '+key+' history failed: '+String(error?.message||error).slice(0,160));}
+        if(!allowed())continue;
+        if(!covered)log('catch-up '+key+' 历史覆盖不完整，保留上次检查位置');
+        const scoped=messages.filter(m=>m.chat===key&&(!m.accountId||m.accountId===account)&&(!m.personaId||m.personaId===persona));
+        const known=new Set(scoped.filter(m=>m.dir==='in').flatMap(m=>[m.messageId,...(m.sourceMessageIds||[])]).filter(v=>v!=null).map(String));
+        for(const audit of featureState.audits||[])if(audit.chat===key&&(!audit.accountId||audit.accountId===account)&&(!audit.persona||audit.persona===persona))for(const id of audit.inboundIds||[])known.add(String(id));
+        const list=[...history.values()].sort((a,b)=>Number(a.time)-Number(b.time));
+        const lastReply=Math.max(0,...scoped.filter(m=>m.dir==='out').map(m=>Number(m.time)||0));
+        const laterConversation=target.kind==='private'?Math.max(0,...scoped.filter(m=>m.dir==='in'&&m.time<=lastReply).map(m=>Number(m.time)||0)):0;
         for (const item of list) {
           const time = (Number(item?.time) || 0) * 1000;
           if (!time || time < since) continue;
@@ -9494,7 +9499,7 @@ export function apply(ctx, rawConfig) {
           if (item.post_type === 'message_sent' || item.message_sent_type) continue;
           const messageId = item.message_id;
           if (messageId === undefined || messageId === null) continue;
-          if (messages.some(m => m.chat === key && m.dir === 'in' && String(m.messageId) === String(messageId))) continue;
+          if (known.has(String(messageId))) continue;
           const payload = {
             post_type: 'message',
             message_type: target.kind,
@@ -9511,15 +9516,18 @@ export function apply(ctx, rawConfig) {
           const scope=sleepInboxScope(payload);
           if(!recordsAllowed(key)||pausedConversation(key)||groupStopped(key)||target.kind==='group'&&!mentionsSelf(payload.message,selfId))continue;
           if(featureState.inbox.some(j=>j.id===selfId+':'+key+':'+messageId))continue;
-          sleepInbox.capture(payload,scope);
-          queued += 1;
+          if(time+999<laterConversation){
+            const words=qqHumanWords(segmentsOf(payload.message));
+            logMessage({chat:key,time,dir:'in',messageId:String(messageId),speakerId:sender,speakerName:String(item.sender?.card||item.sender?.nickname||''),text:words||'[离线附件]',userText:words,source:'offline-history'});
+          }else if(sleepInbox.capture(payload,scope))queued++;
         }
-      }
-      if(queued)reviewSleepInbox();
-      if (queued) log(`catch-up queued ${queued} missed message(s)`);
-    } finally {
-      catchUpRunning = false;
+        if(covered&&allowed()){
+          state.historyScanAt=state.historyScanAt||{};
+          state.historyScanAt[scopeKey]=start-1000;
+          saveState();
+        }
     }
+    if(queued&&current())reviewSleepInbox();
   }
   async function sharedContext(payload, key) {
     const extracted = extractIncoming(payload.message, payload.self_id); const notes = []; const references = []; const images = [];

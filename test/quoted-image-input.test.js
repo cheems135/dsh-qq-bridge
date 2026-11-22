@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {extractIncoming,segmentsOf} from '../bridge-features.js';
-import {createQqImageInput} from '../qq-image-input.js';
+import {createQqImageInput,adaptQqVisionInput} from '../qq-image-input.js';
 import {mergeGroupWindow} from '../group-conversation.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 function extract(name,deps){
@@ -46,4 +46,17 @@ test('quoted mface can be seen, cycle is finite, unrelated group and changed acc
  const c=fixture({messages:{100:original([{type:'reply',data:{id:'100'}}])}});const r=await c.read({},'group:123456','100');assert.equal(c.calls.length,1);assert.equal(r.reference.status,'partial');
  const other=fixture({messages:{100:{...original([image]),group_id:999999}}});await assert.rejects(other.read({},'group:123456','100'),/不属于/);assert.equal(other.catalog.length,0);
  const changed=fixture({messages:{100:original([image])},scopeChange:true});await assert.rejects(changed.read({},'group:123456','100'),/账号或人设改变/);
+});
+
+test('Pro receives a text observation from the same provider and Flash retains its native image input',async()=>{
+ const route={provider:'deepseek-account',model:'deepseek-v4-pro'},image={type:'image',attachment:{id:'test-image'}},question={type:'text',text:'What number?'};
+ for(const fail of [false,true]){
+  const input=[question,image];let calls=0;
+  const observation=await adaptQqVisionInput(input,route,question.text,async(_system,parts,_limit,selected)=>{
+    calls++;assert.deepEqual(selected,{provider:route.provider,model:'deepseek-flash'});assert.equal(parts[1],image);
+    if(fail)throw Error('unavailable');return '4827';
+  });
+  assert.equal(calls,1);assert.deepEqual(input,[question,observation]);assert.equal(observation.type,'text');assert.equal(observation.text.includes('4827'),!fail);
+ }
+ const native=[image];assert.equal(await adaptQqVisionInput(native,{...route,model:'deepseek-flash'},'',()=>assert.fail()),null);assert.deepEqual(native,[image]);
 });

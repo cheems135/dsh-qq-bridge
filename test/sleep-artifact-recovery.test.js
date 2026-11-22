@@ -55,7 +55,21 @@ test('real reconnect history path captures sleeping messages without fresh comma
  const start=source.indexOf('  async function catchUpMissedMessages() {'),end=source.indexOf('  async function sharedContext(',start);assert(end>start);
  for(const stale of [false,true]){
   const captured=[],settings={activeAccountId:'a'},featureState={generation:0,inbox:[]};let reviews=0;
-  const deps={stopped:false,accountPaused:false,socket:{ready:true},settings,featureState,lastSelfId:'99999',cfg:{napcat:{}},effectiveUsers:()=>['12345'],effectiveGroups:()=>[],messages:[],state:{},activePersona:()=>({id:'p'}),request:async()=>{if(stale)settings.activeAccountId='changed';return {messages:[{message_id:1,time:Math.floor(Date.now()/1000),user_id:'12345',sender:{user_id:'12345'},message:[{type:'text',data:{text:'睡着时收到的消息'}}]}]};},sleepInboxScope:()=>({accountId:'a',personaId:'p',key:'private:12345'}),recordsAllowed:()=>true,pausedConversation:()=>false,groupStopped:()=>false,mentionsSelf:()=>false,sleepInbox:{capture:(p,s)=>captured.push({p,s})},reviewSleepInbox:()=>reviews++,log:()=>{}};
+  const deps={stopped:false,accountPaused:false,socket:{ready:true},settings,featureState,saveState:()=>{},lastSelfId:'99999',cfg:{napcat:{}},effectiveUsers:()=>['12345'],effectiveGroups:()=>[],messages:[],state:{},activePersona:()=>({id:'p'}),request:async()=>{if(stale)settings.activeAccountId='changed';return {messages:[{message_id:1,time:Math.floor(Date.now()/1000),user_id:'12345',sender:{user_id:'12345'},message:[{type:'text',data:{text:'睡着时收到的消息'}}]}]};},sleepInboxScope:()=>({accountId:'a',personaId:'p',key:'private:12345'}),recordsAllowed:()=>true,pausedConversation:()=>false,groupStopped:()=>false,mentionsSelf:()=>false,sleepInbox:{capture:(p,s)=>captured.push({p,s})},reviewSleepInbox:()=>reviews++,log:()=>{}};
   const run=Function(...Object.keys(deps),'let catchUpRunning=false,lastCatchUpAt=0;const catchUpUnavailable=new Set();'+source.slice(start,end)+';return catchUpMissedMessages;')(...Object.values(deps));await run();assert.equal(captured.length,stale?0:1);assert.equal(reviews,stale?0:1);if(!stale)assert.equal(captured[0].p._bridgeCatchUp,true);
  }
+});
+
+test('reconnect pages past live messages, restores a private gap once and admits only an explicit group mention',async()=>{
+ const start=source.indexOf('  async function catchUpMissedMessages() {'),end=source.indexOf('  async function sharedContext(',start);
+ const sec=Math.floor(Date.now()/1000),messages=[],captured=[],archived=[],state={},calls=[];
+ const row=(id,time,user,msg=[])=>({message_id:id,time,user_id:user,sender:{user_id:user},message:msg});
+ messages.push({chat:'private:12345',dir:'in',time:(sec-30)*1000,messageId:'live',sourceMessageIds:['live','merged']},{chat:'private:12345',dir:'out',time:(sec-20)*1000});
+ const recent=Array.from({length:100},(_,i)=>row(i+100,sec-100+i,'99999'));
+ const group=[row(6,sec-5,'98765'),row(7,sec-4,'98765',[{type:'at',data:{qq:'99999'}}])];
+ const deps={stopped:false,accountPaused:false,socket:{ready:true},settings:{activeAccountId:'a'},featureState:{inbox:[],audits:[{chat:'private:12345',inboundIds:['audited']}]},lastSelfId:'99999',cfg:{napcat:{}},effectiveUsers:()=>['12345'],effectiveGroups:()=>['54321'],state,messages,activePersona:()=>({id:'p'}),
+ request:async(name,params)=>{calls.push(params);return {messages:name==='get_group_msg_history'?group:params.reverseOrder===true&&params.message_seq?[row(1,sec-3600,'12345'),row('merged',sec-300,'12345'),row('audited',sec-290,'12345')]:recent};},
+ sleepInboxScope:()=>({}),recordsAllowed:()=>true,pausedConversation:()=>false,groupStopped:()=>false,mentionsSelf:(msg,id)=>msg.some(s=>s.type==='at'&&s.data.qq===id),sleepInbox:{capture:p=>{captured.push(p.message_id);return true;}},reviewSleepInbox:()=>{},saveState:()=>{},qqHumanWords:()=>'',segmentsOf:m=>m,logMessage:m=>{messages.push(m);archived.push(m.messageId);},log:()=>{}};
+ const run=Function(...Object.keys(deps),source.slice(start,end)+';return catchUpMissedMessages;')(...Object.values(deps));await run();await run();
+ assert.deepEqual(archived,['1']);assert.deepEqual(captured,[7]);assert.equal(calls[1].message_seq,100);assert.equal(Object.keys(state.historyScanAt).length,2);
 });
