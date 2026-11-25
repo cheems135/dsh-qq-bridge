@@ -16,6 +16,7 @@ export function createMediaTaskLifecycle({ state, account, persona, source, audi
     const kind = task.kind === 'voice' ? 'speech' : task.kind;
     const backend = task.backend || (source(kind) === 'local' ? 'local' : 'api');
     task.backend = backend;
+    refresh(task.auditId);
     record({
       id: 'media-task:' + task.id, tool: 'media.' + task.kind, kind,
       purpose: '媒体任务：生成 → 入队 → QQ回执 → 读回核对',
@@ -25,7 +26,6 @@ export function createMediaTaskLifecycle({ state, account, persona, source, audi
       result: { stage: task.status, deliveryId: task.deliveryId || '', files: task.file ? [task.file] : [], verification: task.verification || null },
       error: task.error || '',
     }, { accountId: task.accountId, personaId: task.personaId, chat: task.chat, auditId: task.auditId, backend });
-    refresh(task.auditId);
   }
   return {
     refresh, record: recordTask,
@@ -33,12 +33,17 @@ export function createMediaTaskLifecycle({ state, account, persona, source, audi
       const data = state();
       const rows = data.mediaTasks = Array.isArray(data.mediaTasks) ? data.mediaTasks : [];
       const accountId = account() || '', personaId = persona(chat.key);
-      const old = chat.auditId ? rows.find(task => task.accountId === accountId && task.personaId === personaId && task.chat === chat.key && task.auditId === chat.auditId && task.kind === kind && activeStatuses.has(task.status)) : null;
+      const old = chat.auditId ? rows.find(task => task.accountId === accountId && task.personaId === personaId && task.chat === chat.key && task.auditId === chat.auditId && task.kind === kind && (!task.part||!chat.mediaPart||task.part===chat.mediaPart) && activeStatuses.has(task.status)) : null;
       if (old) return { duplicate: true, task: old };
-      const task = { id: id(), at: now(), accountId, personaId, chat: chat.key, auditId: chat.auditId || '', kind, status: 'pending' };
+      const task = { id: id(), at: now(), accountId, personaId, chat: chat.key, auditId: chat.auditId || '', kind, status: 'pending',...(chat.mediaPart?{part:chat.mediaPart}:{}) };
       rows.push(task);
+      try {
+        if (persist() === false) throw Error('媒体任务登记未保存，本次没有启动生成');
+      } catch (error) {
+        data.mediaTasks = data.mediaTasks.filter(row => row !== task);
+        throw error;
+      }
       recordTask(task);
-      persist();
       return { duplicate: false, task };
     },
     finish(task, status, details = {}) {

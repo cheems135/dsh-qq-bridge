@@ -38,6 +38,16 @@ function replyLines(text){
   return lines;
 }
 
+// A voice declaration owns the following speech line even when the model puts
+// blank lines between them. This parses delivery syntax, never chooses speech.
+function bindVoiceLine(text){
+  if(jsonBlock(text))return text;
+  return text.replace(/```[\s\S]*?(?:```|$)|`+[^\x60\r\n]+`+|\[(?:发送|群发|定时)[:：][^\]]*\]|(\[语音(?:[:：][^\]\r\n]{1,20})?\])[ \t]*\n(?:[ \t]*\n)*([^\n]+)/g,(whole,mark,line)=>{
+    if(!mark||/^\s*```/.test(line)||/^\s*\[(?:语音|声音|图|图片|照片|视频|表情包|发送|群发|定时|设置|查|收藏表情|skip)(?:[:：\]])/.test(line))return whole;
+    return mark+line.trim();
+  });
+}
+
 function structuredReplyParts(text){
   const parts=[];
   let start=0;
@@ -46,7 +56,7 @@ function structuredReplyParts(text){
     if(block)parts.push(...(structuredReply(block)?[block]:replyLines(block)));
   };
   // A media line still has its own delivery when a caption contains a list or code.
-  const mediaLines=/```[\s\S]*?(?:```|$)|\[(?:发送|群发|定时)[:：][^\]]*\]|^[ \t]*(\uE200PIC\d+\uE201|\[(?:图|图片|照片)[:：][^\]\r\n]+\]|\[语音(?:[:：][^\]\r\n]+)?\][^\r\n]*)[ \t]*$/gm;
+  const mediaLines=/```[\s\S]*?(?:```|(?![\s\S]))|\[(?:发送|群发|定时)[:：][^\]]*\]|^[ \t]*(\uE200PIC\d+\uE201|\[(?:图|图片|照片)[:：][^\]\r\n]+\]|\[语音(?:[:：][^\]\r\n]+)?\][^\r\n]*)[ \t]*$/gm;
   for(const match of text.matchAll(mediaLines)){
     if(!match[1])continue;
     append(text.slice(start,match.index));
@@ -59,7 +69,7 @@ function structuredReplyParts(text){
 
 // Preserve deliberate chat rhythm without splitting lists, code or relay bodies.
 export function naturalBubbleParts(value,{maxBubbles=0}={}){
-  const text=normalizeReplyNewlines(value).trim();if(!text)return [];
+  const text=bindVoiceLine(normalizeReplyNewlines(value)).trim();if(!text)return [];
   const requested=Number(maxBubbles),cap=Number.isFinite(requested)&&requested>0?Math.min(12,Math.round(requested)):Infinity;
   const parts=structuredReply(text)?structuredReplyParts(text):replyLines(text);
   const commands=/\[(?:发送|群发|定时|语音|表情包|图|图片|照片)[:：\]]|\uE200PIC/.test(text);

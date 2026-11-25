@@ -8,6 +8,17 @@ test('default dialogue removes inline and trailing gestures without removing spo
  assert.equal(stripUnrequestedActions('（低下头）我知道啦。*轻轻点头*\n那明天见（微笑）'),'我知道啦。\n那明天见');
  assert.equal(stripUnrequestedActions('好呀（转身（悄悄地）把书放下）！'),'好呀！');
 });
+
+test('screen gestures are narration, without altering ordinary quoted content or image parameters',()=>{
+ const gesture='（手停在屏幕上，贴了一会儿）';
+ assert.equal(stripUnrequestedActions('我还在呢。\n'+gesture),'我还在呢。');
+ assert.equal(stripUnrequestedActions('好呀（指尖落在窗边）'),'好呀');
+ assert.equal(stripUnrequestedActions('现在手停在屏幕上不方便操作。'),'现在手停在屏幕上不方便操作。');
+ assert.equal(stripUnrequestedActions('（备注：手停在屏幕上是图片描述）'),'（备注：手停在屏幕上是图片描述）');
+ assert.equal(stripUnrequestedActions('[图:指尖落在窗边]'),'[图:指尖落在窗边]');
+ assert.equal(stripUnrequestedActions(gesture,{request:'请逐字引用'}),gesture);
+ assert.equal(stripUnrequestedActions(gesture,{request:'请写一个短故事'}),gesture);
+});
 test('only an explicit current creative request enables stage directions',()=>{
  const text='（微笑）你好。';
  assert.equal(stripUnrequestedActions(text,{request:'你是个小说家吗？'}),'你好。');

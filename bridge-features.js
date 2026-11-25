@@ -4,6 +4,7 @@ import {isIP} from 'node:net';
 import http from 'node:http';
 import https from 'node:https';
 import {gunzipSync, inflateSync, brotliDecompressSync} from 'node:zlib';
+import {publicForumReplies,tiebaReplies} from './tieba-discussion.js';
 
 export const chatKeyValid = key => /^(private|group):\d{5,20}$/.test(String(key));
 export const messageIdValid = id => /^-?\d{1,24}$/.test(String(id));
@@ -26,6 +27,9 @@ export function segmentsOf(message) {
   if(start<message.length)result.push({type:'text',data:{text:decodeEntities(message.slice(start))}});
   return result;
 }
+export function isStickerReactionPart(part) {
+  return part?.type==='mface'||part?.type==='image'&&(Number(part.data?.sub_type)===1||/表情/.test(String(part.data?.summary||'')));
+}
 export function extractIncoming(message, selfId='') {
   const segments=segmentsOf(message);const texts=[];const cards=[];const replies=[];const forwards=[];const urls=[];
   function addUrl(value){for(const m of String(value||'').matchAll(/https?:\/\/[^\s<>"'\u0000-\u001f]+/gi)){const raw=decodeEntities(m[0]).replace(/[，。！？、）】》；]+$/,'');try{const u=new URL(raw);if(!urls.includes(u.href))urls.push(u.href)}catch{}}}
@@ -33,10 +37,17 @@ export function extractIncoming(message, selfId='') {
     const type=String(segment?.type||'');const data=segment?.data||{};
     if(type==='text'){texts.push(String(data.text||''));addUrl(data.text);}
     else if(type==='at'&&String(data.qq)!==String(selfId))texts.push('@'+String(data.qq||''));
-    else if(['image','record','video','file','face','mface'].includes(type))texts.push(({record:'[语音]',video:'[视频]',file:'[文件]',face:'[表情]',mface:'[表情]'})[type]||'');
+    else if(isStickerReactionPart(segment))texts.push('[表情]');
+    else if(['record','video','file','face'].includes(type))texts.push(({record:'[语音]',video:'[视频]',file:'[文件]',face:'[表情]'})[type]);
     else if(type==='reply'&&messageIdValid(data.id))replies.push(String(data.id));
     else if(type==='forward'&&String(data.id||'').length<200)forwards.push(String(data.id||''));
-    else if(type==='node'){const child=extractIncoming(data.content||data.message||[],selfId);texts.push('[转发] '+child.text);urls.push(...child.urls);cards.push(...child.cards);}
+    else if(type==='node'){
+      const child=extractIncoming(data.content||data.message||[],selfId);
+      const speaker=String(data.sender?.card||data.sender?.nickname||data.nickname||data.name||'').replace(/\s+/g,' ').trim().slice(0,60);
+      const body=child.text|| (child.segments.some(s=>s?.type==='image')?'[图片]':'');
+      texts.push('[转发] '+(speaker||'未标注发言人')+'：'+body);
+      urls.push(...child.urls);cards.push(...child.cards);
+    }
     else if(['json','xml','share','music'].includes(type)){
       const raw=String(data.data??data.content??'').slice(0,150000);let obj=data;
       if(type==='json')try{obj=JSON.parse(raw)}catch{try{obj=JSON.parse(decodeEntities(raw))}catch{obj={}}}
@@ -174,7 +185,12 @@ export async function readSharedLink(url,{read=publicGet,signal=AbortSignal.time
       if(includeLinks)for(const a of String(response.body||'').slice(0,1500000).matchAll(/<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi)){
         try{const u=new URL(decodeEntities(a[1]??a[2]),target);if(!['http:','https:'].includes(u.protocol)||u.username||u.password)continue;u.hash='';const href=redactUrl(u.href);if(links.some(l=>l.url===href))continue;links.push({url:href,title:decodeEntities(a[3].replace(/<[^>]*>/g,' ')).replace(/\s+/g,' ').trim().slice(0,180)});if(links.length>=60)break;}catch{}
       }
-      return {url:redactUrl(url),finalUrl:redactUrl(target),...pageContent(response.body),...(includeLinks?{links}:{})};
+      const page={url:redactUrl(url),finalUrl:redactUrl(target),...pageContent(response.body),...(includeLinks?{links}:{})};
+      if(page.status!=='restricted'){
+        const replies=tiebaReplies(target,response.body,decodeEntities);
+        if(replies.length){page[publicForumReplies]=replies;page.status='read';}
+      }
+      return page;
     }
     throw new Error('链接跳转次数过多');
   }catch(error){return{url:redactUrl(url),finalUrl:redactUrl(target),status:'failed',title:'',description:'',body:'',error:String(error.message||error).slice(0,200)}}
@@ -223,6 +239,47 @@ export function normalizeProfile(value={}) {
   const v=value&&typeof value==='object'?value:{};
   return{personaId:String(v.personaId||'').slice(0,100),voiceEnabled:typeof v.voiceEnabled==='boolean'?v.voiceEnabled:null,voiceName:String(v.voiceName||'').slice(0,100),replyChars:Number.isFinite(Number(v.replyChars))?Math.min(2000,Math.max(0,Math.round(Number(v.replyChars)))):0,proactive:typeof v.proactive==='boolean'?v.proactive:null};
 }
+function backupMessage(row) {
+  if (!row || !chatKeyValid(row.chat) || !['in','out'].includes(row.dir) || !Number.isFinite(Number(row.time))) return null;
+  const value = {time:Number(row.time),chat:row.chat,dir:row.dir,text:String(row.text||'').slice(0,20000)};
+  for (const field of ['accountId','personaId','messageId','localId','speakerId','speakerName','historyEventId']) {
+    if (['string','number'].includes(typeof row[field]) && String(row[field])) value[field]=String(row[field]).slice(0,160);
+  }
+  if(typeof row.userText==='string')value.userText=row.userText.slice(0,20000);
+  if(row.retracted===true)value.retracted=true;
+  if(Array.isArray(row.sourceMessageIds))value.sourceMessageIds=row.sourceMessageIds.filter(id=>['string','number'].includes(typeof id)).map(id=>String(id).slice(0,160)).slice(0,100);
+  return value;
+}
+
+// Legacy backups lack platform IDs. Match their occurrences one at a time so
+// two identical messages sent in the same millisecond survive repeated imports.
+export function restoreBackupMessages(current,incoming,accountId='') {
+  const result=current.slice(),byId=new Map(),byText=new Map(),claimed=new Set();
+  const stableId=row=>row.messageId?'qq:'+row.messageId:row.localId?'local:'+row.localId:row.historyEventId?'event:'+row.historyEventId:'';
+  const idKey=row=>JSON.stringify([row.chat,row.dir,stableId(row)]);
+  const textKey=row=>JSON.stringify([row.chat,row.dir,Number(row.time),String(row.text||'').slice(0,20000)]);
+  for(const [i,row] of current.entries()){
+    if(row.accountId&&row.accountId!==accountId)continue;
+    if(stableId(row))byId.set(idKey(row),i);
+    const k=textKey(row);
+    if(!byText.has(k))byText.set(k,[]);
+    byText.get(k).push(i);
+  }
+  const compatible=incoming.filter(row=>!row.accountId||row.accountId===accountId);
+  for(const row of compatible.slice().sort((a,b)=>Number(!!stableId(b))-Number(!!stableId(a)))){
+    const id=stableId(row),k=idKey(row);
+    let at=id?byId.get(k):undefined;
+    if(at===undefined)at=byText.get(textKey(row))?.find(i=>!claimed.has(i)&&(!id||!stableId(result[i])));
+    if(at===undefined){at=result.length;result.push({...row,accountId});}
+    else{
+      claimed.add(at);
+      result[at]={...row,...result[at],...(row.retracted===true?{retracted:true}:{})};
+    }
+    if(id)byId.set(k,at);
+  }
+  return result.sort((a,b)=>a.time-b.time);
+}
+
 export function safeBackup(settings,memories,{includeMessages=false,messages=[]}={}) {
   const profiles=Object.fromEntries(Object.entries(settings.contactProfiles||{}).filter(([key])=>chatKeyValid(key)).map(([key,value])=>[key,normalizeProfile(value)]));
   const modelByChat=Object.fromEntries(Object.entries(settings.modelByChat||{}).filter(([key,v])=>chatKeyValid(key)&&v&&/^[\w.-]{1,100}$/.test(v.provider)&&/^[\w./:@-]{1,150}$/.test(v.model)).map(([key,v])=>[key,{provider:String(v.provider),model:String(v.model)}]));
@@ -230,7 +287,7 @@ export function safeBackup(settings,memories,{includeMessages=false,messages=[]}
     whitelist:(settings.whitelist||[]).map(String),groups:(settings.groups||[]).map(String),owners:(settings.owners||[]).map(String),userNotes:{...settings.userNotes},disabledUsers:(settings.disabledUsers||[]).map(String),disabledGroups:(settings.disabledGroups||[]).map(String),contactProfiles:profiles,
     modelByChat,companion:settings.companion?{enabled:settings.companion.enabled!==false,continuity:settings.companion.continuity!==false,respectPauses:settings.companion.respectPauses!==false,waitMode:settings.companion.waitMode||'natural'}:undefined,memory:{schedule:settings.memory?.schedule==='turns'?'turns':'daily',mode:settings.memory?.mode==='review'?'review':'auto',enabled:settings.memory?.enabled!==false,everyTurns:settings.memory?.everyTurns||40,maxChars:settings.memory?.maxChars||400},dnd:{enabled:!!settings.dnd?.enabled,startHour:settings.dnd?.startHour??23,endHour:settings.dnd?.endHour??9},proactiveCfg:{startHour:settings.proactiveCfg?.startHour??9,endHour:settings.proactiveCfg?.endHour??23,maxPerDay:settings.proactiveCfg?.maxPerDay??3},
     stickerDisabled:[...(settings.stickerDisabled||[])],stickerGroup:{...settings.stickerGroup},stickerGroups:[...(settings.stickerGroups||[])]};
-  return{format:'dsh-im-bridge-backup',version:1,createdAt:Date.now(),settings:safe,memories:Object.fromEntries(Object.entries(memories||{}).filter(([key])=>chatKeyValid(key)).map(([key,value])=>[key,normalizeMemory(value)])),...(includeMessages?{messages:messages.slice(-1000).map(m=>({time:m.time,chat:m.chat,dir:m.dir,text:String(m.text||'').slice(0,20000)}))}:{}),assets:[]};
+  return{format:'dsh-im-bridge-backup',version:1,createdAt:Date.now(),settings:safe,memories:Object.fromEntries(Object.entries(memories||{}).filter(([key])=>chatKeyValid(key)).map(([key,value])=>[key,normalizeMemory(value)])),...(includeMessages?{messages:messages.map(backupMessage).filter(Boolean)}:{}),assets:[]};
 }
 export function validateBackup(input) {
   if(input?.format!=='dsh-im-bridge-backup'||input.version!==1)throw new Error('不是支持的 QQ 桥接备份格式');

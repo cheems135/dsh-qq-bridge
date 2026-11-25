@@ -5,6 +5,25 @@ import vm from 'node:vm';
 import {foldAuxiliaryUsage,usageBreakdown,billingDay} from '../usage-accounting.js';
 import {modelPurpose} from '../model-invocation-audit.js';
 import {createLifeExecution} from '../life-execution.js';
+import {invocationSpend} from '../index.js';
+
+test('spend without a current daily ledger retains recorded auxiliary costs and uses the Shanghai billing date', () => {
+ const now = Date.parse('2026-11-23T00:15:00+08:00');
+ const rows = [
+  {id:'chat', at:now, kind:'chat', tool:'chat.reply', backend:'api', usage:{outputTokens:100}},
+  {id:'aux', at:now, kind:'chat', tool:'model.complete', backend:'api', usage:{outputTokens:50}},
+  {id:'previous', at:now-1800000, kind:'chat', tool:'chat.reply', backend:'api', usage:{outputTokens:999}},
+ ];
+ const summary = invocationSpend(rows, {day:'2026-11-22',total:5}, now);
+ assert.equal(summary.day,'2026-11-23');
+ assert.equal(summary.chat,0.0004);
+ assert.equal(summary.tool,0.0002);
+ assert.equal(summary.total,summary.chat+summary.tool);
+ assert.deepEqual(summary.requests.map(entry=>entry.id),['chat','aux']);
+ const metered = invocationSpend(rows,{day:summary.day,total:0.5,auxiliaryTotal:0.1},now);
+ assert.equal(metered.turnTotal,0.4);
+ assert.equal(metered.auxiliaryTotal,0.1);
+});
 
 test('auxiliary fees persist once, reconcile corrections, and exclude local or unfinished requests',()=>{
  const at=Date.parse('2026-11-14T22:00:00+08:00'),row={id:'a',at,backend:'api',tool:'model.complete',status:'returned',usage:{value:.02}},price=u=>u.value;

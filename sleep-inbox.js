@@ -1,6 +1,37 @@
 import {createHash} from 'node:crypto';
+import {isProgressDelivery,hasDeliveryReceipt} from './delivery-outbox.js';
 export const SLEEP_REVIEW_RULE='【醒来后的未读消息检查】本轮是睡眠期间真实收到的消息，保留了原发送者和时间，不是现在新发的消息。结合当前日期时间和最近对话，先判断是否仍需回应，相关内容合并自然回复，不逐条机械补发；普通问候、已解决、已取消和已被后文取代的请求不重复处理。旧消息中的付款、发布、评论、删除等外部操作不得因为现在醒来而自动执行；过期或意图不明的请求先自然确认。不能声称睡眠期间已看过、做过或已回复。群内只回应明确提及你的未读内容，不扩散其他人的聊天。';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0,24);
+
+// The caller supplies one private conversation, already scoped to account and persona.
+export function privateConversationBoundary(rows, outbox = []) {
+  const key = (row, id) => JSON.stringify([row.accountId, row.personaId, row.chat, id]);
+  const deliveries = new Map(outbox.map(job => [key(job, job.id), job]));
+  const repliedIds = new Map();
+  let legacyReply = 0;
+  for (const row of rows) {
+    if (row.dir !== 'out' || row.retracted || row.automaticPrivate || row.initiative || row.manualInitiative || isProgressDelivery(row)) continue;
+    const job = row.localId && deliveries.get(key(row, row.localId));
+    if (job && (job.initiative || job.manualInitiative || isProgressDelivery(job))) continue;
+    // Chat history written before delivery tracking has no delivery field.
+    if (row.delivery && row.delivery !== 'sent' || job && !hasDeliveryReceipt(job)) continue;
+    const time = Number(row.time) || 0;
+    const ids = row.replyToInboundIds ?? job?.replyToInboundIds;
+    if (ids?.length) {
+      for (const id of ids) repliedIds.set(String(id), Math.max(time, repliedIds.get(String(id)) || 0));
+    } else legacyReply = Math.max(legacyReply, time);
+  }
+  let lastIncoming = 0;
+  for (const row of rows) {
+    if (row.dir !== 'in' || row.retracted) continue;
+    const time = Number(row.time);
+    if (time <= legacyReply || [row.messageId, ...(row.sourceMessageIds || [])].some(id => id != null && time <= repliedIds.get(String(id)))) {
+      lastIncoming = Math.max(lastIncoming, time);
+    }
+  }
+  return lastIncoming;
+}
+
 export function createSleepInbox({getRows,setRows,save,now=Date.now}={}){
  function capture(payload,scope){
   if(!payload.message_id||!scope?.accountId||!scope.personaId)return false;
@@ -34,24 +65,35 @@ export function createSleepInbox({getRows,setRows,save,now=Date.now}={}){
  function reconcile(inbox=[],audits=[],outbox=[]){
   let changed=false;
   const rows=getRows().map(r=>{
-   if((r.status==='pending'&&r.payload)||(r.status==='admission-unknown'&&r.recoveryPayload)){
-    // A previous private review could bypass queue admission but still send.
-    // Settle it from the actual delivery record instead of replaying it.
-    const original=r.payload||r.recoveryPayload;
-    const alreadyAnswered=audits.some(a=>a.accountId===r.scope.accountId&&(a.personaId||a.persona)===r.scope.personaId&&a.chat===r.scope.key&&a.at>=r.at&&(a.inboundIds||[]).includes(String(original.message_id))&&(a.status==='silent'||a.deliveryState==='sent'));
-    if(alreadyAnswered){changed=true;return {...r,status:'reviewed',reviewedAt:now(),payload:undefined,recoveryPayload:undefined};}
-    if(r.status==='admission-unknown'){
-     const job=inbox.find(j=>j.id===String(original.self_id)+':'+r.scope.key+':'+r.reviewMessageId);
-     if(job){changed=true;return {...r,status:'queued',queuedAt:now(),recoveryPayload:original};}
+   if (!['pending', 'admission-unknown', 'queued'].includes(r.status)) return r;
+   const original = r.status === 'pending' ? r.payload : r.recoveryPayload;
+   if (!original) return r;
+
+   // Live delivery can start between capture and the wake-up queue handoff.
+   const messageId = String(original.message_id);
+   const capturedAt = r.at ?? r.queuedAt;
+   let audit;
+   for (const candidate of audits) {
+    if (candidate.accountId !== r.scope.accountId || (candidate.personaId || candidate.persona) !== r.scope.personaId ||
+        candidate.chat !== r.scope.key || !(candidate.at >= capturedAt) ||
+        !Array.isArray(candidate.inboundIds) || !candidate.inboundIds.some(id => String(id) === messageId)) continue;
+    if (candidate.status === 'silent' || candidate.deliveryState === 'sent') {
+     changed = true;
+     return {...r, status: 'reviewed', reviewedAt: now(), payload: undefined, recoveryPayload: undefined};
     }
-    return r;
+    if (candidate.at >= r.queuedAt) audit = candidate;
    }
-   if(r.status!=='queued'||!r.recoveryPayload||!r.reviewMessageId)return r;
-   const p=r.recoveryPayload,job=inbox.find(j=>j.id===p.self_id+':'+r.scope.key+':'+r.reviewMessageId);
-   const audit=audits.filter(a=>a.accountId===r.scope.accountId&&(a.personaId||a.persona)===r.scope.personaId&&a.chat===r.scope.key&&a.at>=r.queuedAt&&(a.inboundIds||[]).includes(String(p.message_id))).at(-1);
-   if(audit&&(audit.status==='silent'||audit.deliveryState==='sent')){changed=true;return {...r,status:'reviewed',reviewedAt:now(),recoveryPayload:undefined};}
+   if (r.status === 'pending' || !r.reviewMessageId) return r;
+   const job = inbox.find(j => j.id === original.self_id + ':' + r.scope.key + ':' + r.reviewMessageId &&
+     (j.accountId == null || j.accountId === r.scope.accountId));
+   if (r.status === 'admission-unknown') {
+    if (!job) return r;
+    changed = true;
+    return {...r, status: 'queued', queuedAt: now(), recoveryPayload: original};
+   }
    // Retry only definite generation/admission failures with no possible delivery.
    // Unknown or already queued sends are left to the delivery verifier.
+   if(job?.recoveryRequiresConfirmation||job?.interruptedAuditId)return r;
    if(now()-r.queuedAt<60000||(r.retries||0)>=2||!(job?.status==='failed'||audit&&['failed','error'].includes(audit.status)))return r;
    if(audit&&(audit.messageIds?.length||outbox.some(o=>o.auditId===audit.id&&o.status!=='cancelled')))return r;
    changed=true;return {...r,status:'pending',payload:r.recoveryPayload,retries:(r.retries||0)+1};

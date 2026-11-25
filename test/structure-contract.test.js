@@ -104,7 +104,8 @@ test('every console stylesheet, script and module dependency is explicitly serve
   const html=fs.readFileSync(new URL('../console.html',import.meta.url),'utf8');
   for(const m of html.matchAll(/(?:src|href)="\/im-bridge\/ui\/([^?"/]+)(?:\?[^"\s]*)?"/g))assert(byName.has(m[1]),m[1]);
   for(const asset of CONSOLE_ASSETS){
-    assert.match(asset.name,/^[a-z0-9-]+\.(?:js|css)$/);
+    assert.match(asset.name,/^[a-z0-9-]+\.(?:js|css|webp)$/);
+    if(asset.name.endsWith('.webp'))assert.equal(asset.contentType,'image/webp');
     assert(fs.existsSync(new URL('../'+asset.source,import.meta.url)),asset.source);
     if(!asset.source.startsWith('./ui/'))assert(pkg.files.includes(asset.source.slice(2)),asset.source+' packaged');
     if(!asset.name.endsWith('.js'))continue;

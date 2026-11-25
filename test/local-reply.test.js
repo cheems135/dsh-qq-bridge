@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cleanLocalReply,requestedFormatting,needsDialogueRepair} from '../local-reply.js';
+import {cleanLocalReply,requestedFormatting,needsDialogueRepair,localDialogueInstruction} from '../local-reply.js';
+import {DRAFT_VOICE_RULE} from '../dialogue-only.js';
 import {createLocalAgent} from '../local-agent.js';
 
 test('chat removes whole-utterance quotes, narration wrappers and escaped line markers',()=>{
@@ -18,6 +19,17 @@ test('meaningful punctuation, quoted terms and explanatory parentheses survive',
   assert.equal(cleanLocalReply('（微笑的意思是友善）'),'（微笑的意思是友善）');
   assert.equal(cleanLocalReply('她看着的那部电影是什么？'),'她看着的那部电影是什么？');
   assert.equal(cleanLocalReply('去 D:\\new\\note.txt 看看。'),'去 D:\\new\\note.txt 看看。');
+});
+
+test('an implicit request for wording can address the intended recipient on the ordinary chat path',()=>{
+  const request='等等，这次我真有点慌，报告已经发给导师了。现在补一句怎么说才清楚？';
+  assert.equal(requestedFormatting(request),false);
+  for(const words of [request,'把这句话翻译成英文，作为我回给对方的短信']){
+    assert.equal(localDialogueInstruction(words).split(DRAFT_VOICE_RULE).length,2);
+    assert.doesNotMatch(localDialogueInstruction(words),/给对方的建议另说/);
+  }
+  const draft='老师，刚才发的报告里，两张图的标题贴反了。';
+  assert.equal(cleanLocalReply(draft,{request}),draft);
 });
 
 test('explicit writing, translation, quotations and code override dialogue presentation',()=>{

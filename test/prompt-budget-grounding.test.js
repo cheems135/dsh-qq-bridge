@@ -25,3 +25,18 @@ test('old turns drop signed policies while keeping their unique facts, user mess
  }
  assert.equal(budget.request({system:'unrelated',messages}).changed,false);
 });
+
+test('old ordinary and schedule-only turns lose outdated policy but keep their original facts',()=>{
+ const budget=createPromptBudget(), messages=[];
+ for(const [index,label] of ['写短一点','我想听听后续','再改一句','好多了'].entries()){
+  const jobs=index===1?[{scene:{activity:'读到镇上钟楼的来历'},at:1,updatedAt:Date.now()-100,status:'completed',actuallyCompleted:true,evidence:[]}]:[];
+  const executionFacts={type:'text',text:conversationExecutionGrounding({jobs})};
+  const words={type:'text',text:label},content=[executionFacts,words];
+  budget.pack(content,{executionFacts,protectedParts:new Set(content)});
+  messages.push({role:'user',content});
+ }
+ const {messages:trimmed}=budget.request({system:BUDGET_MARKER,messages});
+ assert.doesNotMatch(JSON.stringify(trimmed.slice(0,2)),/经历与执行状态/);
+ assert.match(JSON.stringify(trimmed[0]),/写短一点/);
+ assert.match(JSON.stringify(trimmed[1]),/镇上钟楼的来历/);
+});

@@ -1,8 +1,12 @@
+import {createResidenceFeedback} from '../residence-feedback.js';
+const quietResidence=createResidenceFeedback({readJson:()=>null});
+import {dialogueRuntimeFacts} from '../dialogue-runtime-facts.js';
 import {initiativeConversation,recentOperationContext} from '../operation-context.js';
 import {interestHint} from '../website-reading.js';
 import {conversationTimingHint} from '../conversation-timing.js';
 import {BRIEF_RULES} from '../prompt-budget.js';
 import {qqHumanWords} from '../qq-poke.js';
+import {isStickerReactionPart} from '../bridge-features.js';
 import {isShortAcknowledgement,isShortClarification} from '../background-cost-policy.js';
 import {recentReplyAnchor,replyAnchorHint} from '../operation-context.js';
 import {qqTaskEvidence} from '../qq-task-evidence.js';
@@ -33,14 +37,18 @@ import {hasHearingEvidence} from '../hearing-evidence.js';
 import {dialogueReceiptHint} from '../api-conversation-context.js';
 import {prepareLocalReply} from '../local-repetition.js';
 import {naturalBubbleParts,stickerMessageGroups,stickerReplyText,stickerAuthorshipReply} from '../chat-bubbles.js';
-import {cosplayPrompt,naturalPersonaText} from '../dialogue-persona.js';
+import {markSubmissionStarted} from '../qq-turn-context.js';
+import {dialogueHistoryRows,dialogueHistoryText} from '../qq-history-context.js';
+import {personaDecisionPrompt,naturalPersonaText} from '../dialogue-persona.js';
 import {localImageRequest,mediaIntentHint,requestsDifferentCover,requestsSinging,selectMediaIntent} from '../media-intent.js';
 import {isRunningHubCover} from '../runninghub-audio.js';
 import {removeStreamedPrefix} from '../local-fast-chat.js';
 import {unresolvedLocalReceipts} from '../bridge-issues.js';
 import {createInvocationJournal} from '../invocation-journal.js';
+import {resourceFileEvidence} from '../resource-files.js';
 import {createLocalGroupWindow} from '../local-group-window.js';
 import {localIssueReply} from '../local-issue-reply.js';
+import {diagnosticFailure} from '../log-retention.js';
 import {personaWaitStyle,cleanWaitNotice,fallbackWaitNotice} from '../local-wait-notice.js';
 import {localSharedContext,localAnalysisInput} from '../local-chat-context.js';
 import {moodState,moodDelivery,shouldJudgeMood,applyMood,consumeMoodHint} from '../companion-mood.js';
@@ -53,25 +61,27 @@ const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 const anchorSource=source.slice(source.indexOf('  function chatReplyAnchor('),source.indexOf('  async function understandMediaRequest('));
 const personaSource=source.slice(source.indexOf('  function personaCardText('),source.indexOf('  function activePersona('));
 const localSource=source.slice(source.indexOf('  function localTurnScope(chat)'),source.indexOf('\n  async function handlePayloadCore('));
+const walletSource=source.slice(source.indexOf('  function walletNoticeFor('),source.indexOf('  async function prepareWalletContext('));
 const inboundSource=source.slice(source.indexOf('  function handlePayload(payload,'),source.indexOf('\n  async function drainInbox('));
 assert.ok(localSource.length>1000&&inboundSource.length>1000);
 
 function setup(){
   const queued=[],logged=[],calls=[],issues=[];
-  const sandbox={musicContextByChat:new Map(),prepareMusicEvidence:async()=>{},hasHearingEvidence,dialogueReceiptHint,recordsAllowed:()=>true,qqHumanWords,isShortAcknowledgement,recentReplyAnchor,replyAnchorHint,requestsSinging,voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,cleanGeneratedReplyDividers,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
-    BRIEF_RULES,conversationTimingHint,foldAuxiliaryUsage,usage:{},invocationCost:()=>0,saveUsage:()=>{},naturalBubbleParts,stickerMessageGroups,cosplayPrompt,naturalPersonaText,
+  const sandbox={wallet:null,localAudioWorkflows:null,musicContextByChat:new Map(),prepareMusicEvidence:async()=>{},hasHearingEvidence,dialogueReceiptHint,recordsAllowed:()=>true,qqHumanWords,isShortAcknowledgement,recentReplyAnchor,replyAnchorHint,requestsSinging,voiceHearingEvidence:new WeakMap(),consumeMoodHint,hearingContext:e=>JSON.stringify(e),stickerAvailabilityHint:()=>'',sleepAwarenessHint:()=>'',burstSegments:text=>[{type:'text',data:{text}}],initiativeEventFor:()=>null,receiveQqFilePayload:p=>p,socialReplyForChat:async value=>value,assertScheduleReading:()=>{},isDesktop:true,qqTaskEvidence,effectiveGroups:()=>[],groupReplyBinding,groupReplyContext,groupAddressConflict,repairGroupIdentityReply,groupStopped:()=>false,auditById:id=>sandbox.featureState.audits.find(a=>a.id===id),markReplyDelivery:()=>{},currentScheduleScope:()=>null,runScheduledTool:(_key,_name,_args,execute)=>execute(),setTimeout,clearTimeout,promptPreferences:{snapshot:()=>({values:defaultPromptPreferences()})},promptPreferenceRule,lifeExecution:null,calendarMeta:()=>({}),CONTEXT_RULES,CORE_CONTEXT_RULES,contextTopicsFor,nonpaymentOpen,createLocalInitiative,localDailyDiaryInput,serviceMediaScope:new AsyncLocalStorage(),localQqTools:()=>({}),personaStateId,sharedPersonaOutfit,personaStateHint,alignOutfitReply,calendarNow,isLoopbackUrl:()=>true,resolveLocalPhotoSubject,applyLocalPortraitPlan,localMediaPlanningCandidate,pauseLocalGroupWindow:()=>()=>{},resolveLocalMediaTask,unresolvedLocalReceipts,invocationScope:(chat,auditId)=>({accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id,chat,auditId}),reportBridgeIssue:(event,scope)=>issues.push({...event,...scope}),localRequirements,chooseLocalRoute,waitForLocalRoute,localImageRequest,removeStreamedPrefix,localIssueReply,fallbackWaitNotice,personaWaitStyle,cleanWaitNotice,Buffer,AbortController,AbortSignal,Date,console,randomUUID,pathToFileURL,cleanLocalReply,cleanGeneratedReplyDividers,prepareLocalReply,localSharedContext,localAnalysisInput,moodDelivery,shouldJudgeMood,applyMood,
+    BRIEF_RULES,conversationTimingHint,foldAuxiliaryUsage,usage:{},invocationCost:()=>0,saveUsage:()=>{},naturalBubbleParts,stickerMessageGroups,personaDecisionPrompt,naturalPersonaText,markSubmissionStarted,dialogueHistoryRows,dialogueHistoryText,
+    reviewImageForQQ:async()=>({status:'passed'}),
     settings:{activeAccountId:'a',presetPrompts:{p:'角色设定'},personae:[],basePersona:'完整系统提示词',memory:{enabled:false},localChat:{enabled:true,baseUrl:'http://127.0.0.1:8777'},owners:['12345'],reliability:{}},
     persona:{id:'p',name:'测试角色',preset:'whale'},version:'v1',featureState:{floors:{},inbox:[],outbox:[],audits:[]},memories:{},messages:[],memoryHub:null,localTurns:new Map(),stopped:false,accountPaused:false,
     state:{chats:{}},ctx:{get:()=>undefined,effect:()=>{},sessionController:{cancel:()=>{}}},
     soul:{mood:moodState()},soulFor:()=>sandbox.soul,currentPersonaMood:()=>sandbox.soul.mood,
-    enrichConversation:()=>{},prepareCalendarContext:async()=>{},imageTurnHint:()=>'',isSoloStickerTurn:()=>false,
+    enrichConversation:()=>{},prepareCalendarContext:async()=>{},imageTurnHint:()=>'',isSoloStickerTurn:()=>false,isStickerReactionPart,
     segmentsOf:parts=>Array.isArray(parts)?parts:[],transcribeRecord:async()=>'',
     auditForTurn:()=>{const audit={id:randomUUID(),accountId:'a',persona:'p'};sandbox.featureState.audits||=[];sandbox.featureState.audits.push(audit);return audit;},auditAnswerCap:()=>20000,
     extractExpressionTag:text=>({text,emotion:''}),publishCompanionReaction:()=>{},reflectOnTurn:async()=>{},
     learningMemory:null,memeStudy:null,expressionLearning:null,learningMeta:key=>({key,accountId:sandbox.settings.activeAccountId,personaId:sandbox.persona.id}),
     activePersona:()=>sandbox.persona,photoPromptPlan:text=>({prompt:text,humanRequest:text}),personaContextIdentity:()=>sandbox.version,effectiveModel:()=> 'api-model',
     textHash:v=>createHash('sha256').update(v).digest('hex'),
-    log:()=>{},readPresetPrompt:()=>'',logMessage:row=>{logged.push(row);sandbox.messages.push(row);},
+    diagnosticFailure,log:()=>{},readPresetPrompt:()=>'',logMessage:row=>{logged.push(row);sandbox.messages.push(row);},
     queueOutgoing:(chat,segments)=>{queued.push({chat,segments});return 'queued';},validateLocalAttachment,localReplyDelay:()=>0,localErrorDetail:error=>error.message,
     sleepingPayload:()=>false,incomingAllowed:()=>true,saveState:()=>{},saveFeatures:()=>{},
     extractIncoming:segments=>({text:segments.filter(s=>s.type==='text').map(s=>s.data.text).join('')}),
@@ -79,20 +89,35 @@ function setup(){
     handlePayloadCore:()=>{throw Error('unexpected cloud path');},
   };
   sandbox.requestLocalJson=async(url,options)=>{if(url.endsWith('/v1/local/priority'))return {ok:true,status:200,body:{ok:true}};const response=await sandbox.fetch(url,{...options,body:JSON.stringify(options.body)});return {ok:response.ok,status:response.status,body:await response.json()};};
-  sandbox.invocationJournal=createInvocationJournal({getRows:()=>sandbox.featureState.invocations||[],setRows:rows=>sandbox.featureState.invocations=rows});
+  sandbox.invocationJournal=createInvocationJournal({getRows:()=>sandbox.featureState.invocations||[],setRows:rows=>sandbox.featureState.invocations=rows});sandbox.resourceFileEvidence=resourceFileEvidence;sandbox.residenceParts=(chat,options)=>quietResidence.parts({accountId:"a",personaId:"p",key:chat.key},options);
   vm.createContext(sandbox);
   sandbox.interestHint=interestHint;
   sandbox.websiteReader=null;
   vm.runInContext(source.slice(source.indexOf('  function privateReadingInterest('),source.indexOf('  function initiativeEventFor(')),sandbox);
   sandbox.isShortClarification=isShortClarification;
   sandbox.conversationExecutionGrounding=conversationExecutionGrounding;
+  vm.runInContext(source.slice(source.indexOf('  function imageIntentGuidance('),source.indexOf('  function mediaShareHint(')),sandbox);
   vm.runInContext(source.slice(source.indexOf('  function conversationExecutionHint('),source.indexOf('  async function nudge(')),sandbox);
   const invocationSource=source.slice(source.indexOf('  function recordInvocation(event,scope)'),source.indexOf('\n  function invocationScope('));
   const identitySource=source.slice(source.indexOf('  function groupBindingFor(chat)'),source.indexOf('  function sendText(chat,text)'));
-  vm.runInContext(anchorSource+'\n'+personaSource+'\n'+identitySource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
+  vm.runInContext(anchorSource+'\n'+personaSource+'\n'+identitySource+'\n'+walletSource+'\n'+localSource+'\n'+inboundSource+'\n'+invocationSource+'\nthis.review={handleLocalChatTurn,abortLocalTurn,handlePayload,askConversationAnalysis,routeLocalTurn,runLocalInitiativeTick,localInitiativeContext,prioritizeLocalQq};',sandbox);
   sandbox.getLocalCapabilities=async()=>({status:'ready',contextWindow:4096,maxOutputTokens:512,features:Object.fromEntries(['text','json','tools','vision','asr','speech','image','video'].map(key=>[key,{supported:true}]))});
   return {sandbox,queued,logged,calls,issues,...sandbox.review,chat:{key:'private:12345',kind:'private',isOwner:true,chatId:'12345',userId:'12345',incomingImages:[]}};
 }
+
+test('actual local model history leaves out recalled and merged current messages after offline recovery',async()=>{
+  const h=setup(),now=Date.now()-10000;
+  const row=(offset,text,extra={})=>({chat:h.chat.key,accountId:'a',personaId:'p',dir:'in',time:now+offset,text,...extra});
+  h.sandbox.messages.push(row(5,'后来的补充'),row(8,'我已撤回这句',{retracted:true}),
+    row(7,'我还在排队',{dir:'out',delivery:'sent',deliveryRole:'progress'}),
+    row(6,'当前合并段',{messageId:'30',sourceMessageIds:['30','31']}),row(3,'最先说的那句'));
+  await h.handleLocalChatTurn(h.chat,'本轮新话',false,{message_id:31,_bridgeReceivedIds:['31']});
+  const content=h.calls[0].body.messages.map(r=>r.content);
+  assert.doesNotMatch(JSON.stringify(content),/我已撤回这句|我还在排队|当前合并段/);
+  assert.ok(content.indexOf('最先说的那句')>=0 && content.indexOf('最先说的那句')<content.indexOf('后来的补充'));
+  const mediaHistory=h.calls[0].body.turnContext.mediaHistory;
+  assert.deepEqual(mediaHistory.map(row=>row.content),['最先说的那句','后来的补充']);
+});
 
 test('actual bridge function preserves account/persona/chat scope and current input appears once',async()=>{
   const h=setup(),time=Date.now()-1000;
@@ -175,6 +200,40 @@ test('actual local initiative adapter uses background inference and the same rel
  const result=await h.runLocalInitiativeTick();assert.equal(result.status,'queued');assert.equal(h.queued.length,1);assert.equal(h.queued[0].chat.turnKind,'proactive');assert.match(h.queued[0].chat.deliveryKey,/^local:initiative:/);assert.equal(h.logged.length,0,'no invented inbound user row');
  assert.equal(s.featureState.invocations.at(-1).result.decision,'queued');assert.equal(s.featureState.invocations.at(-1).backend,'local');
  s.settings.permissionsMode='configured';s.settings.localChat.initiativeEnabled=false;const count=h.calls.length;assert.equal((await h.runLocalInitiativeTick()).status,'waiting');assert.equal(h.calls.length,count);
+});
+
+for(const mode of ['success','http-failure','invalid-decision','account-switch'])test('wallet reminder joins an existing local decision and is acknowledged only on valid completion: '+mode,async()=>{
+ const h=setup(),s=h.sandbox,notices=[],acknowledged=[];
+ const receipt={identityKey:'test-wallet',scopeId:'owner-persona',ids:['increase-1']};
+ Object.assign(s,{proactiveCheck:()=>'',privateInitiativeUnanswered:()=>false,initiativeConversation,
+  operationContext:()=>recentOperationContext(s.messages,{key:h.chat.key,accountId:'a',personaId:'p'}),
+  autonomyConfig:()=>({enabled:true,initiate:true}),effectiveUsers:()=>['12345'],privateInitiativeAllowed:()=>true,
+  calendarRole:()=>({meta:{}}),socket:{ready:true},pausedConversation:()=>false,featureProfile:()=>({}),
+  inDnd:()=>false,initiativeWindow:()=>true,personaPromptText:()=> '原有人设优先',
+  wallet:{notice:options=>{notices.push(options);return {text:'【余额变化事件】当前 3.4567 CNY，阈值 5 CNY',receipt};},acknowledge:value=>acknowledged.push(value)}});
+ s.settings.wallet={enabled:true};
+ s.messages.push({chat:h.chat.key,accountId:'a',personaId:'p',time:Date.now()-2*3600000,dir:'in',text:'最近在学摄影。'});
+ s.requestLocalJson=async(url,options={})=>{
+  h.calls.push({url,body:options.body});
+  if(url.endsWith('/capabilities'))return {ok:true,body:{status:'ready',contextWindow:4096,maxOutputTokens:512,features:{text:{supported:true},json:{supported:true}}}};
+  assert.equal(options.body.analysis,true);
+  const prompt=options.body.messages[0].content;
+  if(h.calls.filter(c=>c.url.endsWith('/v1/chat/completions')).length===1){
+   assert(prompt.indexOf('原有人设优先')<prompt.indexOf('【余额变化事件】'));
+   assert.match(prompt,/3\.4567 CNY，阈值 5 CNY/);
+  }
+  if(mode==='http-failure')return {ok:false,status:503,body:{error:{message:'busy'}}};
+  if(mode==='account-switch')s.settings.activeAccountId='another';
+  return {ok:true,body:{choices:[{message:{content:mode==='invalid-decision'?'bad-json':'{"speak":false,"text":"","reason":"继续看书"}'}}]}};
+ };
+ await h.runLocalInitiativeTick();
+ assert.equal(h.queued.length,0,'a balance event alone does not force a QQ message');
+ assert(notices.every(n=>n.isOwner&&n.detail===false));
+ assert.equal(acknowledged.length,mode==='success'?1:0);
+ if(mode==='success'){
+  assert.deepEqual(acknowledged[0],receipt);
+  assert.equal(h.calls.filter(c=>c.url.endsWith('/v1/chat/completions')).length,1,'no extra model request for the reminder');
+ }
 });
 
 test('an incoming QQ priority reservation cancels a queued local initiative but preserves a normal reply',()=>{
@@ -384,7 +443,7 @@ test('automatic local context resets preserve records and resume from the curren
 test('real shared API enrichment stays on demand while mood feedback uses one local gateway request',async()=>{
  const h=setup(),s=h.sandbox,usage=[],outcomes=[],observed=[];let recalls=0,cloudCalls=0;
  h.chat.isOwner=true;s.settings.learning={enabled:true};Object.assign(s.settings,{memory:{enabled:true,maxChars:500},companion:{enabled:true},websites:{learning:true},mood:{enabled:true},realism:{enabled:false}});
- Object.assign(s,{conversationStep,conversationHint,consumeMoodHint,commitmentContext:key=>({key}),commitmentLedger:{hint:()=>'',event:()=>{}},
+ Object.assign(s,{dialogueRuntimeFacts,conversationStep,conversationHint,consumeMoodHint,commitmentContext:key=>({key}),commitmentLedger:{hint:()=>'',event:()=>{}},
   chats:new Map(),recordsAllowed:()=>true,conversationStates:()=>s.featureState.conversation||=( {} ),conversationScope:()=>JSON.stringify([s.settings.activeAccountId,s.persona.id]),
   companionSettings:()=>({expressionMode:'relaxed'}),operationContext:()=>[],operationText:(text,limit)=>String(text).slice(0,limit),personaMood:(_core,_meta,value)=>value,
   hubMeta:key=>({key,accountId:s.settings.activeAccountId,personaId:s.persona.id}),calendarMeta:()=>({accountId:'a',personaId:'p'}),calendarRole:()=>({meta:{}}),insightHint:()=>'',sensationBlock:()=>'',
@@ -409,7 +468,7 @@ test('real shared API enrichment stays on demand while mood feedback uses one lo
  s.fetch=async(url,options)=>{h.calls.push({body:JSON.parse(options.body)});return Response.json({text:'先看猫在画面的位置和留白，画累了就歇一会儿。',attachments:[],mood:{confidence:85,evidenceQuote:'谢谢你',reason:'对方表达感谢',moodDelta:2,dims:{happy:3}}});};
  await h.handleLocalChatTurn(h.chat,'谢谢你，还记得上次画猫吗？你学到了什么，这个梗是什么，怎么表达，今天日程如何？',false,{user_id:'12345',message_id:101,message:[]});
  assert.equal(recalls,1);assert.equal(cloudCalls,0);assert.equal(h.calls.length,1);const body=h.calls[0].body;
- for(const kind of ['memory','meme','learning','expression','mood','life'])assert.equal(body.turnContext.features[kind],1,kind);
+ for(const kind of ['memory','learning','expression','mood','life'])assert.equal(body.turnContext.features[kind],1,kind);
  assert.match(JSON.stringify(body.messages),/喜欢画猫/);assert.equal(body.messages.filter(row=>row.content==='谢谢你，还记得上次画猫吗？你学到了什么，这个梗是什么，怎么表达，今天日程如何？').length,1);
  assert.equal(h.queued.length,1);const receipt=s.featureState.audits[0];assert.equal(h.queued[0].chat.auditId,receipt.id);assert.equal(receipt.local,true);assert.equal(receipt.status,'completed');assert.equal(usage.length,2);assert.equal(outcomes.length,2);assert.equal(observed.length,1);assert.equal(s.soul.lastAnalysis.moodAccepted,true);assert.ok(s.soul.mood.dims.happy>=3);assert.equal(s.state.turns[h.chat.key],1);
 });

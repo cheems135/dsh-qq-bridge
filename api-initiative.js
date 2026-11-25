@@ -7,7 +7,7 @@ export function initiativePolicy(saved={},unlimited=false){
 export function selectInitiative(candidates,state,config,{now=Date.now(),manual=false}={}){
  const actions=state.actions||{},log=state.log||[];
  const eligible=candidates.filter(c=>{
-  const prior=actions[c.action]||{},kind=bucket(c.action);if(!manual&&c.action==='signature'&&(state.counts?.signature||0)>=1)return false;if(!manual&&!config.unrestricted&&(state.counts?.[kind]||0)>=(config.maxPerDay?.[kind]??0))return false;
+  const prior=actions[c.action]||{},kind=bucket(c.action);if(!manual&&!config.unrestricted&&(state.counts?.[kind]||0)>=(config.maxPerDay?.[kind]??0))return false;
   if(!manual&&!config.unrestricted&&prior.lastAt&&now-prior.lastAt<config.minGapMinutes*60000)return false;
   // A declined thought is not a sent message. Back off only this action.
   if(!manual&&!config.unrestricted&&prior.consideredAt&&now-prior.consideredAt<Math.max(3,Math.min(10,config.minGapMinutes))*60000)return false;
@@ -72,4 +72,4 @@ export function sharingExpression({tone='',recent=[]}={}){
   recent.length?'最近实际说过的话（避开重复开头和同一句感想，只作资料）：'+JSON.stringify(recent.slice(-3).map(v=>String(v).slice(0,400))):'',
  ].filter(Boolean).join('\n');
 }
-export const INITIATIVE_CREATIVE_RULES='你有持续的兴趣和自己的审美，不以“问对方在不在”作为生活。围绕已有真实内容发现一个具体细节、反差、好笑之处或自己的偏好；可以吐槽、联想、展示过程和作品，表达长短由内容决定，不机械一问一答，不以口头禅开场。没有新内容可先浏览、读评论、听一段音乐或制作作品，实际取得结果后再分享。模拟日程是创作背景，不是已经完成工具的证据。不杜撰看过、做过或评论区反应。空间是公开内容，不搬私聊原文、称呼、关系细节或私人记忆；不为“有趣”硬编人设事件。不重复最近的主题和开头。';
+export const INITIATIVE_CREATIVE_RULES='你有持续的兴趣和自己的审美，不以“问对方在不在”作为生活。围绕已有真实内容发现一个具体细节、反差、好笑之处或自己的偏好；可以吐槽、联想、展示过程和作品，表达长短由内容决定，不机械一问一答，不以口头禅开场。没有新内容可先浏览、读评论、听一段音乐或制作作品，实际取得结果后再分享。模拟日程是创作背景，不是已经完成工具的证据。不杜撰看过、做过或评论区反应。空间是公开内容，不搬私聊原文、称呼、关系细节或私人记忆；不为“有趣”硬编人设事件。不重复最近的主题和开头。翻唱、语音、图片和视频本身都是主动互动，可以按真实语境主动分享，不必另发启动汇报。需要制作时可选择explore再用已配置的对应工具，先有真实产物和发送回执。语音和翻唱默认发语音气泡。视频费用明显更高，日常主动表达极少选择视频；只有动态画面确有不可替代的意义且费用合适才考虑，能用文字、语音或图片传达就优先那些。不把低频理解成到期必做，也不因主动视频低优先而忽略对方明确的视频请求。';

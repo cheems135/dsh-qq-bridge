@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createAgentCapabilities} from '../agent-capabilities.js';
+import {createAgentCapabilities,commitmentToolReceipt} from '../agent-capabilities.js';
 import {createExecutionRuntime,operationEffect} from '../execution-runtime.js';
 import {createLifeExecution,reconcileDeliveredLifeShares,reconcileVerifiedLifeOperations} from '../life-execution.js';
 
@@ -50,7 +50,7 @@ test('daily accounting failure still closes the actual tool receipt',async()=>{
  const start=source.indexOf('      afterTool:async(args,context,outcome)=>{'),end=source.indexOf('      operationRequest:',start);
  assert(start>0&&end>start);
  const finished=[];
- const after=Function('commitmentLedger','commitmentJobContext','gameSessions','executionRuntime',`return ({${source.slice(start,end)}}).afterTool;`)({receipt:()=>{throw Error('accounting failed');}},(_id,context)=>context,{record:()=>{}},{finish:(...args)=>finished.push(args)});
+ const after=Function('commitmentToolReceipt','commitmentLedger','commitmentJobContext','gameSessions','executionRuntime',`return ({${source.slice(start,end)}}).afterTool;`)(commitmentToolReceipt,{receipt:()=>{throw Error('accounting failed');}},(_id,context)=>context,{record:()=>{}},{finish:(...args)=>finished.push(args)});
  await assert.rejects(after({toolName:'bridge_life_qq'},{meta:{commitmentId:'c'}},{exec:{name:'bridge_life_qq'},result:{ok:true,queued:true,deliveryId:'d'}}),/accounting failed/);
  assert.equal(finished.length,1);
  assert.equal(finished[0][2].deliveryId,'d');

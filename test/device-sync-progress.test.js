@@ -59,9 +59,10 @@ test('the bridge refreshes messages from synchronized disk data before settings 
   loadMessages:()=>incoming.slice(-settings.monitor.maxMessages),
   saveSettings:()=>assert.deepEqual(context.messages,incoming),
   loadUsage:()=>({}),loadStickerNotes:()=>({}),readFileSync:()=>'{ }',personaImageManifest:'',
-  cfg:{},defaults:{},wallet:null,loadState:()=>({}),log:()=>{},state:{},saveState:()=>{},
+  cfg:{},defaults:{},wallet:null,loadState:()=>({}),log:()=>{},stateSaveFailed:true,state:{qqLoginHolds:[{accountId:'offline',active:true,source:'user'}]},saveState:()=>{},
   featureFile:'',featureState:{},saveFeatures:()=>{},chats:new Map(),panelChats:new Map(),
-  lifeMemory:null,learningMemory:null,websiteReader:null,personaGrowth:null,memoryHub:null,configuredModels:new Map(),deviceProfiles:null};
+  lifeMemory:null,learningMemory:null,expressionLearning:{reload(){context.expressionReloaded=true;}},websiteReader:null,personaGrowth:null,memoryHub:null,configuredModels:new Map(),deviceProfiles:null};
  await runInNewContext('('+load+')',context)();
- assert.equal(context.messages.length,580);
+ assert.equal(context.messages.length,580);assert.equal(context.expressionReloaded,true);
+ assert.equal(context.state.qqLoginHolds[0].source,'user');
 });

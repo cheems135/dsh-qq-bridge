@@ -78,7 +78,7 @@ test('the installed decision entry uses the supplied delivery anchor and does no
  const deps={isShortAcknowledgement,isShortClarification,mediaPreviewNeeded,settings:{voice:{enabled:true},imagegen:{enabled:true}},requestsSinging:()=>false,
   voiceRuntimeReadiness:()=>({available:true}),selectMediaIntent:(_w,form)=>({kinds:form.form==='voice'?['voice']:[]}),
   operationContext:()=>{throw Error('must not scan the general media history for a short acknowledgement');},
-  operationText:s=>s,activePersona:()=>({prompt:'角色'}),effectiveModel:()=> 'local-test',
+  personaPromptText:p=>p.prompt||'',operationText:s=>s,activePersona:()=>({prompt:'角色'}),effectiveModel:()=> 'local-test',
   askModel:async()=>{calls++;return '{"form":"voice","confidence":0.99,"reason":"应下了实际邀约"}';}};
  const run=Function(...Object.keys(deps),source.slice(a,b)+';return previewMediaForm;')(...Object.values(deps));
  assert.deepEqual((await run('好',scope.key,true,{role:'assistant',text:'我刚读到一段语音教程'})).kinds,[]);

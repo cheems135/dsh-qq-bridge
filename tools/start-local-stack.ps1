@@ -1,7 +1,7 @@
 param([switch]$PlanOnly)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'local-service-startup.ps1')
-$preferredWorkRoot = if ($env:CODEX_DATA_WORK_DIR) { $env:CODEX_DATA_WORK_DIR } else { 'D:\CodexData\work' }
+$preferredWorkRoot = if ($env:CODEX_DATA_WORK_DIR) { $env:CODEX_DATA_WORK_DIR } else { (Join-Path ([System.IO.Path]::GetTempPath()) 'dsh-local-ai') }
 $work = if ($env:QQ_BRIDGE_SERVICE_WORK_DIR) { $env:QQ_BRIDGE_SERVICE_WORK_DIR } elseif (Test-Path -LiteralPath $preferredWorkRoot) { Join-Path $preferredWorkRoot 'qq-local-background-services' } else { Join-Path $env:LOCALAPPDATA 'DSH\qq-bridge\services' }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $mutex = New-Object System.Threading.Mutex($false, 'Local\QQBridgeLocalServiceStartup')

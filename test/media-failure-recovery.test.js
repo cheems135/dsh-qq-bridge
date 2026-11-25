@@ -23,3 +23,11 @@ test('media failure explanation does not leak into a replaced conversation',asyn
  let scope='old',sent=0;const deps={featureState:{generation:0},conversationScope:()=>scope,activePersona:()=>({}),calendarSafeText:String,personaPromptText:()=>'',auditById:()=>({}),operationContext:()=>[],askModel:async()=>{scope='new';return '失败说明';},effectiveModel:()=>({}),stopped:false,accountPaused:false,queueOutgoing:()=>{sent++;}};
  await extract('explainMediaFailure',deps)({key:'group:123'},{error:'failed'});assert.equal(sent,0);
 });
+
+test('failure speech uses persona before task facts without prescribing cute phrasing, fixed length or asking for the same request again',async()=>{
+ let system,input;const queued=[];
+ const deps={featureState:{generation:0},conversationScope:()=> 'scope',activePersona:()=>({id:'p'}),calendarSafeText:String,personaPromptText:()=> 'PERSONA_FIRST',auditById:()=>({userWords:'拍张照片'}),operationContext:()=>[],askModel:async(s,u)=>{system=s;input=JSON.parse(u);return '镜头那句写岔了，图还没开始画。';},effectiveModel:()=>({}),stopped:false,accountPaused:false,localIssueReply:()=> 'fallback',personaWaitStyle:()=>({}),personaContextIdentity:()=> 'v',queueOutgoing:(chat,segments)=>{queued.push(segments);return 'delivery';},saveFeatures:()=>true};
+ await extract('explainMediaFailure',deps)({key:'private:123',auditId:'a'},{id:'image',kind:'image',status:'failed',error:'提示词校验未通过，尚未调用生图接口'});
+ assert(system.startsWith('PERSONA_FIRST'));assert.doesNotMatch(system,/只写一到两句|80字以内|必须.*撒娇|必须.*道歉/);
+ assert.equal(input.originalRequestAvailable,true);assert.equal(input.stage,'failed');assert.equal(queued.length,1);
+});

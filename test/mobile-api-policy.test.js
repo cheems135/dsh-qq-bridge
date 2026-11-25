@@ -20,9 +20,9 @@ test('mobile API routing accepts arbitrary chat/image/speech API models and reje
  for(const type of ['comfyui','voicelab'])assert.throws(()=>connections.save({type,baseUrl:'http://localhost:8188'}),/手机版仅支持 API/);
  const a=connections.save({type:'openai',baseUrl:'https://example.test/v1',chatModel:'arbitrary-chat',imageModel:'arbitrary-image',speechModel:'arbitrary-voice',voice:'custom-voice',apiKey:'synthetic-key'});
  connections.use(a.id,'chat');connections.use(a.id,'image');connections.use(a.id,'speech');
- assert.deepEqual(connections.snapshot().routes,{enabled:true,chat:'profile:'+a.id,image:'profile:'+a.id,speech:'profile:'+a.id});assert.equal(connections.snapshot().apiOnly,true);assert.equal(connections.snapshot().profiles[0].apiKey,undefined);
+ assert.deepEqual(connections.snapshot().routes,{enabled:true,chat:'profile:'+a.id,image:'profile:'+a.id,speech:'profile:'+a.id,video:'legacy'});assert.equal(connections.snapshot().apiOnly,true);assert.equal(connections.snapshot().profiles[0].apiKey,undefined);
  assert.throws(()=>connections.saveRoutes({enabled:true,chat:'host',image:'local'}),/手机版仅支持 API/);
- connections.saveRoutes({enabled:false,chat:'host',image:'legacy',speech:'legacy'});assert.equal(connections.raw().legacyLocalEnabled,false);
+ connections.saveRoutes({enabled:false,chat:'host',image:'legacy',speech:'legacy'});assert.equal(connections.raw().legacyLocalEnabled,undefined);assert.equal(connections.raw().routes.enabled,true);
 });
 test('mobile detection reads only API metadata, never starts a model or probes local generation services',async()=>{
  const requests=[];const fetchImpl=async(url,options)=>{requests.push([url,options.method]);return new Response(JSON.stringify({data:[{id:'custom-model'}]}),{status:200});};

@@ -58,8 +58,13 @@ export async function readConnectionText(response,limit=4*1024*1024){
   if(!response.body){const text=await response.text();if(Buffer.byteLength(text)>limit)throw Error('接口响应过大');return text;}
   let size=0;const chunks=[];for await(const chunk of response.body){size+=chunk.length;if(size>limit)throw Error('接口响应过大');chunks.push(Buffer.from(chunk));}return Buffer.concat(chunks).toString('utf8');
 }
-export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=()=>false,getLegacyComplement=()=>false,isProfileInUse=()=>false,apiOnly=false}){
-  const load=()=>{const raw=storage.read();return apiOnlyConnections(raw&&Array.isArray(raw.profiles)?raw:{version:1,profiles:[],routes:defaultServiceRoutes()},apiOnly);};
+export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=()=>false,getLegacySpeech=()=>'local',isProfileInUse=()=>false,apiOnly=false}){
+  const load=()=>{
+    const raw=storage.read(),state=apiOnlyConnections(raw&&Array.isArray(raw.profiles)?raw:{version:1,profiles:[],routes:defaultServiceRoutes()},apiOnly);
+    if(!state.routes?.enabled){const local=!apiOnly&&(state.legacyLocalEnabled??getLegacyMode())===true;state.routes={enabled:true,chat:local?'local':'host',image:local?'local':'legacy',speech:local?(getLegacySpeech()||'local'):'legacy',video:local?'local':'legacy'};}
+    delete state.legacyLocalEnabled;delete state.legacyApiComplement;
+    return state;
+  };
   const snapshot=()=>{const s=load();return {...s,apiOnly,profiles:s.profiles.filter(p=>!apiOnly||['openai','anthropic','responses','runninghub'].includes(p.type)).map(publicConnection)};};
   const route=kind=>{const s=load();return s.routes?.enabled?s.routes[kind]||'legacy':'legacy';};
   function commit(state,flags){const previous=load();storage.write(state);try{onChange(state,flags);}catch(error){storage.write(previous);try{onChange(previous,{rollback:true});}catch{}throw error;}}
@@ -85,9 +90,9 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
     state.profiles=state.profiles.filter(x=>x.id!==id).concat(p);commit(state);return publicConnection(p);
   }
   function saveRoutes(input){
-    if(input.enabled===true&&['chat','image','speech','video'].some(kind=>Object.hasOwn(input,kind)&&!String(input[kind]||'').trim()))throw Error('有来源尚未选择，请重新选择后再应用');
+    if(['chat','image','speech','video'].some(kind=>Object.hasOwn(input,kind)&&!String(input[kind]||'').trim()))throw Error('有来源尚未选择，请重新选择后再应用');
     if(apiOnly&&['chat','image','speech','video'].some(kind=>input[kind]==='local'))throw Error(mobileApiMessage);
-    const state=load(),routes={enabled:input.enabled===true,chat:String(input.chat||'host'),image:String(input.image||'legacy'),speech:String(input.speech||'legacy'),...(input.video!==undefined||state.routes?.video!==undefined?{video:String(input.video??state.routes.video??'legacy')}:{})};
+    const state=load(),routes={enabled:true,chat:String(input.chat||state.routes.chat||'host'),image:String(input.image||state.routes.image||'legacy'),speech:String(input.speech||state.routes.speech||'legacy'),...(input.video!==undefined||state.routes?.video!==undefined?{video:String(input.video??state.routes.video??'legacy')}:{})};
     for(const kind of ['chat','image','speech',...('video' in routes?['video']:[])]){
       const value=routes[kind];if(['local',kind==='chat'?'host':'legacy'].includes(value)||kind==='speech'&&value==='runninghub')continue;
       const p=state.profiles.find(x=>'profile:'+x.id===value);if(!p)throw Error('所选连接不存在：'+kind);
@@ -95,8 +100,6 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
       if(!p[kind==='chat'?'chatModel':kind==='image'?'imageModel':kind==='video'?'videoModel':'speechModel'])throw Error('请先为所选连接填写对应模型');
       if(kind==='speech'&&!p.voice)throw Error('请先为语音连接填写音色 ID');
     }
-    if(routes.enabled&&!state.routes?.enabled){state.legacyLocalEnabled=getLegacyMode()===true;state.legacyApiComplement=getLegacyComplement()===true;}
-    if(!routes.enabled&&state.routes?.enabled){state.legacyLocalEnabled=getLegacyMode()===true;state.legacyApiComplement=getLegacyComplement()===true;}
     state.routes=routes;commit(state,{routes:true});
     return snapshot();
   }
@@ -120,12 +123,6 @@ export function createServiceConnections({storage,onChange=()=>{},getLegacyMode=
     if(state.routes?.enabled)state.routes={...state.routes,chat};
     commit(state,{routes:state.routes?.enabled===true});
   }
-  function setMode(mode,{apiComplement=false}={}){
-    if(!['local','api'].includes(mode))throw Error('请选择纯本地或 API 模式');
-    if(apiOnly&&mode==='local')throw Error(mobileApiMessage);
-    const state=load();state.routes={enabled:false,chat:mode==='local'?'local':'host',image:mode==='local'?'local':'legacy',speech:mode==='local'?'local':'legacy',...('video' in (state.routes||{})?{video:mode==='local'?'local':'legacy'}:{})};
-    state.legacyLocalEnabled=mode==='local';state.legacyApiComplement=mode==='local'&&apiComplement===true;
-    commit(state,{routes:true,mode:true});return snapshot();
-  }
-  return {snapshot,save,saveRoutes,setMode,use,selectChatModel,remove,route,profile,raw:load};
+
+  return {snapshot,save,saveRoutes,use,selectChatModel,remove,route,profile,raw:load};
 }

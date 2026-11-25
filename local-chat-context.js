@@ -74,7 +74,13 @@ export function localAnalysisInput(input){
  const compact=(item,key='',depth=0)=>{
   if(depth>8)return null;
   if(typeof item==='string')return item.slice(0,['id','sourceId','url'].includes(key)?1000:key==='text'?900:250);
-  if(Array.isArray(item))return item.slice(0,key==='sources'?1:key==='utterances'?8:4).map(row=>compact(row,key,depth+1));
+  if(Array.isArray(item)){
+   const limit=key==='sources'?1:key==='utterances'?8:4;
+   const rows=item.slice(0,limit);
+   // Expression learning budgets up to two public replies after its eight primary rows.
+   if(key==='utterances')rows.push(...item.slice(limit,limit+2).filter(row=>row?.source==='tieba'));
+   return rows.map(row=>compact(row,key,depth+1));
+  }
   if(item&&typeof item==='object')return Object.fromEntries(Object.entries(item).slice(0,20).map(([k,v])=>[k,compact(v,k,depth+1)]));
   return item;
  };

@@ -84,6 +84,7 @@ export function createLifeMemory({storage,now=()=>Date.now(),timeZone='Asia/Shan
   const cache=new Map(),locks=new Set(),planning=new Map();let running=false,closed=false,attemptSerial=0,nextScope=0,reports=[];
   const current=()=>calendarNow(now(),timeZone);
   function get(meta){
+    storage.prepare?.(meta);
     const name=filename(meta);if(cache.has(name))return cache.get(name);
     let doc;try{doc=storage.read(name);}catch(error){if(error?.code!=='ENOENT'&&error?.code!=='MEMORY_CORRUPT')throw error;}
     if(doc&&hash(doc.meta)!==hash(meta))throw Error('memory scope mismatch');
@@ -406,5 +407,5 @@ export function createLifeMemory({storage,now=()=>Date.now(),timeZone='Asia/Shan
     let written=0;try{for(const doc of writes){save(doc);written++;}}catch(error){for(const doc of originals.slice(0,written))save(doc);throw error;}
     for(const doc of writes)cache.set(filename(doc.meta),doc);return writes.length;
   }
-  return {noteConversation,record,recordLearning,presence,today,restoreCurrent,ensureLife,applyUserRequest,chooseActivity,plannedScene,ensurePhotoScene,tick,refine,snapshot,lifeHint,lifeScene,recall,edit,prune,exportArchive,restoreArchive,reload:()=>cache.clear(),scopes:()=>all().filter(d=>permitted(d.meta)).map(d=>clone(d.meta)),close:()=>{for(const role of roles())try{presence(role,{active:false,shutdown:true});}catch{}closed=true;},scopeId:filename};
+  return {noteConversation,record,recordLearning,presence,today,restoreCurrent,ensureLife,applyUserRequest,chooseActivity,plannedScene,ensurePhotoScene,tick,refine,snapshot,lifeHint,lifeScene,recall,edit,prune,exportArchive,restoreArchive,reload:()=>{cache.clear();storage.reload?.();},scopes:()=>all().filter(d=>permitted(d.meta)).map(d=>clone(d.meta)),close:()=>{for(const role of roles())try{presence(role,{active:false,shutdown:true});}catch{}closed=true;},scopeId:filename};
 }

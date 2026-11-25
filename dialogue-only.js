@@ -1,5 +1,6 @@
 // Presentation policy for final chat and speech, never for tool arguments.
-export const DIALOGUE_ONLY_RULE='【聊天文体，优先于人设示例】默认只写直接对对方说的话，不加括号或星号包裹的动作、表情、心理、场景和舞台说明，例如不写“（吐了吐舌头，把手机藏起来）”。情绪用实际措辞表达。换人设不改变此规则；只有本轮用户明确要求动作描写、剧情、故事等创作时才写。正常说明中的括号、引用、代码和工具参数保留。';
+export const DRAFT_VOICE_RULE='替人拟话，先分清谁署名、谁会读。草稿里的“我”只说署名人确认的事。你想到的办法，等他采纳了才能写成他的承诺。要一句能直接发的话，就在收信人该看到的最后一个字收笔。对方另要选项或解释时再谈。';
+export const DIALOGUE_ONLY_RULE='【聊天文体，优先于人设示例】闲聊时直接跟对方说，用措辞表达情绪，不加括号或星号包裹的动作、心理、场景。亲昵、玩笑和陪伴也直接说，不用隔屏触碰等舞台说明代替接话；想分享画面时由语境选择实际媒介。换人设不改变这点。按请求保留故事里的描写、正常括号、引用、代码和工具参数。'+DRAFT_VOICE_RULE;
 
 export function requestedActionNarration(request=''){
  if(/(?:不要|别|禁止|不许|不用|无需|不需要|不能|不得|去掉|删掉)[^，。！？;；\n]{0,16}(?:动作|旁白|心理描写|场景描写|舞台说明)/.test(String(request)))return false;
@@ -11,7 +12,8 @@ const stageWords=/(?:瘪.{0,5}嘴|嘟.{0,5}嘴|撅.{0,5}嘴|声音.{0,16}(?:软|
 function isStageDirection(value){
  const text=String(value).trim();
  if(/^(?:注|备注|补充|说明|注意)\s*[:：]|^(?:例如|比如|即|也就是|含税|不含税|约\d|共\d|可选|选填|默认|单位|格式|英文|简称)|(?:这个词|一词|意思是|表示的是|术语|定义为)|https?:\/\/|[A-Za-z]:[\\/]/.test(text))return false;
- return /^(?:动作|旁白|心理活动|内心独白|场景)\s*[:：]/.test(text)||stageWords.test(text);
+ return /^(?:动作|旁白|心理活动|内心独白|场景)\s*[:：]/.test(text)||stageWords.test(text)
+  || /(?:手(?:指|掌|背)?|指尖|掌心|脑袋|额头|肩膀|身子|尾巴|耳朵|目光|视线).{0,10}(?:停|贴|搭|垂|靠|凑|落|挪|抬|低|缩|探|蹭|收回|伸向)/.test(text);
 }
 
 export function stripUnrequestedActions(value='',{request=''}={}){

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {createExpressionLearning,expressionHistory,expressionScope,explicitStickerMeaning,stickerIdentity} from '../expression-learning.js';
 import {qqHumanWords} from '../qq-poke.js';
 import {learningActor} from '../learning-effects.js';
@@ -151,7 +152,7 @@ test('the shared host adds the reference to ordinary API and local turns without
   const end=source.indexOf('\n  function calendarSnapshot()',start);
   assert(start>=0&&end>start);
   const deps={
-    syncConversationState:()=>{},lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),
+    learningMemory:null,syncConversationState:()=>{},lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),
     contextTopicsFor,operationContext:()=>[],companionSettings:()=>({expressionMode:'relaxed'}),
     learningMeta:()=>meta,expressionLearning:fixture({initial:{items:[card()]}}).learner,
     readConversationContext:()=>assert.fail('ordinary recall does not fetch context'),
@@ -179,6 +180,68 @@ test('the shared host adds the reference to ordinary API and local turns without
 });
 
 const imageDigest='fa0123456789abcdef0123456789abcd';
+test('cold-start public references reach ordinary host inputs with their original excerpt, without becoming personal lessons',async()=>{
+  const catalog=JSON.parse(readFileSync(new URL('../assets/tieba-dialogue-lessons.json',import.meta.url),'utf8'));
+  const f=fixture(),service=f.learner;
+  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
+  const start=source.indexOf('  async function prepareCalendarContext('),end=source.indexOf('\n  function calendarSnapshot()',start);
+  const deps={learningMemory:null,syncConversationState:()=>{},contextTopicsFor,operationContext:()=>[],companionSettings:()=>({}),
+    learningMeta:()=>meta,expressionLearning:service,readConversationContext:()=>assert.fail('no extra context reads')};
+  const prepare=Function(...Object.keys(deps),source.slice(start,end)+'\nreturn prepareCalendarContext;')(...Object.values(deps));
+  const words='好消息，我排了好久的演出票终于拿到了！';
+  const c=catalog.lessons.find(item=>item.id==='cheer-the-win');
+  for(const local of [false,true]){
+    const parts=Object.assign([{type:'text',text:words}],{conversationIntent:'celebrate'});
+    await prepare({key:meta.key,kind:'private'},{},parts,words,{local});
+    assert.deepEqual(parts.expressionIds,['tieba-ref:'+c.id]);
+    assert.equal(parts[0]._bridgeContext,'expression');
+    const instruction=parts[0].text;
+    for(const field of ['style','excerpt','context','example'])assert(c[field]&&instruction.includes(c[field]));
+    assert(instruction.length<=160);
+    if(local)assert(localSharedContext(parts).messages.some(message=>message.content===instruction));
+    else{createPromptBudget().pack(parts,{protectedParts:new Set([parts.at(-1)])});assert(parts[0].text.includes(instruction));assert.equal(parts.at(-1).text,words);}
+  }
+  assert.equal(f.writes,0);assert.equal(service.snapshot(meta).learned,0);
+  const old=fixture({initial:{items:[card({id:'private-win',situation:'朋友分享好消息时一起庆祝'})]}});
+  assert.deepEqual(old.learner.hintDetailed(meta,words,{compact:true}).ids,['private-win']);
+  assert.deepEqual(fixture({allowed:()=>false}).learner.hintDetailed(meta,words,{compact:true}).ids,[]);
+  for(const query of ['题目里有人中了奖，概率怎么算？','帮我写一段恭喜的短信','好耶，帮我把这首诗翻译了','他住院了，真的好可惜']){
+    assert.deepEqual(service.hintDetailed(meta,query,{compact:true}).ids,[]);
+  }
+  for(const query of ['她说“好耶，终于修好了”','室友说，好耶','好耶，不过明天还得从头来']){
+    assert.deepEqual(service.hintDetailed(meta,query,{compact:true,intent:'listen'}).ids,[]);
+  }
+});
+
+test('a public reference tracks retrieval, actual outcome and negative feedback per account, chat and persona across restart',()=>{
+  const f=fixture(),other={...meta,personaId:'p2'},peer={...meta,key:'private:222'},otherAccount={...meta,accountId:'b'};
+  const words='好消息，申请终于通过了！',id='tieba-ref:cheer-the-win';
+  for(let i=0;i<3;i++){
+    const service=f.learner,auditId='audit-'+i;
+    assert.deepEqual(service.hintDetailed(meta,words,{compact:true,auditId}).ids,[id]);
+    assert.equal(service.recordUsage(meta,{auditId,ids:[id]}),false);
+    assert.equal(service.snapshot(meta).applications[0].status,'retrieved');
+    assert.throws(()=>service.feedback(meta,{id:auditId,rating:-1}));
+    assert.equal(service.recordOutcome(meta,{auditId,status:'silent'}),true);
+    assert.throws(()=>service.feedback(meta,{id:auditId,rating:-1}));
+    assert.equal(service.recordOutcome(meta,{auditId,status:i===0?'generated':'delivered'}),true);
+    if(i>0){
+      service.recordOutcome(meta,{auditId,status:'silent'});
+      assert.equal(service.snapshot(meta).applications[0].status,'delivered');
+    }
+    assert.equal(service.feedback(meta,{id:auditId,rating:-1}).changed,1);
+  }
+  const service=f.learner,view=service.snapshot(meta),ref=view.references.find(row=>row.id===id);
+  assert.equal(view.learned,0);assert.equal(view.items.length,0);assert.equal(view.corpus,view.references.length);
+  assert.equal(ref.uses,3);assert(ref.suspended);assert(ref.evidence.length>0);assert(view.referenceSource.startsWith('https://'));
+  assert.deepEqual(service.hintDetailed(meta,words,{compact:true}).ids,[]);
+  for(const scope of [other,peer,otherAccount]){
+    assert.deepEqual(service.hintDetailed(scope,words,{compact:true}).ids,[id]);
+    assert.equal(service.snapshot(scope).references.find(row=>row.id===id).uses,0);
+    assert.equal(service.recordOutcome(scope,{auditId:'audit-0',status:'delivered'}),false);
+  }
+});
+
 const sticker={type:'image',data:{file:imageDigest+'.jpg',url:'https://example.test/temporary/one',sub_type:1}};
 const resent={type:'image',data:{file:imageDigest.toUpperCase()+'.gif',url:'https://example.test/temporary/two',sub_type:1}};
 const different={type:'image',data:{file:'0'.repeat(32)+'.jpg',sub_type:1}};
@@ -218,7 +281,7 @@ test('the QQ path binds an explicit followup to the real sticker and recalls it 
   const refs=new Map([[qqMediaKey(meta,original.id),original]]);
   const f=fixture(),deps={
     expressionLearning:f.learner,settings:{memory:{enabled:true},localChat:{enabled:false}},recordsAllowed:()=>true,
-    segmentsOf:value=>value,qqHumanWords,explicitStickerMeaning,stickerIdentity,qqReadScope:()=>meta,learningMeta:()=>meta,
+    segmentsOf:value=>value,qqHumanWords,isStickerReactionPart,explicitStickerMeaning,stickerIdentity,qqReadScope:()=>meta,learningMeta:()=>meta,
     qqMediaReferences:refs,qqMediaKey,messages:[row('pic','',at,{image:true})],featureState:{floors:{}},memories:{},
     operationContext:()=>[],IMAGE_CONVERSATION_HINT:'picture',normalizeReplyNewlines,
   };
@@ -260,7 +323,7 @@ test('the QQ path binds an explicit followup to the real sticker and recalls it 
   const elliptical=confirm('就是你想的那种');
   host().noteStickerTeaching(chat,elliptical);
   assert.equal(elliptical._bridgeStickerClarification,'赢了');
-  assert.match(host().stickerClarificationHint(elliptical._bridgeStickerClarification),/你自己刚把图误读成了什么/);
+  assert.match(host().stickerClarificationHint(elliptical._bridgeStickerClarification),/之前确实理解错了/);
   const polished=host().stickerClarificationReply;
   assert.equal(polished('那我刚才还傻乎乎地说自己想歪了\n爸爸这么直白，我在被窝里脸都要烫起来了'),'行，刚才是我理解岔了。');
   assert.equal(polished('我刚才还说是手绘呢。\n现在脸有点热了。\n这都能被我看岔。'),'我刚才还说是手绘呢。\n这都能被我看岔。');
@@ -270,3 +333,66 @@ test('the QQ path binds an explicit followup to the real sticker and recalls it 
   host().noteStickerTeaching(chat,repurposed);
   assert.equal(repurposed._bridgeStickerClarification,undefined);
 });
+
+test('a GIF with rotating opaque QQ handles learns from the normal pixel read, survives restart, and accepts correction',async()=>{
+  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
+  function between(start,end){
+    const a=source.indexOf(start),b=source.indexOf(end,a);
+    assert.ok(a>=0&&b>a,start);
+    return source.slice(a,b);
+  }
+  const code=between('  const unidentifiedStickerInputs=','  const qqForwardReader=')+
+    between('  function rememberQqMedia(','  /** Prompt parts for one platform message')+
+    between('  function isSoloStickerTurn(','  async function refineStickerReply(');
+  const f=fixture(),owner=meta.key.slice(8),chat={key:meta.key,kind:'private',isOwner:true};
+  const gif=Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7','base64');
+  let reads=0,current=meta;
+  const deps={qqHumanWords,isStickerReactionPart,explicitStickerMeaning,stickerIdentity,createHash,
+    settings:{owners:[owner],memory:{enabled:true}},segmentsOf:value=>value,qqReadScope:()=>current,
+    learningMeta:()=>current,qqMediaReferences:new Map(),qqMediaKey:(s,id)=>JSON.stringify([s,id]),
+    expressionLearning:f.learner,recordsAllowed:()=>true,saveQqMedia:()=>{},operationContext:()=>[],
+    qqImageInput:{read:async data=>{reads++;return data.variant?Buffer.concat([gif,Buffer.from('x')]):gif;}},
+    sniffImage:bytes=>bytes.subarray(0,3).toString()==='GIF'?'image/gif':null,
+    IMAGE_CONVERSATION_HINT:'image'};
+  const api=()=>Function(...Object.keys(deps),code+'\nreturn {rememberQqMedia,noteStickerTeaching,finishStickerTeaching,readImageBytes,imageTurnHint};')(...Object.values(deps));
+  const received=(file,id,at,meaning)=>({message_id:id,_bridgeReceivedAt:at,user_id:owner,
+    message:[{type:'image',data:{file,sub_type:1}},...(meaning?[{type:'text',data:{text:'该表情包意思为“'+meaning+'”'}}]:[])]});
+  async function view(host,payload){
+    const part=payload.message[0];
+    host.rememberQqMedia(chat.key,payload,0,part);
+    host.noteStickerTeaching(chat,payload);
+    await host.readImageBytes(part.data);
+    if(payload._bridgePendingStickerScope)host.finishStickerTeaching(chat,payload);
+  }
+  const initial=api(),teach=received('temp-one.gif','1',1000,'认栽');
+  await view(initial,teach);
+  assert.equal(teach._bridgeStickerTeaching,'saved');
+  deps.expressionLearning=f.learner;
+  const next=api(),same=received('opaque-new','2',86_401_000);
+  same.message[0].data.sub_type=0;
+  await view(next,same);
+  assert.match(next.imageTurnHint(chat,same),/约定的含义】"认栽"/);
+  assert.match(next.imageTurnHint(chat,same),/单发私聊表情/);
+  const correction=received('opaque-third','3',86_402_000,'服气');
+  await view(next,correction);
+  const idOnly=received(same.message[0].data.md5+'.gif','4',90_000_000);
+  assert.match(next.imageTurnHint(chat,idOnly,false),/约定的含义】"服气".*原图未读取/);
+  const other=received('opaque-new','5',90_001_000);
+  other.message[0].data.variant=true;
+  other.message[0].data.sub_type=0;
+  await view(next,other);
+  assert.equal(next.imageTurnHint(chat,other,false),'');
+  assert.equal(next.imageTurnHint(chat,other),'image');
+  assert.equal(reads,4);
+  const interrupted=received('another.gif','6',90_002_000,'错误绑定');
+  next.rememberQqMedia(chat.key,interrupted,0,interrupted.message[0]);
+  next.noteStickerTeaching(chat,interrupted);
+  current={...meta,accountId:'switched'};
+  await next.readImageBytes(interrupted.message[0].data);
+  next.finishStickerTeaching(chat,interrupted);
+  assert.equal(interrupted._bridgeStickerTeaching,'unbound');
+  assert.equal(next.imageTurnHint(chat,idOnly,false),'');
+  current=meta;
+  assert.match(next.imageTurnHint(chat,idOnly,false),/"服气"/);
+});
+import {isStickerReactionPart} from '../bridge-features.js';

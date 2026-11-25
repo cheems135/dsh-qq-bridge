@@ -63,14 +63,60 @@ async function voiceFetch(url,options,fetchImpl,label) {
 // 保留兼容导出；实际合成不再据此表自动修改用户的语速。
 const MOOD_SPEED={crying:.88,pained:.9,moan:.92,breathless:1.08,anxious:1.05,anxiety:1.05,nervous:1.06,excited:1.08,angry:1.04,laugh:1.05,whisper:.92,tired:.9,sad:.92,lonely:.94,tender:.94,gentle:.94,natural:1,serious:.98,commanding:.97};
 export function moodSpeed(mood){return MOOD_SPEED[mood]||1;}
-function describedVoiceMood(value){
+// These labels aid engine selection. The per-utterance direction still carries
+// degree, mixed feelings and changes of emotion; it is never replaced by a label.
+const DESCRIBED_MOODS=[
+ ['pained',/痛苦|吃痛|疼痛|痛呼|痛得|疼得|\b(?:pained|in pain|painful)\b/gi],
+ ['crying',/哭|泣|抽噎|哽咽|\b(?:crying|sobbing|weeping)\b/gi],
+ ['angry',/愤怒|暴怒|怒火|愤慨|盛怒|生气|气愤|\b(?:angry|furious|rage)\b/gi],
+ ['excited',/狂喜|狂欢|兴奋|激动|欣喜|\b(?:excited|ecstatic|elated)\b/gi],
+ ['laugh',/大笑|狂笑|笑到|笑得|爆笑|笑出声|笑声|轻笑|带笑|忍笑|笑意|含笑|笑着|哭着笑|\b(?:laughing|laughter|giggling)\b/gi],
+ ['afraid',/恐惧|害怕|惊恐|惊惧|\b(?:afraid|terrified|frightened)\b/gi],
+ ['breathless',/气息急促|呼吸急促|喘不上气|\bbreathless\b/gi],
+ ['sad',/悲伤|悲痛|伤心|失落|低落|难过|不开心|不高兴|\b(?:sad|sorrowful)\b/gi],
+ ['happy',/开心|高兴|快乐|愉快|轻快|\bhappy\b/gi],
+ ['gentle',/温柔|轻柔|安慰|柔和|\b(?:gentle|comforting)\b/gi],
+ ['surprised',/惊讶|惊喜|意外|吃惊|\bsurprised\b/gi],
+ ['serious',/认真|严肃|郑重|\bserious\b/gi],
+ ['tender',/撒娇|黏人|依恋|\btender\b/gi],
+ ['shy',/害羞|羞涩|腼腆|\bshy\b/gi],
+ ['teasing',/调侃|逗弄|打趣|\bteasing\b/gi],
+ ['whisper',/耳语|悄声|小声|\bwhisper\b/gi],
+ ['tired',/疲惫|疲倦|困倦|慵懒|累了|\btired\b/gi],
+ ['smug',/得意|自鸣得意|\bsmug\b/gi],
+ ['cold',/冷淡|淡漠|疏离|\bcold\b/gi],
+ ['relieved',/释然|松(?:了)?口气|放下心|\brelieved\b/gi],
+ ['confused',/疑惑|困惑|迷惑|拿不准|\bconfused\b/gi],
+ ['commanding',/命令|强势|不容置疑|\bcommanding\b/gi],
+ ['nervous',/紧张|慌张|慌乱|\bnervous\b/gi],
+ ['trust',/信任|依赖|安心依靠|\btrust\b/gi],
+ ['anticipation',/期待|盼望|\banticipation\b/gi],
+ ['disgust',/嫌弃|厌恶|反感|\bdisgust\b/gi],
+ ['guilt',/愧疚|自责|内疚|\bguilt\b/gi],
+ ['anxiety',/焦虑|忐忑|没底|\b(?:anxiety|anxious)\b/gi],
+ ['boredom',/无聊|兴致缺缺|百无聊赖|\b(?:boredom|bored)\b/gi],
+ ['curiosity',/好奇|想弄明白|\bcuriosity\b/gi],
+ ['moved',/感动|鼻酸|\bmoved\b/gi],
+ ['lonely',/孤单|孤独|寂寞|\blonely\b/gi],
+ ['jealousy',/吃醋|嫉妒|酸溜溜|\b(?:jealousy|jealous)\b/gi],
+ ['helpless',/无奈|没辙|无可奈何|\bhelpless\b/gi],
+ ['sarcastic',/嘲讽|讽刺|阴阳怪气|冷笑|\bsarcastic\b/gi],
+ ['pity',/心疼|怜惜|怜悯|\bpity\b/gi],
+];
+function describedVoiceMoods(value){
  const label=String(value||'').trim();
- // Model reviews commonly include strength/physical qualifiers. Interpret only
- // the emotion label, never the dialogue or a negated performance instruction.
- if(!label||label.length>80||/(?:不(?:要|是|再|用)?|别|无需|没有|避免|非).*(?:哭|泣|笑|怒|喊|怕|恐惧|生气)|\b(?:not|no|without|avoid)\b/i.test(label))return '';
- for(const [pattern,mood]of [[/哭|泣|抽噎|哽咽|\b(?:crying|sobbing|weeping)\b/i,'crying'],[/愤怒|暴怒|怒火|愤慨|盛怒|生气|\b(?:angry|furious|rage)\b/i,'angry'],[/狂喜|狂欢|兴奋|激动|欣喜|\b(?:excited|ecstatic|elated)\b/i,'excited'],[/大笑|狂笑|笑到|笑得|爆笑|笑出声|笑声|\b(?:laughing|laughter|giggling)\b/i,'laugh'],[/恐惧|害怕|惊恐|惊惧|\b(?:afraid|terrified|frightened)\b/i,'afraid'],[/气息急促|呼吸急促|喘不上气|\bbreathless\b/i,'breathless'],[/悲伤|悲痛|伤心|失落|低落|\b(?:sad|sorrowful)\b/i,'sad']])if(pattern.test(label))return mood;
- return '';
+ if(!label||label.length>80)return [];
+ const found=[];
+ for(const [mood,pattern]of DESCRIBED_MOODS){
+  for(const match of label.matchAll(pattern)){
+   const prefix=label.slice(0,match.index).split(/[,，、;；。]|而是|但是|但|转为|转成|变得/).at(-1);
+   if(/(?:不要|不用|别|无需|没有|避免|并非|不是|不再|不).{0,5}$|\b(?:not|no|without|avoid)\s*$/i.test(prefix))continue;
+   found.push({mood,at:match.index});break;
+  }
+ }
+ return found.sort((a,b)=>a.at-b.at).map(row=>row.mood);
 }
+function describedVoiceMood(value){return describedVoiceMoods(value)[0]||'';}
 export function voiceMood(value='auto',line='') {
  const aliases={'温柔':'gentle','轻柔':'gentle','安慰':'gentle','开心':'happy','自然':'natural','低落':'sad','难过':'sad','惊喜':'surprised','认真':'serious','撒娇':'tender','黏':'tender','软':'tender','害羞':'shy','羞':'shy','挑逗':'teasing','逗':'teasing','耳语':'whisper','小声':'whisper','懒':'tired','累':'tired','困':'tired','兴奋':'excited','激动':'excited','气':'angry','生气':'angry','凶':'angry','害怕':'afraid','怕':'afraid','恐惧':'afraid','发抖':'afraid','急':'breathless','喘':'breathless','急促':'breathless','喘不上气':'breathless','娇喘':'moan','喘气':'moan','断续':'moan','酥':'moan','痛':'pained','用力':'pained','吃痛':'pained','咬牙':'pained','哭':'crying','哭腔':'crying','委屈':'crying','哽咽':'crying','得意':'smug','欠揍':'smug','傲':'smug','冷':'cold','冷淡':'cold','冷漠':'cold','释然':'relieved','松口气':'relieved','放心':'relieved','疑惑':'confused','困惑':'confused','拿不准':'confused','强势':'commanding','命令':'commanding','强硬':'commanding','紧张':'nervous','慌':'nervous','不安':'nervous','笑':'laugh','轻笑':'laugh','笑着':'laugh','信任':'trust','依赖':'trust','安心':'trust','期待':'anticipation','盼望':'anticipation','盼':'anticipation','嫌弃':'disgust','厌恶':'disgust','恶心':'disgust','愧疚':'guilt','自责':'guilt','内疚':'guilt','焦虑':'anxiety','没底':'anxiety','心慌':'anxiety','无聊':'boredom','没兴致':'boredom','好奇':'curiosity','想知道':'curiosity','感动':'moved','鼻酸':'moved','孤单':'lonely','孤独':'lonely','寂寞':'lonely','吃醋':'jealousy','酸':'jealousy','无奈':'helpless','没辙':'helpless','嘲讽':'sarcastic','翻白眼':'sarcastic','阴阳':'sarcastic','心疼':'pity','怜惜':'pity','渴望':'breathless','想要':'tender','馋':'breathless','迫不及待':'excited','忍不住':'breathless','发抖声':'afraid','半梦半醒':'tired','黏人':'tender'};
  value=aliases[value]||describedVoiceMood(value)||value;
@@ -87,8 +133,8 @@ export function voiceMoodList(value='') {
  if(raw===''||raw==='auto')return [];
  const parts=raw.split(/[+＋,，、\/／|]/).map(v=>v.trim()).filter(Boolean).slice(0,3);
  const out=[];
- for(const part of parts){const id=voiceMood(part,'');if(id!=='natural'&&id!=='auto'&&!out.includes(id))out.push(id);}
- return out;
+ for(const part of parts){const found=describedVoiceMoods(part),id=voiceMood(part,'');for(const mood of found.length?found:[id])if(mood!=='natural'&&mood!=='auto'&&!out.includes(mood))out.push(mood);}
+ return out.slice(0,3);
 }
 const BRACKET=/\[[^\]]{1,12}\]|\([^)]{1,20}\)/;
 export function normalizeVoiceMood(value='auto') {
@@ -117,7 +163,8 @@ export function breezeDelivery(line,config={},options={}) {
  // One contextual direction wins. Do not stack a stale fixed performance and
  // multiple contradictory mood recipes onto the same utterance.
  const profiles=moodsList.map(emotionProfile),fallback={mood:profiles.map(p=>p.mood).join('、'),cues:[...new Set(profiles.flatMap(p=>p.cues||[]))].slice(0,2)};
- return{mood,instructions:composeDirection({mood,userDirection:extras.breeze.instructions,language:english?'en':'zh',profile:fallback})};
+ const fallbackDirection=english?'Speak with the requested '+moodsList.join(' and ')+' emotion.':'用'+fallback.mood+'的语气说'+(fallback.cues.length?'，'+fallback.cues.join('，'):'');
+ return{mood,instructions:composeDirection({mood,userDirection:fallbackDirection,extra:extras.breeze.instructions,language:english?'en':'zh',profile:fallback})};
 }
 export function resolveVoiceDelivery(config={},options={},review={}){
  const requested=options.emotion||config.emotion||'auto';
@@ -126,7 +173,8 @@ export function resolveVoiceDelivery(config={},options={},review={}){
  const combo=voiceMoodList(requested);
  const mood=normalizeVoiceMood(requested==='auto'?review?.delivery?.emotion:requested);
  // 以前二选一：手动情绪时丢掉审核方向，auto 时丢掉情绪配方。auto 只剩一句笼统方向，台词自然被读平。
- const direction=String(options.instructions||review?.delivery?.instructions||'').trim();
+ const rawMood=requested==='auto'?review?.delivery?.emotion:requested;
+ const direction=String(options.instructions||review?.delivery?.instructions||(mood==='natural'&&rawMood&&!['auto','natural','自然'].includes(rawMood)?rawMood:'')).trim();
  const instructions=breezeDelivery(String(options.text||''),config,{emotion:combo.length?requested:mood,instructions:direction,performance:options.performance,arrangement:options.arrangement}).instructions;
  return{emotion:mood,instructions,instructionsPrepared:true,performance:options.performance||'speech',autoTags:options.autoTags===true};
 }

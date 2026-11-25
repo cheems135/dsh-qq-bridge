@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {readFileSync,writeFileSync,existsSync,mkdirSync,openSync,closeSync,chmodSync,statSync,renameSync} from 'node:fs';
 import {join} from 'node:path';
+import {mobileLoginHold} from '../mobile-napcat.js';
 const config=JSON.parse(readFileSync(process.argv[2],'utf8'));
 if(!/^\d{5,12}$/.test(config.qq)||!existsSync(join(config.dir,'qq')))throw Error('Invalid local QQ configuration');
 mkdirSync(config.dataDir,{recursive:true});mkdirSync(config.cacheDir,{recursive:true});
@@ -18,5 +19,22 @@ const env={...process.env,XDG_RUNTIME_DIR:socketDir,WAYLAND_DISPLAY:'qq-mobile',
 const out=log();compositor=spawn('weston',['--backend=headless-backend.so','--socket=qq-mobile','--width=1024','--height=768','--no-config','--idle-time=0'],{env,stdio:['ignore',out,out],detached:true});closeSync(out);
 compositor.on('error',stop);compositor.on('close',()=>{if(!stopping)stop();});
 const compositorDeadline=Date.now()+30000;
-function launch(){if(stopping)return;if(!existsSync(join(socketDir,'qq-mobile'))){if(Date.now()>compositorDeadline){stop();return;}timer=setTimeout(launch,700);return;}const out=log();qq=spawn(join(config.dir,'qq'),['--no-sandbox','-q',config.qq,'--disable-gpu','--disable-dev-shm-usage','--ozone-platform=wayland','--enable-features=UseOzonePlatform'],{env,cwd:config.dir,stdio:['ignore',out,out],detached:true});closeSync(out);let finished=false;const retry=()=>{if(finished)return;finished=true;qq=null;if(!stopping)timer=setTimeout(launch,15000);};qq.on('error',retry);qq.on('close',retry);}
+// Present only on a foreground verification request for a specific platform notice.
+let verificationTime=Number(process.argv[3]) || 0;
+function launch(){
+  if(stopping)return;
+  if(!existsSync(join(socketDir,'qq-mobile'))){if(Date.now()>compositorDeadline){stop();return;}timer=setTimeout(launch,700);return;}
+  // Check on every launch, including a retry already scheduled before a hold.
+  // A temporarily unreadable state file must not be mistaken for a release.
+  try {
+    const hold=mobileLoginHold(config);
+    const verify=verificationTime>0 && hold && hold.source!=='user' && hold.receiver===config.qq && hold.time===verificationTime;
+    if(hold && !verify){stop();return;}
+  }
+  catch { timer=setTimeout(launch,15000);return; }
+  verificationTime=0;
+  const out=log();qq=spawn(join(config.dir,'qq'),['--no-sandbox','-q',config.qq,'--disable-gpu','--disable-dev-shm-usage','--ozone-platform=wayland','--enable-features=UseOzonePlatform'],{env,cwd:config.dir,stdio:['ignore',out,out],detached:true});closeSync(out);
+  let finished=false;const retry=()=>{if(finished)return;finished=true;qq=null;if(!stopping)timer=setTimeout(launch,15000);};
+  qq.on('error',retry);qq.on('close',retry);
+}
 timer=setTimeout(launch,700);

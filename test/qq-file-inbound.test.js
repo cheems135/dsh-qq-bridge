@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {createQqFileTransfer,normalizeQqFileNotice} from '../qq-file-transfer.js';
 import {segmentsOf,extractIncoming} from '../bridge-features.js';
 import {qqHumanWords} from '../qq-poke.js';
+import {retainInbox} from '../inbox-recovery.js';
 const source=fs.readFileSync(new URL('../index.js',import.meta.url),'utf8');
 function extract(name,deps){const start=source.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0,'missing '+name);for(let end=source.indexOf('}',start);end>=0;end=source.indexOf('}',end+1)){try{return Function(...Object.keys(deps),'return ('+source.slice(start,end+1)+')')(...Object.values(deps));}catch(e){if(e instanceof SyntaxError)continue;throw e;}}throw Error(name);}
 function host({allowed=['12345','54321']}={}){const rows=[];const settings={activeAccountId:'a'};const service=createQqFileTransfer({rows:()=>rows,save(){},authorize:()=>true});const receive=extract('receiveQqFilePayload',{stopped:false,accountPaused:false,normalizeQqFileNotice,settings,segmentsOf,effectiveGroups:()=>allowed,effectiveUsers:()=>allowed,recordsAllowed:()=>true,groupStopped:()=>false,activePersona:()=>({id:'p'}),qqFileTransfer:service});const notice={post_type:'notice',notice_type:'offline_file',self_id:'99999',user_id:'12345',file:{id:'f1',name:'报告.pdf',size:1024}};return {rows,receive,notice,service};}
@@ -17,11 +18,30 @@ test('the same notice twice yields one record and one stable message id',()=>{co
 test('an unknown sender never gets a file record or a hint',()=>{const h=host({allowed:['54321']});const p=h.receive(structuredClone(h.notice));assert.equal(h.rows.length,0);assert.equal(segmentsOf(p.message).some(s=>s._qqFileHint),false);});
 test('saved QQ file records are pruned by permission and length',()=>{const featureState={outbox:[],inbox:[],conversation:{},companionSoul:{},audits:[],mediaTasks:[],qqActions:[],qqFiles:[]};
  for(let i=0;i<260;i++)featureState.qqFiles.push({id:'k'+i,key:i%2?'private:12345':'private:99999'});
- const save=extract('saveFeatures',{featureState,recordsAllowed:key=>key==='private:12345',writeAtomic(){},featureFile:'x',log(){}});
+ const save=extract('saveFeatures',{featureState,retainInbox,keepFeatureRecord:key=>key==='private:12345',recordsAllowed:key=>key==='private:12345',writeAtomic(){},featureFile:'x',log(){}});
  assert.equal(save(),true);
  assert.equal(featureState.qqFiles.every(r=>r.key==='private:12345'),true);
  assert.equal(featureState.qqFiles.length,130);
  assert.equal(featureState.qqFiles.at(-1).id,'k259');
+});
+test('saving a busy inbox preserves unresolved work, order and only the permitted history',()=>{
+ const key='private:12345',now=Date.now();
+ const job=(id,status)=>({id,key,at:now,status,payload:{message_id:id},receivedIds:[id]});
+ const waiting=job('waiting','queued'),running=job('running','processing'),unknown=job('unknown','uncertain');
+ const admitted=Array.from({length:1001},(_,i)=>job('admitted-'+i,'admitted'));
+ const ended=Array.from({length:201},(_,i)=>job('ended-'+i,i%2?'failed':'cancelled'));
+ const forbidden=['queued','processing','uncertain','admitted','failed'].map(status=>({...job('forbidden-'+status,status),key:'private:99999'}));
+ const inbox=[waiting,admitted[0],ended[0],running,...ended.slice(1,3),unknown,...admitted.slice(1),...ended.slice(3),...forbidden];
+ const expected=inbox.filter(row=>row.key===key&&row!==admitted[0]&&row!==ended[0]);
+ const featureState={outbox:[],inbox,audits:[]};
+ let snapshot;
+ const save=extract('saveFeatures',{featureState,retainInbox,keepFeatureRecord:chat=>chat===key,recordsAllowed:chat=>chat===key,writeAtomic:(_file,state)=>{snapshot=JSON.stringify(state);},featureFile:'fixture',log(){}});
+ assert.equal(save(),true);
+ for(const row of [waiting,running,unknown])assert.ok(featureState.inbox.includes(row),row.status+' job disappeared');
+ assert.deepEqual(featureState.inbox.map(row=>row.id),expected.map(row=>row.id));
+ assert.deepEqual(JSON.parse(snapshot).inbox,expected);
+ assert.equal(save(),true);
+ assert.deepEqual(JSON.parse(snapshot).inbox,expected);
 });
 test('a downloaded binary is not reported as read text while a text file keeps a labelled preview',async()=>{
  const fsx=await import('node:fs');const pathx=(await import('node:path')).default;const osx=(await import('node:os')).default;

@@ -1,12 +1,21 @@
+import {GUILD_ACTIONS} from './qq-guild.js';
+import {QQ_SIGNATURE_GUIDANCE} from './profile-expression.js';
+
 const freezeEntry = entry => Object.freeze({
   ...entry,
   required: Object.freeze([...entry.required]),
 });
 
 export const QQ_NATIVE_CATALOG = Object.freeze([
+  ...GUILD_ACTIONS,
   {action: 'get_login_info', title: '获取登录账号信息', scope: 'self', write: false, required: []},
   {action: 'get_status', title: '获取运行状态', scope: 'self', write: false, required: []},
   {action: 'get_version_info', title: '获取版本信息', scope: 'self', write: false, required: []},
+  {action: 'set_self_longnick', title: '修改自己的个性签名', scope: 'self', write: true, required: ['longNick']},
+  {action: 'set_qq_profile', title: '修改自己的昵称和资料', scope: 'self', write: true, required: []},
+  {action: 'set_qq_avatar', title: '用已准备的真实图片修改自己的头像', scope: 'self', write: true, required: ['file']},
+  {action: 'set_online_status', title: '修改自己的在线状态', scope: 'self', write: true, required: ['status', 'ext_status', 'battery_status']},
+  {action: 'set_diy_online_status', title: '修改自己的自定义状态', scope: 'self', write: true, required: ['face_id', 'face_type', 'wording']},
   {action: 'get_friend_list', title: '获取好友列表', scope: 'self', write: false, required: []},
   {action: 'get_group_list', title: '获取群列表', scope: 'self', write: false, required: []},
   {action: 'get_stranger_info', title: '获取陌生人信息', scope: 'private', write: false, required: ['user_id']},
@@ -45,6 +54,11 @@ const SCHEMAS = new Map([
   ['get_login_info', schema([], {})],
   ['get_status', schema([], {})],
   ['get_version_info', schema([], {})],
+  ['set_self_longnick', schema(['longNick'], {longNick:'signature'})],
+  ['set_qq_profile', schema([], {nickname:'profile_text',company:'profile_text',email:'profile_text',college:'profile_text',personal_note:'signature'})],
+  ['set_qq_avatar', schema(['file'], {file:'upload_file'})],
+  ['set_online_status', schema(['status','ext_status','battery_status'], {status:'unsigned_integer',ext_status:'unsigned_integer',battery_status:'unsigned_integer'})],
+  ['set_diy_online_status', schema(['face_id','face_type','wording'], {face_id:'unsigned_integer',face_type:'unsigned_integer',wording:'profile_text'})],
   ['get_friend_list', schema([], {no_cache: 'boolean'})],
   ['get_group_list', schema([], {no_cache: 'boolean'})],
   ['get_stranger_info', schema(['user_id'], {user_id: 'user_id', no_cache: 'boolean'})],
@@ -75,7 +89,7 @@ function activeContext(context) {
   if (!context || typeof context !== 'object' || Array.isArray(context)) {
     return null;
   }
-  const accountId = contextId(context.accountId);
+  const accountId = contextId(context.accountId) || (context.accountId===''&&numericId(context.receiverId)?'onebot:'+numericId(context.receiverId):'');
   const personaId = contextId(context.personaId);
   const key = typeof context.key === 'string' ? context.key.trim() : '';
   if (!accountId || !personaId || !key) return null;
@@ -202,6 +216,10 @@ function validateValue(kind, value) {
     }
     case 'card':
       return boundedText(value, 128) ? String(value) : null;
+    case 'profile_text':
+      return typeof value==='string'&&value.length<=255&&!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value)?value:null;
+    case 'signature':
+      return typeof value==='string'&&value.length<=512&&!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value)?value:null;
     case 'group_name':
       return boundedText(value, 128) && String(value).trim() ? String(value) : null;
     case 'special_title':
@@ -217,6 +235,7 @@ function validateParams(def, params) {
   if (!plainObject(params)) return null;
   const schemaDefinition = SCHEMAS.get(def.action);
   if (!schemaDefinition) return null;
+  if(def.action==='set_qq_profile'&&Object.keys(params).length===0)return null;
 
   const normalized = {};
   for (const key of Object.keys(params)) {
@@ -332,6 +351,7 @@ function safeFailure(action, kind) {
 
 export function createQqNativeCapabilities({
   request,
+  guildAccess,
   allowedUsers = () => [],
   allowedGroups = () => [],
   isOwner = () => false,
@@ -343,7 +363,7 @@ export function createQqNativeCapabilities({
   const identity = context => {
     const active = activeContext(context);
     if (!active) return '';
-    return JSON.stringify([active.accountId, active.personaId, active.key]);
+    return JSON.stringify([active.accountId, context.receiverId||'', active.personaId, context.personaVersion||'', active.key]);
   };
 
   const statusFor = (context, action) => {
@@ -372,6 +392,8 @@ export function createQqNativeCapabilities({
       return QQ_NATIVE_CATALOG.map(entry => ({
         ...entry,
         required: [...entry.required],
+        ...(['set_self_longnick','set_qq_profile'].includes(entry.action)?{signatureGuidance:QQ_SIGNATURE_GUIDANCE}:{}),
+        ...(SCHEMAS.has(entry.action)?{parameters:Object.keys(SCHEMAS.get(entry.action).keys)}:{}),
         ...statusFor(context, entry.action),
       }));
     },
@@ -380,6 +402,13 @@ export function createQqNativeCapabilities({
       if (!activeContext(context)) return safeFailure(action, 'context');
       const def = CATALOG_BY_ACTION.get(action);
       if (!def) return safeFailure(action, 'denied');
+      if(def.scope==='guild'){
+        if(contextScope(context)!=='private'||await callbackValue(isOwner,context,false)!==true)return safeFailure(action,'denied');
+        if(!guildAccess)return safeFailure(action,'unsupported');
+        const outcome=await guildAccess(action,params,context);
+        setStatus(context,action,{read:'supported',accepted:'supported',empty:'empty'}[outcome.status]||outcome.status);
+        return {...outcome,result:sanitize(outcome.result)};
+      }
 
       const normalized = validateParams(def, params);
       if (!normalized) return safeFailure(action, 'params');
@@ -409,11 +438,12 @@ export function createQqNativeCapabilities({
 
       if (def.scope === 'private') {
         const userId = normalized.user_id;
-        if (!users.has(userId)) return safeFailure(action, 'denied');
+        const readingSelf=action==='get_stranger_info'&&userId===numericId(context?.receiverId);
+        if (!readingSelf&&!users.has(userId)) return safeFailure(action, 'denied');
         const origin = contextScope(context);
-        if (origin === 'group'&&!cross) return safeFailure(action, 'denied');
+        if (origin === 'group'&&!cross&&!readingSelf) return safeFailure(action, 'denied');
         if (origin !== 'private'&&origin !== 'group') return safeFailure(action, 'denied');
-        if (!owner && currentPrivateUserId(context) !== userId) return safeFailure(action, 'denied');
+        if (!owner && !readingSelf && currentPrivateUserId(context) !== userId) return safeFailure(action, 'denied');
       }
 
       if (WRITE_ACTIONS.has(action) && !owner) return safeFailure(action, 'denied');

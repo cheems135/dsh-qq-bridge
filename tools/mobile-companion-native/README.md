@@ -15,7 +15,7 @@ MediaProjection 持续提供画面，组件按省流、均衡、细看预算压�
 安装 Java 17+、Android SDK Platform 35、Build Tools 35.0.0 后，在 PowerShell 运行：
 
 ```powershell
-./build.ps1 -SdkRoot '你的Android SDK目录' -JavaHome '你的Java目录' -OutputDirectory 'D:/CodexData/outputs/dsh-companion-build' -Development
+./build.ps1 -SdkRoot '你的Android SDK目录' -JavaHome '你的Java目录' -OutputDirectory './outputs/dsh-companion-build' -Development
 ```
 
 开发签名用于当前验证包；以后覆盖更新必须使用同一签名文件。正式分发可指定 `-SigningStore`、`-SigningAlias`，并将签名密码放在 `DSH_COMPANION_SIGNING_PASSWORD` 环境变量中，不加 `-Development`。签名文件和密码不可放入插件包或公共仓库。

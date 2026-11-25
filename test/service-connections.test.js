@@ -40,10 +40,10 @@ test('profiles preserve hidden credentials and allow independent source combinat
   assert.throws(()=>c.save({...p,baseUrl:'https://other.example/v1'}),/旧密钥/);
   c.saveRoutes({enabled:true,chat:'host',image:'local',speech:'profile:'+p.id});assert.equal(c.route('image'),'local');assert.equal(c.route('speech'),'profile:'+p.id);
   c.saveRoutes({enabled:true,chat:'local',image:'profile:'+p.id,speech:'local'});assert.equal(c.route('chat'),'local');assert.throws(()=>c.remove(p.id),/使用/);
-  c.saveRoutes({enabled:false,chat:'host',image:'legacy',speech:'legacy'});assert.equal(c.route('image'),'legacy');assert.equal(c.raw().legacyLocalEnabled,true);
+  c.saveRoutes({enabled:false,chat:'host',image:'legacy',speech:'legacy'});assert.equal(c.route('image'),'legacy');assert.equal(c.raw().legacyLocalEnabled,undefined);assert.equal(c.raw().routes.enabled,true);
 });
 test('invalid routes fail without silently choosing a different service',()=>{
-  const {c}=store(),p=c.save(profile({type:'anthropic'}));assert.throws(()=>c.saveRoutes({enabled:true,chat:'host',image:'profile:'+p.id,speech:'local'}),/类型/);assert.equal(c.raw().routes.enabled,false);
+  const {c}=store(),p=c.save(profile({type:'anthropic'}));assert.throws(()=>c.saveRoutes({enabled:true,chat:'host',image:'profile:'+p.id,speech:'local'}),/类型/);assert.equal(c.raw().routes.enabled,true);assert.equal(c.route('image'),'local');
   assert.throws(()=>c.saveRoutes({enabled:true,chat:'profile:missing',image:'local',speech:'local'}),/不存在/);
 });
 test('failed registration rolls persistent configuration back',()=>{

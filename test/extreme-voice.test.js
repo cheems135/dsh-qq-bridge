@@ -5,6 +5,9 @@ test('descriptive labels returned by the real model preserve crying, anger and e
  const examples=[['恐惧压抑转崩溃+强烈哭腔+抽噎','afraid+crying'],['压抑愤怒爆发+气息急促+失控','angry+breathless'],['狂喜+笑到发颤','excited+laugh']];
  for(const [emotion,expected]of examples){assert.equal(normalizeVoiceMood(emotion),expected);assert.equal(parseOperationReview({intent:'当前配音',delivery:{emotion,instructions:'按当前情境表达强烈情绪，保留原台词'}},{kind:'voice',request:'你终于回来了'}).delivery.emotion,expected);}
  assert.equal(normalizeVoiceMood('未知描述+强烈哭腔'),'crying');assert.equal(normalizeVoiceMood('不要哭'),'natural');assert.equal(normalizeVoiceMood('not angry'),'natural');assert.equal(normalizeVoiceMood('奇怪标签'),'natural');
+ assert.equal(normalizeVoiceMood('痛苦'),'pained');
+ assert.equal(normalizeVoiceMood('疼得说不出话+哭泣'),'pained+crying');
+ assert.equal(normalizeVoiceMood('不要痛苦'),'natural');
 });
 test('a concrete shouting direction reaches the real synthesizer without restrained default cues',async()=>{
  const config={emotion:'auto',breeze:{mode:'official',apiKey:'fixture',voiceId:'fixture',guidance:2}};

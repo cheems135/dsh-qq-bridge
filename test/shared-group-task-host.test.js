@@ -1,11 +1,22 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {createHash} from 'node:crypto';
+import {markSubmissionStarted} from '../qq-turn-context.js';
 import {localGroupSendRequest,executeLocalGroupSend} from '../local-qq-task.js';import {qqTaskEvidence,qqTaskAnswer} from '../qq-task-evidence.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 function extract(name,deps){const start=source.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0);for(let end=source.indexOf('}',start);end>=0;end=source.indexOf('}',end+1)){let fn;try{fn=Function(...Object.keys(deps),'return ('+source.slice(start,end+1)+');');}catch(e){if(e instanceof SyntaxError)continue;throw e;}return fn(...Object.values(deps));}throw Error(name);}
+test('a submission receipt exists before dispatch and a failed save leaves the turn unsubmitted',()=>{
+ const audit={submissionStartedAt:0};
+ assert.throws(()=>markSubmissionStarted(audit,()=>false,'first'),/未提交/);
+ assert.equal(audit.submissionStartedAt,0);
+ assert.equal(audit.submissionRequestId,undefined);
+ let written;
+ markSubmissionStarted(audit,()=>{written={...audit};return true;},'second');
+ assert.ok(written.submissionStartedAt>0);
+ assert.equal(written.submissionRequestId,'second');
+});
 test('both local and API actual host entry execute the explicit quoted group task, freeze receipts and avoid all drafting calls',async()=>{
  for(const local of [true,false]){
   const calls=[],queued=[],localTurns=new Map(),audit={id:'audit1'},settings={activeAccountId:'a',localChat:{enabled:local},agency:{enabled:true},presetPrompts:{}};
-  const deps={localGroupSendRequest,executeLocalGroupSend,localTurnScope:()=>({accountId:'a',personaId:'p',personaVersion:'v'}),localScopeCurrent:()=>true,localTurns,AbortController,settings,featureState:{generation:0,revisions:{},qqSendTasks:[]},stopped:false,accountPaused:false,prioritizeLocalQq:()=>{},auditForTurn:()=>audit,textHash:v=>createHash('sha256').update(v).digest('hex'),logMessage:()=>{},recordInvocation:()=>{},invocationScope:()=>({}),activePersona:()=>({id:'p',prompt:'自然说话'}),readPresetPrompt:()=>'',queueOutgoing:(chat,segments)=>queued.push({chat,segments}),saveFeatures:()=>true,askApiModel:()=>{throw Error('explicit quote must not call API');},requestLocalJson:()=>{throw Error('explicit quote must not call local model');},localIssueReply:e=>'没发成：'+e.message,personaWaitStyle:()=>'',reportBridgeIssue:()=>{},agencyTools:{localTools:c=>({bridge_tools:{execute:async call=>{assert.equal(localTurns.get(c.key).localContext,c);calls.push(call.arguments);return call.arguments.action==='targets'?{ok:true,targets:[{key:'group:200000002',name:'真实群名'}]}:call.arguments.action==='send'?{ok:true,deliveryId:'d'}:{ok:true,status:'pending'};}}})}};
+  const deps={localGroupSendRequest,executeLocalGroupSend,markSubmissionStarted,localTurnScope:()=>({accountId:'a',personaId:'p',personaVersion:'v'}),localScopeCurrent:()=>true,localTurns,AbortController,settings,featureState:{generation:0,revisions:{},qqSendTasks:[]},stopped:false,accountPaused:false,prioritizeLocalQq:()=>{},auditForTurn:()=>audit,textHash:v=>createHash('sha256').update(v).digest('hex'),logMessage:()=>{},recordInvocation:()=>{},invocationScope:()=>({}),activePersona:()=>({id:'p',prompt:'自然说话'}),readPresetPrompt:()=>'',queueOutgoing:(chat,segments)=>queued.push({chat,segments}),saveFeatures:()=>true,askApiModel:()=>{throw Error('explicit quote must not call API');},requestLocalJson:()=>{throw Error('explicit quote must not call local model');},localIssueReply:e=>'没发成：'+e.message,personaWaitStyle:()=>'',reportBridgeIssue:()=>{},agencyTools:{localTools:c=>({bridge_tools:{execute:async call=>{assert.equal(localTurns.get(c.key).localContext,c);calls.push(call.arguments);return call.arguments.action==='targets'?{ok:true,targets:[{key:'group:200000002',name:'真实群名'}]}:call.arguments.action==='send'?{ok:true,deliveryId:'d'}:{ok:true,status:'pending'};}}})}};
   const run=extract('executeRequestedGroupTask',deps),chat={key:'private:1000000001',kind:'private',isOwner:true,userId:'1000000001'},payload={message_id:123,user_id:'1000000001'};
   assert.equal(await run(chat,'你去这个群冒200000002，发一句“你好”',payload),true);assert.deepEqual(calls.map(c=>c.action),['targets','send','status']);assert.equal(calls[1].text,'你好');assert.equal(calls[1].target,'group:200000002');assert.equal(deps.featureState.qqSendTasks[0].name,'真实群名');assert.equal(audit.groupSendResult.text,'你好');assert.equal(localTurns.size,0);assert.match(queued[0].segments[0].data.text,/队列/);
   await run(chat,'你去这个群冒200000002，发一句“你好”',payload);assert.equal(calls.length,3,'same inbound task must never replay');

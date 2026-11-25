@@ -50,6 +50,7 @@ test('fixed prefixes preserve original spacing and artist tokens, and cannot ove
 test('actual Comfy runtime submits the prepared scene and registered fixed prefix to separate graph nodes on a private copy',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'template-runtime-')),original=graph(),prefix='(@artist), soft light\nDescription:\n',events=[];let submitted,posts=0;
  const runtime=createComfyRuntime({root:dir,getConfig:{baseUrl:'http://127.0.0.1:8188',mediaDir:dir,memoryProfile:'8gb',workflows:{draw:{...spec,api:original}}},fetchImpl:async(url,init={})=>{
+  if(url.endsWith('/object_info'))return Response.json({UNETLoader:{input:{required:{unet_name:[['anima_base.safetensors']]}}}});
   if(url.endsWith('/prompt')){posts++;submitted=JSON.parse(init.body).prompt;return Response.json({prompt_id:'fixture-only'});}
   if(url.includes('/history/fixture-only'))return Response.json({'fixture-only':{outputs:{4:{images:[{filename:'fixture.png',subfolder:'',type:'output'}]}}}});
   if(url.includes('/view?'))return new Response(probeColorPng(),{headers:{'content-type':'image/png'}});throw Error('Unexpected fixture request');

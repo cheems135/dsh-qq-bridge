@@ -3,6 +3,7 @@ import {invocationViewRows} from '../model-invocation-audit.js';
 import {executionOverview} from '../execution-overview.js';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {invocationCost, costText, invocationSpend} from '../usage-accounting.js';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -14,8 +15,7 @@ test('actual host record and output routes expose existing results only for the 
  const dir=mkdtempSync(join(tmpdir(),'host-output-record-')),file=join(dir,'result.png');writeFileSync(file,probeColorPng());
  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8'),handlers=new Map(),rows=[];
  const records=[{id:'ours',accountId:'a',chat:'private:1',auditId:'audit',kind:'image',result:{files:[file]}},{id:'other',accountId:'b',kind:'image',result:{files:[file]}}];
- const pricing={Date,Number,String,Array};vm.createContext(pricing);vm.runInContext(source.slice(source.indexOf('const TOKEN_PRICE'),source.indexOf('import {createMobileEndpoint}')).replaceAll('export function ' ,'function ')+'\nthis.helpers={invocationCost,costText,invocationSpend};',pricing);
- const sandbox={...pricing.helpers,usage:{},invocationViewRows,isDesktop:true,URL,String,LOCAL_MEDIA_DEFAULT:dir,invocationOutputs,serveInvocationOutput,settings:{activeAccountId:'a',localChat:{}},generatedDir:()=>dir,voiceDir:dir,featureState:{outbox:[{id:'sent',accountId:'a',chat:'private:1',auditId:'audit',status:'sent',messageId:'321',segments:[{type:'image',data:{file}}]}]},isLoopbackUrl:()=>true,requestLocalJson:async()=>({body:{records,mediaRoot:dir}}),recordInvocation:row=>rows.push(row),invocationJournal:{list:({accountId})=>rows.filter(r=>r.accountId===accountId)},jsonResponse:(res,status,value)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(value));},ctx:{get:()=>({register:r=>{handlers.set(r.path,r.handler);}}),effect:fn=>fn()}};
+ const sandbox={invocationCost,costText,invocationSpend,usage:{},invocationViewRows,isDesktop:true,URL,String,LOCAL_MEDIA_DEFAULT:dir,invocationOutputs,serveInvocationOutput,settings:{activeAccountId:'a',localChat:{}},generatedDir:()=>dir,voiceDir:dir,featureState:{outbox:[{id:'sent',accountId:'a',chat:'private:1',auditId:'audit',status:'sent',messageId:'321',segments:[{type:'image',data:{file}}]}]},isLoopbackUrl:()=>true,requestLocalJson:async()=>({body:{records,mediaRoot:dir}}),recordInvocation:row=>rows.push(row),invocationJournal:{list:({accountId})=>rows.filter(r=>r.accountId===accountId)},jsonResponse:(res,status,value)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(value));},ctx:{get:()=>({register:r=>{handlers.set(r.path,r.handler);}}),effect:fn=>fn()}};
  Object.assign(sandbox,{executionOverview,recordsAllowed:()=>true,effectiveServiceSources:()=>({items:[]})});
  vm.createContext(sandbox);const start=source.indexOf('  let localInvocationMediaRoot='),end=source.indexOf('\n  const inboxRunning',start);assert.ok(start>0&&end>start);vm.runInContext(source.slice(start,end),sandbox);
  const server=createServer((req,res)=>{const handler=handlers.get(new URL(req.url,'http://localhost').pathname);if(handler)handler(req,res);else res.end('{}');});await listenLocalServer({server});const base='http://127.0.0.1:'+server.address().port;

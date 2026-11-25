@@ -22,6 +22,7 @@ function qrUrl(value) {
   if (typeof value !== 'string' || !value || value.length > 8192) return '';
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? value : ''; } catch { return ''; }
 }
+function quickAccount(value){const id=typeof value==='string'?value:value?.uin??value?.autoLoginAccount;return id===''||/^\d{5,12}$/.test(String(id||''))?String(id):null;}
 function businessError(value) {
   const message = String(value || '');
   if (/Unauthorized|Authorization Failed|not initialized|token.*invalid/i.test(message)) return error('AUTH_EXPIRED', 'NapCat WebUI 登录凭证已失效。');
@@ -116,11 +117,11 @@ export function createNapCatLoginClient({ napcatDir, workDir = napcatDir, readFi
     }).finally(() => { if (pending?.promise === promise) pending = null; });
     pending = { key, promise }; return promise;
   };
-  const call = async (route, body = {}, timeoutMs = 4500) => {
+  const call = async (route, body = {}, timeoutMs = 4500, section = 'QQLogin') => {
     const settings = load();
     for (let attempt = 0; attempt < 2; attempt++) {
       const credential = await authenticate(settings);
-      try { return await invoke(settings, 'QQLogin/' + route, body, credential, timeoutMs); }
+      try { return await invoke(settings, section + '/' + route, body, credential, timeoutMs); }
       catch (err) { if (err.code !== 'AUTH_EXPIRED' || attempt) throw err; cached = null; }
     }
   };
@@ -130,7 +131,9 @@ export function createNapCatLoginClient({ napcatDir, workDir = napcatDir, readFi
       if (!data || typeof data.isLogin !== 'boolean') throw error('WEBUI_STATUS', 'NapCat 返回了无效登录状态。');
       return { isLogin: data.isLogin, isOffline: data.isOffline === true, loginPhase: phases.has(data.loginPhase) ? data.loginPhase : 'offline', qrLoginAccepted: data.qrLoginAccepted === true, coreReady: data.coreReady === true, qrcodeurl: qrUrl(data.qrcodeurl), hasLoginError: !!data.loginError };
     },
-    async getLoginInfo() { const data=await call('GetQQLoginInfo'); const uin=String(data?.uin||data?.user_id||''); if(!/^\d{5,12}$/.test(uin))throw error('ACCOUNT_UNKNOWN','QQ 尚未返回已登录账号'); return {uin,online:data.online===true}; },
+    async getLoginInfo() { const data=await call('GetQQLoginInfo'); const uin=String(data?.uin||data?.user_id||''); if(!/^\d{5,12}$/.test(uin))throw error('ACCOUNT_UNKNOWN','QQ 尚未返回已登录账号'); return {uin,online:data.online===true,nickname:String(data.nick||data.nickname||'').trim().slice(0,100)}; },
+    async getOneBotConfig() { const data=await call('GetConfig', {}, 4500, 'OB11Config');return typeof data==='string'?JSON.parse(data):data; },
+    async saveOneBotConfig(config) { return call('SetConfig', {config:JSON.stringify(config)}, 8000, 'OB11Config'); },
     async getQRCode() { const data = await call('GetQQLoginQrcode'); const url = qrUrl(data?.qrcode); if (!url) throw error('QR_NOT_READY', 'QQ 尚未生成有效二维码。'); return { qrcodeurl: url }; },
     async refreshQR() {
       const data = await call('RefreshQRcode', {}, 14500);
@@ -140,6 +143,8 @@ export function createNapCatLoginClient({ napcatDir, workDir = napcatDir, readFi
       return { qrcodeurl: url, restarting: false };
     },
     async getQuickLoginList() { const data = await call('GetQuickLoginList'); return Array.isArray(data) ? data.map(String).filter(x => /^\d{5,12}$/.test(x)).slice(0, 30) : []; },
+    async getQuickLoginAccount() { const account=quickAccount(await call('GetQuickLoginQQ'));if(account===null)throw error('QUICK_ACCOUNT_INVALID','NapCat 返回的自动登录账号格式无效。');return account; },
+    async setQuickLoginAccount(uin) { const id=quickAccount(uin);if(id===null)throw error('ACCOUNT_INVALID','QQ 账号格式无效。');await call('SetQuickLoginQQ',{uin:id});if(quickAccount(await call('GetQuickLoginQQ'))!==id)throw error('QUICK_ACCOUNT_NOT_SAVED','自动登录账号未保存，请在连接页检查。');return {saved:true}; },
     async setQuickLogin(uin) { const id = String(uin || ''); if (!/^\d{5,12}$/.test(id)) throw error('ACCOUNT_INVALID', 'QQ 账号格式无效。'); await call('SetQuickLogin', { uin: id }, 14500); return { requested: true }; },
     clear() { cached = null; },
   });

@@ -16,6 +16,37 @@ const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.gif']);
 const AUDIO_EXTENSIONS = new Set(['.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac']);
 const DEFAULT_MAX_BYTES = {image: 64 * 1024 * 1024, video: 512 * 1024 * 1024, audio: 128 * 1024 * 1024, speech: 128 * 1024 * 1024};
+const MODEL_FILE_FIELDS=new Set(['lora_name','ckpt_name','unet_name','vae_name','clip_name','clip_name1','clip_name2','clip_name3','control_net_name']);
+
+export function rebindMovedModelFiles(workflow, info) {
+  const changes=[];
+  const filename=value=>String(value).replaceAll('\\','/').split('/').at(-1);
+  for(const [id,node] of Object.entries(workflow)){
+    const inputs={...info[node.class_type]?.input?.required,...info[node.class_type]?.input?.optional};
+    for(const [field,current] of Object.entries(node.inputs||{})){
+      const choices=inputs[field]?.[0];
+      if(!MODEL_FILE_FIELDS.has(field)||typeof current!=='string'||!Array.isArray(choices)||choices.includes(current))continue;
+      const matches=choices.filter(choice=>typeof choice==='string'&&filename(choice)===filename(current));
+      if(matches.length!==1)continue;
+      node.inputs[field]=matches[0];
+      changes.push({node:id,field,previous:current,value:matches[0]});
+    }
+  }
+  return changes;
+}
+
+export function comfyRequestError(pathname, status, text) {
+  let body;try{body=JSON.parse(text);}catch{}
+  const nodes=Object.entries(body?.node_errors||{}).flatMap(([id,node])=>(node.errors||[]).map(error=>{
+    const field=error.extra_info?.input_name;
+    return '节点 '+id+(field?'（'+field+'）':'')+'：'+String(error.details||error.message||error.type||'参数校验失败');
+  }));
+  const detail=nodes.length?nodes.join('；'):String(body?.error?.message||text);
+  return Object.assign(Error('ComfyUI '+pathname+'（HTTP '+status+'）：'+detail.slice(0,1000)),{
+    code:nodes.length?'COMFY_VALIDATION_FAILED':'COMFY_REQUEST_FAILED',
+    nodeErrors:body?.node_errors||null,
+  });
+}
 
 // Only declared port mappings are used; node/model names have no special meaning.
 export function prepareLocalChatImages(workflow, spec, args = {}) {
@@ -222,7 +253,7 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
       try {
         const response = await fetchImpl(baseUrl.replace(/\/+$/, '') + pathname, {...init, signal: scoped.signal});
         const text = await response.text();
-        if (!response.ok) throw new Error(`ComfyUI ${pathname} -> ${response.status} ${text.slice(0, 160)}`);
+        if (!response.ok) throw comfyRequestError(pathname,response.status,text);
         try {
           return JSON.parse(text);
         } catch {
@@ -390,6 +421,11 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
         if (spec.inputs?.prompt && !String(args.prompt || '').trim()) throw new Error('图片/视频工作流缺少 prompt');
       }
       if(['image','video'].includes(spec.output?.kind)){
+        if(Object.values(workflow).some(node=>Object.keys(node.inputs||{}).some(field=>MODEL_FILE_FIELDS.has(field)))){
+          const info=await callJson(c.baseUrl,'/object_info',{},signal);
+          const remappedFiles=rebindMovedModelFiles(workflow,info);
+          if(remappedFiles.length)options.onInvocation?.({status:'prepared',kind:spec.output.kind,workflow:kind,remappedModelFiles:remappedFiles});
+        }
         const mapped=Object.fromEntries(Object.entries(spec.inputs||{}).map(([key,binding])=>[key,{node:String(binding.node||''),field:binding.field,value:workflow[binding.node]?.inputs?.[binding.field]}]));
         options.onInvocation?.({status:'submitted',kind:spec.output.kind,workflow:kind,workflowDetails:describeLocalWorkflow(workflow,spec,kind),submittedArguments:{prompt:args.prompt,negativePrompt:args.negativePrompt||'',fixedPrompts:args.fixedPrompts||[],seed:args.seed,referenceImage:!!args.image,sceneRecompose:args.recomposeScene===true,submittedNodes:mapped}});
       }
@@ -412,14 +448,14 @@ export function createComfyRuntime({getConfig, root, fetchImpl = fetch} = {}) {
         }
         throw error;
       }
-      const mediaDir = resolve(String(c.mediaDir || process.env.LOCAL_MEDIA_DIR || 'D:/CodexData/workspaces/2026-11-04/qq/outputs/local-media'));
-      const mediaEntry = ['image','video','text'].includes(spec.output?.kind) && spec.output?.node ? {outputs:{[spec.output.node]:entry.outputs?.[spec.output.node]||{}}} : entry;
+      const mediaDir = resolve(String(c.mediaDir || process.env.LOCAL_MEDIA_DIR || 'local-media'));
+      const mediaEntry = ['image','video','text','audio'].includes(spec.output?.kind) && spec.output?.node ? {outputs:{[spec.output.node]:entry.outputs?.[spec.output.node]||{}}} : entry;
       const {media, collected} = await downloadMedia(c.baseUrl, mediaEntry, mediaDir, submitted.prompt_id, signal, spec.maxBytes || c.maxBytes);
       const expectedKind = spec.output?.kind || (['image', 'video'].includes(kind) ? kind : '');
-      const selectedMedia = ['image', 'video'].includes(expectedKind) ? media.filter(item => item.kind === expectedKind) : media;
+      const selectedMedia = ['image', 'video','audio'].includes(expectedKind) ? media.filter(item => item.kind === expectedKind) : media;
       for (const preview of media.filter(item => !selectedMedia.includes(item))) try { unlinkSync(preview.file); } catch {}
-      if (['image', 'video'].includes(expectedKind) && !selectedMedia.length) {
-        throw new Error(`工作流没有返回 ${expectedKind === 'image' ? '图片' : '视频'} 产物，未将预览图当作最终结果`);
+      if (['image', 'video','audio'].includes(expectedKind) && !selectedMedia.length) {
+        throw new Error(`工作流没有返回 ${expectedKind === 'image' ? '图片' : expectedKind === 'audio' ? '音频' : '视频'} 产物，未将预览图当作最终结果`);
       }
       const text = readTextOutput(entry, spec.output) || (spec.output?.kind==='text'?'':collected.text[0]) || '';
       if(spec.output?.kind==='text'&&!text)throw Error('所选聊天输出节点 '+spec.output.node+' 没有回传文本字段 '+spec.output.field+'；请核对输出映射或添加文本显示节点，未把其他节点内容当作回答');

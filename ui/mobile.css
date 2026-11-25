@@ -1,10 +1,9 @@
 /* The phone shell: a compact header, five touch tabs and a single content column. */
-html[data-device-ui="phone"]{color-scheme:light;--bg:#faf9f7;--panel:#fff;--panel-2:#f6f7f9;--ink:#303b4b;--ink2:#697482;--ink3:#788390;--line:#e8eaee;--line2:#dce1e8;--soft:#f3f5f8;--soft2:#edf1f6;--accent:#4a729e;--accent-ink:#3e6087;--accent-weak:#edf3fa;--hero:#f0f4fa;--hero-ink:#3e6087;--ok:#447b68;--warn:#8a6b3b;--danger:#b15858;--paper:#fffdf8;--paper-rule:#e9e6df;--radius:20px}
 html[data-device-ui="phone"] body{background:var(--bg)!important;overscroll-behavior-y:contain;padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 html[data-device-ui="phone"] .app{display:block;min-height:0;max-width:760px;margin:auto}
 html[data-device-ui="phone"] .side{position:static;display:contents;width:auto;height:auto;min-height:0;padding:0;border:0}
 html[data-device-ui="phone"] .side>.brand,html[data-device-ui="phone"] .side>.nav-label,html[data-device-ui="phone"] .side>.side-guide,html[data-device-ui="phone"] .side>.sidefoot{display:none}
-html[data-device-ui="phone"] .nav{position:fixed;inset:auto 0 0;z-index:1200;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;margin:0;padding:8px max(6px,env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));height:auto;border:0;border-top:1px solid var(--line);border-radius:0;background:var(--panel);box-shadow:0 -6px 24px #223f4b06;overflow:visible}
+html[data-device-ui="phone"] .nav{position:fixed;inset:auto 0 0;z-index:1200;display:grid!important;grid-template-columns:repeat(7,minmax(42px,1fr));gap:0;margin:0;padding:8px max(6px,env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));height:auto;border:0;border-top:1px solid var(--line);border-radius:0;background:var(--panel);box-shadow:0 -6px 24px #223f4b06;overflow-x:auto}
 html[data-device-ui="phone"] .nav .tab{min-width:0;min-height:58px;padding:6px 0!important;border:0;border-radius:14px;display:flex;flex-direction:column;justify-content:center;gap:3px;background:transparent!important;color:var(--ink2)}
 html[data-device-ui="phone"] .nav .tab.on{color:var(--accent-ink)!important;background:var(--accent-weak)!important}
 html[data-device-ui="phone"] .tab>svg{width:22px;height:22px;margin:0}
@@ -50,8 +49,6 @@ html[data-device-ui="phone"] input::placeholder,html[data-device-ui="phone"] tex
 html[data-device-ui="phone"] input[type="checkbox"],html[data-device-ui="phone"] input[type="radio"]{width:20px;height:20px;flex-shrink:0}
 html[data-device-ui="phone"] .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 html[data-device-ui="phone"] button{min-height:42px;touch-action:manipulation}
-html[data-device-ui="phone"] button.primary{background:var(--accent)!important;border-color:var(--accent)!important;color:#fff}
-html[data-device-ui="phone"] button.primary:hover:not(:disabled){background:var(--accent-ink)!important}
 html[data-device-ui="phone"] button:not(.primary):not(.danger){color:var(--ink)}
 html[data-device-ui="phone"] .subnav button.on{color:var(--accent-ink);background:var(--accent-weak);border-color:transparent}
 html[data-device-ui="phone"] .nav .tab.on,html[data-device-ui="phone"] .subnav button.on{box-shadow:none}
@@ -60,7 +57,7 @@ html[data-device-ui="phone"] .life-copy h1,html[data-device-ui="phone"] .life-co
 html[data-device-ui="phone"] .life-copy p,html[data-device-ui="phone"] .life-eyebrow,html[data-device-ui="phone"] .life-state{color:var(--ink2)!important}
 html[data-device-ui="phone"] .quick-tile,html[data-device-ui="phone"] .companion-columns .diary-peek{background:var(--panel)!important;color:var(--ink);border-color:var(--line)}
 html[data-device-ui="phone"] .diary-shelf{background:var(--panel)!important;border-color:var(--line)!important;box-shadow:none!important}
-html[data-device-ui="phone"] .diary-sheet{background-color:#fff!important;background-image:conic-gradient(#e2f0fc 25%,#fff 0 50%,#e2f0fc 0 75%,#fff 0)!important;background-size:32px 32px!important;background-position:0 0!important;border-color:var(--line)!important;color:var(--ink)!important}
+html[data-device-ui="phone"] .diary-sheet{background-color:var(--panel)!important;background-image:conic-gradient(var(--soft) 25%,var(--panel) 0 50%,var(--soft) 0 75%,var(--panel) 0)!important;background-size:32px 32px!important;background-position:0 0!important;border-color:var(--line)!important;color:var(--ink)!important}
 html[data-device-ui="phone"] .diary-sheet .diary-text,html[data-device-ui="phone"] .diary-preview,html[data-device-ui="phone"] .diary-title{color:var(--ink)!important}
 html[data-device-ui="phone"] .diary-sheet .diary-date{background:var(--paper)!important}
 html[data-device-ui="phone"] .diary-date,html[data-device-ui="phone"] .diary-date b,html[data-device-ui="phone"] .diary-date span,html[data-device-ui="phone"] .diary-intro h2,html[data-device-ui="phone"] .diary-doodle,html[data-device-ui="phone"] .diary-kaomoji{color:var(--accent-ink)!important}
@@ -75,6 +72,4 @@ html[data-device-ui="phone"] .device-preview{max-width:732px;margin:12px 14px 0;
 html[data-device-ui="phone"] .diary-sheet{padding:24px 18px!important;min-height:420px}
 html[data-device-ui="phone"] [data-desktop-only]{display:none!important}
 html[data-device-ui="phone"] .modalbox{width:calc(100vw - 24px);max-height:85dvh;overflow:auto}
-html[data-device-ui="phone"][data-theme="dark"]{color-scheme:dark;--bg:#1a1e24;--panel:#232831;--panel-2:#2b313c;--ink:#e5e9ef;--ink2:#b0b8c4;--ink3:#a1adbd;--line:#353d48;--line2:#454e5c;--soft:#2b313b;--soft2:#333c49;--accent:#4b75a3;--accent-ink:#bad1ef;--accent-weak:#303e52;--hero:#2b3543;--hero-ink:#c4d7ef;--ok:#a2cdb5;--warn:#d6b77d;--danger:#eca0a0;--paper:#292d34;--paper-rule:#383e47}
-html[data-device-ui="phone"][data-theme="dark"] button.primary:hover:not(:disabled){background:#3b628e!important}
 

@@ -8,6 +8,8 @@ export function passiveConsoleRequest(method,url,payload){
  if(method!=='POST')return true;
  if(url==='/im-bridge/clientlog')return true;
  const reads={
+  '/im-bridge/features/guild':['catalog','get_guild_list','get_guild_service_profile','get_guild_channel_list','get_topic_channel_feeds','get_guild_msg'],
+  '/im-bridge/features/qzone':['status','comments'],
   '/im-bridge/features/companion':['snapshot'],
   '/im-bridge/features/memory-hub':['snapshot','evidence','search'],
   '/im-bridge/website-mcp':['list','schema'],

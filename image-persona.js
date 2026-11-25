@@ -114,7 +114,7 @@ export function selfieDeviceConflict(value,camera){
  for(const match of text.matchAll(/智能手机|手机|自拍杆|\b(?:smart\s?phone|cell\s?phone|mobile\s?phone|phone|selfie stick)\b/gi)){
   const before=text.slice(Math.max(0,match.index-55),match.index),after=text.slice(match.index+match[0].length,match.index+match[0].length+85);
   if(/\b(?:no|without|exclude|avoid)\b[^,.!?;\n]{0,50}$/i.test(before))continue;
-  if(/(?:不要|不画|不显示|不露出|没有|禁止|避免|不得|无需)[^，,。.!?；;\n]{0,12}$|\b(?:no|without|exclude|avoid|invisible|off.frame|out.of.frame)\s+(?:(?:visible|any|a|the|recording|capturing)\s+)*$/i.test(before))continue;
+  if(/(?:不要|不画|不显示|不露出|没有|禁止|避免|不得|无需)[^，,。.!?；;\n]{0,12}$|\b(?:no|without|exclude|avoid|invisible|off.frame|out.of.frame|off[ -]screen)\s+(?:(?:visible|any|a|the|recording|capturing)\s+)*$/i.test(before))continue;
   if(/^(?:始终|完全|保持|应|必须|都|均|等拍摄设备|和拍摄设备|等)?(?:在画外|不入镜|不出现|不露出|不可见)|^\s+(?:(?:is|are|stays?|remains?|must|should|kept|completely|entirely)\s+)*(?:out(?:side)?[ -](?:of[ -])?(?:the[ -])?(?:frame|image|shot)|off[ -]frame|invisible|not visible)/i.test(after))continue;
   if(/^\s+(?:camera|selfie|screen(?:'s)?\s+(?:light|glow)|light|glow)\b/i.test(after)||/^(?:前置|自拍|屏幕(?:的)?光|光)/.test(after))continue;
   const clause=after.split(/[,，。;；\n]/)[0];

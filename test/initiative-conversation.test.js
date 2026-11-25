@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {initiativeConversation,initiativeConversationHint,recentOperationContext} from '../operation-context.js';
 import {routineFollowupDenial} from '../conversation-timing.js';
 import {unansweredPrivateInitiative,proactiveDenial} from '../social-pacing.js';
+import {dialogueHistoryRows} from '../qq-history-context.js';
 import {createLocalInitiative} from '../local-initiative.js';
 
 const at=Date.parse('2026-11-19T16:04:00+08:00');
@@ -22,6 +23,28 @@ test('only platform-confirmed messages, in this QQ conversation, create a wait f
   const saved={dir:'out',delivery:'sent',automaticPrivate:true,proactiveEpisode:'old',chat,accountId,initiativeSentAt:last.sentAt,time:last.at};
   assert.equal(unansweredPrivateInitiative(actor,[],[saved],at-70_000),true);
   assert.equal(unansweredPrivateInitiative(actor,[],[{...saved,retracted:true}],0),false);
+});
+
+test('switching a persona never transfers its unanswered question or treats a retracted reply as an answer',()=>{
+  const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
+  const start=source.indexOf('  function privateInitiativeUnanswered('),end=source.indexOf('\n  function queueOutgoing(',start);
+  assert.ok(start>=0&&end>start);
+  let selected=personaId;
+  const messages=[],features={outbox:[last],floors:{}};
+  const deps={settings:{activeAccountId:accountId},baseActivePersona:()=>({id:selected}),featureState:features,
+    memories:{},messages,dialogueHistoryRows,unansweredPrivateInitiative,Date:{now:()=>at}};
+  const waiting=Function(...Object.keys(deps),source.slice(start,end)+'\nreturn privateInitiativeUnanswered;')(...Object.values(deps));
+  assert.equal(waiting(chat),true);
+  selected='other';assert.equal(waiting(chat),false);
+  messages.push({chat,accountId,personaId:selected,dir:'in',text:'收到',time:at-1000});
+  selected=personaId;assert.equal(waiting(chat),true);
+  const reply={chat,accountId,personaId,dir:'in',text:'知道啦',time:at-2000,retracted:true};
+  messages.push(reply);assert.equal(waiting(chat),true);
+  reply.retracted=false;assert.equal(waiting(chat),false);
+  messages.length=0;features.floors[chat]=at-1000;assert.equal(waiting(chat),false);
+  features.outbox=[];features.floors[chat]=0;
+  messages.push({chat,accountId,personaId,dir:'out',delivery:'sent',automaticPrivate:true,time:last.sentAt});
+  assert.equal(waiting(chat),true);
 });
 
 test('initiative context includes their latest real sentence, distinguishes silence, and excludes other conversations and unsent drafts',()=>{

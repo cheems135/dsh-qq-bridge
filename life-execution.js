@@ -11,6 +11,27 @@ import {latestTaskWait} from './task-progress.js';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const text=(v,n=500)=>String(v??'').trim().slice(0,n);
 const ACTIVE=new Set(['queued','running','waiting_user','planned','paused','needs_reconcile','participating']);
+const backupReview='从备用记录恢复，先核对任务的真实进度';
+function uncertainStep(job){
+ return (job.steps||[]).some(step=>['started','unknown'].includes(step.status)&&(!step.idempotent||EFFECTS.has(step.effect)));
+}
+export function recoverBackupJob(job,at){
+ const legacy=job.status==='needs_reconcile'&&job.reason===backupReview;
+ if(!legacy&&!ACTIVE.has(job.status))return;
+ if(!legacy&&(['waiting_user','needs_reconcile','planned'].includes(job.status)||job.status==='paused'&&!uncertainStep(job)&&!job.waitingService&&job.finalReply?.status!=='unknown'))return;
+ if(!legacy&&job.status==='participating')return;
+ job.resume=false;job.resumeOnIdle=false;job.recoveredAt=at;
+ if(uncertainStep(job)||job.waitingService||job.finalReply?.status==='unknown'){
+  job.status='needs_reconcile';job.reason='上次操作缺少回执，保留原任务号和检查点供核对';return;
+ }
+ if(job.question&&!job.question.answer){job.status='waiting_user';job.reason='等待上次问题的答复';return;}
+ if(job.kind==='sleep'&&!job.steps?.length){
+  job.status='ended';job.endedAt||=at;job.reason='保留原睡眠安排，无外部操作需要核对';return;
+ }
+ job.status=job.checkpoint?.safeToResume?'paused':'interrupted';
+ job.resumeOnIdle=job.status==='paused'&&job.scene?.date===calendarNow(at).day;
+ job.reason=job.resumeOnIdle?'已恢复只读检查点，空闲后继续':'执行记录已恢复，进度保留，未确认完成';
+}
 export function lifeExecutionStorage(file,log=()=>{},now=Date.now){
  const backup=file+'.last-good';
  function readOne(path){
@@ -40,8 +61,7 @@ export function lifeExecutionStorage(file,log=()=>{},now=Date.now){
    const state=previous.state||{version:2,jobs:[],sleep:{},wake:{}};
    state.recoveredAt=now();
    for(const job of state.jobs)if(ACTIVE.has(job.status)){
-    job.status='needs_reconcile';job.resume=false;job.resumeOnIdle=false;
-    job.reason='从备用记录恢复，先核对任务的真实进度';
+    recoverBackupJob(job,state.recoveredAt);
    }
    log(previous.state?'已从备用日程执行记录恢复':'无可读的备用执行记录，保留日程计划，从下一时段继续执行');
    return state;
@@ -158,7 +178,7 @@ export function reconcileVerifiedLifeOperations(state,operations=[],outbox=[],no
  }
  return repaired;
 }
-export function createLifeExecution({storage,config,roles,sceneFor,activityFor=sceneFor,onFinish=()=>{},allowed,dispatch,groups=null,conversationBusy=()=>false,onProgress=()=>{},onStateChange=()=>{},operationJournal=()=>[],deliveryJournal=()=>[],onReconcile=()=>{},stop=()=>{},notify=async()=>{},questionChannel='qq',now=()=>Date.now()}={}){
+export function createLifeExecution({storage,config,roles,sceneFor,activityFor=sceneFor,onFinish=()=>{},allowed,dispatch,groups=null,conversationBusy=()=>false,onProgress=()=>{},onStateChange=()=>{},operationJournal=()=>[],deliveryJournal=()=>[],onReconcile=()=>{},isTurnActive=null,onIssue=()=>{},stop=()=>{},notify=async()=>{},questionChannel='qq',now=()=>Date.now()}={}){
  let state;try{state=storage.read();}catch(e){if(e.code!=='ENOENT')throw e;}
  state=state&&Array.isArray(state.jobs)?state:{version:2,jobs:[],wake:{},sleep:{}};state.version=2;state.wake||={};state.sleep||={};
  let closed=false,busy=false;
@@ -170,6 +190,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
   const unresolved=(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status));j.status=unresolved?'needs_reconcile':'paused';j.resume=!unresolved;j.resumeOnIdle=!unresolved;j.reason=unresolved?'先核对上次操作的实际结果':'普通操作无需再次许可，保留进度后继续';
  }}
  retireOrdinaryQuestions();
+ for(const j of state.jobs)if(j.reason===backupReview&&j.status==='needs_reconcile')recoverBackupJob(j,state.recoveredAt||now());
  // No blind replay after restart. Only a persisted read-only continuation is
  // eligible to resume automatically; unknown side effects require observation.
  for(const j of state.jobs)if(['queued','running'].includes(j.status)){
@@ -299,6 +320,19 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    &&!(j.steps||[]).some(s=>!s.idempotent&&['started','unknown'].includes(s.status)))
    .sort((a,b)=>(b.resumeRequestedAt||b.question?.answeredAt||b.pausedAt||0)-(a.resumeRequestedAt||a.question?.answeredAt||a.pausedAt||0));
  }
+ function verifyTurns(meta){
+  if(!isTurnActive)return;
+  for(const j of jobs(meta)){
+   if(!['queued','running'].includes(j.status))continue;
+   const previous=Math.max(j.lastDispatchAt||0,j.startedAt||0,j.checkpoint?.at||0,j.at||0);
+   if(now()-previous<120000||isTurnActive(j)!==false)continue;
+   const uncertain=uncertainStep(j), wait=latestTaskWait(j,now());
+   j.status=uncertain||wait?.expired?'needs_reconcile':wait||j.checkpoint?.safeToResume?'paused':'interrupted';
+   j.resumeOnIdle=j.status==='paused';j.resume=false;
+   j.reason=uncertain?'执行回合已结束，上次操作缺少回执，请核对原任务':wait?'执行回合已结束，保留原服务任务号供查询':j.resumeOnIdle?'执行回合已结束，将从只读检查点继续':'执行回合已结束，没有收到完成回执，已保留最后进度';
+   j.updatedAt=now();save();progress(j);onIssue(j.meta,j.reason,j.id);
+  }
+ }
  async function tick(){
   if(closed||busy)return;await enforceExecution();if(!cfg().enabled)return;busy=true;
   try{
@@ -308,7 +342,7 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    for(const role of roles()){
    if(!role?.meta)continue;
    try{
-   if(closed||!allowed(role.meta))continue;const sc=current(role.meta);if(!sc)continue;
+   if(closed||!allowed(role.meta))continue;verifyTurns(role.meta);const sc=current(role.meta);if(!sc)continue;
    // Offline/refresh placeholders describe availability, never an executable task.
    // Check before hashing the scene: their displayed clock changes every minute.
    if(offlineSlot(sc)||sc.scheduleNeedsRefresh===true){
@@ -388,8 +422,8 @@ export function createLifeExecution({storage,config,roles,sceneFor,activityFor=s
    if(conversationBusy(role.meta)||j.nextDispatchAt>now())continue;
    const stamp=sceneStamp(role.meta,sc);j.status='queued';j.dispatchSignature=taskProgressSignature(j);delete j.lastTurnEnded;save();
    try{const sessionId=await dispatch(role,j);if(!sessionId){if(j.status==='queued')j.status=j.resume||j.resumeOnIdle?'paused':'planned';save();continue;}if(!cfg().execute||!allowed(role.meta)){await stop(role.meta,{scheduledOnly:true,reason:'日程执行已关闭'});if(['queued','running'].includes(j.status))pause(j,'执行期间安排变化，保留进度');save();continue;}if(j.status==='queued')j.status='running';j.boundSceneId=stamp;j.sessionId=sessionId;j.startedAt||=now();j.lastDispatchAt=now();j.dispatchCount=(j.dispatchCount||0)+1;j.resume=false;j.resumeOnIdle=false;delete j.resumeRequestedAt;delete j.resumeAfterAnswer;save();}
-   catch(e){j.status='failed';j.reason=text(e.message,220);j.endedAt=now();save();onFinish(j);}
-  }catch(error){/* one broken role must not block the others */}
+   catch(e){j.status=uncertainStep(j)?'needs_reconcile':'failed';j.reason=text(e.message||'任务派发失败',220);j.endedAt=now();save();progress(j);onIssue(role.meta,j.reason,j.id);onFinish(j);}
+  }catch(error){onIssue(role.meta,'调度失败：'+text(error?.message||error,220),'scheduler');}
   }
   }finally{busy=false;}
  }

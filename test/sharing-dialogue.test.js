@@ -1,3 +1,4 @@
+import {audioDeliveryKind} from '../audio-delivery.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import crypto from 'node:crypto';import path from 'node:path';
 import {naturalBubbleParts} from '../chat-bubbles.js';
 import {imageShareReply,imageOnlyRequest} from '../sharing-dialogue.js';
@@ -26,7 +27,7 @@ test('local scheduled work receives social guidance and actual recipient without
 function shareFixture({captionFailure=false,bare=false,late=false,audio=false}={}){
  const begin=source.indexOf('      lifeShare:async(args,context)=>{'),end=source.indexOf('\n      },\n    };',begin);assert(begin>=0&&end>begin);
  const file=audio?'fixture.wav':'fixture.png',job={id:'j',shares:[],scene:{activity:'画鲸鱼'}},sent=[],captions=[];let valid=true;
- const deps={targets:()=>['private:12345'],activityShareStatus:()=>({}),resolveShareRecipient:t=>t||'private:12345',shareTask:()=>job,shareEvidence:()=>[{ok:true,substantive:true,url:'https://example.org/chapter',coverage:'章节正文'}, {ok:true,substantive:true,tool:'bridge_drawing',file,title:'小鲸鱼',coverage:'实际画布导出的鲸鱼作品'}],drawingStudio:{verifyArtifact:()=>({ok:true,file,substantive:true})},digitalArtifact:()=>({}),artifacts:()=>'',...(audio?{verifiedSharedFile:()=>({sha256:'test'})}:{}),readFileSync:()=>audio?Buffer.from('RIFF'):Buffer.from('89504e470d0a1a0a00','hex'),naturalizeLinkForChat:async v=>v,imageCaptionForChat:async(c,k,options)=>{captions.push({caption:c,key:k,options});if(captionFailure)throw Error('caption unavailable');if(late)valid=false;return bare?'':'先给你看看这只小鲸鱼。';},agencyAuthorized:()=>valid,executionRuntime:{begin:()=>{}},outgoingActivityChat:(_c,key)=>({key}),textHash:x=>crypto.createHash('sha256').update(x).digest('hex'),naturalBubbleParts,sendSegments:(chat,segments)=>{sent.push({chat,segments});return 'delivery-'+sent.length;},rememberActivityShare:(_c,j,item)=>j.shares.push(item)};
+ const deps={audioDeliveryKind,targets:()=>['private:12345'],activityShareStatus:()=>({}),resolveShareRecipient:t=>t||'private:12345',shareTask:()=>job,shareEvidence:()=>[{ok:true,substantive:true,url:'https://example.org/chapter',coverage:'章节正文'}, {ok:true,substantive:true,tool:'bridge_drawing',file,title:'小鲸鱼',coverage:'实际画布导出的鲸鱼作品'}],drawingStudio:{verifyArtifact:()=>({ok:true,file,substantive:true})},digitalArtifact:()=>({}),artifacts:()=>'',...(audio?{verifiedSharedFile:()=>({sha256:'test'})}:{}),readFileSync:()=>audio?Buffer.from('RIFF'):Buffer.from('89504e470d0a1a0a00','hex'),naturalizeLinkForChat:async v=>v,imageCaptionForChat:async(c,k,options)=>{captions.push({caption:c,key:k,options});if(captionFailure)throw Error('caption unavailable');if(late)valid=false;return bare?'':'先给你看看这只小鲸鱼。';},agencyAuthorized:()=>valid,executionRuntime:{begin:()=>{}},outgoingActivityChat:(_c,key)=>({key}),textHash:x=>crypto.createHash('sha256').update(x).digest('hex'),naturalBubbleParts,sendSegments:(chat,segments)=>{sent.push({chat,segments});return 'delivery-'+sent.length;},rememberActivityShare:(_c,j,item)=>j.shares.push(item)};
  const callback=new Function(...Object.keys(deps),'return ({'+source.slice(begin,end+8)+'}).lifeShare;')(...Object.values(deps));const context={key:'private:12345',signal:new AbortController().signal,meta:{kind:'proactive'},exec:{}};
  return {callback,context,file,sent,captions,job};
 }
@@ -46,7 +47,7 @@ test('actual caption helper passes full effective persona and checks account cha
 
 function ordinaryImageFixture({request='',cancel=false}={}){
  const start=source.indexOf('            if (file !== null) {'),end=source.indexOf('\n            else { finishMediaTask',start);assert(start>=0&&end>start);const sent=[];let generation=0,calls=0;
- const dependencies={file:'existing-image.png',settings:{imagegen:{}},saveSettings:()=>{},finishMediaTask:()=>{},mediaTask:{id:'task'},generatedReply:true,chat:{key:'private:12345',kind:'private'},chunks:['[图:蓝色睡衣]'],requestedImage:request,photoCommand:['','蓝色睡衣'],imageCaptionForChat:async(_c,_k,options)=>{calls++;if(cancel)generation=1;return imageShareReply('',{...options,ask:async()=> '这张先拿给你看看。'});},log:()=>{},stopped:false,accountPaused:false,featureState:{get generation(){return generation;}},messageGeneration:0,completeMediaShare:()=>{},share:null,auditById:()=>null,mediaShareCurrent:()=>true,sendSegments:(chat,segments)=>{sent.push({chat,segments});return 'image-id';},naturalBubbleParts};
+ const dependencies={reviewImageForQQ:async()=>({status:'passed'}),file:'existing-image.png',settings:{imagegen:{}},saveSettings:()=>{},finishMediaTask:()=>{},mediaTask:{id:'task'},generatedReply:true,chat:{key:'private:12345',kind:'private'},chunks:['[图:蓝色睡衣]'],requestedImage:request,photoCommand:['','蓝色睡衣'],imageCaptionForChat:async(_c,_k,options)=>{calls++;if(cancel)generation=1;return imageShareReply('',{...options,ask:async()=> '这张先拿给你看看。'});},log:()=>{},stopped:false,accountPaused:false,featureState:{get generation(){return generation;}},messageGeneration:0,completeMediaShare:()=>{},share:null,auditById:()=>null,mediaShareCurrent:()=>true,sendSegments:(chat,segments)=>{sent.push({chat,segments});return 'image-id';},naturalBubbleParts};
  const run=new Function(...Object.keys(dependencies),'return (async()=>{let imageDeliveryId="",imageOk=false;for(let n=0;n<1;n++){'+source.slice(start,end)+'}return {imageDeliveryId,imageOk};})();');return {run:()=>run(...Object.values(dependencies)),sent,get calls(){return calls;}};
 }
 test('ordinary generated picture adds missing dialogue after its existing image only once',async()=>{const f=ordinaryImageFixture();assert((await f.run()).imageOk);assert.equal(f.sent.length,2);assert.equal(f.sent[0].segments[0].type,'image');assert.equal(f.sent[1].segments[0].type,'text');assert.equal(f.sent[1].chat.afterImageId,'image-id');assert.equal(f.calls,1);});
@@ -62,7 +63,7 @@ test('mixed audio artifact and chapter validate both inputs and concurrent retri
  await assert.rejects(send('https://example.org/unread'),/先实际读取/);assert.equal(f.sent.length,0);
  const [first,repeat]=await Promise.all([send('https://example.org/chapter'),send('https://example.org/chapter')]);
  assert.equal(first.deliveryId,repeat.deliveryId);assert.equal(f.job.shares.length,1);
- assert.deepEqual(f.sent.map(r=>r.segments[0].type),['file','text','text']);
+ assert.deepEqual(f.sent.map(r=>r.segments[0].type),['record','text','text']);
  assert.deepEqual(f.sent.slice(1).map(r=>r.segments[0].data.text),['一起听听','https://example.org/chapter']);
 });
 test('an ordinary tool-result reply bypasses the artifact-share rewriter',async()=>{
@@ -75,4 +76,14 @@ test('an ordinary tool-result reply bypasses the artifact-share rewriter',async(
  const receipt='查过索引了，背景音乐插件没有确切匹配。这个包返回 404，这次没有安装。';
  assert.equal(await refine({key:'private:12345'},{kind:'user',text:'找这个插件装上'},receipt),receipt);
  assert.equal(artifactRewrites,0);
+});
+
+test('a blocked reply image records that it was never submitted and surfaces the failure once',()=>{
+ const start=source.indexOf('if(automatic&&!share){'),end=source.indexOf('\n          }',start)+12;
+ assert(start>=0&&end>start);
+ const status=[],reason=[],notice=[],chat={auditId:'one',turnKind:'user',allowSideEffects:false};
+ const deps={automatic:true,share:null,userTurn:true,chat,beginMediaTask:()=>({duplicate:false,task:{}}),finishMediaTask:(_task,state,details)=>status.push([state,details.error]),markReplyDelivery:(_chat,state,details)=>reason.push([state,details]),imageFailureReply:()=>notice.push('notice')};
+ const run=Function(...Object.keys(deps),'for(const item of [1]){'+source.slice(start,end)+'throw Error("unexpected submission");}');
+ run(...Object.values(deps));assert.equal(status[0][0],'failed');assert.equal(reason[0][0],'withheld');assert.match(status[0][1],/未提交/);assert.equal(notice.length,1);
+ deps.beginMediaTask=()=>({duplicate:true});run(...Object.values(deps));assert.equal(notice.length,1);
 });

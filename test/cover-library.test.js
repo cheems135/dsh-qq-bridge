@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cpSync,mkdtempSync,writeFileSync} from 'node:fs';
+import {cpSync,mkdtempSync,writeFileSync,existsSync,readFileSync} from 'node:fs';
+import {mergeSyncJson} from '../sync-union.js';
 import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import {rmSync} from 'node:fs';
 import {coverRequestTitle,createCoverLibrary,isRenderedCoverFilename} from '../cover-library.js';
 
@@ -21,8 +23,32 @@ test('saved covers deduplicate by title and content and survive copying the libr
   assert.equal(b.list().length,1);
   assert.equal(createCoverLibrary({root:()=>phone,scope:()=>['another','persona']}).list().length,0);
   assert.equal(coverRequestTitle('重新录一版《晴天（副歌）》'),'');
+  assert.equal(coverRequestTitle('唱首新歌《晴天（副歌）》'),'');
+  assert.equal(coverRequestTitle('我想听新的歌曲'),'');
   assert.equal(coverRequestTitle('不想听《晴天（副歌）》'),'');
   assert.equal(coverRequestTitle('唱《晴天（副歌）》，顺便画一张图'),'');
   assert.equal(isRenderedCoverFilename('rh-audio-02946759-229e-424e-a1ec-9954771d2cb1.wav'),true);
   assert.equal(isRenderedCoverFilename('../rh-audio-02946759-229e-424e-a1ec-9954771d2cb1.wav'),false);
+  assert.equal(a.remove(row.id),true);
+  assert.equal(existsSync(row.file),false);
+  const deleted=JSON.parse(readFileSync(row.file.replace(/\.wav$/,'.json'),'utf8'));
+  const merged=mergeSyncJson(row,deleted);
+  assert.equal(merged.deleted,true);
+  assert.equal(a.find('晴天（副歌）'),null);
+  assert.equal(a.get(row.id),null);
+  assert.equal(a.remove('../outside'),false);
+  const again=a.save('晴天（副歌）',source);
+  assert.notEqual(again.id,row.id);
+  assert.equal(a.save('晴天（副歌）',source).id,again.id);
+});
+
+test('a full-length WAV above the former 32MB limit can be archived and a deletion cannot be recovered from its invocation',t=>{
+  const temp=mkdtempSync(join(tmpdir(),'cover-full-length-'));t.after(()=>rmSync(temp,{recursive:true,force:true}));
+  const source=join(temp,'full.wav'),audio=Buffer.alloc(33*1024*1024);audio.write('RIFF');audio.write('WAVE',8);writeFileSync(source,audio);
+  const library=createCoverLibrary({root:()=>join(temp,'library'),scope:()=>['persona']});
+  const row=library.save('远山',source,{autoSaved:true,originInvocationId:'real-generation',sourceSong:{title:'远山',verified:true,audio:'api/source.mp3',duration:207}});
+  assert.equal(row.bytes,audio.length);assert.equal(row.identityVerified,true);assert.equal(row.quality,'unreviewed');
+  assert.equal(library.hasOriginInvocation('real-generation'),true);
+  assert.equal(library.remove(row.id),true);assert.equal(library.list().length,0);
+  assert.equal(library.hasOriginInvocation('real-generation'),true);assert.equal(library.hasOriginInvocation('other'),false);
 });

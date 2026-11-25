@@ -4,7 +4,7 @@ import {normalizeParameterOverrides} from './workflow-parameters.js';
 import {existsSync, statSync} from 'node:fs';
 import {extname, isAbsolute, relative, resolve, sep} from 'node:path';
 
-export const LOCAL_MEDIA_DEFAULT = 'D:/CodexData/workspaces/2026-11-04/qq/outputs/local-media';
+export const LOCAL_MEDIA_DEFAULT = resolve(process.env.LOCAL_MEDIA_DIR || 'local-media');
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.mkv', '.gif']);

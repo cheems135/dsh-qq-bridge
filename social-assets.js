@@ -8,7 +8,7 @@ export function createSocialAssets({rootFor,authorize,now=Date.now}={}){
  const check=c=>{if(!authorize(c))throw Error('账号、人设或任务已变化，停止准备空间配图');c.signal?.throwIfAborted();};
  function save(c,value){const target=join(root(c),'assets.json'),tmp=target+'.'+randomUUID()+'.tmp';writeFileSync(tmp,JSON.stringify(value));renameSync(tmp,target);}
  function remember(file,{source,query='',captureId='',title=''},c){
-  check(c);if(!['search','screenshot','generated','drawing'].includes(source))throw Error('未知空间图片来源');
+  check(c);if(!['search','screenshot','generated','drawing','resource'].includes(source))throw Error('未知空间图片来源');
   const image=imageBytes(readFileSync(realpathSync(file)));check(c);mkdirSync(root(c),{recursive:true});
   const destination=join(root(c),randomUUID()+'.'+image.extension);writeFileSync(destination,image.bytes);
   const item={id:basename(destination),source,query:String(query).slice(0,160),captureId:String(captureId).slice(0,100),title:String(title).slice(0,100),hash:image.hash,at:now()};

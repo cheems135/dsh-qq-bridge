@@ -3,7 +3,7 @@ import {composeDirection} from './voice-performance.js';
 import {imageExecutionInquiry} from './media-intent.js';
 import {localGroupSendRequest,executeLocalGroupSend} from './local-qq-task.js';
 import {localVideoObservationRequest} from './local-media-planner.js';
-import {pruneLogFile,recentRecords} from './log-retention.js';
+import {diagnosticFailure,pruneLogFile,recentRecords} from './log-retention.js';
 import {createScheduleToolBreaker} from './schedule-tool-breaker.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {promptPreferenceRule,voicePromptInstructions} from './prompt-preferences.js';
@@ -18,7 +18,7 @@ import {selectLocalVoice,voiceServiceState,serviceVoices,requestLocalSpeech,rele
 import {prepareLocalImagePrompt,assertReferenceInput,localImageReferenceMode,explicitlyRequiresReference} from './local-image-prompt.js';
 import {imageParameters} from './image-api-contract.js';
 import {createInvocationJournal,invocationKind} from './invocation-journal.js';
-import {understandLocalTurn} from './local-understanding.js';
+import {understandLocalTurn,withLocalReading} from './local-understanding.js';
 // Local AI gateway, independent of DSH. It exposes an ordinary OpenAI-compatible
 // chat endpoint plus the bridge-only /v1/local/turn agent endpoint.
 import {createHash,randomInt, randomUUID} from 'node:crypto';
@@ -280,7 +280,7 @@ export function createLocalModelServer({
   const contextPressure = new Map();
   const toolBroker = createLocalToolBroker();
   const inspections = new Map();
-  const journalFile=join(env.LOCAL_AI_WORK_DIR||'D:/CodexData/work/local-ai-routing','invocations-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let invocationRows=[];
+  const journalFile=join(env.LOCAL_AI_WORK_DIR||join(root,'work'),'invocations-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let invocationRows=[];
   try{const value=JSON.parse(readFileSync(journalFile,'utf8'));if(Array.isArray(value))invocationRows=value;}catch{}
   const invocationJournal=createInvocationJournal({getRows:()=>invocationRows,setRows:rows=>invocationRows=rows,save:()=>{mkdirSync(dirname(journalFile),{recursive:true});writeFileSync(journalFile+'.tmp',JSON.stringify(invocationRows));renameSync(journalFile+'.tmp',journalFile);}});
   const issueFile=join(env.LOCAL_AI_WORK_DIR||dirname(configPath),'bridge-issues-'+createHash('sha256').update(root+String(configPath)).digest('hex').slice(0,12)+'.json');let issueRows=[];
@@ -293,7 +293,7 @@ export function createLocalModelServer({
   }
   maintainDiagnosticLogs();
   const issueScope=context=>({...context?.recordScope,backend:'local'});
-  const capabilityDetector=createCapabilityDetector({getConfig:()=>config,root,workDir:env.LOCAL_AI_WORK_DIR||'D:/CodexData/work/local-ai-routing',services:async()=>{
+  const capabilityDetector=createCapabilityDetector({getConfig:()=>config,root,workDir:env.LOCAL_AI_WORK_DIR||join(root,'work'),services:async()=>{
     const value=await executionStatus();let voice=voiceService().type!=='voicelab',voiceBusy=false,voiceReason='已手动配置语音协议，实际生成时验证连接与 WAV 回执';
     try{const state=await voiceServiceState(voiceService(),{fetchImpl,signal:AbortSignal.timeout(1500)});voice=state.alive===true||voiceService().type!=='voicelab';voiceBusy=state.busy;voiceReason=state.alive===true?'本地语音只读状态接口可连接；尚未进行合成实测':'已手动配置语音协议，实际生成时验证连接与 WAV 回执';}catch{}
     return {reachable:config.backend!=='comfyui'||value.comfyQueue.reachable,busy:voiceBusy||value.execution.active.length>0||config.backend==='comfyui'&&(value.comfyQueue.running>0||value.comfyQueue.pending>0),voice,voiceReason};
@@ -547,7 +547,7 @@ export function createLocalModelServer({
     const latest = rows.map(message => message.role).lastIndexOf('user');
     const message=messages[latest];
     if (message) {
-      const files = imageDataFiles(message.content, env.LOCAL_AI_WORK_DIR || 'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
+      const files = imageDataFiles(message.content, env.LOCAL_AI_WORK_DIR || join(root,'work','runtime'));
       if (!files.length) return rows;
       if(files.directory)tempFiles.push(files.directory);
       const route=config.visionMode==='auto'&&config.memoryProfile==='8gb'&&config.backend==='comfyui'&&files.length>1?'caption':visionRoute();
@@ -810,7 +810,7 @@ export function createLocalModelServer({
       if(!mediaTask.subjectAmbiguous&&(mediaTask.source==='followup'||mediaTask.ambiguous))prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:mediaTask.ambiguous?'【本轮重复发送请求】当前可靠上下文无法确认要重复哪份媒体。先按角色口吻简短确认要发什么；没有实际任务时不能说图片正在渲染、语音正在合成或已经发送。':'【本轮媒体续接】当前人类要求重复前面的媒体请求：'+mediaTask.effectiveRequest+'。请实际执行对应工具，不只答应，不把旧助手的口头承诺当作成功回执。'});
       let personaReference=null;
       if(turnContext.personaImage?.dataUrl){
-        const files=imageDataFiles([{type:'image_url',image_url:{url:turnContext.personaImage.dataUrl}}],env.LOCAL_AI_WORK_DIR||'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
+        const files=imageDataFiles([{type:'image_url',image_url:{url:turnContext.personaImage.dataUrl}}],env.LOCAL_AI_WORK_DIR||join(root,'work','runtime'));
         if(files.directory)tempFiles.push(files.directory);
         if(files[0]){personaReference={file:files[0],description:String(turnContext.personaImage.description||'').slice(0,500),camera:String(turnContext.personaImage.camera||'').slice(0,700),sha256:createHash('sha256').update(readFileSync(files[0])).digest('hex')};sourceImages.add(resolve(files[0]));}
       }
@@ -827,16 +827,10 @@ export function createLocalModelServer({
       if(mediaTask.image||mediaTask.speech||mediaTask.video||mediaTask.ambiguous)plan.fast=false;
       if(!config.fastDialogue)plan.fast=false;
       if(turnContext.autonomous===true)plan.fast=false;
+      let localReading='';
       if(config.dialoguePriority==='quality'&&plan.fast&&!mediaTask.semanticChecked){
         try{
-          const meaning=await understandLocalTurn(prepared,{request,model:modelRunner,signal,onProgress});
-          if(meaning){
-            const latest=prepared.map(row=>row.role).lastIndexOf('user');
-            // Only this inference view is normalized. Host history, memory,
-            // authorization text and tool contexts retain the original words.
-            prepared[latest]={...prepared[latest],content:meaning};
-            prepared.splice(latest,0,{role:'system',_localContextKind:'instruction',content:'【本轮口语理解】本轮输入已按现有上下文整理了指代和明显音近字。直接回应实际意思，不说明整理过程或纠错，不新建事实或操作授权。'});
-          }
+          localReading=await understandLocalTurn(prepared,{request,model:modelRunner,signal,onProgress});
         }catch(error){if(signal?.aborted||error.name==='AbortError')throw error;log('local understanding deferred; original input preserved');}
       }
       if(!turnContext.autonomous&&config.dialoguePriority==='quality'&&!plan.fast)prepared.splice(prepared.map(row=>row.role).lastIndexOf('user'),0,{role:'system',_localContextKind:'instruction',content:QUALITY_CONVERSATION_RULES});
@@ -849,7 +843,8 @@ export function createLocalModelServer({
         executeTool:(name,args,execute)=>{if(name==='image'&&imageExecutionInquiry(request))throw Error('当前是在询问已有图片的生成过程，不执行新的生图任务');if(name==='video'&&!turnContext.mediaOnly&&localVideoObservationRequest(request))throw Error('当前要求观看已有视频，不能调用生成视频工作流；应使用 bridge_watch');return Object.hasOwn(externalTools,name)?execute():scheduleToolBreaker.run(turnContext.scheduleScope,name,args,execute);},
         model:async options=>{
           if(turnContext.mediaOnly){if(mediaOnlyIssued)return {content:JSON.stringify({action:'final',text:''})};mediaOnlyIssued=true;const task=turnContext.mediaOnly;return {content:JSON.stringify({action:task.kind,arguments:task.kind==='speech'?{text:task.prompt}:{prompt:task.prompt,...(task.workflowId?{workflowId:task.workflowId}:{}),...(task.aspectRatio?{aspectRatio:task.aspectRatio}:{}),...(task.size?{size:task.size}:{})}})};}
-          const result=await modelRunner({...options,protocol:fast?(config.dialoguePriority==='quality'?QUALITY_DIALOGUE_RULES:FAST_DIALOGUE_RULES):options.protocol+'\n'+WAIT_NOTICE_RULE+(recentWaitNotices.length?'\n最近的等待提示（本轮不要复用）：'+JSON.stringify(recentWaitNotices):''),...(fast?{fastDialogue:true,outputTokens:plan.outputTokens,...(onEvent&&!groupContext.isGroup&&!asksOutfit(request)&&config.streamDialogue&&options.purpose!=='repair'?{onText:delta=>stream.feed(delta)}:{})}:{})});
+          const inferenceMessages=fast&&!options.purpose?withLocalReading(options.messages,localReading):options.messages;
+          const result=await modelRunner({...options,messages:inferenceMessages,protocol:fast?(config.dialoguePriority==='quality'?QUALITY_DIALOGUE_RULES:FAST_DIALOGUE_RULES):options.protocol+'\n'+WAIT_NOTICE_RULE+(recentWaitNotices.length?'\n最近的等待提示（本轮不要复用）：'+JSON.stringify(recentWaitNotices):''),...(fast?{fastDialogue:true,outputTokens:plan.outputTokens,...(onEvent&&!groupContext.isGroup&&!asksOutfit(request)&&config.streamDialogue&&options.purpose!=='repair'?{onText:delta=>stream.feed(delta)}:{})}:{})});
           if(fast){const message=result?.choices?.[0]?.message||result?.message||result,raw=typeof result==='string'?result:contentText(message.content);if(message?.tool_calls?.length||/"action"\s*:\s*"(?!final")/.test(raw))throw Object.assign(Error('转完整工具模式'),{code:'LOCAL_FAST_TOOLS'});}
           return result;
         },
@@ -868,7 +863,7 @@ export function createLocalModelServer({
           const {localObservations=[],...result}=typeof raw==='string'?{ok:true,text:raw}:raw||{};
           const observed=[];
           for(const observation of localObservations.slice(0,2)){
-            const files=imageDataFiles([{type:'image_url',image_url:{url:observation.url}}],env.LOCAL_AI_WORK_DIR||'D:/CodexData/workspaces/2026-11-04/qq/work/local-ai-runtime');
+            const files=imageDataFiles([{type:'image_url',image_url:{url:observation.url}}],env.LOCAL_AI_WORK_DIR||join(root,'work','runtime'));
             if(files.directory)tempFiles.push(files.directory);
             for(const file of files){try{const caption=await captionImage(file,signal,request,onProgress);observed.push({at:observation.at,text:caption.text,coverage:'本机视觉工作流对实际截图的分析，不能证明完整观看或听过音频'});}catch(error){if(signal?.aborted)throw error;observed.push({at:observation.at,error:String(error.message||error).slice(0,200),coverage:'取得实际画面，但本地视觉分析失败，不能推测图中内容'});}}
           }
@@ -1062,7 +1057,7 @@ export function createLocalModelServer({
           const next = normalizeLocalConfig(patch, config);
           saveConfig(configPath, next);
           config = next;
-          log(`config backend=${config.backend} model=${config.modelId} comfy=${config.comfyUrl}`);
+          log(`config backend=${config.backend} model=${config.modelId} comfy=${new URL(config.comfyUrl).origin}`);
           sendJson(res, 200, {ok: true, ...publicLocalConfig(config), config: publicLocalConfig(config)});
         } catch (error) {
           stats.errors += 1;
@@ -1182,7 +1177,7 @@ export function createLocalModelServer({
           stats.lastError=localErrorDetail(error).slice(0,300);
           lastForegroundAt=Date.now();
           if(!controller.signal.aborted)issues.record({id:'local:error:'+(bodyContext.recordScope?.auditId||randomUUID()),kind:'chat',message:stats.lastError},issueScope(bodyContext));
-          log('local turn error elapsedMs='+(Date.now()-started)+' '+stats.lastError);
+          log('local turn error elapsedMs='+(Date.now()-started)+' '+diagnosticFailure(error));
           finish(controller.signal.aborted ? 499 : 500, {error: {message:stats.lastError,userMessage:localIssueReply(error),type:'local_turn_error',code:String(error?.code||'').slice(0,100)}});
         }finally{if(parentToken&&initiativeParents.get(parentToken)===controller)initiativeParents.delete(parentToken);leave();}
       })();

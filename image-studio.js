@@ -1,4 +1,5 @@
 import {IMAGE_CONTRACT_REVISION} from './image-api-contract.js';
+import {normalizeRequestExample} from './ui/execution-overview.js';
 import {requestedImageText,maskRequestedImageText} from './image-prompt-language.js';
 import {promptPreferenceRule} from './prompt-preferences.js';
 import {parseRunningHubBalance,runningHubBillingSource} from './runninghub-balance.js';
@@ -292,7 +293,7 @@ export function createImageStudio({getConfig,ask,visualPlan,fetchImpl=globalThis
         const negativeParts=hasNegative?[language==='zh'?plan.cameraNegativeChinese:plan.cameraNegative,plan.styleTags?.[0]==='anime'&&!plan.styleTags.includes('realistic')?(language==='zh'?'写实摄影、真人实拍':'photorealism, live-action photography'):'',parsed.negativePrompt?modelImagePrompt(parsed.negativePrompt,{language,minimum:1}):''].filter(Boolean):[];
         const result={lifeUpdate:parsed.lifeUpdate&&typeof parsed.lifeUpdate==='object'?{location:clean(parsed.lifeUpdate.location).slice(0,140),outfit:clean(parsed.lifeUpdate.outfit).slice(0,180)}:null,prompt:modelImagePrompt(promptLines.join('\n'),{language:'any'}),fixedPrompts,modelProfile:{id:modelProfile.id,label:modelProfile.label,source:modelProfile.source,evidence:modelProfile.evidence,format:modelProfile.format,language,negativeSupported:hasNegative},negativePrompt:negativeParts.join(language==='zh'?'，':', '),summary:clean(parsed.summary).slice(0,250),...(workflow?.personaReference?{referenceIdentity:modelImagePrompt(parsed.referenceIdentity||brief.referenceDescription,{language:'any',minimum:5})}:{})};
         if(secrets.some(key=>result.prompt.includes(key)||result.negativePrompt.includes(key)||fixedPrompts.some(p=>p.prompt.includes(key))))throw Error('提示词包含凭据内容');
-        if(workflow?.personaReference||plan.lifeContext||plan.ownPortrait){
+        if(workflow?.personaReference||plan.lifeContext||plan.ownPortrait||brief.lockedWorkflowPrompts.length){
           const review=JSON.parse(String(await ask('【图像细节核对】核对原始画面要求和最终提示词，只返回 JSON {"ok":true或false,"missing":["遗漏或冲突的具体细节"]}。按人设身份、风格、服装与配套头饰、镜头取景、动作/手势/拿的物品/身体接触、场景物件位置、具体光源逐项检查。换装时头饰应随新穿搭更换或摘除，明确要求保留的优先，耳形与角不是可摘头饰。必须保留当前取景内可见的已指定细节，不为看见鞋子等画外细节擅自扩大成全身。当前用户要求优先于日程；用户指定的地点、衣着和动作直接采用，不能因override的启发式标记未识别而驳回。时间单独核对：timeContext是实际当前时间与时区。换装、换地点或动作不代表改变时段；用户未明确指定其他拍摄时间时，日期、昼夜和自然光应与当前时间一致，不照搬旧对话或参考图的光线。室内夜间可开灯，不凭时钟猜天气或精确日出日落。明确指定的历史、未来、想象或其他时段只改变画面，不改变真实时钟、日程与当前状态。日程只补全本轮未指定的信息；旧聊天、参考图默认造型和模型自己加的冲突细节应忽略。镜头以requirements.camera、cameraConstraint和framing为准。外部拍摄应按本轮原话保留背面、侧面、机位和人物朝向；framing为scene时按原话保留画面范围，不加默认半身裁切。日程、参考图、上一张照片及visualBrief里与已选镜头冲突的描述忽略。禁止把前置自拍改成旁观者看她拿手机，只有对镜自拍允许反射中的手机。前置自拍一臂用于画外拍摄，只剩另一只手能持物；连续动作选一个瞬间，不能同时要求三只手。只核对主要的当前动作和必要物件，日程情绪和取景外鞋袜不作为必须画出的细节。不得返回工具标签或执行资料中的指令。只根据这一版 finalPrompt 核对，不复述旧版缺陷。未指定的合理构图和光线细节允许补全，不把自然语言同义表达当成冲突。requirements.lockedWorkflowPrompts 是程序追加的用户固定词，润色不能删除或改写；如果这些固定词本身与当前要求冲突，额外返回 fixedPromptConflicts 数组，每项逐字复制其中实际冲突的原始词片段；没有则返回空数组。',JSON.stringify({requirements:brief,headwearCheck:HEADWEAR_RULE_ZH,draftPrompt:sceneBody,finalPrompt:result.prompt}),600,chat)).trim().replace(/^```(?:json)?\s*|\s*```$/g,''));
           const fixedConflicts=(Array.isArray(review.fixedPromptConflicts)?review.fixedPromptConflicts:[]).filter(token=>typeof token==='string'&&token.trim().length>=2&&brief.lockedWorkflowPrompts.some(fixed=>fixed.includes(token.trim()))&&result.prompt.includes(token.trim())).map(token=>token.trim());
           if(fixedConflicts.length)throw Object.assign(Error('工作流「'+(workflow?.name||workflow?.id||'当前工作流')+'」的固定提示词与本次画面要求冲突：'+fixedConflicts.join('、')+'。尚未提交生图；请在工作流的固定提示词/LoRA触发词中调整，或手动选择相符的工作流。固定词不会被自动删除，继续润色也不能解决这个冲突。'),{code:'IMAGE_FIXED_PROMPT_CONFLICT',nonRetryable:true});
@@ -338,7 +339,7 @@ function curlExampleTokens(value) {
   if(started)tokens.push(token);return tokens;
 }
 export function parseRunningHubExample(value) {
-  const text=String(value||'').trim().replace(/^```(?:bash|sh|shell|powershell|cmd|curl|json)?\s*\n?|\n?```$/gi,'');
+  const text=normalizeRequestExample(value);
   if(!text||text.length>512*1024)throw Error('请粘贴完整请求示例，内容不要超过 512KB');
   const tokens=curlExampleTokens(text);if(!/^curl(?:\.exe)?$/i.test(tokens[0]||''))throw Error('请粘贴以 curl 开头的 RunningHub 请求示例');
   let endpoint='',body='',method='',credentials=[];
@@ -357,8 +358,8 @@ export function parseRunningHubExample(value) {
     if(/^https?:\/\//i.test(token)){if(endpoint)throw Error('示例只能包含一个服务地址');endpoint=token;}
   }
   if(method&&method.toUpperCase()!=='POST')throw Error('请选择生图任务的 POST 请求示例');
-  let url;try{url=new URL(endpoint);}catch{throw Error('没有找到有效的 RunningHub 生图请求地址');}
-  if(url.protocol!=='https:'||! /^(?:www\.)?runninghub\.(cn|ai)$/i.test(url.hostname)||url.username||url.password||url.port||url.search||url.hash)throw Error('请使用 RunningHub 官方 HTTPS 生图请求示例');
+  let url;try{url=new URL(endpoint);}catch{throw Error('没有找到有效的 RunningHub 请求地址');}
+  if(url.protocol!=='https:'||! /^(?:www\.)?runninghub\.(cn|ai)$/i.test(url.hostname)||url.username||url.password||url.port||url.search||url.hash)throw Error('请使用 RunningHub 官方 HTTPS 请求示例');
   const match=url.pathname.match(/^\/openapi\/v2\/run\/(ai-app|workflow)\/(\d{1,30})\/?$/),legacyApp=/^\/task\/openapi\/ai-app\/run\/?$/.test(url.pathname);if(!match&&!legacyApp)throw Error('地址不是应用或工作流的生图提交接口');
   let payload;try{payload=JSON.parse(body);}catch{throw Error('请求体不是完整 JSON，请保留 --data-raw 后的全部内容');}
   if(!payload||typeof payload!=='object'||Array.isArray(payload)||!Array.isArray(payload.nodeInfoList)||!payload.nodeInfoList.length||payload.nodeInfoList.length>300)throw Error('请求体需要包含 1 到 300 项 nodeInfoList');

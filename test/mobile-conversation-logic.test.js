@@ -11,7 +11,7 @@ test('ordinary topics, quotations and other people do not establish the sender�
  for(const words of ['算了放过你吧','算了，放过你吧','我一个人去上班','结果出来了吗','你说得对不对？','我朋友最近好难过','她说“我好累，晚安”','“我好累”的意思是什么','我不难过','我难过吗？','我好孤独才怪','你为什么会怕？','我开会要带什么？','星期一我要去上课']){
   const state=conversationStep({},words,options);
   assert.ok(['listen','chat','answer'].includes(state.intent),words+' -> '+state.intent);
-  assert.equal(state.userAffect,'neutral',words);
+  assert.equal(state.userAffect,'unknown',words);
   assert.equal(state.pauseUntil,0,words);
  }
  for(const words of ['先别再生成了','先别生成了','算了吧','不用了']) {
@@ -35,7 +35,7 @@ test('speakers can ask for company or practical help and then move on',()=>{
  assert.match(conversationHint(continued),/沿用当时的细节/);
  assert.doesNotMatch(conversationHint(continued,{config:{continuity:false}}),/沿用当时的细节/);
  const later=step('结果出来了，周六去看球',hard);
- assert.equal(later.userAffect,'neutral');
+ assert.equal(later.userAffect,'unknown');
  assert.doesNotMatch(conversationHint(later),/低落|难受/);
 });
 
@@ -51,7 +51,7 @@ test('feedback about a repeated line and a correction of tone update the exchang
  assert.match(conversationHint(repeated),/话说重复了就换个落点/);
  const corrected=conversationStep({...repeated,userAffect:'frustrated'},'我没有嫌你烦',{...context,now:2000});
  assert.equal(corrected.intent,'reframe');
- assert.equal(corrected.userAffect,'neutral');
+ assert.equal(corrected.userAffect,'unknown');
  assert.equal(corrected.pauseUntil,0);
  assert.match(conversationHint(corrected),/接住对方新说明的意思/);
  const both=conversationStep(corrected,'我是说你总重复这句，我没有嫌你烦。',{...context,now:3000});

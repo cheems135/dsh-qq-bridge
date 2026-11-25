@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {normalizeVoiceMood} from './voice-studio.js';
 import {isShortAcknowledgement,isShortClarification} from './background-cost-policy.js';
 import {conversationTime,initiativeTimingHint} from './conversation-timing.js';
+import {dialogueHistoryRows,dialogueHistoryText} from './qq-history-context.js';
 export const OPERATION_CONTEXT_SIZE=8;
 // A picture is usually the start of a topic, not a one-turn attachment: keep the
 // latest received image visible for a while even when the assistant itself sends
@@ -14,12 +15,12 @@ export function operationText(value,max=900){return cap(String(value??'').replac
 const imageBearing=row=>row.image===true||[...(Array.isArray(row.files)?row.files:[]),row.file].some(value=>typeof value==='string'&&/\.(?:png|jpe?g|gif|webp)$/i.test(value));
 export function recentOperationContext(rows,{key='',accountId='',personaId='',floor=0,now=Date.now()}={}){
  if(!key)return[];
- const eligible=(Array.isArray(rows)?rows:[]).filter(row=>row.chat===key&&(row.accountId||'')===accountId&&(row.personaId||'')===personaId&&Number(row.time)>floor&&Number(row.time)<=now&&['in','out'].includes(row.dir)&&!['failed','cancelled','unknown','queued','sending'].includes(row.delivery)&&row.retracted!==true).sort((a,b)=>a.time-b.time);
+ const eligible=dialogueHistoryRows(rows,{key,accountId,personaId,floor,now});
  const tail=eligible.slice(-OPERATION_CONTEXT_SIZE),latestUser=eligible.findLast(row=>row.dir==='in');
  let selected=latestUser&&!tail.includes(latestUser)?[latestUser,...tail.slice(1)]:tail;
  const anchor=eligible.findLast(row=>row.dir==='in'&&imageBearing(row)&&now-Number(row.time)<=IMAGE_ANCHOR_WINDOW_MS);
  if(anchor&&!selected.includes(anchor)){selected=[anchor,...selected];while(selected.length>OPERATION_CONTEXT_SIZE){const drop=selected.findIndex(row=>row!==anchor&&row!==latestUser);if(drop<0)break;selected.splice(drop,1);}}
- return selected.map(row=>({id:String(row.messageId||row.localId||row.time),role:row.dir==='in'?'user':'assistant',at:row.time,...(imageBearing(row)?{hasImage:true}:{}),...(row===anchor&&row!==latestUser?{imageAnchor:true}:{}),text:operationText(row.dir==='in'?(row.userText||row.text):row.text,900)||((row.image||row.file||row.files?.length)?'[图片或语音附件]':'[空消息]')}));
+ return selected.map(row=>({id:String(row.messageId||row.localId||row.time),role:row.dir==='in'?'user':'assistant',at:row.time,...(imageBearing(row)?{hasImage:true}:{}),...(row===anchor&&row!==latestUser?{imageAnchor:true}:{}),text:operationText(dialogueHistoryText(row),900)||((row.image||row.file||row.files?.length)?'[图片或语音附件]':'[空消息]')}));
 }
 export function recentReplyAnchor(rows,{key='',accountId='',personaId='',words='',replyId='',excludeIds=[],floor=0,at=Date.now()}={}){
  const clarification=isShortClarification(words);

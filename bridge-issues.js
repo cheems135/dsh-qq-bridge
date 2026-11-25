@@ -12,7 +12,14 @@ export function createBridgeIssues({getRows=()=>[],setRows=()=>{},save=()=>{},no
    row={id,at:Number(safe.at)||now(),accountId:String(safe.accountId||''),personaId:String(safe.personaId||''),chat:String(safe.chat||safe.key||''),backend:safe.backend==='api'?'api':'local',kind:String(safe.kind||'chat'),message:String(safe.message||safe.error||'操作未完成').slice(0,1600),auditId:String(safe.auditId||''),acknowledged:false};
    setRows([...rows,row].slice(-limit));save();return row;
   },
-  list({accountId}={}){return recentRecords(Array.isArray(getRows())?getRows():[],now()).filter(r=>accountId===undefined||r.accountId===accountId).slice(-limit).reverse().map(redactInvocation);},
+  list({accountId,personaId,chat}={}){
+   const stored=getRows();
+   return recentRecords(Array.isArray(stored)?stored:[],now()).filter(row=>row&&
+    (accountId===undefined||row.accountId===accountId)&&
+    (personaId===undefined||row.personaId===personaId)&&
+    (chat===undefined||row.chat===chat)
+   ).slice(-limit).reverse().map(redactInvocation);
+  },
   acknowledge(ids,{accountId}={}){const selected=new Set(ids||[]);for(const row of Array.isArray(getRows())?getRows():[])if(row.accountId===accountId&&selected.has(row.id))row.acknowledged=true;save();},
  };
 }

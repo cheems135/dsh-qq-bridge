@@ -1,0 +1,45 @@
+curl --location --request POST 'https\://www\.runninghub.cn/openapi/v2/run/ai-app/2102953894560231426' \\\
+\--header "Content-Type: application/json" \\\
+\--header "Authorization: Bearer ${RUNNINGHUB_API_KEY}" \\\
+\--data-raw '{\
+&#x20; "nodeInfoList": [\
+&#x20;   {\
+&#x20;     "nodeId": "1",\
+&#x20;     "fieldName": "audio",\
+&#x20;     "fieldValue": "849975f16cec7dc9fd7c14dff25c37736dd80b47f418faa660579d35622e4d91.mp3",\
+&#x20;     "description": "上传音乐"\
+&#x20;   },\
+&#x20;   {\
+&#x20;     "nodeId": "2",\
+&#x20;     "fieldName": "audio",\
+&#x20;     "fieldValue": "71ce9da9e050c63e0cf059806e2c1c3ce3bdbb43acce2b5bce5c95c0a711438b.mp3",\
+&#x20;     "description": "上传音色"\
+&#x20;   },\
+&#x20;   {\
+&#x20;     "nodeId": "5",\
+&#x20;     "fieldName": "value",\
+&#x20;     "fieldValue": "0",\
+&#x20;     "description": "音色参考开始时间（第几秒）"\
+&#x20;   },\
+&#x20;   {\
+&#x20;     "nodeId": "6",\
+&#x20;     "fieldName": "value",\
+&#x20;     "fieldValue": "30",\
+&#x20;     "description": "音色参考结束时间（第几秒）"\
+&#x20;   },\
+&#x20;   {\
+&#x20;     "nodeId": "10",\
+&#x20;     "fieldName": "value",\
+&#x20;     "fieldValue": "true",\
+&#x20;     "description": "音色人声分离（去背景声）"\
+&#x20;   },\
+&#x20;   {\
+&#x20;     "nodeId": "37",\
+&#x20;     "fieldName": "value",\
+&#x20;     "fieldValue": "false",\
+&#x20;     "description": "可视化波形动画"\
+&#x20;   }\
+&#x20; ],\
+&#x20; "instanceType": "default",\
+&#x20; "usePersonalQueue": "false"\
+}'

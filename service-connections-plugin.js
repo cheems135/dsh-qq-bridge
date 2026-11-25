@@ -3,16 +3,16 @@ import {readFileSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {createServiceConnections,detectConnection,cleanConnectionError,connectionUrl} from './service-connections.js';
 import {createConnectionAdapter,providerForConnection} from './service-adapters.js';
-export function installServiceConnections({ctx,dataDir,writeAtomic,onApply=()=>{},getLegacyMode=()=>false,getLegacyComplement=()=>false,isProfileInUse=()=>false,getEffectiveSources=()=>null,fetchImpl=fetch,apiOnly=false}){
+export function installServiceConnections({ctx,dataDir,writeAtomic,onApply=()=>{},getLegacyMode=()=>false,getLegacySpeech=()=>'local',isProfileInUse=()=>false,getEffectiveSources=()=>null,fetchImpl=fetch,apiOnly=false}){
   let handle;const file=join(dataDir,'service-connections.json');
   function register(state){
     const llm=ctx.get('llm'),providers=state.profiles.filter(p=>['openai','anthropic','responses'].includes(p.type)&&p.chatModel).map(p=>providerForConnection(p.id));
     if(handle){handle.replace(providers);return;}
     if(providers.length){if(!llm?.registerAdapter)return;ctx.effect(()=>{handle=llm.registerAdapter(providers,createConnectionAdapter({connections,attachments:ctx.get('attachments'),fetchImpl}));return handle;});}
   }
-  const connections=createServiceConnections({apiOnly,getLegacyMode,getLegacyComplement,isProfileInUse,storage:{read(){try{if(statSync(file).size>4*1024*1024)throw Error('连接配置过大');return JSON.parse(readFileSync(file,'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}},write:data=>writeAtomic(file,data)},onChange:(state,flags)=>{register(state);onApply(state,flags);}});
+  const connections=createServiceConnections({apiOnly,getLegacyMode,getLegacySpeech,isProfileInUse,storage:{read(){try{if(statSync(file).size>4*1024*1024)throw Error('连接配置过大');return JSON.parse(readFileSync(file,'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}},write:data=>writeAtomic(file,data)},onChange:(state,flags)=>{register(state);onApply(state,flags);}});
   register(connections.raw());
-  if(connections.raw().routes?.enabled)onApply(connections.raw(),{startup:true});
+  writeAtomic(file,connections.raw());onApply(connections.raw(),{startup:true});
   const web=ctx.get('webServer');if(web)ctx.effect(()=>web.register({kind:'exact',path:'/im-bridge/service-connections',handler(req,res){
     const send=(status,data)=>{if(!res.writableEnded){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data));}};
     try{if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host||req.headers['sec-fetch-site']==='cross-site')return send(403,{error:'拒绝跨站修改连接'});}catch{return send(403,{error:'连接来源无效'});}
@@ -28,7 +28,6 @@ export function installServiceConnections({ctx,dataDir,writeAtomic,onApply=()=>{
         else if(input.action==='save')result={profile:connections.save(input)};
         else if(input.action==='use'){if(input.kind==='chat'&&!ctx.get('llm')?.registerAdapter)throw Error('当前 DSH 不支持注册新的聊天连接；图片和语音连接仍可使用');result=connections.use(input.id,input.kind);}
         else if(input.action==='routes'){if(input.routes?.enabled&&String(input.routes.chat||'').startsWith('profile:')&&!ctx.get('llm')?.registerAdapter)throw Error('当前 DSH 不支持注册新的聊天连接');result=connections.saveRoutes(input.routes||{});}
-        else if(input.action==='mode')result=connections.setMode(input.mode,{apiComplement:input.apiComplement===true});
         else if(input.action==='remove')result=connections.remove(input.id);
         else throw Error('未知连接操作');
         send(200,{ok:true,...result});

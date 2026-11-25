@@ -16,6 +16,15 @@ function fixture(t,device,settings,connections={profiles:[],routes:{enabled:fals
  const sync=createDeviceSync({device,dataDir:root,sourceDir,roots:()=>roots,flush:async()=>{},credential:async()=>'',status:()=>({version:'1.53.0',paused:true}),pause:async()=>{},resume:async()=>{},reload:async()=>{}});
  t.after(()=>sync.close());return {sync,root};
 }
+test('sync cannot clear the receiving QQ session login hold or assign the other device its previous session',t=>{
+ const {sync,root}=fixture(t,'phone',{});
+ const holds=[{accountId:'my-profile',receiver:'12345',time:101,reason:'QQ 要求重新登录',active:true}];
+ fs.writeFileSync(path.join(root,'state.json'),JSON.stringify({qqLoginHolds:holds}));
+ const incoming=Buffer.from(JSON.stringify({qqLoginHolds:[{accountId:'peer',active:true}]}));
+ assert.equal(JSON.parse(sync.canonical('data/state.json',incoming)).qqLoginHolds,undefined);
+ assert.deepEqual(JSON.parse(sync.canonical('data/state.json',incoming,false)).qqLoginHolds,holds);
+});
+
 test('new sync shares API profiles, diary/memory settings but preserves each device runtime choices',async t=>{
  const desktopSettings={localChat:{enabled:true,modelId:'desktop-model'},comfyui:{enabled:true},agency:{desktop:true,workspace:'desktop'},voice:{engine:'localai',enabled:true},memory:{enabled:true},life:{enabled:true},personae:[{id:'same-character'}]};
  const phoneSettings={localChat:{enabled:false},voice:{engine:'breeze',enabled:true},agency:{desktop:false,workspace:'internal'}};
@@ -40,6 +49,6 @@ test('mobile tool discovery excludes local generation and Windows workspace serv
 });
 test('device shells have independent navigation and phone-only capabilities stay off the phone menu',()=>{
  const sandbox={};vm.runInNewContext(fs.readFileSync(new URL('../ui/device-ui.js',import.meta.url),'utf8'),sandbox);const ui=sandbox.QQBridgeDeviceUI;
- const desktop=[{id:'system',pages:['local','services','devices']}];assert.equal(ui.groups('phone',desktop).length,5);assert.equal(ui.groups('desktop',desktop)[0].pages[0],'local');assert.equal(ui.supports('phone','local'),false);assert.equal(ui.supports('phone','photo'),false);for(const page of ['memory','daily','diary','services','bilibili','websitemcp','invocations'])assert.equal(ui.supports('phone',page),true);
+ const desktop=[{id:'system',pages:['local','services','devices']}];assert.equal(ui.groups('phone').some(g=>g.id==='api'&&g.pages.includes('apisong')),true);assert.equal(ui.groups('phone').some(g=>g.id==='local'),false);assert.equal(ui.groups('desktop',desktop)[0].pages[0],'local');assert.equal(ui.supports('phone','local'),false);assert.equal(ui.supports('phone','photo'),false);for(const page of ['memory','daily','diary','services','bilibili','guild','websitemcp','invocations'])assert.equal(ui.supports('phone',page),true);
  assert.equal(ui.previewWriteAllowed('/im-bridge/settings',{localChat:{enabled:true}}),false);assert.equal(ui.previewWriteAllowed('/im-bridge/device-profiles',{action:'select',device:'phone'}),true);assert.equal(ui.previewWriteAllowed('/im-bridge/features/companion',{action:'snapshot'}),true);
 });

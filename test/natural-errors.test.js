@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {localIssueReply} from '../local-issue-reply.js';
-test('persona tones vary without technical leaks, fake success, gestures or extra model calls',()=>{
+test('fallback facts stay short without forced persona catchphrases, technical leaks, fake success or extra model calls',()=>{
  const error=Error('TypeError C:/private/sk-secret');const first=localIssueReply(error,{style:'playful',scope:'test'}),second=localIssueReply(error,{style:'playful',scope:'test'});
- assert.notEqual(first,second);assert.match(first,/没做成/);assert.doesNotMatch(first,/TypeError|private|sk-secret|[（(]|已完成|已经发出/);
+ assert.equal(first,second);assert.doesNotMatch(first,/调用记录|这次未能完成|啧|唔/);assert.match(first,/没做成/);assert.doesNotMatch(first,/TypeError|private|sk-secret|[（(]|已完成|已经发出/);
  assert.match(localIssueReply(Error('arguments 参数错误')),/格式没写对/);
  assert.match(localIssueReply(Object.assign(Error('pause'),{code:'SCHEDULE_TOOL_PAUSED'})),/四次.*下个日程/);
 });

@@ -1,27 +1,31 @@
 // Describes the selected route only. Routing remains owned by serviceSource;
 // this function does not probe a provider, load a model or spend any tokens.
-const kinds={chat:'聊天',image:'图片',speech:'语音',video:'视频'};
+const kinds={chat:'聊天',image:'图片',speech:'语音',video:'视频',sing:'唱歌'};
 const text=value=>String(value??'').slice(0,300);
 function endpoint(value){try{const u=new URL(value);return u.origin;}catch{return '';}}
-export function serviceSourceOverview({settings={},connections={},sources={},model={},chat='',desktop=true,voiceEngine='none',now=Date.now()}={}){
+export function serviceSourceOverview({settings={},connections={},sources={},model={},chat='',desktop=true,voiceEngine='none',localAudio={},now=Date.now()}={}){
   model=model||{};
   const local=settings.localChat||{},profiles=connections.profiles||[],mixed=connections.routes?.enabled===true;
   const fallback=desktop&&local.enabled===true&&local.apiComplement===true;
   const result=Object.entries(kinds).map(([kind,label])=>{
     const source=sources[kind]||'legacy',legacyLocalVoice=kind==='speech'&&source==='legacy'&&voiceEngine==='localai';
-    const isLocal=source==='local'||legacyLocalVoice,field=kind==='chat'?'chatModel':kind+'Model';
+    const audio=localAudio[kind],audioLocal=desktop&&audio?.mode==='local';
+    const isLocal=source==='local'||legacyLocalVoice||audioLocal,field=kind==='chat'?'chatModel':kind+'Model';
     let selected=source.startsWith('profile:')?profiles.find(p=>p.id===source.slice(8)):null;
     if(!selected&&kind==='chat'&&!isLocal)selected=profiles.find(p=>model.provider==='qq-connection-'+p.id);
     const runningHubVideo=kind==='video'&&source==='legacy'&&settings.videogen?.provider==='runninghub';
     if(!selected&&kind==='video'&&!isLocal&&source==='legacy'&&!runningHubVideo)selected=profiles.find(p=>p.id===settings.videogen?.profileId);
     let connection='',chosen='',origin='',from='',enabled=true,configured=true;
-    if(isLocal){
+    if(audioLocal){
+      const selectedAudio=audio.presets?.find(p=>p.id===audio.workflowId);
+      connection='本地 ComfyUI 音频工作流';chosen=text(selectedAudio?.name);origin=endpoint(selectedAudio?.baseUrl);from=kinds[kind]+'配置';configured=!!selectedAudio;
+    }else if(isLocal){
       connection=kind==='speech'?'本地语音服务':kind==='chat'?(local.backend==='comfyui'?'ComfyUI 聊天工作流':'本地模型服务'):'本地 ComfyUI';
       const workflow=kind==='chat'?local.chatWorkflow:local.defaultWorkflows?.[kind];
       chosen=kind==='chat'&&local.backend!=='comfyui'?text(local.modelId):text((local.workflowLibrary||[]).find(w=>w.id===workflow)?.name||workflow);
       if(kind==='speech')chosen=text(legacyLocalVoice?settings.voice?.localai?.preset:local.voicePreset)||'在本地服务中选择音色';
       origin=endpoint((legacyLocalVoice?settings.voice?.localai?.baseUrl:kind==='chat'&&local.backend!=='comfyui'?local.modelBaseUrl:'')||local.baseUrl||'http://127.0.0.1:8777');
-      from=legacyLocalVoice?'语音设置 → 本地语音':mixed?'连接与搭配 → 按能力选择':'整体本地模式';
+      from=legacyLocalVoice?'语音设置 → 本地语音':'连接与搭配 → 按能力选择';
       configured=desktop;enabled=kind==='speech'?local.voiceEnabled!==false:kind==='image'?settings.imagegen?.enabled!==false:true;
     }else if(selected){
       connection=text(selected.name)||text(selected.id);chosen=text(kind==='chat'?model.model||selected[field]:selected[field]);origin=endpoint(selected.baseUrl);
@@ -42,6 +46,9 @@ export function serviceSourceOverview({settings={},connections={},sources={},mod
     }else if(kind==='speech'){
       connection=voiceEngine==='none'?'尚未选择语音服务':text(voiceEngine);
       chosen=text(voiceEngine==='breeze'?settings.voice?.breeze?.model:voiceEngine==='minimax'?settings.voice?.minimax?.model:'');configured=voiceEngine!=='none';from='语音设置';
+    }else if(kind==='sing'){
+      const config=settings.voice?.runninghub?.sing||{};
+      connection='RunningHub';chosen=text(config.presets?.find(p=>p.id===config.id&&p.mode===config.mode)?.name||config.id);origin=endpoint(settings.imagegen?.runninghub?.baseUrl||'https://www.runninghub.cn');from='唱歌配置';configured=!!config.id&&!!settings.imagegen?.runninghub?.apiKey;enabled=settings.voice?.enabled===true;
     }else{connection='尚未选择视频 API';configured=false;from='视频生成设置';}
     if(kind==='image')enabled=settings.imagegen?.enabled!==false;
     if(kind==='speech')enabled=enabled&&settings.voice?.enabled===true;

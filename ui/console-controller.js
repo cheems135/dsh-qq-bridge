@@ -1,6 +1,8 @@
 import {renderPageNavigation, enhancePageNavigation, passiveConsoleRequest, capturePanelView, restorePanelView} from './console-interaction.js';
-import {renderServiceSources, paintExecutionRequests} from './execution-overview.js';
-import {createFormState, sameFormValue} from './form-state.js';
+import {renderServiceSources, paintExecutionRequests, capabilityPages, recognizeServiceRequest, normalizeRequestExample} from './execution-overview.js';
+import {guildView,bindGuild} from './guild.js';
+import {createFormState, sameFormValue, formScope} from './form-state.js';
+import {groupMemoryScopes} from './memory-library.js';
 import {deviceCapabilities, openPermissionControls} from './settings-contract.js';
 
 
@@ -14,7 +16,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   window.addEventListener('unhandledrejection', function (event) { reportClient('Promise 拒绝 ' + (event.reason && event.reason.message ? event.reason.message : event.reason)); });
   var data = null;
   var uiDevice='',desktopNavSnapshot=null,desktopHeadsSnapshot=null,navEventsBound=false;
-  function runtimeDevice(){return data&&data.status&&data.status.edition==='mobile'?'phone':'desktop';}
+  function runtimeDevice(snapshot=data){return snapshot?.status?.edition==='mobile'?'phone':'desktop';}
   /* 能力限制由实际运行设备决定；统一连接界面不代表电脑只能使用 API。 */
   function mobileApiOnly(){return deviceCapabilities(runtimeDevice()).apiOnly;}
   function deviceUiPreview(){return !!uiDevice&&uiDevice!==runtimeDevice();}
@@ -22,10 +24,11 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if(!data)return;
     if(!desktopNavSnapshot){desktopNavSnapshot=NAV_GROUPS.map(function(g){return Object.assign({},g,{pages:g.pages.slice()});});desktopHeadsSnapshot=Object.assign({},PAGE_HEADS);}
     uiDevice=runtimeDevice();
-    var adapter=window.QQBridgeDeviceUI;NAV_GROUPS=adapter?adapter.groups(uiDevice,desktopNavSnapshot):desktopNavSnapshot.map(function(g){return Object.assign({},g,{pages:g.pages.filter(function(p){return uiDevice!=='phone'||p!=='local';})});});
+    window.QQBridgeAppearance?.setDevice(uiDevice);
+    var adapter=window.QQBridgeDeviceUI;NAV_GROUPS=adapter?adapter.groups(uiDevice,desktopNavSnapshot):desktopNavSnapshot.map(function(g){return Object.assign({},g,{pages:g.pages.filter(function(p){return uiDevice!=='phone'||p!=='local'&&p!=='photo';})});});
     PAGE_HEADS=Object.assign({},desktopHeadsSnapshot);
     if(mobileApiOnly()){PAGE_HEADS.services=['API 连接与搭配','聊天、图片与语音可分别连接不同提供商。','API 连接 模型 协议 搭配'];PAGE_HEADS.devices=['设备与同步','管理连接配置、切换实际运行设备与同步资料。','手机 电脑 设备 同步'];}
-    if(!pageVisible(tab)){tab='overview';history.replaceState(null,'','#overview');}
+    if(!pageVisible(tab)){tab='overview';expandedSection=groupFor(tab).id;history.replaceState(history.state,'','#overview');}
     if(adapter)adapter.apply(uiDevice,runtimeDevice());
   }
   function applyPreviewControls(){if(deviceUiPreview()){document.querySelectorAll('#pane input,#pane textarea,#pane select,#pane button').forEach(function(el){if(el.matches('[data-go],[data-close-persona],[data-persona-tool]')||/^(?:profile|device)/.test(el.id)||['diaryPrev','diaryNext','cpGraphMotion','cpGraphReset'].includes(el.id))return;el.disabled=true;el.title='当前为另一设备的界面预览，请在实际运行设备打开插件后修改设置或执行任务。';});}}
@@ -46,10 +49,6 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   var renderedTab = '';
   var imagegenDraft = null;
   var imagegenTypedKeys = {};
-  var groupLastPages = {};
-  var themeMode = 'auto';
-  try { themeMode = localStorage.getItem('qqb-ui-theme') || 'auto'; } catch (e) {}
-  if (['auto', 'light', 'dark'].indexOf(themeMode) < 0) themeMode = 'auto';
   var msgFilter = 'all';
   var monQuery = '';
   var monitorTimer = null;
@@ -57,45 +56,21 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
 
   function $(id) { return document.getElementById(id); }
 
-  /** Follow the host page's theme when embedded, the OS when opened standalone. */
-  function applyTheme() {
-    var apply = function (mode) { if (document.documentElement.getAttribute('data-theme') !== mode) document.documentElement.setAttribute('data-theme', mode); };
-    if (themeMode !== 'auto') { apply(themeMode); return; }
-    var dark = null;
-    try {
-      var parentDoc = window.parent && window.parent !== window ? window.parent.document : null;
-      var root = parentDoc ? parentDoc.documentElement : null;
-      if (root && parentDoc.body) {
-        var marker = ((root.className || '') + ' ' + (root.getAttribute('data-theme') || '') + ' ' + (root.getAttribute('data-color-mode') || '')).toLowerCase();
-        if (marker.indexOf('dark') !== -1) dark = true;
-        else if (marker.indexOf('light') !== -1) dark = false;
-        else {
-          var bg = window.parent.getComputedStyle(parentDoc.body).backgroundColor || '';
-          var parts = bg.match(/\d+/g);
-          if (parts && parts.length >= 3) {
-            dark = (Number(parts[0]) * 0.299 + Number(parts[1]) * 0.587 + Number(parts[2]) * 0.114) < 128;
-          }
-        }
-      }
-    } catch (e) {
-      dark = null;
-    }
-    if (dark === null) dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    apply(dark ? 'dark' : 'light');
-  }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
   /** 自建弹窗：面板跑在 iframe 里，window.confirm / prompt 会被 Chromium 直接拦掉。 */
-  function showModal(message, withInput, placeholder, okLabel) {
+  function showModal(message, withInput, placeholder, okLabel, keepDraft) {
     return new Promise(function (resolve) {
       var box = $('modal'); var input = $('modalInput'); var ok = $('modalOk'); var cancel = $('modalCancel');
       var previous = document.activeElement;
       $('modalMsg').textContent = message;
       input.style.display = withInput ? '' : 'none'; input.value = ''; input.placeholder = placeholder || '';
+      var keep=$('modalKeep');keep.hidden=!keepDraft;
+      if(keepDraft)keep.onclick=function(){done('keep');};
       ok.textContent = okLabel || '确定'; cancel.textContent = '取消';
       box.hidden = false;
       function done(value) {
-        box.hidden = true; ok.onclick = null; cancel.onclick = null;
+        box.hidden = true; keep.hidden=true; keep.onclick=null; ok.onclick = null; cancel.onclick = null;
         document.removeEventListener('keydown', onKey);
         if (previous && previous.isConnected) previous.focus({ preventScroll: true });
         resolve(value);
@@ -104,7 +79,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         if (event.key === 'Escape') { event.preventDefault(); cancel.click(); }
         else if (event.key === 'Enter' && event.target === input) { event.preventDefault(); ok.click(); }
         else if (event.key === 'Tab') {
-          var elements = withInput ? [input,cancel,ok] : [cancel,ok];
+          var elements = withInput ? [input,cancel,ok] : keepDraft ? [cancel,keep,ok] : [cancel,ok];
           var first = elements[0]; var last = elements[elements.length-1];
           if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -140,28 +115,70 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     });
   }
 
+  var pageResourceLabels = {models:'模型列表',presets:'人设列表',storage:'存储信息',thoughts:'思绪记录',login:'登录状态',messages:'对话记录'};
+  var pageReads = {model:['models'],sessions:['models'],persona:['presets'],profiles:['models','presets'],storage:['storage'],thoughts:['thoughts'],connection:['login'],monitor:['messages']};
+  var pageResources = new Map();
+  var loadRevision = 0;
+  var paneRevision = 0;
+  function readPageResource(key) {
+    var cached = pageResources.get(key);
+    if (cached) return cached;
+    var record = {status:'loading'};
+    pageResources.set(key, record);
+    record.promise = api('GET', '/im-bridge/' + key).then(function (value) {
+      if (pageResources.get(key) !== record) return;
+      if (!value || typeof value !== 'object') throw Error('没有返回有效数据');
+      switch (key) {
+        case 'models':
+          if (!Array.isArray(value.groups)) throw Error('缺少模型列表');
+          models = value; break;
+        case 'presets':
+          if (!Array.isArray(value.presets)) throw Error('缺少人设列表');
+          presets = value.presets; break;
+        case 'storage':
+          if (!value.sizes && !value.cacheDir) throw Error('缺少存储信息');
+          storage = value; break;
+        case 'thoughts': thoughts = value; break;
+        case 'login': login = value; break;
+        case 'messages':
+          if (!Array.isArray(value.messages)) throw Error('缺少对话记录');
+          monitor = value; break;
+      }
+      record.status = 'ready';
+    }).catch(function (error) {
+      record.status = 'failed';
+      record.error = error.message;
+    });
+    return record;
+  }
   function load(options) {
+    var revision = ++loadRevision;
     return Promise.all([
       api('GET', '/im-bridge/settings'),
-      api('GET', '/im-bridge/login'),
-      api('GET', '/im-bridge/messages'),
-      api('GET', '/im-bridge/models'),
-      api('GET', '/im-bridge/presets'),
-      api('GET', '/im-bridge/thoughts'),
-      api('GET', '/im-bridge/storage'),
       api('GET', '/im-bridge/features').catch(function () { return null; }),
       api('GET', '/im-bridge/device-profiles').catch(function () { return null; })
     ]).then(async function (r) {
-      data = r[0]; login = r[1]; monitor = r[2]; models = r[3];
-      presets = (r[4] && r[4].presets) || [];
-      thoughts = r[5];
-      storage = r[6];
-      featureData = r[7]; deviceProfileData = r[8]; mobileUiPolicy(); initNavigation();
+      if (revision !== loadRevision) return false;
+      if (!r[0]?.status || !r[0].settings) throw Error('缺少控制台配置');
+      pageResources.clear();
+      login = monitor = models = thoughts = storage = null;
+      presets = [];
+      alignHomeQQProfile(r[0]);
+      if(data&&formScope(data)!==formScope(r[0])){
+        newFormScope();
+        if(!$('modal').hidden)$('modalCancel').click();
+      }
+      data = r[0]; featureData = r[1]; deviceProfileData = r[2]; mobileUiPolicy(); initNavigation();
       hubPreview=null;hubSearchResult='';if(hubSelection)try{hubPreview=(await api('POST','/im-bridge/features/memory-hub',{key:hubSelection,action:'snapshot'})).memoryHub;}catch{};
       lastSnapshotAt = Date.now();
       if(options?.refreshCompanion&&['overview','daily','diary','star','study','songs'].includes(tab))await refreshCompanionPanel({render:false});
-      renderPill(); renderPane();
+      if (revision !== loadRevision) return false;
+      renderPill();
+      var result = await renderPane();
+      if (revision === loadRevision && result !== false && renderedTab) maybeShowOnboarding();
+      return result;
     }).catch(function (e) {
+      if (revision !== loadRevision) return false;
       toast('读取失败：' + e.message);
       if (!data || !renderedTab) {
         $('pane').innerHTML = '<div class="loading-state"><h1>暂时无法加载控制台</h1><p>' + esc(e.message) + '</p><button class="primary" id="retryLoad">重新加载</button></div>';
@@ -185,7 +202,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var st = data.status;
     renderShellStatus();
     $('dot').style.background = st.connected ? '#2fbf71' : '#d94b4b';
-    $('pillText').textContent = st.accountPaused ? '连接已停用' : (st.connected ? 'NapCat 已连接' : '等待连接');
+    $('pillText').textContent = st.accountNeedsAttention ? '桥接会话需要恢复' : st.accountPaused ? '桥接已暂停' : (st.connected ? 'NapCat 已连接' : st.qqLoggedIn===true?'QQ 已登录 · 桥接待连接':'等待连接');
     window.__bridgeVersion = st.version || '';
     if ($('ver')) $('ver').textContent = 'v' + (st.version || '—');
     var effortLabel = { off: '省', low: '标准', high: '高', max: '最高' };
@@ -194,6 +211,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
 
   var ICONS = {
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>',
     clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     book:'<path d="M3 4h7l2 2 2-2h7v16h-7l-2 1-2-1H3Z"/><path d="M12 6v15M6 8h3M15 8h3"/>',
@@ -220,36 +238,33 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   function icon(name) {
     return '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + '</svg>';
   }
-  var NAV_GROUPS = [
-    { id: 'home', label: '她的小世界', note: '现在、日程与小日记', icon: 'home', pages: ['overview','daily','diary','star'] },
-    { id: 'messages', label: '消息中心', note: '查看、发送与管理对话', icon: 'chat', pages: ['monitor', 'send', 'sessions', 'delivery', 'activity','invocations'] },
-    { id: 'character', label: '认识她', note: '人设、关系与学习', icon: 'spark', pages: ['persona', 'profiles', 'directives', 'autonomy', 'study', 'thoughts', 'memory'] },
-    { id: 'web', label: '上网与内容', note: '账号、浏览与视频资料', icon: 'search', pages: ['bilibili','qzone','websitemcp'] },
-    { id: 'assets', label: '声音与画面', note: '说话、唱歌与图像视频', icon: 'image', pages: ['voice', 'songs', 'imagegen', 'videogen', 'photo', 'sticker', 'collect'] },
-    { id: 'system', label: '系统设置', note: '连接、权限与运行配置', icon: 'settings', pages: ['connection', 'prompts', 'services', 'local', 'devices', 'whitelist', 'model', 'storage', 'backup'] }
-  ];
+  var NAV_GROUPS = window.QQBridgeDeviceUI?.groups('desktop');
   var PAGE_HEADS = {
     prompts:['提示词管理','中文调整常规表达与画面偏好，查看模板中英对照。','提示词 模板 中文 英文 预览 恢复 历史'],
     directives:['长期指令','写下需要长期遵守的要求或任务，每轮生效；与当前要求冲突时会先问你。','长期 指令 任务 常驻 规则 冲突'],
+    guild:['QQ 频道','查看已加入的频道、子频道和话题。','频道 子频道 帖子 QQ 社交'],
     qzone:['QQ 空间','查看图文动态回执，读取并回复实际评论。','空间 动态 配图 评论 回复'],
-    services:['连接与搭配','检测 API 或本地服务，分别选择聊天、图片与语音的来源。','API 本地 自由 连接 自动识别 模型 类型 混合 串联 搭配'],
+    services:['功能配置与连接','分别配置聊天、图片、语音、视频和唱歌，管理本地网关与 API 协作。','API 本地 自由 连接 自动识别 模型 类型 混合 串联 搭配'],
     websitemcp:['网站工具 / MCP','输入网址，识别公开接口与搜索表单，测试后供本地和 API 使用。','网站 自动封装 MCP 接口 搜索 OpenAPI 工具 适配'],
     invocations:['提示词与调用记录','本地与 API 共用的实际调用记录，可复制提示词用于调整。','生图 视频 提示词 prompt 工具 调用 记录 API 本地 补全'],
     daily:['今天的小日程','在线做小事，离线就安心睡觉。','生活 当前 等待 恢复 任务 权限'],
     diary:['私人手账','','日记 摘记 经历 回忆'],
     star:['关系星图','看她和谁来往、在什么场合、常聊些什么。','星图 关系 人物 话题 来源 图谱'],
     study:['学习效果','分清已存资料、实际召回、生成答复和本人评价。','学习 反馈 纠正 效果 应用'],
-    songs:['唱歌','配置 RunningHub 唱歌与翻唱工作流。','唱歌 翻唱 RunningHub 工作流'],
+    api:['API 服务','云端聊天、图片、语音、唱歌与视频，按功能配置。','API 服务 工作流'],
+    apisong:['唱歌配置','独立选择本地或 API，配置原曲、音色与工作流。','唱歌 翻唱 API 工作流 cURL'],
+    maintenance:['诊断与维护','需要排查或手动干预时使用。','纠错 会话 手动发送 回执 排查'],
+    songs:['翻唱作品','试听、确认或删除生成过的歌曲版本。','唱歌 翻唱 库存 作品 删除'],
     devices: ['设备与同步', '管理当前设备的连接配置，也可同步资料与切换实际运行设备。', '手机 电脑 USB 数据线 同步 切换 密钥 隐私 版本'],
     delivery: ['消息可靠性', '查看处理队列、平台回执与失败记录，按需重试。', '去重 合并 重发 回执 失败'],
     activity: ['回复依据与纠错', '查看本轮使用的记忆与分享资料，预览修正版或申请撤回。', '上下文 诊断 引用 来源 撤回 重新生成'],
     profiles: ['对话偏好', '为每个联系人或群单独选择人设、模型、声音与回复偏好。', '联系人 独立 配置 音色 主动'],
     backup: ['备份与迁移', '导出人设、记忆与素材，先预览再合并恢复。', '导出 导入 恢复 备份 迁移 JSON'],
-    overview: ['今天的小世界', '看看她正在做什么，翻翻今天的心情。', '概览 在线 状态 今日 花费'],
+    overview: ['桥接工作台', '连接、待办与最近的安排', '首页 概览 在线 状态 今日 花费'],
     monitor: ['对话记录', '查看与她的往来，按联系人或消息内容快速查找。', '聊天 监听 历史 搜索'],
     send: ['发送消息', '以她的身份发送文字、语音或表情。', '发消息 手动 补发'],
     sessions: ['会话管理', '为不同对话选择模型，管理每一段独立的上下文。', '重置 模型 单独 新会话'],
-    persona: ['自我与人设卡', '空自我卡是底子，人设卡是她的 cosplay 外层。', '人设 人设卡 自我 性格 提示词 预设 导入 导出 AI 试聊 cosplay 角色'],
+    persona: ['自我与人设卡', '选择她看重什么、怎样理解对话和作决定。', '人设 人设卡 自我 性格 提示词 预设 导入 导出 AI 试聊 cosplay 角色'],
     memory: ['长期记忆', '管理她记住的事，让新的对话也能接着聊。', '压缩 轮数 迁移 记忆'],
     autonomy: ['主动互动', '统一管理自主日常、当前请求和离线休息。', '自主 签名 昵称 空间 主动 追问 沉默 补充 勿扰 频率'],
     thoughts: ['情绪与学习', '查看情绪变化、作品反思与主动行为。', '心情 情绪 学习 网站 网页 来源 分享 视频 复盘 动作'],
@@ -261,13 +276,14 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     imagegen: ['图像生成', '管理生图服务与参数，试着把一句描述变成画面。', '生图 RunningHub 硅基流动 API Key 工作流'],
     connection: ['账号与连接', '登录与手动登出 QQ，切换机器人账号，管理 NapCat 连接。', '登录 登出 退出 logout 二维码 token WebSocket 重启 测试 暂停 自启'],
     bilibili: ['B站', '本地模型和 API 模型共用的账号、浏览与评论草稿。', 'B站 哔哩哔哩 Bilibili 二维码 扫码 登录 推荐 字幕 评论 API 本地'],
-    local: ['本地连接', 'ComfyUI 与本地语音：填地址、看状态、直接试一次。', '本地 ComfyUI 工作流 反推 看图 本地模型 语音 Breeze VoiceLab 8188 7870'],
+    local: ['本地网关与工作流', 'ComfyUI 与本地语音：填地址、看状态、直接试一次。', '本地 ComfyUI 工作流 反推 看图 本地模型 语音 Breeze VoiceLab 8188 7870'],
     whitelist: ['联系人与权限', '管理号主、私聊联系人与可用的群。', '白名单 QQ 群 备注 广播 权限'],
     model: ['模型与搜索', '选择聊天模型、思考深度和联网搜索方式。', '智力 档位 provider SearXNG 搜索引擎'],
-    storage: ['存储与缓存', '查看空间占用，迁移或清理运行时缓存。', '目录 路径 占用 清理 迁移'],
+    storage: ['存储与缓存', '查看聊天、记忆与媒体占用，迁移资料或整理临时文件。', '目录 路径 占用 清理 迁移'],
     logs: ['运行日志', '查看插件的运行记录与连接信息。', '日志 排错 调试 错误']
   };
-  var HIDDEN_PAGES = ['logs'];
+  var HIDDEN_PAGES = ['logs','activity','sessions','send'];
+  if(!NAV_GROUPS)NAV_GROUPS=[{id:'home',label:'所有功能',short:'功能',note:'打开控制台页面',icon:'home',pages:Object.keys(PAGE_HEADS).filter(function(p){return p!=='logs';})}];
   function pageVisible(page) {
     return HIDDEN_PAGES.indexOf(page) !== -1 || NAV_GROUPS.some(function (g) { return g.pages.indexOf(page) !== -1; });
   }
@@ -283,77 +299,213 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if ($('sideAccount')) $('sideAccount').textContent = st.selfId ? 'QQ ' + st.selfId : '尚未连接账号';
     if ($('sideAvatar')) $('sideAvatar').innerHTML = icon('whale');
   }
+  var expandedSection = '';
+  var routeIndex = Number.isInteger(history.state?.bridgePage) ? history.state.bridgePage : 0;
+  var historyBusy = false;
+  var navigatorReturn = null;
+  var navigatorOpener = null;
+  var routeViews = new Map();
+  var routeViewScope = '';
+  var quickPages = [
+    {page:'overview', label:'首页', icon:'home'},
+    {page:'monitor', label:'消息', icon:'chat'},
+    {page:'persona', label:'人设', icon:'user'},
+    {page:'connection', label:'连接', icon:'link'}
+  ];
+
+  function routeLink(page, label, contents) {
+    return '<a href="#'+esc(page)+'" data-go="'+esc(page)+'"'+(page===tab?' aria-current="page"':'')+'>'+contents+esc(label)+'</a>';
+  }
+  function renderWorkspaceNav() {
+    $('workspaceNav').innerHTML = NAV_GROUPS.map(function (group) {
+      if (group.pages.length===1) return '<div class="nav-home">'+routeLink(group.pages[0], '工作台', icon(group.icon))+'</div>';
+      var pages = group.pages.map(function (page) { return routeLink(page,PAGE_HEADS[page][0],''); }).join('');
+      return '<div class="nav-section"><button type="button" data-section-toggle="'+esc(group.id)+'" aria-controls="nav-pages-'+esc(group.id)+'">'+icon(group.icon)+'<span>'+esc(group.label)+'</span><span class="section-caret" aria-hidden="true"></span></button><div class="nav-pages" id="nav-pages-'+esc(group.id)+'" hidden>'+pages+'</div></div>';
+    }).join('');
+    $('quickNav').innerHTML = quickPages.filter(function (item) { return pageVisible(item.page); }).map(function (item) {
+      return routeLink(item.page,item.label,icon(item.icon));
+    }).join('')+'<button id="moreNav" type="button" aria-haspopup="dialog" aria-controls="workspaceNavigator">'+icon('grid')+'全部</button>';
+    $('workspaceNav').onclick = function (event) {
+      var button=event.target.closest('[data-section-toggle]');
+      if (!button) return;
+      expandedSection = expandedSection===button.dataset.sectionToggle ? '' : button.dataset.sectionToggle;
+      syncNavigation();
+    };
+    $('moreNav').onclick = function () { openNavigator(false,false,this); };
+  }
   function syncNavigation() {
     var group = groupFor(tab);
-    Array.prototype.forEach.call(document.querySelectorAll('[data-group]'), function (btn) {
-      var active = btn.getAttribute('data-group') === group.id;
-      btn.classList.toggle('on', active);
-      if (active) btn.setAttribute('aria-current', 'page'); else btn.removeAttribute('aria-current');
+    $('workspaceNav').querySelectorAll('[data-section-toggle]').forEach(function (button) {
+      var id=button.dataset.sectionToggle, open=expandedSection===id;
+      button.setAttribute('aria-expanded',String(open));
+      button.classList.toggle('current-section',group.id===id);
+      $('nav-pages-'+id).hidden=!open;
     });
-    $('breadcrumb').textContent = group.label;
+    document.querySelectorAll('#workspaceNav [data-go],#quickNav [data-go],#searchResults [data-go]').forEach(function (link) {
+      if (link.dataset.go===tab) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
+    });
+    $('moreNav').classList.toggle('current-section',!quickPages.some(function (item) { return item.page===tab; }));
+    $('breadcrumbGroup').textContent = group.label;
+    $('breadcrumb').textContent = PAGE_HEADS[tab][0];
     document.title = PAGE_HEADS[tab][0] + ' · QQ 桥接';
   }
 
-  function bindRoutes() {
-    Array.prototype.forEach.call(document.querySelectorAll('[data-go]'), function (btn) {
-      btn.onclick = function () { navigate(btn.getAttribute('data-go')); };
+  function bindRoutes(root) {
+    (root || document).querySelectorAll('[data-go]').forEach(function (button) {
+      button.onclick = async function (event) {
+        if (button.tagName==='A' && (event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)) return;
+        event.preventDefault();
+        var destination=button.dataset.go;
+        if ($('workspaceNavigator').open) await dismissNavigator();
+        await navigate(destination);
+        if(tab===destination&&button.dataset.goTarget)$(button.dataset.goTarget)?.focus();
+      };
     });
-  }
-  function closeSearch() {
-    $('searchResults').hidden = true;
-    $('navSearch').setAttribute('aria-expanded', 'false');
   }
   function renderSearch() {
-    var q = $('navSearch').value.trim().toLowerCase();
-    var found = Object.keys(PAGE_HEADS).filter(function (key) { if(!NAV_GROUPS.some(function(g){return g.pages.indexOf(key)>=0;}))return false;return !q || PAGE_HEADS[key].join(' ').toLowerCase().indexOf(q) !== -1 || groupFor(key).label.indexOf(q) !== -1; });
-    $('searchResults').innerHTML = '<div class="search-heading">' + (q ? '搜索结果' : '全部功能') + '<span>' + found.length + ' 项</span></div>' + (found.length ? found.map(function (key) {
-      return '<button class="search-result" data-go="' + key + '"><span>' + icon(groupFor(key).icon) + '</span><span><b>' + PAGE_HEADS[key][0] + '</b><small>' + groupFor(key).label + '</small></span>' + icon('arrow') + '</button>';
-    }).join('') : '<div class="search-empty">没有找到，试试「语音」「勿扰」或「登录」。</div>');
-    $('searchResults').hidden = false;
-    $('navSearch').setAttribute('aria-expanded', 'true');
-    bindRoutes();
+    var query=$('navSearch').value.trim().toLowerCase();
+    var count=0;
+    var sections=NAV_GROUPS.map(function (group) {
+      var pages=group.pages.filter(function (page) {
+        return !query || (PAGE_HEADS[page].join(' ')+' '+group.label).toLowerCase().includes(query);
+      });
+      if(query) pages.push(...HIDDEN_PAGES.filter(function(page){
+        return groupFor(page).id===group.id && PAGE_HEADS[page].join(' ').toLowerCase().includes(query);
+      }));
+      if (!pages.length) return '';
+      count+=pages.length;
+      return '<section><h3>'+esc(group.label)+'</h3><div>'+pages.map(function (page) {
+        return routeLink(page,PAGE_HEADS[page][0],icon(group.icon));
+      }).join('')+'</div></section>';
+    });
+    var results=$('searchResults');
+    results.innerHTML = count ? sections.join('') : '<p class="nav-empty">没有找到相关功能。可试试“登录”“记忆”或“语音”。</p>';
+    results.scrollTop=0;
+    $('navMatchCount').textContent = '找到 '+count+' 个功能';
+    bindRoutes(results);
+  }
+  function openNavigator(search, fromHistory, opener) {
+    var dialog=$('workspaceNavigator');
+    if (dialog.open) { if(search)$('navSearch').focus(); return; }
+    if (!$('modal').hidden || document.querySelector('dialog[open]')) return;
+    var active=opener||document.activeElement;
+    navigatorOpener=active&&active!==document.body&&active!==document.documentElement?active:$('openNavigator');
+    $('navSearch').value='';
+    renderSearch();
+    if (!fromHistory) history.pushState(Object.assign({},history.state,{bridgePage:routeIndex,bridgeNavigator:true}),'',location.href);
+    dialog.showModal();
+    (search ? $('navSearch') : $('closeNavigator')).focus({preventScroll:true});
+  }
+  function closeNavigatorDialog() {
+    $('workspaceNavigator').close();
+    var opener=navigatorOpener?.isConnected?navigatorOpener:$('openNavigator');
+    navigatorOpener=null;
+    opener?.focus({preventScroll:true});
+  }
+  function dismissNavigator() {
+    var dialog=$('workspaceNavigator');
+    if (!dialog.open) return Promise.resolve();
+    closeNavigatorDialog();
+    if (!history.state?.bridgeNavigator) return Promise.resolve();
+    return new Promise(function (resolve) {
+      navigatorReturn=resolve;
+      history.back();
+    });
+  }
+  function handleNavigatorKey(event) {
+    if(event.isComposing)return;
+    // A nonempty search field consumes Escape to clear itself before dialog cancel fires.
+    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();void dismissNavigator();return;}
+    var input=$('navSearch'), links=Array.from($('searchResults').querySelectorAll('[data-go]')), at=links.indexOf(document.activeElement);
+    if(event.target!==input&&at<0)return;
+    if(event.key==='Enter'&&event.target===input&&links[0]){event.preventDefault();links[0].click();}
+    if(event.key==='ArrowDown'&&links.length){event.preventDefault();links[Math.min(at+1,links.length-1)].focus();}
+    if(event.key==='ArrowUp'&&at>=0){event.preventDefault();(at>0?links[at-1]:input).focus();}
+  }
+  async function followHistory() {
+    if (navigatorReturn) { var resolve=navigatorReturn; navigatorReturn=null; resolve(); }
+    if (history.state?.bridgeNavigator) { openNavigator(false,true); return; }
+    var dialog=$('workspaceNavigator');
+    if (dialog.open) closeNavigatorDialog();
+    var hash=location.hash.slice(1);
+    var requested=PAGE_HEADS[hash]&&pageVisible(hash)?hash:'overview';
+    if (hash!==requested) history.replaceState(history.state,'','#'+requested);
+    if (historyBusy || requested===tab) return;
+    historyBusy=true;
+    var priorIndex=routeIndex;
+    var incoming=history.state?.bridgePage;
+    try {
+      await navigate(requested,false);
+      if (location.hash.slice(1)===tab) {
+        routeIndex=Number.isInteger(incoming)?incoming:priorIndex+1;
+        history.replaceState(Object.assign({},history.state,{bridgePage:routeIndex}),'',location.href);
+      } else if (Number.isInteger(incoming)&&incoming!==priorIndex) {
+        history.go(priorIndex-incoming);
+      } else {
+        history.replaceState(Object.assign({},history.state,{bridgePage:priorIndex}),'','#'+tab);
+      }
+    } finally { historyBusy=false; }
   }
   function renderThemeControl() {
-    var label = { auto: '跟随宿主 / 系统', light: '浅色', dark: '深色' }[themeMode];
-    $('themeToggle').innerHTML = icon(themeMode === 'auto' ? 'monitor' : themeMode === 'dark' ? 'moon' : 'sun');
-    $('themeToggle').title = '当前主题：' + label + '，点击切换';
-    $('themeToggle').setAttribute('aria-label', '当前主题：' + label + '，点击切换');
+    var dialog=$('appearanceDialog'), root=document.documentElement;
+    var selected=[];
+    dialog.querySelectorAll('input[type="radio"]').forEach(function(input){
+      input.checked=input.value===(input.name==='appearance-mode'?root.dataset.themeMode:root.dataset.accent);
+      if(input.checked)selected.push(input.labels[0].textContent.trim());
+    });
+    $('themeToggle').title='界面外观 · '+selected.join(' · ');
+  }
+  function bindAppearance(){
+    var dialog=$('appearanceDialog'), button=$('themeToggle');
+    button.onclick=function(){
+      if(dialog.open)return;
+      renderThemeControl();
+      dialog.showModal();
+      dialog.querySelector('[name="appearance-mode"]:checked')?.focus({preventScroll:true});
+    };
+    $('closeAppearance').onclick=function(){dialog.close();};
+    dialog.onclose=function(){button.focus({preventScroll:true});};
+    dialog.onclick=function(event){
+      if(event.target!==dialog)return;
+      var bounds=dialog.getBoundingClientRect();
+      if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)dialog.close();
+    };
+    dialog.onchange=function(event){
+      var input=event.target;
+      if(input.type!=='radio'||!input.checked)return;
+      var saved=window.QQBridgeAppearance.choose(input.name==='appearance-mode'?'mode':'accent',input.value);
+      $('appearanceStatus').textContent=saved?'':'浏览器限制了本地存储，当前选择仅在此页面有效。';
+    };
+    window.addEventListener('qqbridge-appearance-change',renderThemeControl);
+    renderThemeControl();
   }
   function initNavigation() {
-    $('tabs').innerHTML = NAV_GROUPS.map(function (g) {
-      return '<button class="tab" data-group="' + g.id + '">' + icon(g.icon) + '<span><b>' + g.label + (g.id === 'home' ? ' <em class="nav-version" id="ver">v—</em>' : '') + '</b><small>' + g.note + '</small></span><span class="nav-arrow">›</span></button>';
-    }).join('');
-    if ($('ver')) $('ver').textContent = 'v' + (window.__bridgeVersion || '—');
-    Array.prototype.forEach.call(document.querySelectorAll('[data-group]'), function (btn) {
-      btn.onclick = function () { var g = NAV_GROUPS.filter(function (item) { return item.id === btn.getAttribute('data-group'); })[0]; navigate(groupLastPages[g.id] || g.pages[0]); };
-    });
-    var hash = location.hash.slice(1);
-    tab = PAGE_HEADS[hash]&&pageVisible(hash) ? hash : 'overview';
-    groupLastPages[groupFor(tab).id] = tab;
+    if (!navEventsBound) {
+      var hash=location.hash.slice(1);
+      tab=PAGE_HEADS[hash]&&pageVisible(hash)?hash:'overview';
+      history.replaceState(Object.assign({},history.state,{bridgePage:routeIndex}),'','#'+tab);
+      expandedSection=groupFor(tab).id;
+    }
+    renderWorkspaceNav();
+    if ($('workspaceNavigator').open) renderSearch();
+    $('ver').textContent='v'+(data?.status?.version||window.__bridgeVersion||'—');
     syncNavigation();
     $('refreshIcon').innerHTML = icon('refresh');
     $('refresh').onclick = async function () { var btn = this; btn.disabled = true; btn.classList.add('refreshing'); try { var loaded = await load({refreshCompanion:true});if (loaded !== false) toast('数据已刷新'); } finally { btn.disabled = false; btn.classList.remove('refreshing'); } };
-    $('themeToggle').onclick = function () { themeMode = { auto: 'light', light: 'dark', dark: 'auto' }[themeMode]; try { localStorage.setItem('qqb-ui-theme', themeMode); } catch (e) {} applyTheme(); renderThemeControl(); };
-    renderThemeControl();
-    $('navSearch').oninput = renderSearch;
-    $('navSearch').onfocus = renderSearch;
-    $('navSearch').onkeydown = function (event) {
-      if (event.key === 'Escape') { closeSearch(); this.blur(); }
-      if (event.key === 'ArrowDown') { var next = $('searchResults').querySelector('[data-go]'); if (next) { event.preventDefault(); next.focus(); } }
-      if (event.key === 'Enter') { var first = $('searchResults').querySelector('[data-go]'); if (first && !$('searchResults').hidden) first.click(); }
-    };
-    $('searchResults').onkeydown = function (event) {
-      var buttons = Array.prototype.slice.call(this.querySelectorAll('[data-go]'));
-      var at = buttons.indexOf(document.activeElement);
-      if (event.key === 'ArrowDown' && at < buttons.length - 1) { event.preventDefault(); buttons[at + 1].focus(); }
-      if (event.key === 'ArrowUp') { event.preventDefault(); if (at > 0) buttons[at - 1].focus(); else $('navSearch').focus(); }
-      if (event.key === 'Escape') { closeSearch(); $('navSearch').focus(); closeSearch(); }
-    };
-    if(!navEventsBound){navEventsBound=true;
-    document.addEventListener('click', function (event) { if (!event.target.closest('.feature-search')) closeSearch(); });
-    document.addEventListener('keydown', function (event) { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('navSearch').focus(); } });
-    window.addEventListener('popstate', function () { navigate(location.hash.slice(1), false); });
-    window.addEventListener('hashchange', function () { if (tab !== location.hash.slice(1)) navigate(location.hash.slice(1), false); });
+    $('openNavigator').onclick=function(){openNavigator(true,false,this);};
+    $('openNavigator').querySelector('kbd').textContent=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘ K':'Ctrl K';
+    $('closeNavigator').onclick=dismissNavigator;
+    var dialog=$('workspaceNavigator');
+    dialog.oncancel=function(event){event.preventDefault();void dismissNavigator();};
+    dialog.onclick=function(event){if(event.target!==dialog)return;var rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)void dismissNavigator();};
+    $('navSearch').oninput=renderSearch;
+    dialog.onkeydown=handleNavigatorKey;
+    if(!navEventsBound){
+      navEventsBound=true;
+      document.addEventListener('keydown',function(event){if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openNavigator(true);}});
+      window.addEventListener('popstate',followHistory);
+      window.addEventListener('hashchange',followHistory);
+      if(history.state?.bridgeNavigator)openNavigator(false,true);
     }
     bindRoutes();
   }
@@ -364,11 +516,16 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   function viewPromptManager(){setTimeout(function(){var frame=$('promptManagerFrame');if(frame)frame.addEventListener('load',resizePromptEditor);resizePromptEditor();},0);return '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button data-go="model" class="small ghost">← 返回模型设置</button><a href="/im-bridge/prompt-manager">独立打开编辑器 ↗</a></div><iframe id="promptManagerFrame" src="/im-bridge/prompt-manager" title="提示词管理 · 中文编辑" style="display:block;width:100%;max-width:100%;min-width:0;height:500px;border:1px solid #d6e6f8;border-radius:16px;background:#f2f7fd"></iframe>'; }
 
   function viewDeviceProfiles(){
-    var p=deviceProfileData;if(!p)return '<div class="card"><h2>设备连接配置</h2><p>重新加载插件后可在这里查看当前设备的连接配置。</p></div>';
-    var device=p.runtimeDevice,c=p.profiles[device],names={phone:'手机版',desktop:'电脑版'};
+    var p=deviceProfileData,device=p?.runtimeDevice,c=p?.profiles?.[device],names={phone:'手机版',desktop:'电脑版'};
+    if(!Object.hasOwn(names,device)||!c||typeof c.wsUrl!=='string')return '<div class="card"><h2>设备连接配置</h2><p>未取得当前设备的连接配置。</p><button class="small" id="retryDeviceProfile">重试读取</button></div>';
     return '<div class="card"><h2>'+names[device]+'连接配置</h2><p>群聊自主参与、图片理解、语音和回执处理共用同一套规则，当前插件版本 '+esc(p.version)+'。这里保存的就是当前设备使用的连接配置；换到另一台设备运行时会读取那台设备自己的配置，聊天与记忆逻辑保持一致。</p><div class="form-two"><label class="field">QQ 连接地址<input id="profileWsUrl" value="'+esc(c.wsUrl)+'"></label><label class="field">连接令牌<input id="profileToken" type="password" autocomplete="new-password" placeholder="'+(c.hasAccessToken?'已保存，留空保留':'未设置')+'"></label></div><label class="check-field"><input id="profileClearToken" type="checkbox">清除这套配置保存的连接令牌</label><label class="field">NapCat 目录<input id="profileNapcatDir" value="'+esc(c.napcatDir)+'"></label>'+(device==='desktop'?'<label class="field">启动器路径（留空自动选择）<input id="profileLauncher" value="'+esc(c.launcher)+'"></label>':'<p class="muted">手机版自动使用 DSH Go 本机 QQ 服务和手机媒体工具。</p>')+'<div class="btnrow"><button id="profileSave">保存'+names[device]+'配置</button></div><p id="profileResult" role="status" aria-live="polite">只影响当前设备的连接方式，不会改变聊天与记忆。</p></div>';
   }
   function bindDeviceProfiles(){
+    if($('retryDeviceProfile'))$('retryDeviceProfile').onclick=async function(){
+      var btn=this;btn.disabled=true;
+      try{var result=await api('GET','/im-bridge/device-profiles');if(btn.isConnected){deviceProfileData=result;renderPane();}}
+      catch(e){toast('读取设备连接配置失败：'+e.message);}finally{if(btn.isConnected)btn.disabled=false;}
+    };
     if(!deviceProfileData)return;
     if($('profileSave'))$('profileSave').onclick=async function(){var button=this,device=deviceProfileData.runtimeDevice;if(deviceProfileSaving||deviceUiSwitchBusy)return;deviceProfileSaving=true;button.disabled=true;try{deviceProfileData=await api('POST','/im-bridge/device-profiles',{action:'save',device:device,profile:{wsUrl:$('profileWsUrl').value,accessToken:$('profileToken').value,clearToken:$('profileClearToken').checked,napcatDir:$('profileNapcatDir').value,launcher:$('profileLauncher')?.value||''}});if($('profileToken'))$('profileToken').value='';if($('profileClearToken'))$('profileClearToken').checked=false;if($('profileResult'))$('profileResult').textContent=deviceProfileData.applied?'当前设备配置已保存并应用。':'配置已保存，下次在这台设备运行时生效。';if(renderedTab==='devices'){formBaselines.devices.profileToken='';formBaselines.devices.profileClearToken=false;rememberDraft('devices');renderDraftNotice();}toast('设备配置已保存');}catch(e){if($('profileResult'))$('profileResult').textContent=e.message;toast(e.message);}finally{deviceProfileSaving=false;if(button.isConnected)button.disabled=false;}};
   }
@@ -416,6 +573,8 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
 
   function renderPane() {
+    rememberTranscript();
+    var revision = ++paneRevision;
     document.body.dataset.promptEditor=String(tab==='prompts');
     if(qzoneHealthTimer){clearInterval(qzoneHealthTimer);qzoneHealthTimer=null;}
     if(tab!=='local')stopLocalRunWatch();if(invocationTimer){clearInterval(invocationTimer);invocationTimer=null;}
@@ -423,19 +582,40 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     rememberDraft(renderedTab);
     stopQrWatch();
     var group = groupFor(tab);
-    var renderers = { prompts:viewPromptManager,daily:rebuiltDaily,diary:rebuiltDiary,star:rebuiltStar,study:viewStudy,songs:viewSongs,devices: viewDevices, delivery: viewDelivery, activity: viewActivity, invocations:viewInvocations,directives:viewDirectives, qzone:viewQzone, profiles: viewProfiles, backup: viewBackup, overview: companionHome, monitor: viewMonitor, send: viewSend, sessions: viewSessions, persona: viewPersona, memory: viewMemory, autonomy: viewAutonomy, thoughts: viewThoughts, sticker: viewSticker, collect: viewCollect, photo: viewPhoto, voice: viewVoiceCard, imagegen: viewImagegen, videogen:viewVideogen, connection: viewConnection, services: viewServiceConnections, bilibili: viewBilibili, websitemcp: viewWebsiteMcp, local: viewLocal, whitelist: viewWhitelist, model: viewModelSettings, storage: viewStorage, logs: viewLogs };
+    var renderers = { api:viewApiServices,apisong:viewApiSinging,maintenance:viewMaintenance,prompts:viewPromptManager,daily:rebuiltDaily,diary:rebuiltDiary,star:rebuiltStar,study:viewStudy,songs:viewSongs,devices: viewDevices, delivery: viewDelivery, activity: viewActivity, invocations:viewInvocations,directives:viewDirectives, qzone:viewQzone, guild:guildView, profiles: viewProfiles, backup: viewBackup, overview: companionHome, monitor: viewMonitor, send: viewSend, sessions: viewSessions, persona: viewPersona, memory: viewMemory, autonomy: viewAutonomy, thoughts: viewThoughts, sticker: viewSticker, collect: viewCollect, photo: viewPhoto, voice: viewVoiceCard, imagegen: viewImagegen, videogen:viewVideogen, connection: viewConnection, services: viewServiceConnections, bilibili: viewBilibili, websitemcp: viewWebsiteMcp, local: viewLocal, whitelist: viewWhitelist, model: viewModelSettings, storage: viewStorage, logs: viewLogs };
     var head = PAGE_HEADS[tab];
     var samePage = renderedTab === tab;
     const audioScope=String(data.settings.activeAccountId||'');
     const previousAudio=samePage?document.querySelector('[data-rh-audio]'):null;
-    var panelView = samePage ? capturePanelView($('pane')) : null;
+    if(routeViewScope!==formScope(data)){routeViews.clear();routeViewScope=formScope(data);}
+    var panelView = samePage ? capturePanelView($('pane')) : routeViews.get(tab);
     var spendView = samePage&&tab==='overview'&&$('homeSpend')?.dataset.scope===homeSpendScope() ? $('homeSpend') : null;
     var html = '<div class="pagehead"><div><div class="page-eyebrow">' + (group.id === 'home' ? 'OVERVIEW' : group.label) + '</div><h1>' + head[0] + '</h1><p>' + head[1] + '</p></div><span class="page-decoration">' + icon(group.icon) + '</span></div>';
     if (group.pages.length > 1) html += renderPageNavigation(group,tab,PAGE_HEADS,esc);
+    if(tab==='overview')html='<header class="home-heading"><h1>'+head[0]+'</h1><div class="home-build">'+(data.status.version?'<span>v'+esc(data.status.version)+'</span>':'')+'<span id="liveSnapshot">'+(lastSnapshotAt?'同步于 '+new Date(lastSnapshotAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):'正在同步')+'</span></div></header>';
+    var missing = (pageReads[tab] || []).filter(function (key) { return readPageResource(key).status !== 'ready'; });
+    if (missing.length) {
+      var loading = missing.some(function (key) { return pageResources.get(key).status === 'loading'; });
+      var failed = loading ? [] : missing;
+      var message = failed.length ? failed.map(function (key) { return pageResourceLabels[key] + '未加载：' + pageResources.get(key).error; }).join('；')
+        : '正在读取' + missing.map(function (key) { return pageResourceLabels[key]; }).join('、') + '…';
+      $('pane').innerHTML = html + '<div class="card" role="status"><p>' + esc(message) + '</p>' +
+        (failed.length ? '<button class="small" id="retryPageData">重试本页</button>' : '') + '</div>';
+      renderedTab = '';
+      clearInterval(monitorTimer); monitorTimer = null;
+      syncNavigation(); bindRoutes(); syncFloatingSave();
+      if (failed.length) {
+        $('retryPageData').onclick = function () { failed.forEach(function (key) { pageResources.delete(key); }); return renderPane(); };
+        return false;
+      }
+      return Promise.all(missing.map(function (key) { return pageResources.get(key).promise; })).then(function () {
+        if (revision === paneRevision) return renderPane();
+      });
+    }
     html += '<div class="draft-notice" id="draftNotice" hidden><span id="draftText"></span><button class="small ghost" id="discardDraft">放弃修改</button></div>';
-    if (tab === 'overview') html += '<div class="dashboard-live"><span class="live-label"><i class="status-dot online"></i><span id="liveSnapshot">实时同步状态</span></span></div>';
-    const audioSettings=tab==='voice'?'speech':tab==='local'?'speech,sing':'';
-    html += '<div class="page-content page-' + tab + '">' + renderers[tab]() + (audioSettings?'<div data-rh-audio="'+audioSettings+'"></div>':'') + '</div>';
+    const audioSettings=tab==='voice'?'speech':tab==='apisong'?'sing':'';
+    var pageBody=renderers[tab]()+(audioSettings?'<div data-rh-audio="'+audioSettings+'"></div>':'');
+    html += '<div class="page-content page-' + tab + '">' + capabilityPageMarkup(tab,pageBody) + '</div>';
     $('pane').innerHTML = html;
     const nextAudio=document.querySelector('[data-rh-audio]');
     if(nextAudio&&previousAudio?.dataset.rhScope===audioScope)nextAudio.replaceWith(previousAudio);
@@ -452,28 +632,40 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     applyOpenPermissionControls();
     startFormTracking();
     bindEnhancements();bindInvocations();bindDirectives();
-    bindFeatureUI();bindQzone();
+    bindFeatureUI();bindQzone();bindGuild(api);
     bindCompanionPanel();
+    if(tab==='overview'){
+      bindHomeQQProfile();
+      var details=$('homeRecent')?.closest('details');
+      if(details){details.addEventListener('toggle',paintHomeRecent);if(details.open)void paintHomeRecent();}
+    }
     bindRebuiltCompanion();
     if(mobileApiOnly()){['agWorkspace','igDir','cacheInput','memDir'].forEach(function(id){var el=$(id);if(el&&id!=='cacheInput'&&id!=='memDir')el.closest('label')?.setAttribute('data-desktop-only','');});if($('cacheInput'))$('cacheInput').placeholder='手机内的目录，留空使用默认位置';if($('agDesktop')){$('agDesktop').checked=false;$('agDesktop').disabled=true;$('agDesktop').closest('label')?.setAttribute('hidden','');}if($('agWorkspace'))$('agWorkspace').closest('label')?.remove();}
     applyPreviewControls();
     if(tab==='devices')bindDevices();
     bindVoiceStudio();
+    void bindCapabilityPage();
     const runningHubAudio=document.querySelector('[data-rh-audio]');
     if(runningHubAudio&&!runningHubAudio.dataset.rhReady)void import('./runninghub-audio-ui.js').then(({mountRunningHubAudio})=>{
       if(runningHubAudio.isConnected&&!runningHubAudio.dataset.rhReady){
         mountRunningHubAudio(runningHubAudio,{settings:data.settings.voice.runninghub,api,esc});
         runningHubAudio.dataset.rhReady='true';
         runningHubAudio.dataset.rhScope=audioScope;
+        startFormTracking();
       }
     }).catch(()=>{if(runningHubAudio.isConnected)runningHubAudio.textContent='RunningHub 音频设置暂未加载，请重新加载 QQ 桥接。';});
     syncFloatingSave();
     if (tab === 'logs') loadLog();
     if(panelView)restorePanelView($('pane'),panelView);else window.scrollTo({left:0,top:0,behavior:'instant'});
+    if(tab==='monitor')bindTranscript();
     if (monitorTimer) { clearInterval(monitorTimer); monitorTimer = null; }
     if (tab === 'monitor') monitorTimer = setInterval(function () {
-      if (tab !== 'monitor' || (document.activeElement && document.activeElement.closest('.modal'))) return;
-      api('GET', '/im-bridge/messages').then(function (v) { if (tab === 'monitor') { monitor = v; renderPane(); } }).catch(function () {});
+      var editing = () => document.activeElement?.matches('#monitorChat,#monSearch') || document.activeElement?.closest('.modal');
+      if (tab !== 'monitor' || document.hidden || editing()) return;
+      var revision = paneRevision;
+      api('GET', '/im-bridge/messages').then(function (v) {
+        if (tab === 'monitor' && paneRevision === revision && !editing()) { monitor = v; renderPane(); }
+      }).catch(function () {});
     }, 2000);
   }
   function enhanceCards() {
@@ -542,64 +734,52 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     return out;
   }
 
-  function viewOverview() {
-    var st = data.status;
-    var settings = data.settings;
-    var cost = st.cost || {};
-    var auto = st.autonomy || { config: {}, state: {} };
-    var counts = auto.state.counts || {};
-    var persona = st.personaName || st.preset || '未选择人设';
-    var stateLabel = st.accountPaused ? '连接已暂停' : (st.connected ? '一切就绪，聊点什么吧。' : '连接你的第一个对话。');
-    var day = new Date();
-    var dayText = day.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
-    var out = '<div class="dashboard">';
-    out += '<section class="welcome"><div class="eyebrow">YOUR EVERYDAY COMPANION<span>' + esc(dayText) + '</span></div>' +
-      '<div class="welcome-body"><div><span class="welcome-status"><i class="status-dot ' + (st.connected ? 'online' : '') + '"></i>' + (st.connected ? '机器人在线' : '机器人未连接') + '</span>' +
-      '<h2>' + stateLabel + '</h2><p>让每一次回应，都有自己的性格。</p>' +
-      '<div class="btnrow"><button class="primary" data-go="' + (st.connected ? 'monitor' : 'connection') + '">' + icon(st.connected ? 'chat' : 'link') + (st.connected ? '查看对话' : '设置连接') + '</button>' +
-      '<button class="hero-secondary" data-go="persona">调整角色 ' + icon('arrow') + '</button></div></div>' +
-      '<div class="bridge-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>' +
-      '<div class="float-bubble bubble-one">' + icon('chat') + '</div><div class="float-bubble bubble-two">' + icon('spark') + '</div>' +
-      '<div class="bridge-mark"><svg viewBox="0 0 110 86" fill="none"><path d="M16 39C15 19 35 9 55 13c13 3 19 13 19 24 9 0 13-7 20-13 0 17-7 31-24 32-8 14-26 20-42 10C18 60 15 50 16 39Z" fill="currentColor"/><path d="M33 54c6 5 16 6 24 1" stroke="#dceee6" stroke-width="3" stroke-linecap="round"/><circle cx="37" cy="34" r="3.5" fill="#dceee6"/><path d="M47 6c2-5 8-5 10-1M61 8c6-4 11-1 10 4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></div>' +
-      '<span class="art-caption">QQ ↔ DSH</span></div></div></section>';
-    out += '<section class="card companion-card"><div class="section-heading"><span class="eyebrow">当前角色</span><span class="tag accent-tag">' + (st.connected ? '正在陪伴' : '已配置') + '</span></div>' +
-      '<div class="companion-avatar">' + icon('whale') + '</div><h2>' + esc(persona) + '</h2><p>每个对话，都延续同一个她。</p>' +
-      '<div class="companion-meta"><span>记忆 <b>' + (settings.memory && settings.memory.enabled ? '已开启' : '已关闭') + '</b></span><span>语音 <b>' + (settings.voice && settings.voice.enabled ? '已开启' : '已关闭') + '</b></span></div>' +
-      '<button class="companion-edit" data-go="persona">管理角色设定 ' + icon('arrow') + '</button></section>';
-    var metrics = [
-      ['chat', (st.chats || []).length, '活跃会话', '独立上下文，持续聊天', 'sessions'],
-      ['users', (st.allowUsers || []).length + (st.allowGroups || []).length, '可用联系人 / 群', '管理谁可以与她交流', 'whitelist'],
-      ['wallet', '¥' + Number(cost.today || 0).toFixed(3), '今日预估花费', '本轮 ¥' + Number(cost.last || 0).toFixed(4), 'model'],
-      ['image', (data.stickerFiles || []).length, '表情素材', '给对话多一点表情', 'sticker']
-    ];
-    out += '<div class="metric-grid">' + metrics.map(function (m) {
-      return '<button class="metric" data-go="' + m[4] + '"><span class="metric-label">' + m[2] + icon(m[0]) + '</span><b>' + m[1] + '</b><span class="metric-caption">' + m[3] + icon('arrow') + '</span></button>';
-    }).join('') + '</div>';
-    out += '<section class="card quick-card"><div class="section-heading"><h2>从这里开始</h2><span class="muted">常用操作，一步直达</span></div><div class="quick-grid">';
-    [
-      ['send', 'send', '发送消息', '文字、语音或表情'],
-      ['persona', 'spark', '编辑人设', '让她更像你想的样子'],
-      ['sticker', 'image', '整理素材', '上传、分组与停用'],
-      ['autonomy', 'sun', '主动互动', '主动日常与休息']
-    ].forEach(function (item) {
-      out += '<button class="quick-action" data-go="' + item[0] + '"><span class="quick-icon">' + icon(item[1]) + '</span><span><b>' + item[2] + '</b><small>' + item[3] + '</small></span>' + icon('arrow') + '</button>';
-    });
-    out += '</div></section>';
-    var recent = ((monitor && monitor.messages) || []).slice(-4).reverse();
-    out += '<section class="card recent-card"><div class="section-heading"><h2>最近对话</h2><button class="text-link" data-go="monitor">查看全部 ' + icon('arrow') + '</button></div>';
-    if (!recent.length) out += '<div class="empty">' + icon('chat') + '<b>第一句，从这里开始</b><span>连接 QQ 后，聊天记录会出现在这里。</span><button class="small" data-go="connection">前往账号与连接</button></div>';
-    recent.forEach(function (m) {
-      out += '<div class="recent-item"><span class="message-avatar ' + (m.dir === 'out' ? 'from-bot' : '') + '">' + icon(m.dir === 'out' ? 'whale' : 'user') + '</span>' +
-        '<div><b>' + esc(m.dir === 'out' ? persona : notesLabel(m.chat || '')) + '<time>' + esc(new Date(m.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })) + '</time></b><p>' + esc(m.text || (m.file ? '[图片]' : '[附件]')) + '</p></div></div>';
-    });
-    out += '</section><section class="card activity-card"><div class="section-heading"><h2>今天的主动互动</h2><span class="state-label"><i class="status-dot ' + (auto.config.enabled ? 'online' : '') + '"></i>' + (auto.config.enabled ? '已开启' : '未开启') + '</span></div>' +
-      '<div class="activity-numbers"><span><b>' + (counts.chats || 0) + '</b>主动找人</span><span><b>' + (counts.signature || 0) + '</b>更新签名</span><span><b>' + (counts.qzone || 0) + '</b>空间动态</span></div>' +
-      '<p class="muted">主动聊天、追问与补充回复，都可以按你的节奏来。</p><button class="activity-link" data-go="autonomy">设置互动节奏 ' + icon('arrow') + '</button></section>';
-    out += walletMarkup();
-    out += '<div class="dashboard-note">' + viewUsageNote() + '<span>' + icon('shield') + '本地运行 · QQ / IM 桥接</span></div></div>';
-    return out;
+  async function paintHomeRecent(){
+    var box=$('homeRecent');
+    if(!box?.closest('details')?.open)return;
+    if(!monitor){
+      box.textContent='正在读取最近对话…';
+      var record=readPageResource('messages');
+      await record.promise;
+      if(!box.isConnected||pageResources.get('messages')!==record)return;
+      if(record.status==='failed'){
+        box.innerHTML='<p class="muted">最近对话读取失败：'+esc(record.error)+'</p><button class="small">重试</button>';
+        box.querySelector('button').onclick=function(){pageResources.delete('messages');return paintHomeRecent();};
+        return;
+      }
+    }
+    var recent=monitor.messages.slice(-4).reverse(),persona=data.status.personaName||data.status.preset||'未选择人设';
+    box.innerHTML=recent.length?recent.map(function(m){
+      return '<div class="recent-item"><span class="message-avatar '+(m.dir==='out'?'from-bot':'')+'">'+icon(m.dir==='out'?'whale':'user')+'</span>'+
+        '<div><b>'+esc(m.dir==='out'?persona:notesLabel(m.chat||''))+'<time>'+esc(new Date(m.time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))+'</time></b><p>'+esc(m.text||(m.file?'[图片]':'[附件]'))+'</p></div></div>';
+    }).join(''):'<div class="empty">'+icon('chat')+'<b>第一句，从这里开始</b><span>连接 QQ 后，聊天记录会出现在这里。</span><button class="small" data-go="connection">前往账号与连接</button></div>';
+    var connect=box.querySelector('[data-go="connection"]');if(connect)connect.onclick=function(){navigate('connection');};
   }
 
+  function viewOverview() {
+    const st = data.status, settings = data.settings, activity = st.autonomy || {};
+    const counts = activity.state?.counts || {}, cost = st.cost || {};
+    const stateLabel = value => value === true ? '已开启' : value === false ? '已关闭' : '状态未提供';
+    const resources = [
+      ['sessions', '活跃会话', st.chats?.length],
+      ['whitelist', '允许联系的人与群', Array.isArray(st.allowUsers) && Array.isArray(st.allowGroups) ? st.allowUsers.length + st.allowGroups.length : undefined],
+      ['sticker', '表情素材', data.stickerFiles?.length]
+    ];
+    const summary = resources.map(([page, label, value]) =>
+      '<button type="button" data-go="'+page+'"><span>'+label+'</span><b>'+esc(value ?? '—')+'</b>'+icon('arrow')+'</button>'
+    ).join('');
+    const spend = [cost.today != null ? '今日估算 ¥'+Number(cost.today).toFixed(3) : '', cost.last != null ? '上次调用 ¥'+Number(cost.last).toFixed(4) : ''].filter(Boolean).join(' · ');
+    return '<div class="home-management">'+
+      '<section><div class="home-section-head"><h3>角色与会话</h3><button type="button" data-go="persona">编辑人设</button></div>'+
+      '<p>'+esc(st.personaName || st.preset || '未选择人设')+' · 记忆'+stateLabel(settings.memory?.enabled)+' · 语音'+stateLabel(settings.voice?.enabled)+'</p>'+
+      '<div class="home-management-list">'+summary+'</div>'+
+      '<div class="btnrow">'+homeAction('send','发送消息','send')+homeAction('model','模型设置','settings')+'</div>'+
+      (spend?'<small>'+esc(spend)+'</small>':'')+'</section>'+
+      '<section><div class="home-section-head"><h3>主动互动</h3><button type="button" data-go="autonomy">设置互动</button></div>'+
+      '<p>主动互动'+stateLabel(activity.config?.enabled)+'</p><dl class="home-count-list">'+
+      [['主动找人',counts.chats],['更新签名',counts.signature],['空间动态',counts.qzone]].map(([label,value])=>'<div><dt>'+label+'</dt><dd>'+esc(value ?? (activity.state?.counts ? 0 : '—'))+'</dd></div>').join('')+
+      '</dl></section>'+homeLauncherCard()+walletMarkup()+viewUsageNote()+'</div>';
+  }
 
   function localJson(response) {
     return response.text().then(function (text) {
@@ -654,7 +834,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     return fetch('/im-bridge/local/status',{cache:'no-store'}).then(function(response){
       if(response.status===404)return fetch('/im-bridge/local',{cache:'no-store'}).then(localJson).then(function(value){return {version:value.version,hostVersion:data?.status?.version,execution:value.execution,comfyQueue:value.queue};});
       return localJson(response);
-    }).then(function(value){paintLocalRun(value);}).catch(function(error){if($('localRunBadge'))$('localRunBadge').textContent='离线 / 状态读取失败';if($('localRunCurrent'))$('localRunCurrent').textContent='未取得最新状态：'+error.message+'。下方保留的是上一次已读取结果。';}).finally(function(){localRunBusy=false;});
+    }).then(function(value){paintLocalRun(value);}).catch(function(error){if($('localRunBadge'))$('localRunBadge').textContent='本地推理状态暂未取得';if($('localRunCurrent'))$('localRunCurrent').textContent='未取得最新状态：'+error.message+'。下方保留的是上一次已读取结果。';}).finally(function(){localRunBusy=false;});
   }
   function stopLocalRunWatch(){if(localRunTimer)clearInterval(localRunTimer);localRunTimer=null;}
   function startLocalRunWatch(){stopLocalRunWatch();if(localRunSnapshot)paintLocalRun(localRunSnapshot);void refreshLocalRun();localRunTimer=setInterval(refreshLocalRun,2000);}
@@ -775,7 +955,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     return outputs;
   }
   async function applyLocalChatWorkflow(id) {
-    var config=Object.assign({},captureLocalForm(),{backend:'comfyui',chatWorkflow:id}),result=await localPost({action:'save',gatewayUrl:$('localGatewayUrl').value.trim(),config:config,enabled:true,apiComplement:false,disableMixedRoutes:true});
+    var config=Object.assign({},captureLocalForm(),{backend:'comfyui',chatWorkflow:id}),result=await localPost({action:'save',gatewayUrl:$('localGatewayUrl').value.trim(),config:config,enabled:true});
     if(result.config?.chatWorkflow!==id)throw Error('网关未确认选中的聊天工作流，请检查运行版本');
     if(result.verified!==true||result.localChat?.enabled!==true||result.localChat?.apiComplement===true||result.routing?.routes?.enabled===true)throw Error('后台未确认纯本地模式，请重启 DSH 后刷新检查；没有把配置保存冒充模式切换成功');
     localConfigDraft=null;localDraftEditing=false;await localRefresh();renderPane();toast('已确认工作流并切换为纯本地，API 补全已关闭');
@@ -792,7 +972,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       if(draft.chatWorkflow===id)draft.chatWorkflow='';
       for(var kind of ['image','video'])if(localDefaultsDraft[kind]===id)localDefaultsDraft[kind]='';
       localConfigDraft=Object.assign({},draft,{workflowLibrary:localWorkflowDraft,defaultWorkflows:Object.assign({},localDefaultsDraft)});
-      localDraftEditing=true;
+      localDraftEditing=!!Object.keys(pageDrafts.local||{}).length;
       if(result?.config){if(localGateway)localGateway.config=result.config;data.localChat=Object.assign({},data.localChat,result.config);}
       renderPane();toast(saved?'已删除并保存；原工作流文件保留':'已移除尚未保存的条目');
     }catch(error){toast('没有删除：'+error.message);}finally{if(button.isConnected)button.disabled=false;}
@@ -852,6 +1032,10 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         : localWorkflowDraft;
   }
 
+  function localWorkflowStructureChanged() {
+    var saved=localGateway?.config?.workflowLibrary || data?.localChat?.workflowLibrary || [];
+    return JSON.stringify(saved.map(w=>w.id))!==JSON.stringify(localWorkflowDraft.map(w=>w.id));
+  }
   function localSetValue(id, value) {
     var el = $(id);
     if (!el || document.activeElement === el) return;
@@ -908,9 +1092,9 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var s = v.status || {};
     if (v.gateway && v.gateway.reachable && s.reachable) { badge.textContent = '网关与 ComfyUI 已连接'; badge.className = 'tag accent-tag'; }
     else if (v.gateway && v.gateway.reachable) { badge.textContent = '网关已连接'; badge.className = 'tag'; }
-    else { badge.textContent = '连不上'; badge.className = 'tag'; }
+    else { badge.textContent = '本地推理网关未连接'; badge.className = 'tag'; }
     var lines = [];
-    if(v.hostVersion&&v.hostVersion!=='1.61.9')lines.push('当前运行插件 '+v.hostVersion+'；此面板为 1.61.9。请重启 DSH 加载更新，旧进程无法启用新增参数与主动工具逻辑。');
+    if(v.hostVersion&&data.status?.version&&v.hostVersion!==data.status.version)lines.push('本机网关和桥接返回了不同的插件版本，请刷新状态。');
     lines.push(v.localChat?.enabled?(v.localChat.apiComplement?'当前模式：本地，允许明确的 API 补全':'当前模式：纯本地，不使用 API 补全'):'当前模式：API；下方模型只是本地网关配置，尚未启用');
     lines.push('ComfyUI：' + (c.comfyUrl || s.baseUrl || ''));
     lines.push('聊天来源：' + (c.backend || 'comfyui') + ' · ' + (c.backend === 'openai' ? (c.modelId || '') : (c.chatWorkflow || '')));
@@ -937,6 +1121,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       vb.className = 'tag' + (v.localVoice.running ? ' accent-tag' : '');
       vi.textContent = '协议：' + (v.localVoice.engine||'未配置') + '\n地址：' + (v.localVoice.baseUrl||'未配置') + '\n设备：' + (v.localVoice.device||'gpu') + (v.localVoice.dir?'\n启动目录：'+v.localVoice.dir:'') + (v.localVoice.state==='unknown'?'\n此服务没有只读状态接口，实际合成时检查连接。':'');
     }
+    rememberDraft('local');
     if (workflowsChanged) renderPane();
   }
   function localRefresh() {
@@ -962,7 +1147,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       out += '<div class="card" data-local-workflow="' + index + '" style="margin:12px 0;background:var(--bg)"><label class="field">名称<input data-wf="name" value="' + esc(item.name || '') + '" maxlength="100"></label>' +
         '<p class="muted">'+({image:'图片工作流',video:'视频工作流',chat:'聊天模型工作流'})[item.kind]+' · '+(item.autoDetection?'已自动识别节点':'可点“重新识别”自动填写')+'</p>';
       if (item.kind === 'image' || item.kind === 'video') out += '<label class="field">LoRA 触发词／固定追加词（可选，每行一条）<textarea data-wf="triggerWords" maxlength="4000" rows="2" placeholder="只填这个工作流确实需要的触发词">'+esc(item.triggerWords||'')+'</textarea></label><p class="muted">随这条工作流保存，生成时补进提示词；模型与 LoRA 文件仍由工作流自身加载。不会据此自动切换工作流，也不需要固定服装或日程。</p>';
-      out += '<div class="btnrow"><button data-local-workflow-inspect="'+index+'">重新识别</button>'+(item.kind==='chat'?'<button data-local-use-chat="'+esc(item.id)+'">用于本地聊天</button>':'')+'</div>'+ 
+      out += '<div class="btnrow"><button data-local-workflow-inspect="'+index+'">重新识别</button>'+(item.kind==='chat'?'<button data-local-use-chat="'+esc(item.id)+'">用于本地聊天</button>':'')+'</div>'+
         '<details><summary>高级：节点映射、文件和等待时间</summary><label class="field">内部 ID<input data-wf="id" value="'+esc(item.id||'')+'"></label>'+
         '<div class="form-two"><label class="field">类型<select data-wf="kind"><option value="image"' + (item.kind === 'image' ? ' selected' : '') + '>图片</option><option value="video"' + (item.kind === 'video' ? ' selected' : '') + '>视频</option><option value="chat"'+(item.kind==='chat'?' selected':'')+'>聊天模型</option></select></label><label class="field">已导入的文件<input data-wf="file" value="' + esc(item.file || '') + '" placeholder="assets/comfyui/...json"></label></div>' +
         '<label class="field">用途备注<textarea data-wf="description" maxlength="800" rows="2" placeholder="例如：日常角色自拍，需要一张人设参考图">' + esc(item.description || '') + '</textarea></label>' +
@@ -1160,21 +1345,145 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
 
   var connectionState=null,connectionDraft=null,connectionDetection=null;
+  var localAudioState=null;
+  var capabilityLabels={chat:'聊天',image:'图片',speech:'语音',video:'视频',sing:'唱歌'};
+  function capabilityKind(page){return Object.keys(capabilityPages).find(function(k){return capabilityPages[k]===page;});}
+  function sourcesWithSinging(value){
+    var result={...(value||{}),items:[...(value?.items||[])]},config=data?.settings?.voice?.runninghub?.sing||{},local=localAudioState?.sing;
+    if(!result.items.length)result.items=['chat','image','speech','video'].map(kind=>({kind,label:capabilityLabels[kind],state:'loading',connection:'正在读取实际配置',from:'打开独立配置页',model:'',note:'读取完成后显示已保存的来源',billing:''}));
+    if(!result.items.some(r=>r.kind==='sing'))result.items.push({kind:'sing',label:'唱歌',source:local?.mode==='local'?'local':'runninghub',backend:local?.mode==='local'?'local':'api',connection:local?.mode==='local'?'本地 ComfyUI 音频工作流':'RunningHub',model:local?.mode==='local'?(local.presets||[]).find(p=>p.id===local.workflowId)?.name||'尚未选择工作流':config.presets?.find(p=>p.id===config.id)?.name||config.id||'尚未配置',from:'唱歌配置',note:'点击配置执行来源、原曲和参考音色',billing:local?.mode==='local'?'本地执行':'API 可能计费；实际调用见记录'});
+    if(localAudioState?.speech?.mode==='local')result.items=result.items.map(r=>r.kind==='speech'?{...r,backend:'local',connection:'本地 ComfyUI 音频工作流',model:localAudioState.speech.presets?.find(p=>p.id===localAudioState.speech.workflowId)?.name||'尚未选择工作流'}:r);
+    return result;
+  }
+  function capabilityHubMarkup(){
+    var lc=data?.settings?.localChat||data?.localChat||{};
+    return '<section class="card"><h2>选择要配置的功能</h2><p class="muted">点击功能框，在各自页面选择本地或 API、服务与工作流。每项单独保存，不用在多个页面找搭配选项。</p><div id="connectionEffectiveSources">'+renderServiceSources(sourcesWithSinging(connectionState?.effectiveSources),{configure:true})+'</div></section>'+
+      (!mobileApiOnly()?'<section class="card"><h2>本地模型与日程的 API 弥补能力</h2><label class="check-field"><input id="capApiComplement" type="checkbox"'+(lc.apiComplement?' checked':'')+'>本地模型不足时允许 API 补全</label><label class="check-field"><input id="capApiTaskAssist" type="checkbox"'+(lc.apiTaskAssist?' checked':'')+'>允许 API 协助理解和执行日程任务</label><p class="muted">补全开启后才可使用任务协作；实际调用会记入费用与调用记录。各项图片、语音、视频和唱歌仍按自己的来源执行。</p><button id="capAssistSave" class="primary">保存弥补能力</button><p id="capAssistStatus" role="status"></p></section><section class="card"><h2>本地网关</h2><p class="muted">地址、连接状态、模型列表、启动排错、工作流库和本地试聊集中在这里。</p><p>'+esc(lc.baseUrl||'http://127.0.0.1:8777')+'</p><button data-go="local" class="primary">打开本地网关与工作流</button><button id="capGatewayCheck">只读检查网关</button><p id="capGatewayStatus" role="status"></p></section>':'');
+  }
+  function capabilityPageMarkup(page,body){
+    var kind=capabilityKind(page);if(!kind)return body;
+    return '<section class="card capability-config" data-capability="'+kind+'"><div class="section-heading"><h2>'+capabilityLabels[kind]+'配置</h2><button data-go="services">全部功能</button></div><p>选择此功能的执行方式</p><div class="form-two"><label class="field">运行位置<select id="capMode"><option value="api">API</option>'+(!mobileApiOnly()?'<option value="local">本地</option>':'')+'</select></label><label class="field">具体来源<select id="capSource" disabled><option>正在读取…</option></select></label></div><div class="btnrow"><button id="capApply" class="primary" disabled>应用此功能的来源</button><button id="capRetry">重新读取</button>'+(!mobileApiOnly()?'<button data-go="local">本地网关</button>':'')+'</div><p id="capStatus" role="status">读取当前实际配置…</p></section>'+
+      '<section class="card" id="capRequestPanel"><h2>自动识别请求参数</h2><label class="field">粘贴请求示例<textarea id="capExample" rows="5" spellcheck="false" placeholder="完整 cURL、JSON 请求或 ComfyUI 工作流"></textarea></label><div class="btnrow"><button id="capRecognize">识别并填入配置</button><button data-go="services">连接库</button></div><p id="capImportStatus" role="status"></p></section>'+
+      '<div id="capApiBody">'+body+'</div><section class="card" id="capLocalBody" hidden><h2>本地'+capabilityLabels[kind]+'</h2><div id="capLocalFields"></div><p id="capLocalStatus" role="status"></p></section>';
+  }
+  async function bindCapabilityPage(){
+    var panel=document.querySelector('[data-capability]');if(!panel)return;
+    const kind=panel.dataset.capability,mode=$('capMode'),source=$('capSource'),status=$('capStatus');let connections=null,localConfig=null,inspection=null,audioAvailable=false;
+    const alive=()=>panel.isConnected;
+    const localAudio=kind==='sing'||kind==='speech';
+    function paintLocalAudio(){if($('capVoiceServiceFields'))$('capVoiceServiceFields').hidden=source.value!=='voice-service';if($('capAudioWorkflowFields'))$('capAudioWorkflowFields').hidden=source.value==='voice-service';}
+    function show(){
+      var local=mode.value==='local';$('capApiBody').hidden=local;$('capLocalBody').hidden=!local;
+      $('capRequestPanel').querySelector('h2').textContent=local?'自动识别本地工作流':'自动识别 API 请求参数';
+      var choices=local?localAudio?(kind==='speech'?[['voice-service','本地语音服务（VoiceLab 等）']]:[]).concat((localAudioState?.[kind]?.presets||[]).map(p=>[p.id,p.name])):kind==='speech'?[['local','本地语音服务']]:[['local','本地'+capabilityLabels[kind]]]:kind==='sing'?[['runninghub','RunningHub 唱歌工作流']]:[[kind==='chat'?'host':'legacy',kind==='chat'?'当前聊天模型设置':'当前'+capabilityLabels[kind]+' API 设置']].concat(kind==='speech'?[['runninghub','RunningHub 语音工作流']]:[]).concat((connections?.profiles||[]).filter(p=>kind==='chat'?['openai','responses','anthropic'].includes(p.type)&&p.chatModel:p.type==='openai'&&p[kind+'Model']&&(kind!=='speech'||p.voice)).map(p=>['profile:'+p.id,p.name]));
+      var previous=source.value;source.innerHTML=choices.map(p=>'<option value="'+esc(p[0])+'">'+esc(p[1])+'</option>').join('');if(choices.some(p=>p[0]===previous))source.value=previous;source.disabled=!choices.length;
+      $('capApply').disabled=!connections||!choices.length||local&&localAudio&&!audioAvailable&&!(kind==='speech'&&source.value==='voice-service');
+      paintLocalAudio();
+      if(local&&localAudio&&!audioAvailable&&source.value!=='voice-service')$('capLocalStatus').textContent='本地音频工作流执行模块已安装，将在下次正常加载插件时启用。当前桥接连接保持运行；API 配置仍可使用。';
+    }
+    async function read(){
+      $('capApply').disabled=true;
+      try{
+        const results=await Promise.allSettled([api('GET','/im-bridge/service-connections'),!mobileApiOnly()?api('GET','/im-bridge/local-audio'):Promise.resolve(null)]);if(!alive())return;
+        if(results[0].status!=='fulfilled')throw results[0].reason;connections=results[0].value;connectionState=connections;
+        if(results[1].status==='fulfilled'&&results[1].value?.state){localAudioState=results[1].value.state;audioAvailable=!localAudioState.error;}
+        const current=localAudio&&localAudioState?.[kind]?.mode==='local'?'local':connections.routes?.[kind]||'legacy';mode.value=current==='local'?'local':'api';show();source.value=current==='local'&&localAudio?(localAudioState?.[kind]?.mode==='local'?localAudioState[kind].workflowId:'voice-service'):current;
+        if(!source.value&&source.options.length)source.selectedIndex=0;
+        status.textContent='当前执行：'+(current==='local'?'本地':'API')+'。选择后点击应用，只更新此功能。';
+        if(!mobileApiOnly())await readLocal();
+        if(alive())startFormTracking();
+      }catch(e){if(alive())status.textContent='未读取到实际配置：'+e.message+'。请重试；没有更改来源。';}
+    }
+    async function readLocal(){
+      if(localAudio){
+        $('capLocalFields').innerHTML='<p>导入自己的 ComfyUI 音频工作流，核对台词、原曲和参考音色的输入，再选择工作流并应用。</p><label class="field">工作流文件<input id="capWorkflowFile" type="file" accept=".json,application/json"></label><div id="capMappings"></div><div class="form-two"><label class="field">参考音色<input id="capReferenceFile" type="file" accept="audio/*"></label>'+(kind==='sing'?'<label class="field">原曲素材<input id="capSongFile" type="file" accept="audio/*"></label>':'')+'</div>';
+        if(kind==='speech'){
+          try{const local=await api('GET','/im-bridge/local');if(!alive())return;localConfig=local.config||{};}catch{}
+          $('capLocalFields').innerHTML='<div id="capAudioWorkflowFields">'+$('capLocalFields').innerHTML+'</div><div id="capVoiceServiceFields"><h3>本地语音服务</h3>'+localVoiceConfigMarkup(localConfig?.voiceService||data.localChat?.voiceService)+'<label class="field">音色<input id="capVoicePreset" value="'+esc(localConfig?.voicePreset||'')+'"></label><button id="capVoiceSave">保存本地语音服务</button></div>';
+          $('capVoiceSave').onclick=async()=>{try{if(!localConfig)throw Error('请先连接本地网关，未覆盖已有配置');const r=await api('POST','/im-bridge/local',{action:'save',config:{voiceService:captureLocalVoiceService(),voicePreset:$('capVoicePreset').value,voiceEnabled:true}});localConfig=r.config;$('capLocalStatus').textContent='本地语音参数已保存。';startFormTracking();}catch(e){$('capLocalStatus').textContent=e.message;}};
+          paintLocalAudio();
+        }
+        for(const [id,role]of [['capReferenceFile','reference_audio'],['capSongFile','song_audio']])if($(id))$(id).onchange=async function(){try{const f=this.files[0];if(!f)return;if(f.size>16*1024*1024)throw Error('请选择16MB以内音频');const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('读取音频失败'));reader.readAsDataURL(f);});const r=await api('POST','/im-bridge/local-audio',{action:'upload',kind,role,name:f.name,data:encoded.split(',')[1]});localAudioState=r.state;$('capLocalStatus').textContent='素材已保存到本地，不上传云端。';}catch(e){$('capLocalStatus').textContent=e.message;}};
+      }else{
+        try{const r=await api('GET','/im-bridge/local');if(!alive())return;localConfig=r.config||{};}catch(e){if(alive())$('capLocalStatus').textContent=e.message+'。可打开本地网关检查地址和启动状态。';}
+        if(!alive())return;
+        const lc=localConfig||data.settings.localChat||{},entries=(lc.workflowLibrary||[]).filter(w=>w.kind===kind);
+        $('capLocalFields').innerHTML='<label class="field">当前工作流<select id="capLocalWorkflow"><option value="">尚未选择</option>'+entries.map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join('')+'</select></label>'+ (kind==='chat'?'<label class="field">本地模型协议<select id="capChatBackend"><option value="comfyui">ComfyUI 工作流</option><option value="openai">OpenAI 兼容模型服务</option></select></label><label class="field">模型服务地址<input id="capModelUrl" value="'+esc(lc.modelBaseUrl||'http://127.0.0.1:8000/v1')+'"></label><label class="field">模型 ID<input id="capModelId" value="'+esc(lc.modelId||'')+'"></label>':'')+'<label class="field">导入本地工作流<input id="capWorkflowFile" type="file" accept=".json,application/json"></label><div id="capMappings"></div><button id="capLocalSave">保存本地'+capabilityLabels[kind]+'配置</button><p><button data-go="local">网关地址、节点参数与完整工作流库</button></p>';
+        $('capLocalWorkflow').value=kind==='chat'?lc.chatWorkflow||'':lc.defaultWorkflows?.[kind]||'';
+        if(kind==='chat')$('capChatBackend').value=lc.backend||'comfyui';
+        $('capLocalSave').onclick=async()=>{try{await saveLocalParameters();$('capLocalStatus').textContent='本地参数已保存，来源选择独立生效。';startFormTracking();}catch(e){$('capLocalStatus').textContent=e.message;}};
+      }
+      if($('capWorkflowFile'))$('capWorkflowFile').onchange=async function(){try{if(this.files[0])await inspect(JSON.parse(await this.files[0].text()),this.files[0].name);}catch(e){$('capLocalStatus').textContent=e.message;}};
+    }
+    async function saveLocalParameters(){
+      if(!localConfig)throw Error('网关未连接，未覆盖当前配置');
+      const workflow=$('capLocalWorkflow').value;
+      if((kind!=='chat'||$('capChatBackend').value==='comfyui')&&!workflow)throw Error('请先选择已导入的工作流');
+      if(kind==='chat'&&$('capChatBackend').value==='openai'&&!$('capModelId').value.trim())throw Error('请填写本地服务中的模型 ID');
+      const patch=kind==='chat'?{backend:$('capChatBackend').value,modelBaseUrl:$('capModelUrl').value,modelId:$('capModelId').value,chatWorkflow:workflow}:{defaultWorkflows:{...localConfig.defaultWorkflows,[kind]:workflow}};
+      const result=await api('POST','/im-bridge/local',{action:'save',config:patch});
+      if(!result.verified||kind!=='chat'&&result.config?.defaultWorkflows?.[kind]!==workflow)throw Error('网关未确认所选工作流，未切换来源');
+      localConfig=result.config;
+    }
+    async function inspect(graph,filename){
+      if(mode.value!=='local')throw Error('请先选择本地模式再导入工作流');
+      const result=await api('POST',localAudio?'/im-bridge/local-audio':'/im-bridge/local',localAudio?{action:'inspect',kind,workflow:graph}:{action:'inspect-workflow',kind,workflow:graph,filename});if(!alive())return;
+      inspection=result;const analysis=result.analysis||result,outputs=analysis.outputs||[],candidates=analysis.candidates||{};
+      $('capMappings').innerHTML='<h3>核对自动识别结果</h3><label class="field">工作流名称<input id="capWorkflowName" value="'+esc(filename||analysis.name||'我的'+capabilityLabels[kind])+'"></label>'+Object.entries(candidates).map(([key,rows])=>'<label class="field">'+esc(({text:'台词 / 歌词',prompt:'提示词',song_audio:'原曲',reference_audio:'参考音色',song_start:'片段起点',song_end:'片段终点'})[key]||key)+'<select data-cap-map="'+esc(key)+'"><option value="">不绑定</option>'+(Array.isArray(rows)?rows:[]).map(row=>'<option value="'+esc(JSON.stringify({node:row.node,field:row.field}))+'"'+(analysis.inputs?.[key]?.node===row.node&&analysis.inputs?.[key]?.field===row.field?' selected':'')+'>'+esc(row.label||row.node+' · '+row.field)+'</option>').join('')+'</select></label>').join('')+'<label class="field">输出节点<select id="capWorkflowOutput"><option value="">请选择</option>'+outputs.filter(o=>localAudio||o.kind===kind).map(o=>'<option value="'+esc(JSON.stringify(o))+'"'+(outputs.filter(o=>localAudio||o.kind===kind).length===1?' selected':'')+'>'+esc(o.label||o.node+' · '+o.field)+'</option>').join('')+'</select></label><p class="muted">'+esc((analysis.warnings||[]).join('；'))+'</p><button id="capImportSave">保存这条工作流</button>';
+      $('capImportSave').onclick=async()=>{try{const inputs={...(analysis.inputs||{})};document.querySelectorAll('[data-cap-map]').forEach(el=>{inputs[el.dataset.capMap]=el.value?JSON.parse(el.value):{node:'',field:''};});const output=$('capWorkflowOutput').value;if(!output)throw Error('请选择输出节点');const r=await api('POST',localAudio?'/im-bridge/local-audio':'/im-bridge/local',{action:localAudio?'import':'import-workflow',kind,token:inspection.token,name:$('capWorkflowName').value,inputs,output:JSON.parse(output)});if(localAudio)localAudioState=r.state;else localConfig=r.config;await readLocal();show();if(localAudio)source.value=r.entry.id;else $('capLocalWorkflow').value=r.entry.id;$('capLocalStatus').textContent='工作流已导入，请核对选择后应用此功能的来源。';startFormTracking();}catch(e){$('capLocalStatus').textContent=e.message;}};
+      $('capLocalStatus').textContent='已识别工作流。多个候选不会擅自选择，请核对输入与输出。';
+    }
+    source.onchange=()=>{paintLocalAudio();status.textContent='来源选择尚未应用。';};
+    mode.onchange=()=>{show();status.textContent='尚未应用，当前执行来源没有改变。';};
+    $('capRetry').onclick=read;
+    $('capApply').onclick=async function(){this.disabled=true;try{
+      if(mode.value==='local'&&!localAudio)await saveLocalParameters();
+      if(localAudio&&audioAvailable){const r=await api('POST','/im-bridge/local-audio',{action:'select',kind,mode:source.value==='voice-service'?'api':mode.value,workflowId:source.value});if(r.state?.[kind]?.mode!==(source.value==='voice-service'?'api':mode.value))throw Error('音频来源读回不一致');localAudioState=r.state;}
+      if(kind!=='sing'){const expected=mode.value==='local'?'local':source.value;const r=await api('POST','/im-bridge/service-connections',{action:'routes',routes:{enabled:true,[kind]:expected}});const back=await api('GET','/im-bridge/service-connections');if(r.routes?.[kind]!==expected||back.routes?.[kind]!==expected)throw Error('来源保存核对失败');connections=back;}
+      if(kind==='sing'&&mode.value==='api')await api('POST','/im-bridge/settings',{voice:{runninghub:{sing:{allowLocal:true}}}});
+      status.textContent='已应用并核对：'+capabilityLabels[kind]+'使用'+(mode.value==='local'?'本地':'API')+'。';startFormTracking();
+    }catch(e){status.textContent='未确认切换：'+e.message;}finally{if(alive())show();}};
+    $('capRecognize').onclick=async function(){try{
+      const raw=normalizeRequestExample($('capExample').value);
+      if(mode.value==='local'){
+        const r=recognizeServiceRequest(raw,kind);
+        if(kind==='speech'&&source.value==='voice-service'&&r.type==='openai'){
+          if(!r.url)throw Error('请粘贴带本机地址的完整语音请求');const u=new URL(r.url);
+          if(!['localhost','127.0.0.1','[::1]'].includes(u.hostname))throw Error('本地语音请使用本机地址');
+          $('localVoiceProtocol').value='openai';$('localVoiceUrl').value=u.origin;$('localVoiceTtsPath').value=u.pathname;$('localVoiceModel').value=r.model;$('capVoicePreset').value=r.voice;
+          $('capImportStatus').textContent='已识别本地语音接口、模型和音色，请核对后保存本地语音服务。';return;
+        }
+        if(r.type!=='comfyui')throw Error('本地工作流请提供 ComfyUI JSON');await inspect(r.body,'导入的'+capabilityLabels[kind]+'工作流');return;
+      }
+      if(kind==='sing'||kind==='speech'&&/nodeInfoList|runninghub\./.test(raw)){
+        const root=document.querySelector('[data-rh-audio]');if(!root?.importExample)throw Error('音频编辑器尚未就绪，请重试');
+        $('capImportStatus').textContent='正在识别请求与音频用途…';
+        const imported=await root.importExample(raw);$('capImportStatus').textContent='识别成功：'+imported.id+'。请核对下方输入映射和参数后保存。';return;
+      }
+      if(kind==='image'&&/nodeInfoList|runninghub\./.test(raw)){const el=$('rhExample');if(!el)throw Error('请先在图片提供商选择 RunningHub');el.value=raw;await studioImportExample();return;}
+      const r=recognizeServiceRequest(raw,kind);
+      if(kind==='video'&&r.type==='runninghub'){
+        const id=r.url.match(/ai-app\/(\d+)/)?.[1]||r.body.webappId;
+        if(String(id)!=='2085597941657587714')throw Error('已识别 RunningHub 节点参数，但此视频应用尚未接入动态映射；未将它保存成其他工作流。可使用兼容视频 API 或本地工作流。');
+        $('vgProvider').value='runninghub';$('vgProvider').onchange?.();
+        for(const node of r.body.nodeInfoList||[]){if(node.nodeId==='218'&&node.fieldName==='value')$('vgSeconds').value=node.fieldValue;if(node.nodeId==='172'&&node.fieldName==='aspect_ratio')$('vgRatio').value=node.fieldValue;}
+        $('capImportStatus').textContent='已导入视频应用、默认时长和画幅。其他示例参数（例如分辨率、放大开关）尚未导入，不会假装已保存。参考图和动态脚本按实际请求准备，不使用示例里固定的人物和台词。请在下方保存视频配置。';return;
+      }
+      if(r.type==='comfyui')throw Error('这是本地工作流，请切换本地模式导入');
+      if(r.type==='runninghub')throw Error('这是 RunningHub 生成工作流；聊天请使用模型 API，音频工作流请在语音或唱歌页配置。');
+      if(kind!=='chat'&&r.type!=='openai')throw Error('这份请求使用聊天专用协议，不能当作'+capabilityLabels[kind]+'接口保存。');
+      const box=$('capImportStatus');box.textContent='已识别 '+r.type+'，模型 '+r.model+'，参数：'+r.fields.join('、')+'。密钥请在连接中填写。';
+      box.insertAdjacentHTML('beforeend','<div class="btnrow"><button id="capSaveExample">保存为'+capabilityLabels[kind]+'连接</button></div>');
+      $('capSaveExample').onclick=async()=>{try{if(!r.url)throw Error('JSON 不含接口地址，请粘贴完整 cURL 或在连接库填写地址');const u=new URL(r.url),base=u.origin+u.pathname.replace(/\/(?:chat\/completions|responses|messages|images\/(?:generations|edits)|audio\/speech|videos)\/?$/,'');const input={action:'save',type:r.type,baseUrl:base,name:capabilityLabels[kind]+' · '+u.hostname,[kind==='chat'?'chatModel':kind+'Model']:r.model,voice:r.voice,paths:{[kind]:u.pathname}};await api('POST','/im-bridge/service-connections',input);box.textContent='连接已保存；请在具体来源中选择，并在连接库补充密钥后应用。';await read();}catch(e){box.textContent=e.message;}};
+    }catch(e){if(alive())$('capImportStatus').textContent='未导入：'+e.message;}};
+    await read();
+  }
   function viewServiceConnections(){
-    var markup='<div class="card"><h2>当前实际配置来源</h2><p class="muted">按已生效的设置读取，编辑框里尚未应用的选择不会改变这里。单独会话的覆盖和实际执行模型见调用记录。</p><div id="connectionEffectiveSources">正在读取…</div></div>'+serviceModeMarkup()+'<div class="card"><h2>添加 API 或本地连接</h2><p class="muted">先填地址和密钥，点击检测。检测只读取状态、协议线索和模型列表，不启动推理或生成，不消耗生成额度。一个连接可以分别填写聊天、图片、视频和语音模型，模型名称不固定。聊天默认沿用 DeepSeek，也可以保存其他服务后点击“用于聊天”；图片、语音同样可独立选择其他 API。</p><div class="form-two"><label class="field">名称<input id="connectionName" placeholder="例如：我的 API、本机模型"></label><label class="field">服务地址<input id="connectionUrl" placeholder="https://example.com/v1 或 http://127.0.0.1:8188"></label></div><label class="field">API 密钥<input id="connectionKey" type="password" autocomplete="new-password" placeholder="本地通常无需填写；编辑时留空保留原密钥"></label><div class="btnrow"><button id="connectionDetect" class="primary">自动检测连接</button><button id="connectionNew">清空，新建连接</button></div><p id="connectionEvidence" class="muted" role="status"></p><label class="field">请求类型<select id="connectionType"><option value="auto">自动识别</option><option value="openai">通用 OpenAI 兼容协议（不限服务商）</option><option value="anthropic">Claude 原生 Messages：聊天</option><option value="responses">Responses：聊天</option><option value="comfyui">ComfyUI：需要导入工作流</option><option value="voicelab">VoiceLab：本地语音</option><option value="runninghub">RunningHub：沿用原工作流配置</option></select></label><datalist id="connectionModels"></datalist><div class="form-two"><label class="field">聊天模型<input id="connectionChat" list="connectionModels" placeholder="检测后可选，也可手动输入模型 ID"></label><label class="field">图片模型<input id="connectionImage" list="connectionModels" placeholder="按接口实际支持的图片模型填写"></label><label class="field">视频模型<input id="connectionVideo" list="connectionModels" placeholder="按服务支持的模型填写，不固定模型名"></label><label class="field">语音模型<input id="connectionSpeech" list="connectionModels" placeholder="按接口实际支持的语音模型填写"></label><label class="field">音色 ID<input id="connectionVoice" placeholder="由语音服务提供，不能仅凭模型列表确定"></label></div><label class="field">图片接口<select id="connectionImageMode"><option value="generations">文生图：POST /images/generations</option><option value="edits">参考图编辑：POST /images/edits</option></select></label><details><summary>自定义接口路径与语音格式（可选）</summary><p class="muted">留空使用所选协议的标准路径。可以填写同站点的完整接口地址或路径；更改路径不会改变请求和回执的数据格式。密钥只填在密钥栏。</p><label class="field">聊天接口<input id="connectionChatPath" placeholder="例如 /v1/chat/completions"></label><label class="field">图片接口<input id="connectionImagePath" placeholder="例如 /v1/images/edits"></label><label class="field">语音接口<input id="connectionSpeechPath" placeholder="例如 /v1/audio/speech"></label><label class="field">语音返回格式<select id="connectionAudioFormat"><option value="wav">WAV</option><option value="mp3">MP3</option></select></label></details><details><summary>余额查询（可选，按服务商文档填写）</summary><p class="muted">余额接口与生成协议相互独立，不会猜测接口地址。仅查询此连接同站点，复用此连接密钥。请使用只读取账户余额的接口，不能填写生成、充值或其他操作接口。没有接口时留空，显示暂不可查询。DeepSeek 官方连接可自动识别余额接口。</p><label class="field">余额接口路径<input id="connectionBalanceEndpoint" placeholder="例如 /account/balance"></label><label class="field">查询方式<select id="connectionBalanceMethod"><option value="GET">GET</option><option value="POST">POST</option></select></label><div class="form-two"><label class="field">金额或剩余额度字段<input id="connectionBalanceAmount" placeholder="例如 data.balance"></label><label class="field">币种/单位字段<input id="connectionBalanceCurrencyPath" placeholder="例如 data.currency"></label><label class="field">固定单位（接口不返回时，按文档填写）<input id="connectionBalanceCurrency" placeholder="例如 CNY、USD、积分"></label><label class="field">余额类型<select id="connectionBalanceKind"><option value="money">金额</option><option value="points">积分</option><option value="quota">配额</option></select></label><label class="field">余额列表字段（多钱包时）<input id="connectionBalanceRows" placeholder="例如 data.wallets；没有则留空"></label><label class="field">单位换算除数（默认1，不猜测）<input id="connectionBalanceDivisor" type="number" min="0.000000001" step="any" value="1"></label></div><label class="field">POST查询正文（可选JSON，密钥仍只填在密钥栏）<textarea id="connectionBalanceBody" placeholder="{}"></textarea></label></details><p class="muted">检测到模型列表不代表每个模型都能生图、说话或看图。无法识别时可手动选类型。保持人设图需要支持参考图的编辑接口；不会把人设图丢掉后悄悄改成文生图。ComfyUI 与 RunningHub 仍需要工作流，VoiceLab 使用本地页已配置的服务。</p><div class="btnrow"><button id="connectionSave" class="primary">保存连接</button><button data-go="local">本地服务与工作流</button></div><div id="connectionProfiles"></div></div><div class="card"><h2>分别选择聊天、图片、语音、视频的来源</h2><p class="muted">例如：现有 API 聊天 + 本地 ComfyUI 生图 + API 语音。也可以本地聊天 + API 生图 + 本地语音。开启后按这里指定的来源执行，失败不会偷偷切换；关闭后沿用当前聊天模式统一来源：本地聊天转纯本地，API 聊天转 API。更改搭配会取消旧会话中的未完成桥接任务，保留聊天记录。</p><label class="check-field"><input id="connectionRoutingEnabled" type="checkbox">启用按能力搭配</label><div class="form-two"><label class="field">聊天来源<select id="connectionRouteChat"></select></label><label class="field">图片来源<select id="connectionRouteImage"></select></label><label class="field">语音来源<select id="connectionRouteSpeech"></select></label><label class="field">视频来源<select id="connectionRouteVideo"></select></label></div><div class="btnrow"><button id="connectionRoutesSave" class="primary">应用搭配</button><button id="connectionRefresh">刷新连接</button></div><p id="connectionRouteStatus" class="muted" role="status"></p><p class="muted">“现有 API 聊天”沿用模型页选择；“原图片设置”沿用 RunningHub 等原来源；“原语音设置”沿用语音页引擎。本地选项使用本地页的 ComfyUI 工作流和语音服务。视频也按所选来源执行；“视频页设置”沿用视频生成页，选择本地时使用已导入的视频工作流。</p></div>';
+    var markup='<div class="card"><h2>当前实际配置来源</h2><p class="muted">按已生效的设置读取，编辑框里尚未应用的选择不会改变这里。单独会话的覆盖和实际执行模型见调用记录。</p><div id="connectionEffectiveSources">正在读取…</div></div>'+'<div class="card"><h2>添加 API 或本地连接</h2><p class="muted">先填地址和密钥，点击检测。检测只读取状态、协议线索和模型列表，不启动推理或生成，不消耗生成额度。一个连接可以分别填写聊天、图片、视频和语音模型，模型名称不固定。聊天默认沿用 DeepSeek，也可以保存其他服务后点击“用于聊天”；图片、语音同样可独立选择其他 API。</p><div class="form-two"><label class="field">名称<input id="connectionName" placeholder="例如：我的 API、本机模型"></label><label class="field">服务地址<input id="connectionUrl" placeholder="https://example.com/v1 或 http://127.0.0.1:8188"></label></div><label class="field">API 密钥<input id="connectionKey" type="password" autocomplete="new-password" placeholder="本地通常无需填写；编辑时留空保留原密钥"></label><div class="btnrow"><button id="connectionDetect" class="primary">自动检测连接</button><button id="connectionNew">清空，新建连接</button></div><p id="connectionEvidence" class="muted" role="status"></p><label class="field">请求类型<select id="connectionType"><option value="auto">自动识别</option><option value="openai">通用 OpenAI 兼容协议（不限服务商）</option><option value="anthropic">Claude 原生 Messages：聊天</option><option value="responses">Responses：聊天</option><option value="comfyui">ComfyUI：需要导入工作流</option><option value="voicelab">VoiceLab：本地语音</option><option value="runninghub">RunningHub：沿用原工作流配置</option></select></label><datalist id="connectionModels"></datalist><div class="form-two"><label class="field">聊天模型<input id="connectionChat" list="connectionModels" placeholder="检测后可选，也可手动输入模型 ID"></label><label class="field">图片模型<input id="connectionImage" list="connectionModels" placeholder="按接口实际支持的图片模型填写"></label><label class="field">视频模型<input id="connectionVideo" list="connectionModels" placeholder="按服务支持的模型填写，不固定模型名"></label><label class="field">语音模型<input id="connectionSpeech" list="connectionModels" placeholder="按接口实际支持的语音模型填写"></label><label class="field">音色 ID<input id="connectionVoice" placeholder="由语音服务提供，不能仅凭模型列表确定"></label></div><label class="field">图片接口<select id="connectionImageMode"><option value="generations">文生图：POST /images/generations</option><option value="edits">参考图编辑：POST /images/edits</option></select></label><details><summary>自定义接口路径与语音格式（可选）</summary><p class="muted">留空使用所选协议的标准路径。可以填写同站点的完整接口地址或路径；更改路径不会改变请求和回执的数据格式。密钥只填在密钥栏。</p><label class="field">聊天接口<input id="connectionChatPath" placeholder="例如 /v1/chat/completions"></label><label class="field">图片接口<input id="connectionImagePath" placeholder="例如 /v1/images/edits"></label><label class="field">语音接口<input id="connectionSpeechPath" placeholder="例如 /v1/audio/speech"></label><label class="field">语音返回格式<select id="connectionAudioFormat"><option value="wav">WAV</option><option value="mp3">MP3</option></select></label></details><details><summary>余额查询（可选，按服务商文档填写）</summary><p class="muted">余额接口与生成协议相互独立，不会猜测接口地址。仅查询此连接同站点，复用此连接密钥。请使用只读取账户余额的接口，不能填写生成、充值或其他操作接口。没有接口时留空，显示暂不可查询。DeepSeek 官方连接可自动识别余额接口。</p><label class="field">余额接口路径<input id="connectionBalanceEndpoint" placeholder="例如 /account/balance"></label><label class="field">查询方式<select id="connectionBalanceMethod"><option value="GET">GET</option><option value="POST">POST</option></select></label><div class="form-two"><label class="field">金额或剩余额度字段<input id="connectionBalanceAmount" placeholder="例如 data.balance"></label><label class="field">币种/单位字段<input id="connectionBalanceCurrencyPath" placeholder="例如 data.currency"></label><label class="field">固定单位（接口不返回时，按文档填写）<input id="connectionBalanceCurrency" placeholder="例如 CNY、USD、积分"></label><label class="field">余额类型<select id="connectionBalanceKind"><option value="money">金额</option><option value="points">积分</option><option value="quota">配额</option></select></label><label class="field">余额列表字段（多钱包时）<input id="connectionBalanceRows" placeholder="例如 data.wallets；没有则留空"></label><label class="field">单位换算除数（默认1，不猜测）<input id="connectionBalanceDivisor" type="number" min="0.000000001" step="any" value="1"></label></div><label class="field">POST查询正文（可选JSON，密钥仍只填在密钥栏）<textarea id="connectionBalanceBody" placeholder="{}"></textarea></label></details><p class="muted">检测到模型列表不代表每个模型都能生图、说话或看图。无法识别时可手动选类型。保持人设图需要支持参考图的编辑接口；不会把人设图丢掉后悄悄改成文生图。ComfyUI 与 RunningHub 仍需要工作流，VoiceLab 使用本地页已配置的服务。</p><div class="btnrow"><button id="connectionSave" class="primary">保存连接</button><button data-go="local">本地服务与工作流</button></div><div id="connectionProfiles"></div></div><div class="card"><h2>分别选择聊天、图片、语音、视频的来源</h2><p class="muted">例如：现有 API 聊天 + 本地 ComfyUI 生图 + API 语音。也可以本地聊天 + API 生图 + 本地语音。每项独立执行，修改一项不会覆盖其他能力。更改搭配会取消旧会话中的未完成桥接任务，保留聊天记录。</p><div class="form-two"><label class="field">聊天来源<select id="connectionRouteChat"></select></label><label class="field">图片来源<select id="connectionRouteImage"></select></label><label class="field">语音来源<select id="connectionRouteSpeech"></select></label><label class="field">视频来源<select id="connectionRouteVideo"></select></label></div><div class="btnrow"><button id="connectionRoutesSave" class="primary">应用搭配</button><button id="connectionRefresh">刷新连接</button></div><p id="connectionRouteStatus" class="muted" role="status"></p><p class="muted">“现有 API 聊天”沿用模型页选择；“原图片设置”沿用 RunningHub 等原来源；“原语音设置”沿用语音页引擎。本地选项使用本地页的 ComfyUI 工作流和语音服务。视频也按所选来源执行；“视频页设置”沿用视频生成页，选择本地时使用已导入的视频工作流。</p></div>';
     if(mobileApiOnly())markup=markup.replace(/<option value="(?:comfyui|voicelab)">[^<]*<\/option>/g,'').replace(/<button data-go="local">[^<]*<\/button>/g,'').replaceAll('添加 API 或本地连接','添加 API 连接').replaceAll('例如：我的 API、本机模型','例如：我的聊天 API').replaceAll('https://example.com/v1 或 http://127.0.0.1:8188','https://example.com/v1').replaceAll('本地通常无需填写；编辑时留空保留原密钥','编辑时留空保留原密钥').replaceAll('ComfyUI 与 RunningHub 仍需要工作流，VoiceLab 使用本地页已配置的服务。','RunningHub 仍沿用工作流配置。').replaceAll('例如：现有 API 聊天 + 本地 ComfyUI 生图 + API 语音。也可以本地聊天 + API 生图 + 本地语音。','聊天、图片和语音可分别选择不同 API 提供商。').replaceAll('本地选项使用本地页的 ComfyUI 工作流和语音服务。','手机版仅支持 API 来源。');
-    return markup;
+    return capabilityHubMarkup()+'<details class="card"><summary>连接库与批量搭配</summary>'+markup.slice(markup.indexOf('<div class="card"><h2>添加'))+'</details>';
   }
-  function serviceModeMarkup(){
-    if(mobileApiOnly())return '<div class="card"><h2>API 模式</h2><p id="connectionModeStatus" role="status">正在读取当前来源…</p><div hidden><select id="connectionWholeMode" disabled><option value="api">API 模式</option></select><input id="connectionComplement" type="checkbox" disabled><button id="connectionModeSave" disabled>应用</button></div><p id="connectionModeNotice" class="muted">聊天、图片和语音可分别连接不同 API。手机版不启动本地模型或生成服务。</p><div class="btnrow"><button data-go="model">API 模型设置</button><button data-go="voice">语音参数</button><button data-go="invocations">调用记录</button></div></div>';
-    return '<div class="card"><h2>运行方式与实际来源</h2><p id="connectionModeStatus" role="status">正在读取当前来源…</p><label class="field">整体模式<select id="connectionWholeMode" disabled><option value="api">API 模式</option><option value="local">纯本地（API 补全关闭时）</option></select></label><label class="check-field"><input type="checkbox" id="connectionComplement" disabled>本地能力不足时允许 API 补全</label><label class="check-field"><input type="checkbox" id="connectionTaskAssist" disabled>任务协作：API 做搜索、读网页和观察视频，本地负责理解与回复</label><p class="muted">任务协作默认关闭，需同时开启 API 补全。只发送本次任务和读取结果，不会自动附带整段私聊；API 不直接发 QQ。使用模型页选择的 API（不使用 DeepSeek），协作调用会产生相应 API 费用，并记录输入、步骤和结果。关闭后恢复原补全方式；两项都关闭为纯本地。</p><p class="muted">补全默认关闭。若要固定使用 API 聊天、本地图片等组合，请启用下方“按能力搭配”；搭配启用时由各项来源决定，不使用整体模式和自动补全。</p><button id="connectionModeSave" class="primary" disabled>应用整体模式</button><p id="connectionModeNotice" class="muted" role="status"></p><div class="btnrow"><button data-go="local">本地模型与工作流</button><button data-go="model">API 模型设置</button><button data-go="voice">语音参数</button><button data-go="invocations">调用记录</button></div></div>';
-  }
-  function describeServiceSources(state,local,voice){
-    var routes=state.routes||{},mixed=routes.enabled===true;
-    function label(kind){var value=routes[kind];if(value==='local')return '本地';if(value&&value.indexOf('profile:')===0){var p=(state.profiles||[]).find(function(p){return 'profile:'+p.id===value;});return p?p.name:'连接已失效';}return kind==='chat'?'模型页所选 API':kind==='image'?'图片页配置':kind==='video'?'视频页配置':'语音页配置（'+(voice.engine||'none')+'）';}
-    if(mixed)return '按能力搭配 · 聊天：'+label('chat')+'；图片：'+label('image')+'；语音：'+label('speech')+'；视频：'+label('video')+'。失败不会自动换来源。';
-    return local.enabled?'本地模式 · 聊天与图片、语音使用本地能力；API 补全'+(local.apiComplement?'已开启，仅在本轮能力不足时使用':'已关闭')+'。':'API 模式 · 聊天使用模型页选择，图片与语音使用各自页面配置。';
-  }
+
   function connectionUseButtons(p){
     if(['comfyui','voicelab'].indexOf(p.type)>=0)return '<button data-go="local">配置本地服务与工作流</button>';
     if(p.type==='runninghub')return '<button data-go="imagegen">配置 RunningHub 工作流</button>';
@@ -1198,12 +1507,12 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
   async function refreshConnections(){
     var originNode=$('connectionProfiles');
-    try{var values=await Promise.all([api('GET','/im-bridge/service-connections'),api('GET','/im-bridge/settings')]),r=values[0],current=values[1];if(!originNode||$('connectionProfiles')!==originNode)return;rememberDraft('services');connectionState=r;if($('connectionEffectiveSources'))$('connectionEffectiveSources').innerHTML=renderServiceSources(r.effectiveSources);studioBalanceByProvider={};data.localChat=current.localChat;data.settings=current.settings;var lc=current.localChat||{},mixed=r.routes?.enabled===true;$('connectionWholeMode').value=lc.enabled?'local':'api';$('connectionComplement').checked=lc.apiComplement===true;if($('connectionTaskAssist')){$('connectionTaskAssist').checked=lc.apiTaskAssist===true;$('connectionTaskAssist').disabled=mobileApiOnly()||!lc.enabled||!lc.apiComplement;}$('connectionWholeMode').disabled=mobileApiOnly();$('connectionComplement').disabled=mobileApiOnly()||!lc.enabled;$('connectionModeSave').disabled=mobileApiOnly();$('connectionModeStatus').textContent=describeServiceSources(r,lc,current.settings?.voice||{});$('connectionModeNotice').textContent=mixed?'当前按能力搭配；应用整体模式会关闭搭配，并按整体模式统一来源。':'';
+    try{var values=await Promise.all([api('GET','/im-bridge/service-connections'),api('GET','/im-bridge/settings')]),r=values[0],current=values[1];if(!originNode||$('connectionProfiles')!==originNode)return;rememberDraft('services');connectionState=r;if($('connectionEffectiveSources'))$('connectionEffectiveSources').innerHTML=renderServiceSources(sourcesWithSinging(r.effectiveSources),{configure:true});studioBalanceByProvider={};data.localChat=current.localChat;data.settings=current.settings;var lc=current.localChat||{},mixed=r.routes?.enabled===true;
       $('connectionProfiles').innerHTML='<h3>已保存连接</h3>'+(r.profiles||[]).map(function(p){return '<div class="card"><b>'+esc(p.name)+'</b><p>'+esc(p.type)+' · '+esc(p.baseUrl)+' · '+(p.hasKey?'已保存密钥':'未设置密钥')+'</p><div class="btnrow">'+connectionUseButtons(p)+'<button data-connection-balance="'+esc(p.id)+'">查询余额</button><button data-connection-edit="'+esc(p.id)+'">编辑</button><button data-connection-remove="'+esc(p.id)+'">移除</button></div></div>';}).join('');
-      var routes=r.routes||{};$('connectionRoutingEnabled').checked=routes.enabled===true;
+      var routes=r.routes||{};
       [['chat','connectionRouteChat'],['image','connectionRouteImage'],['speech','connectionRouteSpeech'],['video','connectionRouteVideo']].forEach(function(pair){var kind=pair[0],select=$(pair[1]),initial=kind==='chat'?[['host','现有 API 聊天'],['local','本地聊天模型']]:kind==='image'?[['legacy','原图片设置（API / RunningHub 等）'],['local','本地 ComfyUI 工作流']]:kind==='video'?[['legacy','视频页设置（RunningHub / 兼容 API）'],['local','本地视频工作流']]:[['legacy','原语音设置'],['local','本地语音服务'],['runninghub','RunningHub 语音工作流']];
         if(mobileApiOnly())initial=initial.filter(function(o){return o[0]!=='local';});var options=initial.concat((r.profiles||[]).filter(function(p){return kind==='chat'?r.adapterSupported!==false&&['openai','anthropic','responses'].indexOf(p.type)>=0&&p.chatModel:p.type==='openai'&&(kind==='image'?p.imageModel:kind==='video'?p.videoModel:p.speechModel&&p.voice);}).map(function(p){return ['profile:'+p.id,p.name+' · '+p[kind==='chat'?'chatModel':kind==='image'?'imageModel':kind==='video'?'videoModel':'speechModel']];}));select.innerHTML=options.map(function(x){return '<option value="'+esc(x[0])+'">'+esc(x[1])+'</option>';}).join('');select.value=routes[kind]||initial[0][0];
-      });$('connectionRouteStatus').textContent=r.adapterSupported===false?'当前宿主无法注册新聊天连接；原聊天模型仍可使用。':routes.enabled?'当前按上方四项分别执行。':'当前保持原有整体模式。';
+      });$('connectionRouteStatus').textContent=r.adapterSupported===false?'当前宿主无法注册新聊天连接；原聊天模型仍可使用。':'当前按上方四项分别执行。';
       document.querySelectorAll('[data-connection-use]').forEach(function(button){button.onclick=async function(){button.disabled=true;try{await api('POST','/im-bridge/service-connections',{action:'use',id:button.getAttribute('data-connection-use'),kind:button.getAttribute('data-kind')});await refreshConnections();toast('来源已切换；其他项目保持当前选择');}catch(e){toast('未切换：'+e.message);}finally{if(button.isConnected)button.disabled=false;}};});
       document.querySelectorAll('[data-connection-balance]').forEach(function(button){button.onclick=async function(){button.disabled=true;try{var result=await api('POST','/im-bridge/service-connections',{action:'balance',id:button.getAttribute('data-connection-balance')});toast(result.balance.status==='ok'?result.balance.entries.map(function(e){return e.amount+' '+e.currency;}).join(' / '):result.balance.reason||'余额未知');}catch(e){toast('查询失败：'+e.message);}finally{if(button.isConnected)button.disabled=false;}};});
       document.querySelectorAll('[data-connection-edit]').forEach(function(button){button.onclick=function(){var p=r.profiles.find(function(x){return x.id===button.getAttribute('data-connection-edit');});connectionDraft=Object.assign({},p,{apiKey:''});paintConnectionDraft();};});
@@ -1213,19 +1522,18 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     }catch(e){if($('connectionModeNotice'))$('connectionModeNotice').textContent='当前来源未读取，请刷新后再操作。';if($('connectionRouteStatus'))$('connectionRouteStatus').textContent='连接配置暂未读取：'+e.message+'。安装更新后需要重载插件。';}
   }
   function bindServiceConnections(){
+    if($('capApiComplement')){const syncAssist=()=>{$('capApiTaskAssist').disabled=!$('capApiComplement').checked;};$('capApiComplement').onchange=syncAssist;syncAssist();}
+    if($('capAssistSave'))$('capAssistSave').onclick=async function(){this.disabled=true;try{var complement=$('capApiComplement').checked,assist=$('capApiTaskAssist').checked;await api('POST','/im-bridge/settings',{localChat:{apiComplement:complement,apiTaskAssist:assist}});var r=await api('GET','/im-bridge/settings');if(r.settings?.localChat?.apiComplement!==complement||r.settings?.localChat?.apiTaskAssist!==assist)throw Error('保存结果未核对一致');data.settings=r.settings;$('capAssistStatus').textContent='已保存并核对弥补能力。';startFormTracking();}catch(e){$('capAssistStatus').textContent=e.message;}finally{this.disabled=false;}};
+    if($('capGatewayCheck'))$('capGatewayCheck').onclick=async function(){this.disabled=true;try{var r=await api('GET','/im-bridge/local');$('capGatewayStatus').textContent='网关已连接 · '+(r.hostVersion||r.version||'')+' · '+(r.config?.modelId||r.config?.chatWorkflow||'模型待选择');}catch(e){$('capGatewayStatus').textContent=e.message;}finally{this.disabled=false;}};
+    if(!mobileApiOnly())void api('GET','/im-bridge/local-audio').then(function(r){localAudioState=r.state;if($('connectionEffectiveSources'))$('connectionEffectiveSources').innerHTML=renderServiceSources(sourcesWithSinging(connectionState?.effectiveSources),{configure:true});}).catch(function(){});
     paintConnectionDraft();void refreshConnections();$('connectionType').onchange=syncConnectionProtocolFields;
-    $('connectionWholeMode').onchange=function(){$('connectionRoutingEnabled').checked=false;$('connectionRoutingEnabled').dispatchEvent(new Event('input',{bubbles:true}));var local=this.value==='local';$('connectionComplement').disabled=!local;if(!local)$('connectionComplement').checked=false;if($('connectionTaskAssist'))$('connectionTaskAssist').disabled=!local||!$('connectionComplement').checked;$('connectionModeNotice').textContent='模式尚未应用，点击“应用整体模式”后生效。';};
-    if($('connectionTaskAssist'))$('connectionTaskAssist').onchange=function(){$('connectionModeNotice').textContent='任务协作设置尚未应用，请点击“应用整体模式”。';};
-    $('connectionComplement').onchange=function(){if($('connectionTaskAssist'))$('connectionTaskAssist').disabled=!this.checked;$('connectionModeNotice').textContent='API 补充设置尚未应用，请点击“应用整体模式”。';};
-    $('connectionModeSave').onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/settings',{localChat:{apiTaskAssist:!!$('connectionTaskAssist')?.checked}});await api('POST','/im-bridge/service-connections',{action:'mode',mode:$('connectionWholeMode').value,apiComplement:$('connectionWholeMode').value==='local'&&$('connectionComplement').checked});await refreshConnections();toast('整体模式已应用');}catch(e){$('connectionModeNotice').textContent='未应用：'+e.message;}finally{if(button.isConnected)button.disabled=mobileApiOnly();}};
-
     ['connectionName','connectionUrl','connectionKey','connectionChat','connectionImage','connectionVideo','connectionSpeech','connectionVoice','connectionType','connectionImageMode','connectionChatPath','connectionImagePath','connectionSpeechPath','connectionAudioFormat','connectionBalanceEndpoint','connectionBalanceMethod','connectionBalanceAmount','connectionBalanceCurrencyPath','connectionBalanceCurrency','connectionBalanceKind','connectionBalanceRows','connectionBalanceDivisor','connectionBalanceBody'].forEach(function(id){$(id).oninput=captureConnection;});
     $('connectionRefresh').onclick=refreshConnections;
     $('connectionNew').onclick=function(){connectionDraft=null;connectionDetection=null;paintConnectionDraft();};
     $('connectionDetect').onclick=async function(){var button=this,draft=captureConnection();button.disabled=true;$('connectionEvidence').textContent='正在读取服务状态与模型列表，不会试生成…';try{var r=await api('POST','/im-bridge/service-connections',Object.assign({},draft,{action:'detect'}));connectionDetection=r.detection;connectionDraft=Object.assign({},draft,r.detection);if(r.detection.type==='unknown')connectionDraft.type='auto';if(!connectionDraft.name)try{connectionDraft.name=new URL(draft.baseUrl).hostname;}catch{}if(!connectionDraft.chatModel&&r.detection.capabilities?.chat==='listed')connectionDraft.chatModel=(r.detection.models||[]).find(function(id){return !/embedding|rerank|whisper|tts|flux|image/i.test(id);})||'';paintConnectionDraft();}catch(e){if($('connectionEvidence'))$('connectionEvidence').textContent=e.message;}finally{button.disabled=false;}};
     $('connectionSave').onclick=async function(){var button=this,draft=captureConnection();button.disabled=true;try{var r=await api('POST','/im-bridge/service-connections',Object.assign({},draft,{action:'save'}));connectionDraft=Object.assign({},r.profile,{apiKey:''});paintConnectionDraft();await refreshConnections();toast('连接已保存，按需在下方选择用途');}catch(e){toast(e.message);}finally{button.disabled=false;}};
-    ['connectionRouteChat','connectionRouteImage','connectionRouteSpeech','connectionRouteVideo'].forEach(function(id){$(id).onchange=function(){$('connectionRoutingEnabled').checked=true;$('connectionRoutingEnabled').dispatchEvent(new Event('input',{bubbles:true}));$('connectionRouteStatus').textContent='已选择按能力搭配，保存后生效。';};});
-    $('connectionRoutesSave').onclick=async function(){var button=this,enabled=$('connectionRoutingEnabled').checked;button.disabled=true;try{if(Object.hasOwn(pageDrafts.services||{},'connectionTaskAssist'))await api('POST','/im-bridge/settings',{localChat:{apiTaskAssist:!!$('connectionTaskAssist')?.checked}});var result=await api('POST','/im-bridge/service-connections',{action:'routes',routes:{enabled:enabled,chat:$('connectionRouteChat').value,image:$('connectionRouteImage').value,speech:$('connectionRouteSpeech').value,video:$('connectionRouteVideo').value}});if(result.routes?.enabled!==enabled)throw Error('返回的搭配状态与保存要求不一致');await refreshConnections();toast(enabled?'搭配已启用；后续请求按各自来源执行':'搭配已关闭；沿用当前聊天模式统一来源');}catch(e){if($('connectionRouteStatus'))$('connectionRouteStatus').textContent='未应用：'+e.message;}finally{button.disabled=false;}};
+    ['connectionRouteChat','connectionRouteImage','connectionRouteSpeech','connectionRouteVideo'].forEach(function(id){$(id).onchange=function(){$('connectionRouteStatus').textContent='已选择按能力搭配，保存后生效。';};});
+    $('connectionRoutesSave').onclick=async function(){var button=this,enabled=true;button.disabled=true;try{var result=await api('POST','/im-bridge/service-connections',{action:'routes',routes:{enabled:enabled,chat:$('connectionRouteChat').value,image:$('connectionRouteImage').value,speech:$('connectionRouteSpeech').value,video:$('connectionRouteVideo').value}});if(result.routes?.enabled!==enabled)throw Error('返回的搭配状态与保存要求不一致');await refreshConnections();toast('来源已保存，后续请求按各项选择执行');}catch(e){if($('connectionRouteStatus'))$('connectionRouteStatus').textContent='未应用：'+e.message;}finally{button.disabled=false;}};
   }
 
   function viewLocal() {
@@ -1244,9 +1552,9 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     out += '<section class="card"><h2>本地主动聊天</h2><label class="check-field"><input id="localInitiativeEnabled" type="checkbox"'+(lc.initiativeEnabled!==false?' checked':'')+'>允许空闲时主动私聊号主</label><p class="muted">不设每天次数或固定间隔。日程休息时不主动打扰；空闲时由模型判断有没有想说的话，没有就安静。收到 QQ 消息立即让路。当前只主动发文字，不自动生图或合成语音。</p><button id="localInitiativeSave">保存主动聊天设置</button><p class="muted" id="localInitiativeStatus">等待状态更新…</p></section>';
     out += '<section class="card"><div class="section-heading"><h2>本地模型网关</h2><span class="tag" id="localBadge">检查中…</span></div>';
     out += '<p class="muted">让本地语言模型理解你的要求，选择工作流生成语音、图片或视频。这里试聊只生成本地文件，不发 QQ。</p>';
-    out += '<p class="muted">运行模式与 API 补全统一在“连接与搭配”管理。保存本页只更新本地模型与工作流参数。</p><button data-go="services">管理运行来源</button>';
+    out += '<p class="muted">各项能力的执行来源在“连接与搭配”分别选择。保存本页只更新本地模型与工作流参数。</p><button data-go="services">管理运行来源</button>';
     out += '<div class="form-two"><label class="field">回复由谁生成<select id="localBackend"><option value="comfyui"' + (backend === 'comfyui' ? ' selected' : '') + '>本机 ComfyUI 聊天工作流</option><option value="openai"' + (backend === 'openai' ? ' selected' : '') + '>本机 OpenAI 兼容服务</option></select></label><label class="field">OpenAI 兼容服务地址<input id="localModelBaseUrl" value="' + esc(form.modelBaseUrl || 'http://127.0.0.1:8000/v1') + '" placeholder="http://127.0.0.1:8000/v1"></label></div>';
-    out += '<div class="form-two"><label class="field">服务中的模型（可任选或手填）<input id="localModelId" list="localModelList" value="' + esc(form.modelId || '') + '" placeholder="填写服务实际提供的模型名"><datalist id="localModelList">'+localModels.map(function(x){return '<option value="'+esc(x.id)+'">';}).join('')+'</datalist></label><label class="field">ComfyUI 聊天工作流<select id="localChatWorkflow">'+localChatOptions(form.chatWorkflow || '')+'</select></label></div><div class="btnrow"><button id="localImportChat">导入自己的聊天工作流</button><input id="localChatWorkflowFile" type="file" accept=".json,application/json" hidden><button id="localApplyChat">切换纯本地并使用此工作流</button><button id="localDeleteChat" class="danger">删除选中的工作流</button><button id="localModelsRefresh">读取本机服务的模型列表</button></div><p class="muted" id="localModelsHint">可连接任意本机 OpenAI 兼容服务；导入任意 ComfyUI 聊天工作流并确认输入输出，模型和服务地址沿用工作流原设置。</p>';
+    out += '<div class="form-two"><label class="field">服务中的模型（可任选或手填）<input id="localModelId" list="localModelList" value="' + esc(form.modelId || '') + '" placeholder="填写服务实际提供的模型名"><datalist id="localModelList">'+localModels.map(function(x){return '<option value="'+esc(x.id)+'">';}).join('')+'</datalist></label><label class="field">ComfyUI 聊天工作流<select id="localChatWorkflow">'+localChatOptions(form.chatWorkflow || '')+'</select></label></div><div class="btnrow"><button id="localImportChat">导入自己的聊天工作流</button><input id="localChatWorkflowFile" type="file" accept=".json,application/json" hidden><button id="localApplyChat">仅将聊天切换为此本地工作流</button><button id="localDeleteChat" class="danger">删除选中的工作流</button><button id="localModelsRefresh">读取本机服务的模型列表</button></div><p class="muted" id="localModelsHint">可连接任意本机 OpenAI 兼容服务；导入任意 ComfyUI 聊天工作流并确认输入输出，模型和服务地址沿用工作流原设置。</p>';
     out += '<div class="form-two"><label class="field">回答随机度（0 稳定，数值越高越发散）<input id="localTemperature" type="number" min="0" max="3" step="0.1" value="' + Number(form.temperature == null ? 0.7 : form.temperature) + '"></label><label class="field">单次回复上限（token）<input id="localMaxTokens" type="number" min="32" max="32768" step="1" value="' + Number(form.maxTokens || 512) + '"></label></div>';
     out += '<details class="card" id="localParameterPanel"'+(localParameterOpen?' open':'')+'><summary>调节工作流生成参数</summary><p class="muted">从实际节点识别，不预设模型。温度、回复上限沿用上方统一设置；勾选其他参数才覆盖工作流默认。保留原工作流文件，下一次任务生效。</p><label class="field">选择工作流<select id="localParameterPicker">'+(localWorkflowDraft||[]).map(function(w){return '<option value="'+esc(w.id)+'"'+(w.id===(localParameterSelected||form.chatWorkflow)?' selected':'')+'>'+esc(w.name||w.id)+'</option>';}).join('')+'</select></label><div class="btnrow"><button id="localParameterRead">读取节点参数</button><button id="localParameterSave" class="primary" disabled>保存工作流参数</button><button id="localParameterReset">恢复工作流默认</button><button id="localParameterDiscard">放弃修改并重新读取</button></div><p class="muted" id="localParameterHint" role="status">展开后读取节点参数；读取不会运行模型。</p><div id="localParameterFields" class="form-two" style="max-height:480px;overflow:auto;min-width:0;align-items:start"></div></details>';
     out += '<div class="form-two"><label class="field">最多携带多少历史文字<input id="localHistoryChars" type="number" min="512" max="100000" step="128" value="' + Number(form.historyChars || 12000) + '"></label><label class="check-field"><input id="localVoiceEnabled" type="checkbox"' + (form.voiceEnabled !== false ? ' checked' : '') + '>允许本轮使用本地语音工具</label></div>';
@@ -1278,50 +1586,114 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
 
   function viewConnection() {
-    var st = data.status;
-    var l = login || {};
-    var out = '<div class="card"><h2>空间登录状态</h2><p>QQ 桥接：'+(st.connected?'已连接':'未连接')+' · 空间：'+esc(qzoneStateLabel(st.qzone))+'</p><p class="muted">'+esc(st.qzone?.reason||'QQ 登录后会自动检查空间')+'</p><button data-go="qzone">查看与检查空间登录</button></div>';
-    out += '<div class="card"><h2>登录 QQ</h2><p class="muted">启动 NapCat 后，QQ 有有效的本地历史登录记录时会尝试复用；凭据失效或需要验证时，请使用手机 QQ 扫码确认。启动请求不代表登录成功。</p>';
-    if (l.qqLoggedIn === true) {
-      out += '<div class="row"><span>账号 ' + esc(st.selfId || l.qq) + ' 已登录</span><span class="tag accent-tag">' + (l.connected?'桥接已连接':l.requiresDeviceSwitch?'桥接待机':'等待桥接连接') + '</span></div>';
-      if(l.requiresDeviceSwitch)out += '<p class="muted">本机 QQ 登录正常，桥接尚未在本机启用。点击“在本机启用桥接”即可连接，无需重复扫码。</p>';
-      out += '<div class="btnrow"><button id="btnRestartNapCat">重启本机 QQ / NapCat</button></div><div class="muted" id="loginHint" role="status" style="margin-top:10px"></div>'; 
-    } else {
-      if (l.connected) out += '<p class="muted">' + (l.qqLoggedIn === false ? 'NapCat 桥接已连接，但 QQ 账号尚未登录，请扫码或等待登录结果。' : 'NapCat 桥接已连接，QQ 登录状态尚未确认；扫码入口会保留。') + '</p>';
-      out += '<div class="btnrow"><button class="primary" id="btnStart">启动 NapCat / 扫码登录</button><button id="btnQrRefresh">换一个二维码</button><button id="btnRestartNapCat">重启 NapCat</button></div><div class="muted" id="loginHint" role="status" style="margin-top:10px"></div><div id="qrBox" style="margin-top:12px"></div><div class="muted" id="qrAge" style="margin-top:8px">正在读取二维码状态…</div><div class="muted" id="loginDiag" style="margin-top:4px">正在检查进程…</div>';
-    }
-    out += '</div>';
-    out += '<div class="card"><div class="btnrow">' +
-      '<button id="btnReconnect">重连 NapCat</button>' +
-      '<button id="btnTest">发测试消息</button>' +
-      '<button id="btnPause" class="' + (st.accountPaused ? 'primary' : 'danger') + '">' +
-      (l.requiresDeviceSwitch ? '在本机启用桥接' : st.accountPaused ? '恢复连接' : '停用连接（保留配置）') + '</button>' +
-      '<a class="button-link" href="/" target="_blank" rel="noopener">打开 DeepSeek Harness</a>' +
-      '</div><div class="muted" style="margin-top:8px">停用只是断开这个账号的连接，配置、白名单、人设都保留；恢复后自动重连。</div>' +
-      '<div class="row" style="margin-top:10px"><span>开机自动启动 NapCat<br><span class="muted">当前设备加载插件后启动本机QQ服务</span></span>' +
-      '<button class="small ' + (st.autoStart ? 'primary' : '') + '" id="autoStartToggle">' + (st.autoStart ? '已开启' : '已关闭') + '</button></div>' +
-      '<div class="muted">' + (st.autoStart
-        ? (st.autoStartInstalled ? '本机启动设置已保存；是否需要扫码由QQ登录状态决定' : '已开启，等待保存本机启动设置')
-        : '开启后随当前设备的插件启动本机QQ服务，必要时仍需扫码') + '</div>' +
-      '<div class="kv" style="margin-top:10px"><span>日志文件</span><code class="path">' + esc(st.logFile) + '</code></div></div>';
+    var st=data.status, l=login||{}, guard=st.loginGuard||{}, settings=data.settings;
+    var id=settings.activeAccountId||'', accounts=settings.accounts||[];
+    if(l.selectedAccountId!==undefined&&l.selectedAccountId!==id)l={};
+    var active=accounts.find(function(a){return a.id===id;});
+    var logged=l.qqLoggedIn===true, connected=typeof l.connected==='boolean'?l.connected:st.connected===true;
+    var identity=logged?l.identity:null, name=identity?.nickname||active?.name||'默认配置';
+    var held=guard.userHold===true, attention=!!st.accountNeedsAttention||held, standby=!!l.requiresDeviceSwitch;
+    var pauseLabel=attention?'我已处理，恢复连接':standby?'在本机启用桥接':st.accountPaused?'恢复连接':'停用连接';
+    var checking=l.loginPhase==='verifying_receiver',starting=l.loginPhase==='starting',unconfirmed=l.loginPhase==='startup_unconfirmed',fileError=l.loginPhase==='qq_files_reported_damaged';
+    var qqInstall=l.qqInstallation, qqEvidence=l.qqConnectionEvidence;
+    var qrVisible=!held&&!logged&&!checking&&!starting&&!unconfirmed&&l.canScan!==false&&l.loginMode!=='onebot';
+    var confirming=!logged&&['qrcode_scanned','initializing'].includes(l.loginPhase);
+    var canTrySaved=attention&&!held&&!logged&&!confirming&&guard.manualReason==='QQ 要求重新登录';
+    var hasQr=qrVisible&&(l.qrAvailable??(l.qrUpdatedAt>0&&Number.isFinite(l.qrAgeSeconds)&&l.qrAgeSeconds>=0&&l.qrAgeSeconds<=120));
+    var primary=attention||standby&&logged||st.accountPaused&&!st.manuallyLoggedOut?'btnPause':st.manuallyLoggedOut&&logged?'btnStart':
+      l.loginPhase==='core_not_ready'?'btnRestartNapCat':
+      (confirming||checking||starting)?'':!logged?(hasQr?'focusQr':'btnStart'):!connected?'btnReconnect':'openMonitor';
+    var labels={btnPause:pauseLabel,btnStart:st.manuallyLoggedOut&&logged?'启用桥接':fileError?'重新检测本机连接':'登录 QQ',btnReconnect:'重连桥接',btnTest:'发测试消息',btnRestartNapCat:'重启登录服务'};
+    if(canTrySaved){primary='btnStart';labels.btnStart='尝试已有账号登录';}
+    var title,description,tone='idle';
+    if(attention){title=held?(guard.manualReason||'当前账号已手动暂停'):logged?'QQ 会话已登录，桥接等待恢复':'桥接用 QQ 会话需要恢复';description=held?'请先在 QQ 中处理账号提示。完成后可在这里恢复本机桥接。':logged?'已确认本机 QQ 会话登录成功，点击恢复消息连接即可，无需重复扫码。':canTrySaved?'本机会话收到重新登录通知，可先尝试已有登录记录。好友列表显示在线，不能单独确认本机消息接口可用。':'请在桥接使用的 QQ 会话中完成登录或验证，再恢复消息连接。';tone='warn';}
+    else if(standby&&logged){title='本机桥接待机';description='QQ 已登录。要在这台设备上收发消息，请启用本机桥接。';}
+    else if(st.manuallyLoggedOut){title=logged?'QQ 已登录，桥接已停用':'本机 QQ 已登出';description=logged?'启用桥接后即可收发消息。':'登录当前配置对应的机器人账号。';}
+    else if(st.accountPaused){title='桥接已暂停';description='恢复后，桥接会重新连接当前账号的 NapCat 服务。';}
+    else if(checking){title='消息接口已打开，正在确认 QQ 账号';description='收到当前账号的登录回执或 QQ 事件后会自动连接。';}
+    else if(fileError){title='桥接启动的 QQ 报告“文件已损坏”';description='已识别本机 QQ 版本。自动重启已停止，消息接口尚未连接。';tone='warn';}
+    else if(l.loginPhase==='qq_process_ended'){title='桥接启动的 QQ 进程已退出';description='消息接口仍未连接。请查看本机启动日志或 QQ 窗口提示。';tone='warn';}
+    else if(starting){title='正在启动电脑 QQ 桥接';description='等待本机 QQ 服务响应，暂时无需重复启动。';}
+    else if(unconfirmed){title='电脑 QQ 启动尚未确认';description='启动已超过一分钟，管理服务和消息接口仍未响应。请查看电脑上 QQ 窗口的提示。';tone='warn';}
+    else if(logged&&connected){title='QQ 与桥接均已连接';description='在消息记录中查看机器人最近收到和发出的消息。';tone='ok';}
+    else if(logged){title='QQ 已登录，等待桥接';description='重连 NapCat 后即可使用本机桥接。';}
+    else if(l.loginPhase==='account_mismatch'){title='当前机器人账号尚未登录';description=l.error||'请切换到当前配置对应的 QQ 账号。';tone='warn';}
+    else if(l.loginPhase==='core_not_ready'){title='QQ 登录服务尚未就绪';description=l.error||'可以重启当前账号的登录服务。';tone='warn';}
+    else if(l.loginPhase==='qrcode_scanned'){title='等待手机 QQ 确认';description='二维码已扫描，请在手机 QQ 完成确认。';}
+    else if(l.loginPhase==='initializing'){title='本机登录服务正在初始化';description='连接状态更新后会显示在这里。';}
+    else if(l.qqLoggedIn===false){title='等待 QQ 登录';description='可尝试本机已有的登录记录，或使用手机 QQ 扫码。';}
+    else{title=connected?'桥接已连接，QQ 状态待确认':'等待连接';description='从本机启动登录服务，或扫描已有的 QQ 登录二维码。';}
 
-    out += '<div class="card"><h2>机器人账号</h2>' +
-      '<div class="muted" style="margin-bottom:8px">每个账号对应一个 NapCat 的 WebSocket 地址；切换后立刻重连。同一时间只连一个。</div>';
-    var accounts = data.settings.accounts || [];
-    if (!accounts.length) out += '<div class="empty">还没有额外账号，当前用配置文件里的地址</div>';
-    accounts.forEach(function (a) {
-      var on = data.settings.activeAccountId === a.id;
-      out += '<div class="row"><span>' + esc(a.name) + ' <span class="muted mono">' + esc(a.wsUrl) + '</span>' +
-        (on ? ' <span class="tag">使用中</span>' : '') + '</span>' +
-        '<span class="btnrow">' + (on ? '' : '<button class="small" data-accuse="' + esc(a.id) + '">切换</button>') +
-        '<button class="danger small" data-accdel="' + esc(a.id) + '">删除</button></span></div>';
+    function button(key){
+      if(!key)return '';
+      if(key==='openMonitor')return '<button class="primary" data-go="monitor">查看消息记录</button>';
+      if(key==='focusQr')return '<button class="primary" id="connectionFocusQr">查看登录二维码</button>';
+      var guardAccount=['btnPause','btnStart','btnRestartNapCat'].includes(key)?' data-guard-account="'+esc(id)+'"':'';
+      var disabled=attention&&(key==='btnReconnect'||key==='btnTest')?' disabled':'';
+      return '<button id="'+key+'"'+disabled+guardAccount+(key===primary?' class="primary"':'')+'>'+labels[key]+'</button>';
+    }
+    function stateRow(label,value,kind,more){
+      return '<div class="connection-state"><dt>'+label+'</dt><dd><span class="connection-dot" data-tone="'+kind+'" aria-hidden="true"></span>'+esc(value)+'</dd>'+(more||'')+'</div>';
+    }
+    function endpoint(url){
+      try{var address=new URL(String(url));return address.protocol+'//'+address.host+(address.pathname==='/'?'':address.pathname);}
+      catch{return '地址待核对';}
+    }
+    var out='<div class="connection-workbench"><section class="connection-summary" aria-labelledby="connectionHeadline" data-tone="'+tone+'">'+
+      '<div class="connection-identity"><span class="connection-initial" aria-hidden="true">'+esc(Array.from(name)[0]||'Q')+'</span><div><span class="connection-caption">'+(identity?'当前 QQ 账号':'当前账号配置')+'</span><strong>'+esc(name)+'</strong></div></div>'+
+      '<div class="connection-intro"><div><h2 id="connectionHeadline">'+esc(title)+'</h2><p>'+esc(description)+'</p></div><div class="connection-primary">'+button(primary)+'</div></div>'+
+      '<div id="loginHint" class="connection-feedback" role="status"></div></section>';
+    if(held&&guard.holdSavePending)out+='<section class="connection-warning" role="alert"><div><strong>暂停状态尚未保存</strong><p>本次运行已暂停。请在重启插件前重新保存。</p></div><button id="btnHoldAccount" data-guard-account="'+esc(id)+'">重新保存暂停状态</button></section>';
+
+    var qqState=logged?'已登录':l.qqLoggedIn===false?'等待该会话登录':'待确认';
+    var signedInId=identity?.id||l.qq||(connected?st.selfId:'');
+    var bridgeState=st.accountPaused?'已暂停':standby?'本机待机':connected?'已连接':checking?'正在核对账号':'未连接';
+    out+='<div class="connection-grid"><section class="connection-panel connection-signals" aria-labelledby="connectionSignalTitle"><h3 id="connectionSignalTitle">连接状态</h3><dl>'+
+      stateRow('桥接用 QQ 会话',logged&&signedInId?qqState+' · '+signedInId:qqState,logged?'ok':'idle')+
+      stateRow('NapCat 桥接',bridgeState,st.accountPaused||standby?'idle':connected?'ok':'idle')+
+      stateRow('QQ 空间',qzoneStateLabel(st.qzone),st.qzone?.state==='ready'?'ok':st.qzone?.state==='auth_required'?'warn':'idle','<button class="connection-link" data-go="qzone">查看空间</button>')+
+      '</dl>'+(st.qzone?.reason?'<p class="connection-note">'+esc(st.qzone.reason)+'</p>':'')+'</section>';
+    var diagnostics=(qqInstall||qqEvidence)?'<details id="connectionDiagnostics" class="connection-disclosure"><summary>连接诊断</summary><div class="connection-disclosure-body"><dl>'+
+      (qqInstall?stateRow('QQ 程序入口',qqInstall.entryVersion||'版本未提供','idle')+
+        stateRow('磁盘已选 QQ 内核',(qqInstall.coreVersion||'版本未提供')+(qqInstall.corePresent===false?'（未找到内核文件）':''),qqInstall.corePresent===false?'warn':'idle'):'')+
+      (qqEvidence?stateRow('桥接进程加载的 QQ 内核',qqEvidence.loadedCoreVersion||'未核实',qqEvidence.loadedCoreVersion?'ok':'idle')+
+        stateRow('桥接 QQ 进程启动',qqEvidence.qqStartedAt?new Date(qqEvidence.qqStartedAt).toLocaleString():'未核实','idle')+
+        stateRow('本次消息接口连接',qqEvidence.transportOpenedAt?new Date(qqEvidence.transportOpenedAt).toLocaleString():'未连接','idle')+
+        stateRow('最近一次桥接启动加载的内核',qqEvidence.lastStartupRuntime?qqEvidence.lastStartupRuntime.coreVersion+' · '+new Date(qqEvidence.lastStartupRuntime.startedAt).toLocaleString():'未核实','idle'):'')+
+      '</dl><p class="connection-note" id="loginDiag"></p></div></details>':'';
+    if(qrVisible){
+      out+='<section class="connection-panel connection-qr" aria-labelledby="connectionQrTitle"><div class="connection-section-heading"><h3 id="connectionQrTitle">扫码登录</h3><button class="connection-link" id="btnQrRefresh" data-guard-account="'+esc(id)+'">换一个二维码</button></div>'+
+        '<div class="connection-qr-content"><div id="qrBox" tabindex="-1" aria-label="QQ 登录二维码"></div><div class="connection-qr-instructions"><p>用机器人账号的手机 QQ 扫码，并在手机上确认。</p><p id="qrAge" class="connection-note" role="status">正在读取二维码状态…</p><div id="connectionQrFeedback" class="connection-feedback" role="status"></div></div></div></section>';
+    }
+    out+='</div>';
+
+    out+='<section class="connection-settings" aria-label="连接设置"><details id="connectionAccounts" class="connection-disclosure"><summary><span>机器人账号</span><small>'+esc(accounts.length?accounts.length+' 个配置':'默认配置')+'</small></summary><div class="connection-disclosure-body">'+
+      '<p class="connection-note">每个配置连接一个 NapCat 服务。切换后桥接会连接所选账号。</p>';
+    accounts.forEach(function(a){
+      var selected=a.id===id;
+      out+='<div class="connection-account-row"><div><b>'+esc(a.name||'未命名账号')+'</b>'+(selected?' <span class="connection-tag">使用中</span>':'')+'<code>'+esc(endpoint(a.wsUrl))+'</code></div><div class="connection-actions">'+
+        (selected?'':'<button data-accuse="'+esc(a.id)+'">切换</button>')+
+        '<button class="connection-danger-link" data-accdel="'+esc(a.id)+'">删除</button></div></div>';
     });
-    out += '<div style="display:grid;gap:8px;margin-top:10px">' +
-      '<input id="accName" placeholder="名字，例如：小号">' +
-      '<input id="accUrl" placeholder="ws://127.0.0.1:3101">' +
-      '<input id="accToken" placeholder="token（可空）">' +
-      '<button class="primary" id="accAdd">添加账号</button></div></div>';
-    out += '<div class="card logout-card"><div class="section-heading"><h2>手动登出</h2><span class="tag">' + (st.manuallyLoggedOut ? '已登出' : (st.accountPaused ? '桥接已暂停' : '登录管理')) + '</span></div><p class="muted">停止本机当前机器人对应的 NapCat / QQ 进程，并暂停自动重连。本地登录凭据、插件设置和聊天记录会保留；之后可用「启动 NapCat / 扫码登录」重新上线。</p><div class="btnrow"><button class="danger" id="btnLogout"' + (st.manuallyLoggedOut ? ' disabled' : '') + '>' + (st.manuallyLoggedOut ? '已手动登出' : '手动登出') + '</button><span id="logoutHint" class="muted" role="status">' + (st.manuallyLoggedOut ? '等待你手动重新登录。' : '') + '</span></div></div>';
+    out+='<details id="connectionAddAccount" class="connection-add"><summary>添加账号</summary><div class="connection-fields">'+
+      '<label for="accName">配置名称<input id="accName" placeholder="例如：日常账号"></label>'+
+      '<label for="accUrl">WebSocket 地址<input id="accUrl" placeholder="ws://127.0.0.1:3101" spellcheck="false" autocapitalize="off"></label>'+
+      '<label for="accToken">访问令牌（可选）<input id="accToken" type="password" autocomplete="off" spellcheck="false"></label>'+
+      '<button id="accAdd" class="primary">添加账号</button></div></details></div></details>';
+
+    out+='<details id="connectionAdvanced" class="connection-disclosure"><summary><span>连接维护</span><small>启动、测试与诊断</small></summary><div class="connection-disclosure-body">'+
+      '<div class="connection-setting-row"><div><b>随插件启动 NapCat</b><p class="connection-note">在当前设备加载插件时启动本机 QQ 服务。</p></div><button id="autoStartToggle" aria-pressed="'+!!st.autoStart+'">'+(st.autoStart?'已开启':'已关闭')+'</button></div>'+
+      (st.autoStart&&!st.autoStartInstalled?'<p class="connection-note">等待保存本机启动设置。</p>':'')+
+      '<div class="connection-actions">'+(qrVisible&&primary!=='btnStart'?button('btnStart'):'')+(primary!=='btnReconnect'?button('btnReconnect'):'')+button('btnTest')+
+      (!held&&primary!=='btnRestartNapCat'?button('btnRestartNapCat'):'')+'<a class="button-link" href="/" target="_blank" rel="noopener">打开 DeepSeek Harness</a></div>'+
+      '<p class="connection-note">测试消息会发送给当前允许的所有私聊对象。</p><div id="connectionServiceFeedback" class="connection-feedback" role="status"></div>'+
+      (st.logFile?'<div class="connection-log"><span>日志文件</span><code>'+esc(st.logFile)+'</code></div>':'')+'</div></details>';
+
+    out+='<details id="connectionSafety" class="connection-disclosure"><summary><span>暂停与登出</span><small>当前账号</small></summary><div class="connection-disclosure-body">'+
+      (primary==='btnPause'?'':'<div class="connection-setting-row"><div><b>暂停桥接</b><p class="connection-note">保留当前配置，之后可恢复连接。</p></div>'+button('btnPause')+'</div>')+
+      (!held?'<div class="connection-setting-row"><div><b>账号受限</b><p class="connection-note">在 QQ 看到限制提示时，可在此暂停收发和登录操作。</p></div><button id="btnHoldAccount" data-guard-account="'+esc(id)+'">标记当前账号受限并暂停</button></div>':'')+
+      '<div class="connection-setting-row"><div><b>手动登出</b><p class="connection-note">停止本机机器人对应的 QQ 与 NapCat，保留凭据、设置和聊天记录。</p></div><button class="danger" id="btnLogout"'+(st.manuallyLoggedOut?' disabled':'')+'>'+(st.manuallyLoggedOut?'已手动登出':'手动登出')+'</button></div>'+
+      '<p id="logoutHint" class="connection-feedback" role="status">'+(st.manuallyLoggedOut?'等待手动重新登录。':'')+'</p></div></details>'+diagnostics+'</section></div>';
     return out;
   }
 
@@ -1365,13 +1737,13 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var cardActive = (data.status && data.status.persona && data.status.persona.id) ? data.status.persona.id !== 'config' : !!(data.settings.activePersonaId && data.settings.activePersonaId !== 'self');
     var currentName = (data.status && data.status.personaName) || '';
     var out = '<div class="card persona-self"><h2>自我卡（空人设卡）</h2>' +
-      '<div class="muted" style="margin-bottom:8px">这是她本人，不随人设卡改变。' + (cardActive ? '现在穿着「' + esc(currentName || '人设卡') + '」，卡片只叠加在这张卡外面。' : '现在没有穿人设卡，所有会话都按这张卡说话。') + '留空表示使用默认自我——她会好奇、会高兴或失落，也会有想让人陪、想分享、想弄明白的事；写进去的性格、价值观和说话底线在任何 cosplay 下都保留。</div>' +
+      '<div class="muted" style="margin-bottom:8px">写下她一贯看重的事、兴趣和说话习惯。留空会使用默认自我。</div>' +
       '<textarea id="basePersona" style="min-height:140px">' + esc(base !== '' ? base : baseDefault) + '</textarea>' +
       '<div class="btnrow" style="margin-top:8px"><button class="primary" id="baseSave">保存（下条消息生效）</button>' +
       '<button id="baseReset">恢复默认</button>' +
-      (cardActive ? '<button id="baseSelf" data-self="1">脱下角色卡，回到自我</button>' : '') +
+      (cardActive ? '<button id="baseSelf" data-self="1">切回自我卡</button>' : '') +
       '</div>' +
-      '<p class="muted" style="margin:8px 0 0">当前：' + esc(cardActive ? '穿着「' + currentName + '」' : '自我（未穿人设卡）') + '</p></div>';
+      '<p class="muted" style="margin:8px 0 0">当前：' + esc(cardActive ? '已启用「' + currentName + '」' : '自我卡') + '</p></div>';
     // 预设和自定义合成一个列表：都能改名、编辑、试聊，不再区分来源。
     var custom = (s.personae || []).slice();
     var presetItems = presets.filter(function (p) { return hidden.indexOf(p.id) === -1; }).map(function (p) {
@@ -1382,15 +1754,15 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       return { id: p.id, name: p.name, prompt: p.prompt, isPreset: false };
     }));
 
-    out += '<div class="card"><h2>人设卡（cosplay）</h2>' +
-      '<div class="muted" style="margin-bottom:8px">穿上哪张卡，就用那张卡的外形、背景、语气和喜好说话；卡片只叠加在自我卡外面，摘下后回到自我。点「穿上」切换。</div>';
+    out += '<div class="card"><h2>人设卡</h2>' +
+      '<div class="muted" style="margin-bottom:8px">选中的卡会影响她注意到的细节、自己的偏好和回应方式。可以先试聊再启用。</div>';
     if (!items.length) out += '<div class="empty">还没有人设卡</div>';
     items.forEach(function (p) {
       var on = s.activePersonaId === p.id;
       out += '<div class="persona' + (on ? ' on' : '') + '"><h3>' + esc(p.name) +
-        (on ? '<span class="tag">穿着中</span>' : '') + '</h3>' +
+        (on ? '<span class="tag">使用中</span>' : '') + '</h3>' +
         '<div class="btnrow" style="margin-top:10px">' +
-        '<button class="primary small" data-use="' + esc(p.id) + '">' + (on ? '已穿上' : '穿上') + '</button>' +
+        '<button class="primary small" data-use="' + esc(p.id) + '">' + (on ? '已启用' : '启用') + '</button>' +
         '<button class="small" data-edit="' + esc(p.id) + '">改名 / 编辑</button>' +
         '<button class="small" data-pv="' + esc(p.id) + '">试聊</button>' +
         (p.isPreset
@@ -1408,7 +1780,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     }
     out += '<div style="display:grid;gap:8px">' +
       '<input id="pName" placeholder="人设卡名字，例如：暴躁学霸" value="' + (editing ? esc(editing.name) : '') + '">' +
-      '<textarea id="pPrompt" placeholder="人设卡提示词：这张卡的外形、口头禅、忌讳、爱吃什么……会被当成 cosplay 设定叠在自我卡上">' + (editing ? esc(editing.prompt) : '') + '</textarea>' +
+      '<textarea id="pPrompt" placeholder="她在意什么、遇到分歧会怎么做、有什么爱好或外形特征？">' + (editing ? esc(editing.prompt) : '') + '</textarea>' +
       '<div class="btnrow"><button class="primary" id="pAdd">' + (editing ? '保存修改' : '新建人设卡') + '</button>' +
       '<button id="pCancel" style="display:' + (editing ? '' : 'none') + '">取消编辑</button></div></div></div>';
 
@@ -1454,6 +1826,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       '<button class="small ghost" id="ownerUseFirst">用白名单第一个</button></div></div>';
 
     out+='<section class="card"><h2>她怎么称呼你</h2><p class="muted">先核对真实QQ号，再使用这个账号的备注。聊天和日记共用；昵称相同不会认成同一个人。</p>'+owners.map(id=>'<div class="row owner-address-row"><span class="mono">QQ '+esc(id)+'</span><input id="ownerAddress_'+esc(id)+'" data-owner-note="'+esc(id)+'" value="'+esc(data.settings.userNotes?.[id]||'')+'" maxlength="24" placeholder="例如：老爸、阿辰" aria-label="QQ '+esc(id)+' 的日常称呼"><button data-owner-note-save="'+esc(id)+'">保存称呼</button></div>').join('')+(!owners.length?'<p class="muted">先在上方保存你的QQ号。</p>':'')+'</section>';
+    out += '<section class="card"><h2>聊天对象范围</h2><label class="check-field"><input id="contactWhitelist" type="checkbox" '+(data.settings.contactWhitelistEnabled!==false?'checked':'')+'>仅与名单中的联系人和群互动</label><p class="muted">关闭后可与当前 QQ 好友和已加入的群互动。停用的对象仍排除，号主权限单独设置。</p><button id="contactScopeSave">保存对象范围</button></section>';
     out += '<div class="card"><h2>允许私聊的 QQ</h2>' +
       '<div class="row" style="padding-top:0"><span class="muted">号码默认打码，备注只有你看得到；她看到的也只是备注 + 尾号。</span>' +
       '<button class="small" id="qqReveal">' + (showFullQQ ? '隐藏号码' : '显示完整号码') + '</button></div>';
@@ -1666,13 +2039,54 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
 
   function monitorFiles(m) { return Array.from(new Set([...(Array.isArray(m.files)?m.files:[]),m.file].filter(function(file){return typeof file==='string'&&/^[A-Za-z0-9_-]+\.(png|jpe?g|gif|webp)$/i.test(file);}))); }
+  var monitorHistory=null;
+  function activeTranscript(){
+    var account=data.settings.activeAccountId||'';
+    var recent=monitor?.accountId===undefined||monitor.accountId===account?monitor?.messages||[]:[];
+    var chats=Array.from(new Set([...(monitor?.accountId===account?monitor.historyChats||[]:[]),...recent.map(m=>m.chat)]));
+    if(msgChat!=='all'&&!chats.includes(msgChat))msgChat='all';
+    var scope=JSON.stringify([account,msgChat,chats.slice().sort()]);
+    if(monitorHistory?.scope!==scope)monitorHistory={scope,account,rows:[],next:null,done:false,pending:false};
+    return {recent,chats,history:monitorHistory};
+  }
+  function rememberTranscript(){
+    var box=$('monitorTranscript');
+    if(tab!=='monitor'||!box||!monitorHistory||box.dataset.scope!==monitorHistory.scope)return;
+    if(box.scrollHeight-box.clientHeight-box.scrollTop<6){monitorHistory.anchor=null;return;}
+    var top=box.getBoundingClientRect().top;
+    var node=Array.from(box.querySelectorAll('[data-row]')).find(n=>n.getBoundingClientRect().bottom>top);
+    if(node)monitorHistory.anchor={id:node.dataset.row,offset:node.getBoundingClientRect().top-top};
+  }
+  function bindTranscript(){
+    var box=$('monitorTranscript'),previous=$('earlierMessages');
+    if(!box||!monitorHistory)return;
+    var state=monitorHistory,anchor=state.anchor;
+    var node=anchor&&Array.from(box.querySelectorAll('[data-row]')).find(n=>n.dataset.row===anchor.id);
+    if(node)box.scrollTop+=node.getBoundingClientRect().top-box.getBoundingClientRect().top-anchor.offset;
+    else box.scrollTop=box.scrollHeight;
+    if(!previous)return;
+    var lastTop=box.scrollTop;
+    box.onscroll=()=>{var top=box.scrollTop;if(top<=4&&lastTop>4&&!state.pending&&!state.done)previous.click();lastTop=top;};
+    previous.onclick=async()=>{
+      if(state.pending||state.done)return;
+      var recent=activeTranscript().recent.filter(r=>msgChat==='all'||r.chat===msgChat);
+      var earliest=recent.slice().sort((a,b)=>a.time-b.time||String(a.historyId).localeCompare(String(b.historyId)))[0];
+      var query=new URLSearchParams({account:state.account,before:state.next??earliest?.cursor??''});
+      if(msgChat!=='all')query.set('chat',msgChat);
+      state.pending=true;previous.disabled=true;previous.textContent='正在读取…';
+      try{
+        var page=await api('GET','/im-bridge/message-history?'+query);
+        if(tab!=='monitor'||activeTranscript().history!==state||page.accountId!==state.account)return;
+        state.rows.push(...page.messages);state.next=page.next;state.done=!page.next;
+        renderPane();
+      }catch(e){toast(e.message);}
+      finally{state.pending=false;if(previous.isConnected){previous.disabled=false;previous.textContent='加载更早消息';}}
+    };
+  }
   function viewMonitor() {
-    var all = (monitor && monitor.messages) || [];
-    var chats = [];
-    all.forEach(function (m) {
-      var key = m.chat || '未知';
-      if (chats.indexOf(key) === -1) chats.push(key);
-    });
+    var current=activeTranscript(),history=current.history,chats=current.chats;
+    var byId=new Map();history.rows.concat(current.recent).forEach(function(m,i){byId.set(m.historyId||'recent-'+i,m);});
+    var all=Array.from(byId.values()).sort((a,b)=>a.time-b.time||String(a.historyId).localeCompare(String(b.historyId)));
     var list = all.filter(function (m) {
       if (msgChat !== 'all' && (m.chat || '未知') !== msgChat) return false;
       if (msgFilter !== 'all' && m.dir !== msgFilter) return false;
@@ -1682,34 +2096,37 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       }
       return true;
     });
-    var out = '<div class="card"><div class="banner"><b>免责声明</b><br>' + esc((monitor && monitor.disclaimer) || '') + '</div></div>';
-    out += '<div class="card"><div class="row"><span><b>消息记录</b> <span class="muted">' + list.length + ' / ' + all.length + ' 条</span></span>' +
-      '<input id="monSearch" placeholder="搜内容或备注" value="' + esc(monQuery) + '" style="max-width:180px;padding:7px 10px">' +
-      '<span class="seg" id="msgSeg"><button data-filter="all" class="' + (msgFilter === 'all' ? 'on' : '') + '">全部</button>' +
-      '<button data-filter="in" class="' + (msgFilter === 'in' ? 'on' : '') + '">收到</button>' +
-      '<button data-filter="out" class="' + (msgFilter === 'out' ? 'on' : '') + '">发出</button></span></div>';
-
-    if (chats.length > 0) {
-      out += '<div class="btnrow" style="margin-top:10px">' +
-        '<button class="small ' + (msgChat === 'all' ? 'primary' : 'ghost') + '" data-chat="all">全部对话</button>' +
-        chats.map(function (c) {
-          return '<button class="small ' + (msgChat === c ? 'primary' : 'ghost') + '" data-chat="' + esc(c) + '">' +
-            esc(notesLabel(c)) + '</button>';
-        }).join('') + '</div>';
+    var options = chats.map(function (chat) {
+      return '<option value="'+esc(chat)+'"'+(msgChat===chat?' selected':'')+'>'+esc(notesLabel(chat))+'</option>';
+    }).join('');
+    var out = '<section class="card message-console"><header class="messages-head"><h2>消息记录</h2><span class="muted">'+list.length+' / '+all.length+' 条</span></header>'+
+      '<div class="messages-toolbar"><label>对话<select id="monitorChat"><option value="all">全部对话</option>'+options+'</select></label>'+
+      '<label>搜索<input type="search" id="monSearch" placeholder="内容或备注" value="'+esc(monQuery)+'"></label>'+
+      '<div class="seg" id="msgSeg" role="group" aria-label="消息方向">'+
+      [['all','全部'],['in','收到'],['out','发出']].map(function (item) {
+        var active = msgFilter===item[0];
+        return '<button type="button" data-filter="'+item[0]+'" class="'+(active?'on':'')+'" aria-pressed="'+active+'">'+item[1]+'</button>';
+      }).join('')+'</div></div>';
+    if(monitor?.notice)out+='<p class="banner" role="status">'+esc(monitor.notice)+'</p>';
+    out += '<div id="monitorTranscript" class="msgs" tabindex="0" aria-label="聊天内容" data-scope="'+esc(history.scope)+'">';
+    if(Array.isArray(monitor?.historyChats)&&chats.length){
+      out+=history.done?'<small class="muted">已到本机保存的最早记录</small>':'<button type="button" id="earlierMessages">加载更早消息</button>';
     }
-    out += '<div class="btnrow" style="margin-top:10px"><button class="danger small" id="mClear">清空记录</button>' +
-      '<span class="muted" style="align-self:center">仅保存白名单对话 · 每 2 秒自动刷新</span></div>';
-
-    out += '<div class="msgs" style="margin-top:12px">';
-    if (!list.length) out += '<div class="empty">这个分组还没有消息</div>';
-    list.slice().reverse().forEach(function (m) {
-      out += '<div class="msg ' + m.dir + '"><div class="meta"><span>' + (m.dir === 'in' ? '收到' : ({queued:'等待发送',sending:'等待回执',sent:'已发出',unknown:'送达待确认',failed:'发送失败',cancelled:'已取消'})[m.delivery] || '发出') +
-        '</span><span class="mono">' + esc(notesLabel(m.chat || '')) + '</span><span>' + new Date(m.time).toLocaleTimeString() + '</span></div>' +
+    if (!list.length) out += '<div class="empty">'+(all.length?'没有符合当前筛选的消息':'还没有消息记录')+'</div>';
+    list.forEach(function (m) {
+      out += '<div data-row="'+esc(m.historyId||'')+'" class="msg ' + (m.dir === 'out' ? 'out' : 'in') + '"><div class="meta"><span>' + (m.dir === 'in' ? '收到' : ({queued:'等待发送',sending:'等待回执',sent:'已发出',unknown:'送达待确认',failed:'发送失败',cancelled:'已取消'})[m.delivery] || '发出') +
+        '</span><span>' + esc(notesLabel(m.chat || '')) + '</span><time>' + new Date(m.time).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) + '</time></div>' +
         '<div class="body">' + esc(m.text || '') + '</div>' +
-        monitorFiles(m).map(function(file){return '<a href="/im-bridge/msg-image?file=' + encodeURIComponent(file) + '" target="_blank" rel="noopener"><img loading="lazy" src="/im-bridge/msg-image?file=' + encodeURIComponent(file) + '" alt="' + (m.dir === 'out' ? '机器人发出的图片' : '收到的图片') + '"></a>';}).join('') +
+        monitorFiles(m).map(function(file){
+          if(m.missingFiles?.includes(file))return '<small class="muted">图片副本已不可用</small>';
+          var query=new URLSearchParams({file,account:history.account});
+          if(m.historyId){query.set('chat',m.chat);query.set('time',String(m.time));query.set('id',m.historyId);}
+          var url=esc('/im-bridge/msg-image?'+query);
+          return '<a href="'+url+'" target="_blank" rel="noopener"><img loading="lazy" src="'+url+'" alt="'+(m.dir==='out'?'机器人发出的图片':'收到的图片')+'"></a>';
+        }).join('') +
         '</div>';
     });
-    out += '</div></div>';
+    out += '</div><details class="message-retention"><summary>记录说明与清理</summary><p class="muted">'+esc(monitor?.disclaimer || '本页显示已保存在此设备的监听记录。')+'</p><button class="danger small" id="mClear">清空当前账号的本机消息及归档</button></details></section>';
     return out;
   }
 
@@ -2195,7 +2612,13 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     imagegenDraft=null;imagegenTypedKeys={};await load();if($('igTestPrompt'))$('igTestPrompt').value=originalPrompt;
   }
 
-  function studioExpectedRatio(){
+  function studioExpectedRatio(request){
+    var raw=String(request||'').replace(/：(?=\d)/g,':');
+    var ratio=raw.match(/(?<![\d:：])(1:1|3:2|4:3|16:9|2:3|3:4|9:16|21:9|9:21)(?![\d:：])/),size=raw.match(/(?<!\d)(\d{2,5})\s*[xX×]\s*(\d{2,5})(?!\d)/);
+    if(size)return {w:Number(size[1]),h:Number(size[2]),label:size[1]+'×'+size[2]};
+    if(ratio){var parts=ratio[1].split(':');return {w:Number(parts[0]),h:Number(parts[1]),label:ratio[1]};}
+    var route=connectionState?.effectiveSources?.items?.find(function(item){return item.kind==='image';});
+    if(!route||route.source!=='legacy'||route.backend==='local')return null;
     var entry=studioActiveEntry();if(!entry)return null;
     var pick=function(re){var extra=(entry.extraNodes||[]).find(function(n){return re.test(n.fieldName);});if(extra&&String(extra.fieldValue).trim()!=='')return String(extra.fieldValue);var field=(entry.discovery?.fields||[]).find(function(f){return re.test(f.fieldName);});return field&&String(field.value).trim()!==''?String(field.value):'';};
     var m=pick(/aspect|ratio|比例/i).match(/(\d+(?:\.\d+)?)\s*[:：\/x×]\s*(\d+(?:\.\d+)?)/);
@@ -2203,9 +2626,9 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var w=Number(pick(/^width$/i)),h=Number(pick(/^height$/i));
     return w>0&&h>0?{w:w,h:h,label:w+'×'+h}:null;
   }
-  function studioSizeNote(size){
+  function studioSizeNote(size,request){
     if(!size||!size.width||!size.height)return '';
-    var text=' · '+size.width+'×'+size.height,want=studioExpectedRatio();
+    var text=' · '+size.width+'×'+size.height,want=studioExpectedRatio(request);
     if(want&&want.w>0&&want.h>0){
       var expected=want.w/want.h,actual=size.width/size.height;
       if(Math.abs(expected-actual)/expected>0.04)text+='（画幅设置为 '+want.label+'，实际返回比例不同：这个工作流的画幅节点可能没有接到最终输出，或图生图沿用了输入图尺寸）';
@@ -2322,10 +2745,10 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if(library?.revision!=='20261026-learning-v1')return '<div class="card"><h2>主动与被动学习</h2><p class="muted">学习模块尚未载入，请重新打开 DSH。</p></div>';
     var out='<div class="card"><div class="section-heading"><h2>主动与被动学习</h2><span class="tag">真实资料 · 交流经验 · 自选兴趣</span></div><p class="muted">被动学习观察白名单聊天中的反馈，并提取实际读到的网页与字幕。主动学习结合人设兴趣和未解决的问题查找公开资料，不预设必学主题；固定、重复的要求在你提出后登记到长期任务。手机应用里读到的标题、简介和公开评论也会作为有原文依据的资料排入学习。不会因此额外向 QQ 发消息。</p><div class="form-two"><label class="check-field"><input type="checkbox" id="learnEnabled"'+(c.enabled!==false?' checked':'')+'>启用学习记忆</label><label class="check-field"><input type="checkbox" id="learnPassive"'+(c.passive!==false?' checked':'')+'>被动学习聊天反馈和分享资料</label><label class="check-field"><input type="checkbox" id="learnActive"'+(c.active!==false?' checked':'')+'>允许后台主动学习</label><label class="field">学习方向<select id="learnFocus"><option value="mixed"'+(c.focus==='mixed'?' selected':'')+'>结合人设兴趣与未解决的问题</option><option value="questions"'+(c.focus==='questions'?' selected':'')+'>优先补足未解决的问题</option></select></label><label class="field">主动学习间隔（分钟）<input id="learnInterval" type="number" min="30" max="1440" value="'+Number(c.intervalMinutes||120)+'"></label><label class="field">每天最多主动尝试次数<input id="learnDaily" type="number" min="1" max="6" value="'+Number(c.maxActivePerDay||2)+'"></label></div><button id="learnSave" class="primary">保存学习设置</button><p class="muted">自动学习同时遵守自主总开关和清醒时段；<strong>聊天里的被动学习不设每日次数上限</strong>，读到的新反馈会持续排队处理。主动联网学习仍按每天次数限制。只保存有原文依据的具体理解，搜索标题和摘要不算已读正文。学习过程进入日终记忆，个人信息仍按日／月／年整理。</p></div>';
     if(compact)return '<div class="card"><h2>后台学习</h2><p class="muted">学习记忆 '+(c.enabled!==false?'已开':'已关')+' · 主动学习 '+(c.active!==false?'已开':'已关')+'。学习设置与记录统一在“情绪与学习”管理。</p><button data-go="thoughts">管理学习与情绪</button></div>';
-    var scopes=(library.scopes||[]).filter(x=>{var persona=data.settings.contactProfiles?.[x.meta.key]?.personaId||data.settings.activePersonaId||data.status.persona?.id||data.status.preset;return x.meta.personaId===persona;});
+    var scopes=groupMemoryScopes(library.scopes||[]);
     if(!scopes.some(x=>x.meta.key===learningChat))learningChat=scopes[0]?.meta.key||'';
     var scope=scopes.find(x=>x.meta.key===learningChat),items=scope?.items||[],labels={social:'语境观察',expression:'表达经验',meme:'梗知识',knowledge:'知识'};
-    out+='<div class="card"><h2>学习记录与使用情况（自动提取，无需审核）</h2><label class="field">当前人设的学习范围<select id="learnChat">'+scopes.map(x=>'<option value="'+esc(x.meta.key)+'"'+(x.meta.key===learningChat?' selected':'')+'>'+esc(notesLabel(x.meta.key))+'</option>').join('')+'</select></label><div class="btnrow"><button id="learnNow"'+(!scope?' disabled':'')+'>现在主动学一次</button><button id="learnProcess"'+(!scope?' disabled':'')+'>立即补处理待学习资料</button><button id="learnHistory"'+(!scope?' disabled':'')+'>补学保留的历史反馈</button><button id="learnClear" class="danger small"'+(!scope?' disabled':'')+'>清空此范围的学习库</button></div>';
+    out+='<div class="card"><h2>学习记录与使用情况（自动提取，无需审核）</h2><label class="field">资料来源对话（跨人设共用）<select id="learnChat">'+scopes.map(x=>'<option value="'+esc(x.meta.key)+'"'+(x.meta.key===learningChat?' selected':'')+'>'+esc(notesLabel(x.meta.key))+'</option>').join('')+'</select></label><div class="btnrow"><button id="learnNow"'+(!scope?' disabled':'')+'>现在主动学一次</button><button id="learnProcess"'+(!scope?' disabled':'')+'>立即补处理待学习资料</button><button id="learnHistory"'+(!scope?' disabled':'')+'>补学保留的历史反馈</button><button id="learnClear" class="danger small"'+(!scope?' disabled':'')+'>清空此范围的学习库</button></div>';
     if(!scope)return out+'<p class="muted">先添加白名单联系人。</p></div>';
     var scopeId=JSON.stringify([data.settings.activeAccountId,scope.meta.personaId,learningChat]);
     if(scopeId!==learningScope){learningScope=scopeId;learningPage=0;learningQuery='';}
@@ -2339,16 +2762,16 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if(scope.status)out+='<div class="notice" role="status">'+esc(({queued:'等待学习',running:'学习中',completed:'已处理',failed:'未学成，待重试',cancelled:'本次已取消',pending:'待补处理'})[scope.status.state]||scope.status.state)+'：'+esc(scope.status.reason||'')+(scope.status.query?'<br>公开选题：'+esc(scope.status.query):'')+'</div>';
     if(scope.archiveError)out+='<p class="muted">'+esc(scope.archiveError)+'</p>';
     if(!items.length)out+='<div class="empty">目前没有学成的记录。可以补学历史反馈、分享资料，或让她主动学一次；没有读到正文时会如实说明。</div>';
-    visibleItems.forEach(i=>{out+='<article class="memory-item"><div class="section-heading"><span class="tag">'+esc(labels[i.kind])+'</span><span class="muted">'+(i.mode==='active'?'主动学习':'被动学习')+' · '+esc(new Date(i.at).toLocaleString())+'</span></div><p>'+esc(i.summary)+'</p><p class="muted">适用：'+esc(i.when)+'<br>避免：'+esc(i.avoid)+'</p>'+(i.example?'<p class="muted">自拟例句：'+esc(i.example)+'</p>':'')+'<details><summary>来源与原文依据</summary><p>'+esc(i.source.title)+(i.source.partial?' · 部分材料':'')+'</p><blockquote>'+esc(i.quote)+'</blockquote>'+(i.source.url?'<a href="'+esc(i.source.url)+'" target="_blank" rel="noreferrer">查看公开来源</a>':i.source.type==='phone'?'<p class="muted">来自手机应用当前屏幕，只保存文字，没有截图</p>':'<p class="muted">来自本对话，未提交外网</p>')+'</details><p class="muted">已用于相关回复 '+Number(i.used||0)+' 次'+(i.lastUsedAt?' · 最近 '+esc(new Date(i.lastUsedAt).toLocaleString()):'')+' · '+(i.expiresAt<Date.now()?'已过期，暂停使用':'复核期限 '+esc(new Date(i.expiresAt).toLocaleDateString()))+'</p><button class="danger small" data-learning-delete="'+esc(i.id)+'">删除，不再引用</button></article>';});
+    visibleItems.forEach(i=>{out+='<article class="memory-item"><div class="section-heading"><span class="tag">'+esc(labels[i.kind])+'</span><span class="muted">'+(i.mode==='active'?'主动学习':'被动学习')+' · '+esc(new Date(i.at).toLocaleString())+'</span></div><p>'+esc(i.summary)+'</p><p class="muted">适用：'+esc(i.when)+'<br>避免：'+esc(i.avoid)+'</p>'+(i.example?'<p class="muted">自拟例句：'+esc(i.example)+'</p>':'')+'<details><summary>来源与原文依据</summary><p>'+esc(i.source.title)+(i.source.partial?' · 部分材料':'')+'</p><blockquote>'+esc(i.quote)+'</blockquote>'+(i.source.url?'<a href="'+esc(i.source.url)+'" target="_blank" rel="noreferrer">查看公开来源</a>':i.source.type==='phone'?'<p class="muted">来自手机应用当前屏幕，只保存文字，没有截图</p>':'<p class="muted">来自本对话，未提交外网</p>')+'</details><p class="muted">已用于相关回复 '+Number(i.used||0)+' 次'+(i.lastUsedAt?' · 最近 '+esc(new Date(i.lastUsedAt).toLocaleString()):'')+' · '+(i.expiresAt<Date.now()?'已到复核时间，历史含义仍可检索':'复核期限 '+esc(new Date(i.expiresAt).toLocaleDateString()))+'</p><button class="danger small" data-learning-delete="'+esc(i.id)+'">删除，不再引用</button></article>';});
     if(scope.pending.length)out+='<details><summary>等待学习的资料</summary>'+scope.pending.map(q=>'<p class="muted">'+esc(q.sources.map(x=>x.title).join('、'))+' · 尝试 '+q.attempts+' 次</p>').join('')+'</details>';
-    out+='<p class="muted">知识和经验按账号、联系人、人设隔离。梗默认 7 天后复核；过期不再注入对话。删除后不再用于回复，日历记忆中已经记录的学习过程仍是历史。</p></div>';return out;
+    out+='<p class="muted">知识与经验由插件保存，切换人设不丢失。跨对话只引用可共享的通用资料，私人事实不外传。复核期限不删除已知概念的历史含义；过期资料会标明待复核。删除后不再用于回复，日历记忆中已经记录的学习过程仍是历史。</p></div>';return out;
   }
   function bindLearning(){
     if($('learnChat'))$('learnChat').onchange=function(){learningChat=this.value;renderPane();};
     if($('learnSearch'))$('learnSearch').oninput=function(){learningQuery=this.value;learningPage=0;renderPane();};
     [['learnPrev',-1],['learnNext',1]].forEach(function(pair){if($(pair[0]))$(pair[0]).onclick=function(){learningPage+=pair[1];renderPane();$('learnPagination')?.scrollIntoView({block:'center'});};});
     if($('learnSave'))$('learnSave').onclick=async function(){var button=this;button.disabled=true;try{await api('POST','/im-bridge/settings',{learning:{enabled:$('learnEnabled').checked,passive:$('learnPassive').checked,active:$('learnActive').checked,focus:$('learnFocus').value,intervalMinutes:Number($('learnInterval').value),maxActivePerDay:Number($('learnDaily').value)}});await load();toast('学习设置已保存');}catch(e){toast(e.message);}finally{if(button.isConnected)button.disabled=false;}};
-    async function act(action,button,id){if(!learningChat)return;if(['clear','delete'].includes(action)&&!await askConfirm(action==='clear'?'清空此联系人、当前人设的学习记录和队列？':'删除这条学习记录，并停止在后续回复中引用？'))return;button.disabled=true;try{var r=await api('POST','/im-bridge/features/learning',{key:learningChat,action,id});await load();toast(r.result.reason||'已检查学习状态');}catch(e){toast(e.message);}finally{if(button.isConnected)button.disabled=false;}}
+    async function act(action,button,id){if(!learningChat)return;if(['clear','delete'].includes(action)&&!await askConfirm(action==='clear'?'清空此联系人、当前人设的学习记录和队列？':'删除这条学习记录，并停止在后续回复中引用？'))return;button.disabled=true;try{var bodies=action==='process'?(featureData.learning.scopes||[]).filter(s=>s.meta.key===learningChat&&s.pending?.length).map(s=>({key:learningChat,action,id,personaId:s.meta.personaId})):[];if(!bodies.length)bodies=[{key:learningChat,action,id}];var r;for(var body of bodies)r=await api('POST','/im-bridge/features/learning',body);await load();toast(r.result.reason||'已检查学习状态');}catch(e){toast(e.message);}finally{if(button.isConnected)button.disabled=false;}}
     [['learnNow','active'],['learnProcess','process'],['learnHistory','history'],['learnClear','clear']].forEach(pair=>{if($(pair[0]))$(pair[0]).onclick=function(){act(pair[1],this,'');};});
     document.querySelectorAll('[data-learning-delete]').forEach(b=>b.onclick=function(){act('delete',this,this.getAttribute('data-learning-delete'));});
     if($('memLearning'))$('memLearning').onclick=()=>navigate('thoughts');
@@ -2360,11 +2783,11 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if(!featureData.knownChats.includes(soulChat))soulChat=featureData.knownChats[0]||'';
     var c=featureData.moodConfig||{},s=featureData.soulByChat[soulChat]||{mood:{score:65,timeline:[],dims:{}},experiences:[]};
     var dims={happy:'开心',calm:'平静',sweet:'亲近',heartache:'心疼',worry:'担心',sad:'低落',jealous:'吃醋',angry:'生气',curious:'好奇',excited:'兴奋',disappointed:'失落',relieved:'释然',proud:'得意',bored:'无聊'};
-    var out='<div class="card"><h2>相处状态</h2><p class="muted">按账号、联系人和人设分别保存。情绪是可修正的估计，作品反思与用户个人记忆分开。低可信度的猜测不会影响她的语气；状态会逐渐回稳。</p><label class="field">查看对话<select id="soulChat">'+featureOptions(soulChat)+'</select></label><p>心情 '+Number(s.mood.score).toFixed(0)+' · '+Object.keys(dims).map(k=>dims[k]+' '+Math.round(s.mood.dims[k]||0)).join(' / ')+'</p><div class="form-two"><label class="check-field"><input type="checkbox" id="moodEnabled"'+(c.enabled?' checked':'')+'>启用情绪连续性</label><label class="field">判断间隔（用户轮次）<input id="moodEvery" type="number" min="1" max="20" value="'+Number(c.everyTurns||3)+'"></label><label class="field">最低可信度<input id="moodConfidence" type="number" min="50" max="100" value="'+Number(c.confidence||70)+'"></label><label class="field">回稳半衰期（小时）<input id="moodDecay" type="number" min="1" max="48" value="'+Number(c.halfLifeHours||6)+'"></label></div><p class="muted">默认每三轮评估；明确的情绪信号可提前评估。与已有复盘合用一次模型调用，情绪底色持续影响后续措辞和自动语音；重要事件每天最多提示六次，同一事件只提示一次，不限制情绪延续。</p><button id="soulReset" class="small">让当前对话心情回稳</button><div style="margin-top:12px">'+(s.mood.timeline||[]).slice(-6).reverse().map(e=>'<div class="msg"><div class="meta">'+esc(new Date(e.at).toLocaleString())+' · 可信度 '+Number(e.confidence)+'</div><div>'+esc(e.reason)+'</div><div class="muted">依据：'+esc(e.quote)+'</div></div>').join('')+'</div></div>';
+    var out='<div class="card"><h2>情绪连续性</h2><p class="muted">按账号、联系人和人设分别保存。情绪是可修正的估计，作品反思与用户个人记忆分开。低可信度的猜测不会影响她的语气；状态会逐渐回稳。</p><label class="field">查看对话<select id="soulChat">'+featureOptions(soulChat)+'</select></label><details><summary>查看情绪估计与高级参数</summary><p>心情 '+Number(s.mood.score).toFixed(0)+' · '+Object.keys(dims).map(k=>dims[k]+' '+Math.round(s.mood.dims[k]||0)).join(' / ')+'</p><div class="form-two"><label class="check-field"><input type="checkbox" id="moodEnabled"'+(c.enabled?' checked':'')+'>启用情绪连续性</label><label class="field">判断间隔（用户轮次）<input id="moodEvery" type="number" min="1" max="20" value="'+Number(c.everyTurns||3)+'"></label><label class="field">最低可信度<input id="moodConfidence" type="number" min="50" max="100" value="'+Number(c.confidence||70)+'"></label><label class="field">回稳半衰期（小时）<input id="moodDecay" type="number" min="1" max="48" value="'+Number(c.halfLifeHours||6)+'"></label></div><p class="muted">默认每三轮评估；明确的情绪信号可提前评估。与已有复盘合用一次模型调用，情绪底色持续影响后续措辞和自动语音；重要事件每天最多提示六次，同一事件只提示一次，不限制情绪延续。</p><button id="soulReset" class="small">让当前对话心情回稳</button><div style="margin-top:12px">'+(s.mood.timeline||[]).slice(-6).reverse().map(e=>'<div class="msg"><div class="meta">'+esc(new Date(e.at).toLocaleString())+' · 可信度 '+Number(e.confidence)+'</div><div>'+esc(e.reason)+'</div><div class="muted">依据：'+esc(e.quote)+'</div></div>').join('')+'</div></details></div>';
     if(s.lastAnalysis)out+='<div class="card"><p class="muted">上次分析：'+esc(s.lastAnalysis.state==='running'?'处理中':s.lastAnalysis.reason||'已完成')+' · '+esc(new Date(s.lastAnalysis.at).toLocaleString())+'</p></div>';
     var video=featureData?.videoCapability||{};out+='<div class="card"><h2>视频画面与声音</h2><p>'+esc(video.enhanced?'video-watch-plus 本地增强已就绪':'当前使用本机基础抽帧')+' · '+esc(video.whisper?'本地语音模型已就绪':'语音模型待就绪')+'</p><label class="check-field"><input id="videoPlusEnabled" type="checkbox"'+(data.settings.media?.videoPlus!==false?' checked':'')+'>增强视频卡片与附件理解</label><p class="muted">按切镜与全片骨架提取最多8张画面，先分析声音再转写，避免把背景音乐编成台词。当前读取15分钟、128MB以内的单个视频；音轨覆盖前3分钟。支持可取得视频的B站、抖音等链接，登录或平台限制会如实显示失败。设置与下方阅读选项一起保存。</p></div>';
-    var exp=featureData.expressionLearning||{},cr=exp.corpusRatings||{};
-    out+='<div class="card"><h2>自然说话与梗学习</h2><p>真人对话样例 '+Number(exp.corpus||0)+' 组（日常 '+Number(cr.general||0)+' · 情绪/粗口 '+Number(cr.edgy||0)+' · 黄色玩笑 '+Number(cr.bawdy||0)+' · 成人向 '+Number(cr.adult||0)+'） · 当前对话已学表达 '+Number(exp.learned||0)+' 条 · 待整理发言 '+Number(exp.pending||0)+' 条</p><p class="muted">把普通接话、情绪和场景统一按语境检索；不要求先出现原词，不强制搞笑，不学习个人身份。样例包含 MIT 授权的 LCCC 小样本（约 220 条）、少量 Apache-2.0 的 KdConv 对话片段和本项目自写的日常/情绪/场景/粗口/亲密对话，只作语气参考，不是训练模型权重。黄色玩笑样例对所有私聊和群聊开放，只当玩笑、不点名身体、对方不接就收；成人向亲密仍只在号主私聊且开启成人模式时检索，不进群聊或陌生人对话。可用 tools/import-expression-corpus.mjs 从本地 LCCC/KdConv 文件补充自己的语料。</p><details><summary>本对话最近学到的表达</summary>'+(exp.items||[]).slice(-8).map(i=>'<p><b>'+esc(i.situation)+'</b>：'+esc(i.style)+'</p>').join('')+'</details></div>';
+    var exp=featureData.expressionLearning||{};
+    out+='<div class="card"><h2>自然说话与表达学习</h2><p>随插件提供 '+Number(exp.corpus||0)+' 条公开贴吧表达参考。聊天时优先参考相处中学到的说法。</p><button data-go="study">查看学习记录与本轮参考来源</button></div>';
     out+=websiteReadingMarkup();
     out+='<div class="card"><h3>历史作品反思</h3>';
     out+=(s.experiences||[]).slice(-8).reverse().map(e=>'<div class="msg"><div class="meta">'+esc(e.title)+' · '+esc(new Date(e.at).toLocaleString())+'</div><div>'+esc(e.insight)+'</div><p>'+esc(e.nextResponse)+'</p><div class="muted">原文依据：'+esc(e.evidenceQuote)+'</div></div>').join('')||'<p class="muted">没有历史记录。</p>';
@@ -2429,31 +2852,31 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
 
   function viewModelSettings() {
-    var s = data.status;
-    var pc = data.settings.proactiveCfg || { startHour: 9, endHour: 23, maxPerDay: 3 };
-    var dnd = data.settings.dnd || { enabled: false, startHour: 23, endHour: 9 };
-    
-    var out = '<div class="card"><h2>聊天模型</h2><div class="row"><span>当前</span><span class="muted mono" id="modelCur"></span></div>' +
-      '<label class="field" style="margin-top:8px">智力档位（点一下立刻切换并重开会话）</label>' +
-      '<div class="btnrow">' +
-      ['eco:省·不思考', 'standard:标准·轻思考', 'high:高·深想', 'max:最高·拉满'].map(function (pair) {
-        var id = pair.split(':')[0];
-        var label = pair.split(':')[1];
-        return '<button class="small ' + ((data.status.intelligence || 'standard') === id ? 'primary' : '') + '" data-iq="' + id + '">' + label + '</button>';
-      }).join('') + '</div>' +
-      '<div class="muted" style="margin-top:4px">当前实际档位：<code>' + esc(data.status.effectiveEffort || 'low') + '</code>。档位写在会话里，所以切换会结束当前会话，下一条消息自动开新会话。</div>' +
-      '<div class="muted" id="iqHint"></div>' +
-      '<div style="display:grid;gap:8px;margin-top:8px">' +
-      '<label class="field">模型提供商<select id="mProvider"></select></label><label class="field">聊天模型<select id="mModel"></select></label>' +
-      '<div class="btnrow"><button class="primary" id="mSave">保存模型</button><button id="mReset">恢复默认</button></div>' +
-      '<div class="muted">思考深度由上面的「智力档位」统一控制，这里只管用哪个模型。聊天默认沿用 DeepSeek；要接入其他服务，在“连接与搭配”填地址、密钥和模型，保存后点击“用于聊天”。也可继续使用 DSH 的模型设置。</div>' +
-      '<button data-go="services">添加或切换聊天 API</button><div class="muted" id="ibHint">输入预算：本轮系统 ' + Number((featureData?.inputBudget?.last||{}).systemChars||0) + ' 字 + 动态 ' + Number((featureData?.inputBudget?.last||{}).contentChars||0) + ' 字（去重前 ' + Number((featureData?.inputBudget?.last||{}).rawContentChars||0) + ' 字）；较长的临时提示只保留最近两轮。</div>' +
-      '</div></div>';
-
-
-
-    out += viewSearchCard();
-    return out;
+    var status = data.status;
+    var budget = featureData?.inputBudget?.last;
+    var levels = [
+      ['eco', '省', '不思考'], ['standard', '标准', '轻思考'],
+      ['high', '高', '深入思考'], ['max', '最高', '最高深度']
+    ];
+    var currentLevel = status.intelligence || 'standard';
+    var options = levels.map(function (level) {
+      var selected = currentLevel === level[0];
+      return '<button type="button" class="model-level" data-iq="'+level[0]+'" aria-pressed="'+selected+'"'+(selected?' disabled':'')+'><b>'+level[1]+'</b><span>'+level[2]+'</span></button>';
+    }).join('');
+    var budgetSummary = budget
+      ? '系统 '+Number(budget.systemChars||0).toLocaleString()+' 字 · 动态 '+Number(budget.contentChars||0).toLocaleString()+' 字 · 去重前 '+Number(budget.rawContentChars||0).toLocaleString()+' 字'
+      : '暂无本轮输入用量';
+    return '<div class="model-workspace">'+
+      '<section class="model-current"><div class="model-mark">'+icon('settings')+'</div><div><span>当前生效模型</span><strong id="modelCur"></strong></div></section>'+
+      '<div class="model-configuration"><section class="card model-settings"><h2>聊天模型</h2>'+
+      '<label class="field">提供商<select id="mProvider"></select></label><label class="field">模型<select id="mModel"></select></label>'+
+      '<div class="btnrow"><button class="primary" id="mSave">保存模型</button><button id="mReset">恢复默认</button></div>'+
+      '<button class="model-route-link" data-go="services">'+icon('link')+'配置其他聊天 API</button></section>'+
+      '<section class="card model-thinking"><h2>思考深度</h2>'+
+      '<div class="model-levels" role="group" aria-label="思考深度">'+options+'</div>'+
+      '<p class="muted">切换会结束当前会话，下一条消息将使用新档位。</p><div class="muted" role="status" id="iqHint"></div>'+
+      '<details class="model-budget"><summary>本轮输入用量</summary><p class="muted" id="ibHint">'+budgetSummary+'。较长的临时提示只保留最近两轮。</p></details></section></div>'+
+      viewSearchCard()+'</div>';
   }
 
   /** 人设页里的「主动行为」块：她什么时候会主动说话。 */
@@ -2465,8 +2888,8 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
 
   function viewSearchCard() {
     var se = (data.settings && data.settings.search) || {};
-    return '<div class="card"><h2>网页搜索来源</h2>' +
-      '<div class="muted" style="margin-bottom:8px">用于网页搜索与资料查询；是否搜索由当前需求决定。这里设置默认搜索来源，实际结果以调用记录为准。</div>' +
+    return '<section class="card model-search"><h2>网页搜索来源</h2>' +
+      '<p class="muted">需要查资料时，优先使用这里选择的搜索引擎。</p>' +
       '<label class="field">引擎<select id="seEngine">' +
       '<option value="host"' + (se.engine === 'host' || !se.engine ? ' selected' : '') + '>DSH 自带（默认）</option>' +
       '<option value="wikipedia"' + (se.engine === 'wikipedia' ? ' selected' : '') + '>维基百科 API（免费、无需 key）</option>' +
@@ -2476,7 +2899,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       '</select></label>' +
       '<label class="field" style="margin-top:8px">SearXNG 地址<input id="searxUrl" placeholder="http://127.0.0.1:8888" value="' + esc(se.searxUrl || '') + '"></label>' +
       '<label class="field" style="margin-top:8px">自定义搜索 URL<input id="seCustomUrl" placeholder="https://example.com/search?q={q}" value="' + esc(se.customUrl || '') + '"></label>' +
-      '<button class="primary" id="searxSave" style="margin-top:10px">保存搜索设置</button></div>';
+      '<button class="primary" id="searxSave">保存搜索设置</button></section>';
   }
 
   /** 记忆：压缩规则 + 存放位置。 */
@@ -2540,9 +2963,9 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
   function calendarMemoryMarkup(){
     if(!calendarReady())return '<section class="card"><h2>记忆日历</h2><p class="muted">记忆正在准备，稍后刷新即可查看。</p></section>';
-    var cal=featureData.calendar,scopes=(cal.scopes||[]).filter(s=>!s.meta.accountId||!data.settings.activeAccountId||s.meta.accountId===data.settings.activeAccountId),key=s=>encodeURIComponent(JSON.stringify([s.meta.key,s.meta.personaId]));
-    if(!scopes.some(s=>key(s)===calendarSelection))calendarSelection=key(scopes.find(s=>s.meta.key===companionPanelKey())||scopes.find(s=>s.meta.kind==='chat')||scopes[0]||{meta:{key:'',personaId:''}});
-    var scope=scopes.find(s=>key(s)===calendarSelection),level=calendarBrowse.level;
+    var cal=featureData.calendar,scopes=(cal.scopes||[]).filter(s=>!s.meta.accountId||!data.settings.activeAccountId||s.meta.accountId===data.settings.activeAccountId),groups=groupMemoryScopes(scopes),key=s=>s.libraryKey||encodeURIComponent(JSON.stringify([s.meta.key,s.meta.personaId]));
+    if(!groups.some(s=>key(s)===calendarSelection))calendarSelection=key(groups.find(s=>s.meta.key===companionPanelKey())||groups.find(s=>s.meta.kind==='chat')||groups[0]||{meta:{key:'',personaId:''}});
+    var scope=groups.find(s=>key(s)===calendarSelection),level=calendarBrowse.level;
     var rows=scopes.flatMap(s=>(s[level]||[]).map(record=>({record,scope:s}))).sort((a,b)=>b.record.start.localeCompare(a.record.start));
     if(!calendarBrowse.period)calendarBrowse.period=calendarPeriod(rows[0]?.record.start||cal.now?.day||new Date().toISOString().slice(0,10));
     var selected=calendarPeriod(calendarBrowse.period),records=rows.filter(x=>calendarPeriod(x.record.start)===selected),pending=scopes.reduce((n,s)=>n+(s.pendingDays||[]).filter(d=>calendarPeriod(d.date)===selected).reduce((sum,d)=>sum+d.rows,0),0);
@@ -2550,14 +2973,14 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var out='<section class="card memory-calendar"><div class="section-heading"><div><h2>记忆日历</h2><p class="muted">选一个日期，翻翻那时的事。</p></div><div class="memory-period-tabs" role="group" aria-label="记忆时间尺度">'+[['days','日'],['months','月'],['years','年']].map(([id,label])=>'<button data-ct-level="'+id+'" aria-pressed="'+(level===id)+'">'+label+'</button>').join('')+'</div></div><div class="memory-date-bar"><button id="ctPrevious" aria-label="上一个'+({days:'日期',months:'月份',years:'年份'})[level]+'">‹</button><label class="field"><span class="sr-only">选择'+({days:'日期',months:'月份',years:'年份'})[level]+'</span><input id="ctDate" type="'+({days:'date',months:'month',years:'number'})[level]+'" value="'+esc(selected)+'"'+(level==='years'?' min="1900" max="2200" step="1"':'')+'></label><button id="ctNext" aria-label="下一个'+({days:'日期',months:'月份',years:'年份'})[level]+'">›</button><button id="ctLatest" class="ghost small">最近有记录</button></div>';
     out+='<div class="memory-date-picks" aria-label="已有记忆的日期">'+periods.slice(0,8).map(p=>'<button class="small" data-ct-period="'+esc(p)+'" aria-pressed="'+(selected===p)+'">'+esc(p)+'</button>').join('')+'</div><div id="ctRecords" aria-live="polite">';
     records.forEach(({record:r,scope:s})=>{
-      var source=(s.meta.kind==='life'?'她的数字日常':notesLabel(s.meta.key))+' · '+personaLabel(s.meta.personaId);
+      var source=s.meta.kind==='life'?'她的数字日常':notesLabel(s.meta.key);
       out+='<article class="calendar-entry"><header><time>'+esc(r.start+(r.end!==r.start?' — '+r.end:''))+'</time><small>'+esc(source)+'</small></header>'+(r.events||[]).map(e=>'<p>'+esc((e.speakerName?e.speakerName+'：':'')+e.text)+'</p>').join('')+'<details class="calendar-source"><summary>查看依据'+(r.partial?' · 部分资料':'')+'</summary>'+(r.events||[]).filter(e=>e.quote).map(e=>'<blockquote>'+esc(e.quote)+'</blockquote>').join('')+'<small>'+Number(r.sourceCount||0)+' 条来源</small><div><button class="danger small" data-ct-delete="'+esc(r.id)+'" data-ct-owner="'+esc(key(s))+'">删除这份归档</button></div></details></article>';
     });
     if(!records.length)out+='<div class="empty-soft">'+(pending?'这一天的聊天还在积累，整理完成后会出现在这里。':'这段时间还没有整理好的记忆。可以换个日期看看。')+'</div>';
     out+='</div><details class="calendar-manage"><summary>整理与管理</summary><p class="muted">每天自动整理昨日记忆，月末与年末汇总。查看不会触发整理，原始资料保留。</p>';
     if(cal.lastRun)out+='<p class="muted" role="status">'+esc(calendarReport(cal.lastRun))+'</p>';
     if(cal.error)out+='<p role="alert">'+esc(cal.error)+'</p>';
-    out+='<label class="field">管理范围<select id="ctScope">'+scopes.map(s=>'<option value="'+esc(key(s))+'"'+(key(s)===calendarSelection?' selected':'')+'>'+esc((s.meta.kind==='life'?'她的数字日常':notesLabel(s.meta.key))+' · '+personaLabel(s.meta.personaId))+'</option>').join('')+'</select></label><div class="btnrow"><button id="ctRun"'+(!scope?' disabled':'')+'>整理这个范围</button><button id="ctRunAll">整理全部</button><button class="danger small" id="ctClear"'+(!scope?' disabled':'')+'>清空这个范围</button></div>';
+    out+='<label class="field">管理对话来源（不按人设拆分）<select id="ctScope">'+groups.map(s=>'<option value="'+esc(key(s))+'"'+(key(s)===calendarSelection?' selected':'')+'>'+esc(s.meta.kind==='life'?'她的数字日常':notesLabel(s.meta.key))+'</option>').join('')+'</select></label><div class="btnrow"><button id="ctRun"'+(!scope?' disabled':'')+'>整理这个范围</button><button id="ctRunAll">整理全部</button><button class="danger small" id="ctClear"'+(!scope?' disabled':'')+'>清空这个范围</button></div>';
     if(scope?.anchors?.length)out+='<details><summary>长期记住的事</summary>'+scope.anchors.map(a=>'<div class="row"><span>'+esc((a.source?.speakerName?a.source.speakerName+'：':'')+a.text)+'</span><button class="danger small" data-ct-anchor="'+esc(a.id)+'">删除</button></div>').join('')+'</details>';
     return out+'</details></section>';
   }
@@ -2576,9 +2999,10 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var w=featureData?.wallet,c=data.settings.wallet||{},accounts=w?.accounts||[];
     var out='<section class="card" style="grid-column:1/-1"><div class="section-heading"><h2>账户余额与角色感知</h2><button class="small" id="wRefresh">刷新余额</button></div><p class="muted">显示已接入的生图、语音和对话账户。查询失败或暂不可查询不会记成零；今日预估花费与剩余余额分开。</p>';
     if(w&&w.revision!=='20261111-provider-wallet-v2')out+='<p class="banner" role="status">当前后端还是旧余额逻辑。请重载 QQ 桥接插件后点“刷新余额”，才能按当前服务读取余额；只刷新网页不会载入后端修改。</p>';
+    if(w&&w.eventRevision!=='20261125-threshold-increase-v3')out+='<p class="banner" role="status">新的余额提醒设置等待插件重新加载，现有余额查询仍可使用。</p>';
     if(!accounts.length)out+='<div class="empty">余额尚未查询，可点刷新；聊天中及后台也会定期更新。</div>';
     accounts.forEach(a=>{var amount=walletAmountText(a);out+='<div class="row"><span><b>'+esc(a.label)+' · '+esc(a.provider)+'</b><small class="muted" style="display:block">'+esc(a.reason||'')+(a.updatedAt?' · '+esc(new Date(a.updatedAt).toLocaleTimeString()):'')+'</small></span><span>'+esc(amount||({free:'免费 / 本地',unsupported:'暂不可查询',unknown:'未知',error:'查询失败'})[a.status]||'未知')+' <span class="tag">'+esc(walletStateText(a))+'</span></span></div>';});
-    out+='<div class="form-two"><label class="check-field"><input type="checkbox" id="wEnabled"'+(c.enabled!==false?' checked':'')+'>让她感知账户余额</label><label class="check-field"><input type="checkbox" id="wReactions"'+(c.reactions!==false?' checked':'')+'>低余额、耗尽和恢复时允许情绪反应</label><label class="field">金额低余额线<input id="wMoney" type="number" min="0" max="100000" value="'+Number(c.lowMoney??5)+'"></label><label class="field">配额低余额线<input id="wCoins" type="number" min="0" max="1000000" value="'+Number(c.lowCoins??100)+'"></label><label class="field">积分低余额线<input id="wPoints" type="number" min="0" max="1000000" step="0.001" value="'+Number(c.lowPoints??100)+'"></label><label class="field">RunningHub 按哪种余额判断<select id="wRhBilling">'+[['auto','待确认：先显示，不判断耗尽'],['points','按新版积分判断（自己确认 Key 使用积分时选）'],['money','按企业 API 钱包判断']].map(function(o){return '<option value="'+o[0]+'"'+((c.runninghubBillingSource||'auto')===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label></div><p class="muted">余额跟随实际使用的连接。其他服务可在“连接与搭配”配置其余额查询接口、金额字段和单位；接口未提供或未配置时显示未知/暂不可查询。不同服务、金额、积分和配额分别展示，不相加、不猜汇率。RunningHub 用户可按 Key 实际扣费来源选择积分或 API 钱包。</p><button class="primary" id="wSave">保存余额感知</button><p class="muted">金额按账户返回的币种显示；美元低余额线最多为 1 美元。余额金额只注入号主私聊。情绪反应随当前人设表达，不会因此另起消息刷屏。</p></section>';return out;
+    out+='<div class="form-two"><label class="check-field"><input type="checkbox" id="wEnabled"'+(c.enabled!==false?' checked':'')+'>让她感知账户余额</label><label class="check-field"><input type="checkbox" id="wReactions"'+(c.reactions!==false?' checked':'')+'>低于阈值或额度上升时提醒机器人</label><label class="field">金额低余额线<input id="wMoney" type="number" min="0" max="100000" value="'+Number(c.lowMoney??5)+'"></label><label class="field">配额低余额线<input id="wCoins" type="number" min="0" max="1000000" value="'+Number(c.lowCoins??100)+'"></label><label class="field">积分低余额线<input id="wPoints" type="number" min="0" max="1000000" step="0.001" value="'+Number(c.lowPoints??100)+'"></label><label class="field">RunningHub 按哪种余额判断<select id="wRhBilling">'+[['auto','待确认：先显示，不判断耗尽'],['points','按新版积分判断（自己确认 Key 使用积分时选）'],['money','按企业 API 钱包判断']].map(function(o){return '<option value="'+o[0]+'"'+((c.runninghubBillingSource||'auto')===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label></div><p class="muted">余额跟随实际使用的连接。其他服务可在“连接与搭配”配置其余额查询接口、金额字段和单位；接口未提供或未配置时显示未知/暂不可查询。不同服务、金额、积分和配额分别展示，不相加、不猜汇率。RunningHub 用户可按 Key 实际扣费来源选择积分或 API 钱包。</p><button class="primary" id="wSave">保存余额感知</button><p class="muted">金额按账户返回的币种显示；美元低余额线最多为 1 美元。余额金额只注入号主私聊。低位持续扣费不重复提醒；额度增加不等于已核实充值成功。提醒供下一次聊天或正常自主判断使用，由她决定是否提起，不直接给你发系统消息。</p></section>';return out;
   }
   function bindCalendarWallet(){
     async function lifeAction(body){try{await api('POST','/im-bridge/life-execution',body);await load();toast('日程状态已更新');}catch(e){toast(e.message);}}
@@ -2595,8 +3019,8 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if($('ctNext'))$('ctNext').onclick=()=>calendarMove(1);
     if($('ctLatest'))$('ctLatest').onclick=()=>{calendarBrowse.period='';renderPane();};
     if($('ctScope'))$('ctScope').onchange=function(){calendarSelection=this.value;renderPane();};
-    async function calendarEdit(action,id,sourceKey=calendarSelection){var s=(featureData.calendar.scopes||[]).filter(s=>encodeURIComponent(JSON.stringify([s.meta.key,s.meta.personaId]))===sourceKey)[0];if(!s)return;if(!await askConfirm(action==='clear'?'清空这个账号、联系人和人设范围的日历记忆及未归档日记账？旧聊天不会自动重新摄入。':'删除这条日历记忆？'))return;await api('POST','/im-bridge/features/calendar',{action,id,key:s.meta.key,personaId:s.meta.personaId});await load();toast('日历记忆已更新');}
-    async function runCalendar(all,button){button.disabled=true;try{var scope=(featureData.calendar.scopes||[]).find(s=>encodeURIComponent(JSON.stringify([s.meta.key,s.meta.personaId]))===calendarSelection),body={action:'run'};if(!all&&scope){body.key=scope.meta.key;body.personaId=scope.meta.personaId;}var result=await api('POST','/im-bridge/features/calendar',body);await load();toast(calendarReport(result.result||{}));}catch(e){toast(e.message);}finally{if(button.isConnected)button.disabled=false;}}
+    async function calendarEdit(action,id,sourceKey=calendarSelection){var scopes=featureData.calendar.scopes||[],original=scopes.find(s=>encodeURIComponent(JSON.stringify([s.meta.key,s.meta.personaId]))===sourceKey),group=groupMemoryScopes(scopes).find(s=>s.libraryKey===sourceKey),members=original?[original]:group?.members||[];if(!members.length)return;if(!await askConfirm(action==='clear'?'清空这个对话来源的全部日历记忆及未归档记录（包含历史人设）？旧聊天不会自动重新摄入。':'删除这条日历记忆？'))return;for(var s of members)await api('POST','/im-bridge/features/calendar',{action,id,key:s.meta.key,personaId:s.meta.personaId});await load();toast('日历记忆已更新');}
+    async function runCalendar(all,button){button.disabled=true;try{var group=groupMemoryScopes(featureData.calendar.scopes||[]).find(s=>s.libraryKey===calendarSelection),requests=all?[{action:'run'}]:(group?.members||[]).map(s=>({action:'run',key:s.meta.key,personaId:s.meta.personaId})),result;for(var body of requests)result=await api('POST','/im-bridge/features/calendar',body);await load();toast(calendarReport(result?.result||{}));}catch(e){toast(e.message);}finally{if(button.isConnected)button.disabled=false;}}
     if($('ctRun'))$('ctRun').onclick=function(){runCalendar(false,this);};
     if($('ctRunAll'))$('ctRunAll').onclick=function(){runCalendar(true,this);};
     if($('ctClear'))$('ctClear').onclick=()=>calendarEdit('clear','').catch(e=>toast(e.message));
@@ -2611,6 +3035,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var m=hubPreview||featureData?.memoryHub;
     var out='<div class="card"><h2>共享经历与个人记忆</h2><p class="muted">同一 QQ 账号、同一对话的用户事实和历史资料可跨人设查阅，原话保留说话者与来源角色。每个人设的主观反思、关系称呼和未完事项分别保存；换人设仍会新建聊天上下文。同一人设的核心性格、自身实际经历与通用知识跨场合连续；私人原文和关系细节按来源保留。</p><label class="field">查看对话<select id="hubScope">'+keys.map(k=>'<option value="'+esc(k)+'"'+(k===hubSelection?' selected':'')+'>'+esc(notesLabel(k))+'</option>').join('')+'</select></label>';
     if(!m?.available)return out+'<p class="muted">开启记忆并选中已允许的对话后，可查看本地记忆。</p></div>';
+    out+='<p class="muted">桥接会在本机保存聊天原文。使用云端模型时，回复可能带上近期对话或检索出的旧事；后台整理记忆也可能把选中的原文片段和说话人发给模型服务。配对设备执行数据同步时会复制记忆文件。</p>';
     out+='<p class="muted">原始记录 '+Number(m.sources||0)+' 条 · 已确认事实 '+(m.facts||[]).length+' 条 · 当前人设摘记 '+(m.diaries||[]).length+' 篇</p><p class="muted">'+esc(m.retrieval)+'</p>';
     if(m.ownReflection)out+='<details><summary>当前人设的主观反思</summary><p>'+esc(m.ownReflection.text)+'</p><small>这是角色理解，不是用户事实。</small></details>';
     (m.diaries||[]).slice().reverse().forEach(d=>{out+='<details><summary>'+esc(d.day)+' · 当前人设互动摘记</summary><p>'+esc(d.text)+'</p><small>来源 '+d.sourceIds.length+' 条</small></details>';});
@@ -2627,23 +3052,35 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
   function viewMemoryBasic(){
     var mem=data.settings.memory||{};
-    return '<div class="card"><h2>自动整理规则</h2><p class="muted">原始消息单独留存，可靠自述形成共享事实；按问题检索少量来源，当前人设保留自己的生活摘要与反思。日终、月终、年终归档继续保留，不随机遗忘或自动删除原文。</p><div class="row"><span>启用记忆</span><button id="memToggle" class="small">'+(mem.enabled!==false?'已开':'已关')+'</button></div><label class="field">对话记忆字数预算<input id="memChars" type="number" min="120" max="2000" value="'+Number(mem.maxChars||1200)+'"></label><button id="memSave" class="primary">保存</button></div><div class="card"><h2>记忆文件位置</h2><p class="muted">同一人设的连续记忆、日记与来源位于 memory-hub，历史归档位于 calendar-memory，歌曲资料位于 singing。一键同步按记忆目录保留资料，迁移前请先备份。</p><input id="memDir" value="'+esc(data.settings.memoryDir||'')+'" placeholder="留空使用默认目录"><button id="memDirSave">迁移到该目录</button></div>';
+    return '<div class="card"><h2>自动整理规则</h2><p class="muted">原始消息单独留存，可靠自述形成共享事实；按问题检索少量来源，当前人设保留自己的生活摘要与反思。日终、月终、年终归档继续保留，不随机遗忘或自动删除原文。</p><div class="row"><span>启用记忆</span><button id="memToggle" class="small">'+(mem.enabled!==false?'已开':'已关')+'</button></div><label class="field">对话记忆字数预算<input id="memChars" type="number" min="120" max="2000" value="'+Number(mem.maxChars||1200)+'"></label><button id="memSave" class="primary">保存</button></div><div class="card"><h2>记忆文件位置</h2><p class="muted">同一人设的连续记忆、日记与来源位于 memory-hub，历史归档位于 calendar-memory，歌曲资料位于 singing。一键同步按记忆目录保留资料，迁移前请先备份。</p>'+(data.settings.storageUnified?'<code class="path">'+esc(data.settings.memoryDir)+'</code><button data-go="storage">管理统一数据目录</button>':'<input id="memDir" value="'+esc(data.settings.memoryDir||'')+'" placeholder="留空使用默认目录"><button id="memDirSave">迁移到该目录</button><button data-go="storage">管理全部桥接资料</button>')+'</div>';
   }
 
   function viewStorage() {
     var out = "";
-    out += '<div class="card"><h2>缓存与占用</h2>' +
-      '<div class="muted" style="margin-bottom:8px">图片、语音、视频、波形图、设备截图和画本统一跟随此目录。记忆和设置另行保存，收藏与作品不会自动删除。</div>' +
-      '<div class="kv"><span>当前路径</span><code class="path">' + esc((storage && storage.cacheDir) || (data.status && data.status.cacheDir) || '') + '</code></div>' +
-      '<div class="row"><span>占用</span><span class="muted">表情 ' + fmtSize(storage && storage.sizes && storage.sizes.sticker) +
-      ' · 语音 ' + fmtSize(storage && storage.sizes && storage.sizes.voice) +
-      ' · 监听图 ' + fmtSize(storage && storage.sizes && storage.sizes.messages) +
-      ' · 日志 ' + fmtSize(storage && storage.sizes && storage.sizes.log) + '</span></div>' +
-      '<input id="cacheInput" placeholder="新路径，例如 D:/dsh-cache/im-bridge" style="margin-top:8px">' +
-      '<div class="btnrow" style="margin-top:8px"><button class="primary" id="cacheMove">迁移到这个路径</button>' +
-      '<button id="cacheDefault">恢复默认</button>' +
-      '<button id="cachePreview">看看能清理多少</button><button class="danger" id="cacheClean">按保留策略清理临时文件</button></div>'+
-      '<label class="check-field"><input id="cacheAuto" type="checkbox"'+(storage?.retention?.enabled!==false?' checked':'')+'>自动整理临时媒体</label><div class="row"><label class="field">保留天数<input id="cacheDays" type="number" min="1" max="365" value="'+Number(storage?.retention?.days||7)+'"></label><label class="field">临时文件上限（MB）<input id="cacheMax" type="number" min="256" value="'+Number(storage?.retention?.maxMB||4096)+'"></label></div><button id="cachePolicy">保存整理规则</button><label class="field" style="margin-top:10px">我自己的文件上限（MB）<input id="mySpaceMax" type="number" min="50" max="4096" value="'+Number(data.settings.mySpaceMaxMB||1024)+'"></label><button id="mySpaceSave">保存上限</button><p class="muted">笔记、画、存下的音频视频都算在内；超过上限会从最旧的开始收，笔记不动。</p><p class="muted">当前媒体共 '+fmtSize(storage?.managed?.totalBytes||0)+'；最近一小时及正在发送的文件保留。普通生成图按保留策略整理；喜欢的图片请加入相册。收藏表情、相册、画本、作品与歌曲示范不自动清理。</p>' +
+    var retention = storage?.retention || data.settings.mediaRetention;
+    var retentionReady = typeof retention?.enabled === 'boolean' && Number.isFinite(retention.days) && Number.isFinite(retention.maxMB);
+    var usage=storage?.usage,loc=storage?.location,paths=storage?.paths;
+    out += '<div class="card"><h2>数据目录与占用</h2>';
+    if(usage&&loc&&paths){
+      out+='<div class="kv"><span>'+(loc.root?'统一数据目录':'当前媒体目录')+'</span><code class="path">'+esc(loc.root||paths.cache)+'</code></div>'+
+        '<p class="muted">桥接已统计 '+fmtSize(usage.totalBytes)+(usage.skipped?'（有 '+Number(usage.skipped)+' 处未计入）':'')+
+        (usage.freeBytes!=null?' · 所在卷可用 '+fmtSize(usage.freeBytes):'')+'</p>';
+      var labels={chats:'聊天记录与会话工作区',memory:'长期记忆',assets:'作品与素材',temporary:'临时媒体与附件',logs:'运行日志',backups:'自动恢复点',profile:'配置及其他桥接数据'};
+      Object.entries(labels).forEach(([key,label])=>{out+='<div class="row"><span>'+label+'</span><b>'+fmtSize(usage.bytes[key])+'</b></div>';});
+      out+='<details><summary>各目录位置</summary>'+Object.entries({data:'私有配置',memory:'记忆',workspace:'会话工作区',cache:'媒体及消息归档'}).map(([key,label])=>'<div class="kv"><span>'+label+'</span><code class="path">'+esc(paths[key])+'</code></div>').join('')+
+        '<p class="muted">DSH 共享会话另占 '+fmtSize(usage.hostBytes)+'，由宿主管理。</p><code class="path">'+esc(usage.hostSessions||'')+'</code></details>'+
+        '<p class="muted">恢复前快照按类型各留最近 '+Number(storage.backupsPerType)+' 份，设备同步的回退副本单独轮换。</p></div>'+
+        '<div class="card"><h2>迁移整套桥接资料</h2>';
+      if(loc.error)out+='<p role="alert">'+esc(loc.error)+'</p>';
+      if(loc.pending){
+        out+='<p>下次启动本机引擎时复制到 <code class="path">'+esc(loc.pending)+'</code>，核验通过后启用。原目录保留。</p><button id="cacheCancelMove">取消待执行迁移</button>';
+      }else{
+        out+='<label class="field">新的专用目录<input id="cacheInput" value="'+esc(loc.suggested)+'"></label><p class="muted">选择空目录。下次启动本机引擎时一并复制聊天、作品、记忆、配置及备份，校验前继续使用原位置。</p><button class="primary" id="cacheMove">预约迁移</button>';
+      }
+    }else out+='<p class="muted">当前媒体目录 '+esc(storage?.cacheDir||'暂未取得')+'</p>';
+    out+='</div><div class="card"><h2>临时文件保留</h2><div class="btnrow"><button id="cachePreview">查看可清理空间</button><button class="danger" id="cacheClean">按保留策略清理临时文件</button></div>'+
+      (retentionReady ? '<label class="check-field"><input id="cacheAuto" type="checkbox"'+(retention.enabled?' checked':'')+'>自动整理临时媒体</label><div class="row"><label class="field">保留天数<input id="cacheDays" type="number" min="1" max="365" value="'+retention.days+'"></label><label class="field">临时文件上限（MB）<input id="cacheMax" type="number" min="256" value="'+retention.maxMB+'"></label></div><button id="cachePolicy">保存整理规则</button>' : '<p class="muted">暂未取得临时媒体整理规则，请刷新后再编辑。</p>') +
+      '<label class="field" style="margin-top:10px">我自己的文件上限（MB）<input id="mySpaceMax" type="number" min="50" max="4096" value="'+Number(data.settings.mySpaceMaxMB||1024)+'"></label><button id="mySpaceSave">保存上限</button><p class="muted">笔记、画、存下的音频视频都算在内；超过上限会从最旧的开始收，笔记不动。</p><p class="muted">当前媒体共 '+fmtSize(storage?.managed?.totalBytes||0)+'；最近一小时及正在发送的文件保留。普通生成图按保留策略整理；喜欢的图片请加入相册。收藏表情、相册、画本、作品与歌曲示范不自动清理。</p>' +
       '<div id="cacheOut" class="muted" style="margin-top:8px"></div></div>';
     out += '<div class="card"><h2>诊断</h2><p class="muted">排错时再打开；平时放在这里，不占主菜单。</p><div class="btnrow"><button data-go="logs">运行日志</button><button data-go="devices">设备与连接</button></div></div>';
     return out;
@@ -2673,7 +3110,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       '<div id="vMiniSection"><h3>可选情绪增强</h3><p class="muted">使用 MiniMax 官方音色或自己复刻的音色；需独立 API Key，试听和生成均可能计费，仅选用此服务时调用。</p><label class="field">MiniMax API Key<input type="password" autocomplete="off" id="vMiniKey" placeholder="'+(mini.hasKey?'已保存；留空保留':'仅启用增强时需要')+'"></label><label class="field">增强音色<select id="vMiniVoice">'+miniVoiceOptions(mini.voiceId)+'</select></label><label class="field">模型<select id="vMiniModel">'+['speech-2.8-hd','speech-2.8-turbo','speech-2.6-hd','speech-2.6-turbo'].map(function(m){return '<option value="'+m+'"'+((mini.model||'speech-2.8-hd')===m?' selected':'')+'>'+m+'</option>';}).join('')+'</select></label></div>'+
       '<div id="vBreezeSection"><h3>Breeze TTS 2</h3><p class="muted">开源权重模型，官方 API 按字符计费；也可以指向自建的 vLLM-Omni（OpenAI 兼容 /v1/audio/speech）。音色 ID 在 breeze.blue 应用里设计或克隆后复制；自建时用 S0–S9 预置音色，或填自己训练/克隆的音色。</p><label class="field">接入方式<select id="vBreezeMode"><option value="official"'+((v.breeze?.mode||'official')==='official'?' selected':'')+'>Breeze 官方 API（api.breeze.blue）</option><option value="openai"'+(v.breeze?.mode==='openai'?' selected':'')+'>自建 vLLM-Omni（OpenAI 兼容）</option></select></label><label class="field">接口地址<input id="vBreezeBase" value="'+esc(v.breeze?.baseUrl||'')+'" placeholder="'+(v.breeze?.mode==='openai'?'http://127.0.0.1:8091':'https://api.breeze.blue')+'"></label><label class="field">API Key<input type="password" autocomplete="off" id="vBreezeKey" placeholder="'+((v.breeze&&v.breeze.hasKey)?'已保存；留空保留':'官方模式必填，自建可留空')+'"></label><label class="field">音色 ID<input id="vBreezeVoice" value="'+esc(v.breeze?.voiceId||'')+'" placeholder="voc_xxx（官方）/ S0（自建预置）"></label><label class="field">模型<input id="vBreezeModel" value="'+esc(v.breeze?.model||'')+'" placeholder="breeze-tts-2 / BreezeBlue/Breeze-TTS-2"></label><label class="field">语言代码<input id="vBreezeLang" value="'+esc(v.breeze?.language||'zh')+'" placeholder="zh"></label><label class="field">音色 / 常用演绎方向（逐句语气自动补充）<input id="vBreezeInstructions" value="'+esc(v.breeze?.instructions||'')+'" placeholder="例如：保持清亮自然的当前音色"></label></div>'+
       '<details id="vLegacy"'+(v.engine==='custom'?' open':'')+'><summary>自定义服务</summary><label class="field">自定义 TTS 地址（{text} / {voice}）<input id="vCustomUrl" value="'+esc(v.customUrl||'')+'"></label><label class="field">自定义音色名<input id="vCustomVoice" value="'+esc(v.customVoice||'')+'"></label></details>'+
-      operationContextMarkup('vContext')+'<button id="vSaveEngine" class="primary" style="margin-top:12px">保存语音设置</button><label class="field">试听方式<select id="vPerformance"><option value="speech">说话</option><option value="sing">RunningHub 唱歌</option></select><small class="muted">唱歌使用歌曲页中已保存的 RunningHub 工作流。翻唱素材与输出序号可在那里配置。</small></label><label class="field" style="margin-top:16px">试听文字<input id="vText" placeholder="例如：没关系呀，我在听，慢慢说就好。"></label><button id="vTest">试听当前设置</button><p class="muted">只在本页播放，不自动发给 QQ。选择情绪增强时将调用计费接口。</p><div id="vOut" role="status" style="margin-top:10px"></div>'+
+      operationContextMarkup('vContext')+'<button id="vSaveEngine" class="primary" style="margin-top:12px">保存语音设置</button><label class="field">试听方式<select id="vPerformance"><option value="speech">说话</option><option value="sing">RunningHub 唱歌</option></select><small class="muted">唱歌使用“API 服务 → 唱歌 API”中的工作流。翻唱素材与输出序号可在那里配置。</small></label><label class="field" style="margin-top:16px">试听文字<input id="vText" placeholder="例如：没关系呀，我在听，慢慢说就好。"></label><button id="vTest">试听当前设置</button><p class="muted">只在本页播放，不自动发给 QQ。选择情绪增强时将调用计费接口。</p><div id="vOut" role="status" style="margin-top:10px"></div>'+
       (v.lastError?'<div class="banner" style="margin-top:12px"><b>上次语音失败</b><p>'+esc(v.lastError)+'</p></div>':'')+'</div>';
   }
 
@@ -2718,6 +3155,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var n = Number(bytes) || 0;
     if (n < 1024) return n + ' B';
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    if(n>=1024**3)return (n/1024**3).toFixed(1)+' GB';
     return (n / 1024 / 1024).toFixed(1) + ' MB';
   }
 
@@ -2733,8 +3171,8 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   var qrReadSerial = 0;
   var qrObjectUrl = '';
 
-  function loginHint(message, danger) {
-    var hint = $('loginHint');
+  function loginHint(message, danger, button) {
+    var hint = $(button?.closest('#connectionAdvanced')?'connectionServiceFeedback':button?.closest('.connection-qr')?'connectionQrFeedback':'loginHint');
     if (!hint) return;
     hint.textContent = message;
     hint.style.color = danger ? 'var(--danger)' : 'var(--ink3)';
@@ -2813,14 +3251,16 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     }
   }
 
-  
+
 
   function refreshDiag() {
     var line = $('loginDiag');
-    if (!line) return;
+    if (!line?.closest('details')?.open) return;
     api('GET', '/im-bridge/login/diag').then(function (d) {
       if (!line.isConnected) return;
-      line.textContent = 'QQ 进程 ' + d.qqProcesses + ' 个 · NapCat 进程 ' + d.napcatProcesses + ' 个 · 桥接 ' + d.port3001 + (d.qrAgeSeconds === null ? '' : ' · 本地二维码 ' + d.qrAgeSeconds + ' 秒前');
+      var count = function (n) { return Number.isInteger(n) && n >= 0 ? n + ' 个' : '未知'; };
+      line.textContent = 'QQ 进程 ' + count(d.qqProcesses) + ' · NapCat 进程 ' + count(d.napcatProcesses) + ' · 桥接 ' + (d.port3001 || '未知');
+      if (Number.isFinite(d.qrAgeSeconds) && d.qrAgeSeconds >= 0) line.textContent += ' · 本地二维码 ' + d.qrAgeSeconds + ' 秒前';
       if (d.advice) line.textContent += ' —— ' + d.advice;
       line.style.color = d.advice ? 'var(--danger)' : 'var(--ink3)';
     }).catch(function (error) { if (line.isConnected) line.textContent = '暂时无法检查登录进程：' + error.message; });
@@ -2829,8 +3269,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   function startQrWatch() {
     stopQrWatch();
     paintQr();
-    refreshDiag();
-    qrTimer = setInterval(function () { if ($('qrBox')) paintQr(); refreshDiag(); }, 5000);
+    qrTimer = setInterval(function () { if ($('qrBox')) paintQr(); }, 5000);
   }
 
   function stopQrWatch() {
@@ -2871,7 +3310,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     fillModels(cur.model);
     if ($('modelCur')) {
       $('modelCur').textContent =
-        (cur.provider || '?') + ' / ' + (cur.model || '?') + (cur.reasoningEffort ? ' · ' + cur.reasoningEffort : '');
+        [cur.provider,cur.model,data.status.effectiveEffort || cur.reasoningEffort].filter(Boolean).join(' / ') || '尚未配置';
     }
   }
 
@@ -2919,7 +3358,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         if(result.entry.kind!=='chat'&&!localDefaultsDraft[result.entry.kind])localDefaultsDraft[result.entry.kind]=result.entry.id;
         localConfigDraft.workflowLibrary=localWorkflowDraft;
         if(s.activateChat&&result.entry.kind==='chat'){localConfigDraft.backend='comfyui';localConfigDraft.chatWorkflow=result.config.chatWorkflow;}
-        localImportState=null;localDraftEditing=true;
+        localImportState=null;localDraftEditing=!!Object.keys(pageDrafts.local||{}).length;
         if(localGateway){localGateway.config=result.config;}
         renderPane();toast(s.activateChat&&result.entry.kind==='chat'?(result.config.chatWorkflow===result.entry.id?'已导入并用于本地聊天，下一轮生效':'已导入，但旧网关未确认聊天选择；请重启网关后再应用'):'工作流已导入并保存');
       }).catch(function(error){button.disabled=false;toast('导入失败：'+error.message);});
@@ -2951,7 +3390,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
           localDraftEditing = false;
           localConfigDraft = null;
           if ($('localWorkflowHint')) $('localWorkflowHint').textContent = '配置已保存；下一轮生效。';
-          toast(data.localChat?.enabled?(data.localChat.apiComplement?'本地模型已保存，API 补全仍开启':'本地模型已保存，当前为纯本地'):'本地配置已保存；当前仍是 API 模式，可点击“切换纯本地并使用此工作流”');
+          toast(data.localChat?.enabled?(data.localChat.apiComplement?'本地模型已保存，API 补全仍开启':'本地模型已保存，当前为纯本地'):'本地配置已保存；当前仍是 API 模式，可点击“仅将聊天切换为此本地工作流”');
           return localRefresh().catch(function(error){toast('配置已保存，但刷新状态未完成：'+error.message);return result;});
         })
         .catch(function (e) {
@@ -2977,7 +3416,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       };
     });
     function rememberLocalEdit() {
-      localDraftEditing = true;
+      localDraftEditing = !!Object.keys(pageDrafts.local||{}).length || localWorkflowStructureChanged();
       captureLocalForm();
     }
     if($('localParameterRead'))$('localParameterRead').onclick=readLocalParameters;
@@ -3114,41 +3553,45 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       var btn = $(pair[0]);
       if (btn) btn.onclick = async function () { $('sendText').value = pair[1]; };
     });
+    if ((el = $('connectionFocusQr'))) el.onclick = function () {
+      var box=$('qrBox');if(box){box.scrollIntoView({block:'center'});box.focus({preventScroll:true});}
+    };
     if ((el = $('btnStart'))) el.onclick = async function () {
       var button = this;
       button.disabled = true;
-      loginHint('正在启动 NapCat，请等待登录状态或二维码…');
+      loginHint('正在检查 QQ 登录状态…',false,button);
       try {
-        var v = await api('POST', '/im-bridge/login', { action: 'start' });
-        loginHint(v.already ? 'NapCat 桥接已连接，正在检查 QQ 登录状态…' : (v.message || '启动请求已提交，正在等待二维码或 QQ 登录结果。'));
-        paintQr(true);
-        setTimeout(function () { if (tab === 'connection') load(); }, 6000);
-      } catch (error) { loginHint('启动失败：' + error.message, true); }
+        var v = await api('POST', '/im-bridge/login', { action: 'start',accountId:button.dataset.guardAccount });
+        loginHint(v.already ? '本机 QQ 已登录，正在检查桥接连接…' : (v.message || '启动请求已提交，正在等待二维码或 QQ 登录结果。'),false,button);
+        await syncLiveSnapshot();
+        if(tab==='connection')paintQr(true);
+      } catch (error) { loginHint('启动失败：' + error.message, true,button); }
       finally { button.disabled = false; }
     };
     if ((el = $('btnQrRefresh'))) el.onclick = async function () {
       var button = this;
       button.disabled = true;
-      loginHint('正在向 NapCat 申请一个新二维码…');
+      loginHint('正在向 NapCat 申请一个新二维码…',false,button);
       try {
-        var v = await api('POST', '/im-bridge/login', { action: 'qr-refresh' });
-        loginHint(v.message || (v.restarting ? '正在重新建立登录，请等待新二维码…' : '新二维码请求已完成，请用手机 QQ 扫码。'));
+        var v = await api('POST', '/im-bridge/login', { action: 'qr-refresh',accountId:button.dataset.guardAccount });
+        loginHint(v.message || (v.restarting ? '正在重新建立登录，请等待新二维码…' : '新二维码请求已完成，请用手机 QQ 扫码。'),false,button);
         await paintQr(true);
-      } catch (error) { loginHint('更换二维码失败：' + error.message, true); }
+      } catch (error) { loginHint('更换二维码失败：' + error.message, true,button); }
       finally { button.disabled = false; }
     };
     if ((el = $('btnRestartNapCat'))) el.onclick = async function () {
       var button = this;
       button.disabled = true;
-      loginHint('正在重启当前机器人对应的 NapCat…');
+      loginHint('正在重启当前机器人对应的 NapCat…',false,button);
       try {
-        var v = await api('POST', '/im-bridge/login', { action: 'restart' });
-        loginHint(v.message || '重启请求已提交，请等待二维码或 QQ 登录结果。');
+        var v = await api('POST', '/im-bridge/login', { action: 'restart',accountId:button.dataset.guardAccount });
+        loginHint(v.message || '重启请求已提交，请等待二维码或 QQ 登录结果。',false,button);
         paintQr(true);
-      } catch (error) { loginHint('重启失败：' + error.message, true); }
+      } catch (error) { loginHint('重启失败：' + error.message, true,button); }
       finally { button.disabled = false; }
     };
     if ($('qrBox')) startQrWatch();
+    if ((el=$('connectionDiagnostics'))) { el.ontoggle=refreshDiag; refreshDiag(); }
     if ((el = $('autoStartToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var next = !data.status.autoStart;
@@ -3159,25 +3602,44 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         .finally(function () { el.disabled = false; });
     };
     if ((el = $('btnReconnect'))) el.onclick = async function () {
-      if(login&&(login.requiresDeviceSwitch||data.status.accountPaused)){await api('POST','/im-bridge/action',{kind:'activate-local'});toast('本机桥接已启用');await load();return;}
-      var el = this; // 捕获当次元素
-      api('POST', '/im-bridge/action', { kind: 'reconnect' }).then(function (v) {
-        toast(v.connected ? '已重连' : '请求已发出，但 NapCat 还没连上'); load();
-      });
+      if (data.status.accountNeedsAttention) { toast('请先处理 QQ 账号提示'); return; }
+      this.disabled=true;
+      try {
+        if(login&&(login.requiresDeviceSwitch||data.status.accountPaused)){await api('POST','/im-bridge/action',{kind:'activate-local'});toast('本机桥接已启用');}
+        else{var v=await api('POST','/im-bridge/action',{kind:'reconnect'});toast(v.connected?'已重连':'重连请求已提交，正在等待 NapCat');}
+        await load();
+      } catch(error){toast('重连失败：'+error.message);} finally{this.disabled=false;}
+    };
+    if ((el = $('btnHoldAccount'))) el.onclick = async function () {
+      this.disabled = true;
+      try {
+        await api('POST','/im-bridge/action',{kind:'hold-account',accountId:this.dataset.guardAccount});
+        toast('账号暂停状态已保存');
+      } catch (error) { toast(error.message); }
+      finally { this.disabled = false; await load(); }
     };
     if ((el = $('btnPause'))) el.onclick = async function () {
-      if(login&&(login.requiresDeviceSwitch||data.status.accountPaused)){await api('POST','/im-bridge/action',{kind:'activate-local'});toast('本机桥接已启用');await load();return;}
-      var el = this; // 捕获当次元素
-      var paused = !data.status.accountPaused;
-      api('POST', '/im-bridge/action', { kind: paused ? 'pause' : 'resume' }).then(function () {
-        toast(paused ? '已停用连接（配置保留）' : '已恢复连接'); load();
-      });
+      if (data.status.accountNeedsAttention) {
+        this.disabled = true;
+        try {
+          var result = await api('POST','/im-bridge/action',{kind:'resume',accountId:this.dataset.guardAccount});
+          toast(result.accountNeedsAttention ? 'QQ 账号仍需处理，请查看连接状态' : '已提交恢复请求');
+          await load();
+        } catch (error) { toast('恢复失败：' + error.message); }
+        finally { this.disabled = false; }
+        return;
+      }
+      this.disabled=true;
+      try{
+        if(login&&(login.requiresDeviceSwitch||data.status.accountPaused)){await api('POST','/im-bridge/action',{kind:'activate-local'});toast('本机桥接已启用');}
+        else{var paused=!data.status.accountPaused;await api('POST','/im-bridge/action',{kind:paused?'pause':'resume',accountId:this.dataset.guardAccount});toast(paused?'已停用连接（配置保留）':'已恢复连接');}
+        await load();
+      }catch(error){toast('连接操作失败：'+error.message);}finally{this.disabled=false;}
     };
     if ((el = $('btnTest'))) el.onclick = async function () {
-      var el = this; // 捕获当次元素
-      api('POST', '/im-bridge/action', { kind: 'test' }).then(function (v) {
-        toast(v.connected ? '测试消息已发出' : 'NapCat 未连接，没发出去');
-      });
+      this.disabled=true;
+      try{await api('POST','/im-bridge/action',{kind:'test'});toast('已提交测试，请在发送记录中核对 QQ 回执');}
+      catch(error){toast('测试失败：'+error.message);}finally{this.disabled=false;}
     };
     if ((el = $('logRefresh'))) el.onclick = loadLog;
     Array.prototype.forEach.call(document.querySelectorAll('[data-reset]'), function (btn) {
@@ -3302,14 +3764,14 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     Array.prototype.forEach.call(document.querySelectorAll('[data-use]'), function (btn) {
       btn.onclick = async function () {
         api('POST', '/im-bridge/settings', { activePersonaId: btn.getAttribute('data-use') })
-          .then(function () { toast('已穿上人设卡'); load(); });
+          .then(function () { toast('已启用人设卡'); load(); });
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-self]'), function (btn) {
       btn.onclick = async function () {
         try {
           await api('POST', '/im-bridge/settings', { activePersonaId: '' });
-          toast('已脱下角色卡，回到自我');
+          toast('已切回自我卡');
           await load();
         } catch (e) { toast(e.message); }
       };
@@ -3332,7 +3794,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         var target = (data.settings.personae || []).filter(function (p) { return p.id === id; })[0];
         var isActive = data.settings.activePersonaId === id;
         var tip = '删除人设卡「' + (target ? target.name : id) + '」？' +
-          (isActive ? '她正穿着这张卡，删除后会脱下它、回到自我。' : '');
+          (isActive ? '当前正在使用这张卡，删除后会切回自我卡。' : '');
         if (!await askConfirm(tip)) return;
         var personae = (data.settings.personae || []).filter(function (p) { return p.id !== id; });
         var patch = { personae: personae };
@@ -3373,6 +3835,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
 
     document.querySelectorAll('[data-owner-note-save]').forEach(b=>b.onclick=async()=>{var id=b.dataset.ownerNoteSave,notes={...data.settings.userNotes,[id]:$('ownerAddress_'+id).value.trim()};b.disabled=true;try{await api('POST','/im-bridge/settings',{userNotes:notes});await load();toast('称呼已与这个QQ账号绑定，日记也会使用');}catch(e){toast(e.message);}finally{if(b.isConnected)b.disabled=false;}});
     if ((el = $('qqInput'))) el.onkeydown = function (e) { if (e.key === 'Enter') $('qqAdd').click(); };
+    if ((el=$('contactScopeSave'))) el.onclick=async function(){await api('POST','/im-bridge/settings',{contactWhitelistEnabled:$('contactWhitelist').checked});await load();};
     if ((el = $('ownerSave'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var list = ($('ownersInput').value || '').split(/[,，\s]+/).filter(function (v) { return v; });
@@ -3527,8 +3990,8 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       try {
         await saveImagegenCurrent();out=$('igOut');preview=$('igPreview');
         var v = await api('POST', '/im-bridge/imagegen', { prompt: prompt,workflow:studioSelectedWorkflow(),contextKey:operationPanelContext(),receipt:prepared?.receipt,preparedPrompt:prepared?english:undefined,preparedNegative:prepared?negative:undefined,preparedFixedPrompts:prepared?fixedPrompts:undefined });
-        studioResult={name:v.name,text:'已生成：'+v.file+studioSizeNote(v.size)+'（'+Math.round(v.ms/1000)+' 秒）'};studioBusy=false;
-        out.textContent = '已生成：' + v.file + studioSizeNote(v.size) + '（' + Math.round(v.ms / 1000) + ' 秒）';
+        studioResult={name:v.name,text:'已生成：'+v.file+studioSizeNote(v.size,prompt)+'（'+Math.round(v.ms/1000)+' 秒）'};studioBusy=false;
+        out.textContent = '已生成：' + v.file + studioSizeNote(v.size,prompt) + '（' + Math.round(v.ms / 1000) + ' 秒）';
         preview.innerHTML = '<img src="/im-bridge/gen/file?name=' + encodeURIComponent(v.name) + '&t=' + Date.now() +
           '" style="max-width:100%;border-radius:12px;border:1px solid var(--line)">';
         load();
@@ -3629,16 +4092,15 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         renderPane();
       };
     });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-chat]'), function (btn) {
-      btn.onclick = async function () {
-        msgChat = btn.getAttribute('data-chat');
-        renderPane();
-      };
-    });
+    if ((el = $('monitorChat'))) el.onchange = function () {
+      msgChat = this.value;
+      renderPane();
+    };
     if ((el = $('mClear'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
-      if (!await askConfirm('清空监听记录？图片文件不会删。')) return;
-      api('POST', '/im-bridge/messages', { action: 'clear' }).then(function () { toast('已清空'); load(); });
+      var account=monitorHistory?.account;
+      if(typeof account!=='string'||!await askConfirm('清空当前账号的近期消息和全部本机聊天归档？图片副本另按媒体规则保留。'))return;
+      api('POST','/im-bridge/messages',{action:'clear',accountId:account}).then(function(){monitorHistory=null;toast('已清空当前账号的消息记录');load();}).catch(e=>toast(e.message));
     };
 
     if ((el = $('pvGo'))) el.onclick = async function () {
@@ -3816,9 +4278,8 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         .catch(function (e) { toast('失败：' + e.message); });
     };
     if ((el = $('accAdd'))) el.onclick = async function () {
-      var el = this; // 捕获当次元素
       var url = ($('accUrl').value || '').trim();
-      if (!/^wss?:\/\//.test(url)) { toast('地址要以 ws:// 开头'); return; }
+      if (!/^wss?:\/\//.test(url)) { toast('地址要以 ws:// 或 wss:// 开头'); return; }
       var accounts = (data.settings.accounts || []).slice();
       accounts.push({
         id: 'acc' + Date.now(),
@@ -3826,12 +4287,15 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         wsUrl: url,
         token: ($('accToken').value || '').trim()
       });
-      api('POST', '/im-bridge/settings', { accounts: accounts }).then(function () { toast('已添加'); load(); });
+      this.disabled=true;
+      try{await api('POST','/im-bridge/settings',{accounts:accounts});toast('已添加');await load();}
+      catch(error){toast('添加账号失败：'+error.message);}finally{this.disabled=false;}
     };
     Array.prototype.forEach.call(document.querySelectorAll('[data-accuse]'), function (btn) {
       btn.onclick = async function () {
-        api('POST', '/im-bridge/settings', { activeAccountId: btn.getAttribute('data-accuse') })
-          .then(function () { toast('已切换，正在重连'); load(); });
+        btn.disabled=true;
+        try{await api('POST','/im-bridge/settings',{activeAccountId:btn.getAttribute('data-accuse')});toast('已切换账号配置');await load();}
+        catch(error){toast('切换失败：'+error.message);}finally{btn.disabled=false;}
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-accdel]'), function (btn) {
@@ -3841,7 +4305,9 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
         var accounts = (data.settings.accounts || []).filter(function (a) { return a.id !== id; });
         var patch = { accounts: accounts };
         if (data.settings.activeAccountId === id) patch.activeAccountId = '';
-        api('POST', '/im-bridge/settings', patch).then(function () { toast('已删除'); load(); });
+        btn.disabled=true;
+        try{await api('POST','/im-bridge/settings',patch);toast('已删除');await load();}
+        catch(error){toast('删除账号失败：'+error.message);}finally{btn.disabled=false;}
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll('.chatModel'), function (select) {
@@ -3858,7 +4324,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
           .then(function () { toast('已保存，下一轮生效'); load(); });
       };
     });
-    
+
     if ((el = $('memToggle'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       api('POST', '/im-bridge/settings', { memory: { enabled: !(data.settings.memory && data.settings.memory.enabled !== false) } })
@@ -3869,25 +4335,16 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       api('POST', '/im-bridge/settings', { memory: { schedule:'daily',mode:'auto', maxChars: Number($('memChars').value) } })
         .then(function () { toast('已保存'); load(); });
     };
-    
-    
-    if ((el = $('cacheMove'))) el.onclick = async function () {
-      var el = this; // 捕获当次元素
-      var dir = ($('cacheInput').value || '').trim();
-      if (!dir) { toast('填一个路径'); return; }
-      if (!await askConfirm('把缓存迁移到 ' + dir + ' ？会移动日志、监听历史、语音和表情包。')) return;
-      el.disabled = true;
-      $('cacheOut').textContent = '迁移中…';
-      api('POST', '/im-bridge/settings', { cacheDir: dir })
-        .then(function () { $('cacheOut').textContent = '已迁移到 ' + dir; toast('已迁移'); load(); })
-        .catch(function (e) { $('cacheOut').textContent = '失败：' + e.message; })
-        .finally(function () { el.disabled = false; });
+
+
+    if($('cacheMove'))$('cacheMove').onclick=async function(){
+      var target=$('cacheInput').value.trim();if(!target){toast('请选择专用目录');return;}
+      if(!await askConfirm('下次启动本机引擎时将整套桥接资料复制到 '+target+' 并校验，原资料保留。确定预约？'))return;
+      this.disabled=true;
+      try{await api('POST','/im-bridge/storage',{action:'move',target});toast('已预约，下次启动本机引擎时执行');await load();}
+      catch(e){toast(e.message);}finally{this.disabled=false;}
     };
-    if ((el = $('cacheDefault'))) el.onclick = async function () {
-      var el = this; // 捕获当次元素
-      api('POST', '/im-bridge/settings', { cacheDir: '' })
-        .then(function () { toast('已恢复默认路径'); load(); });
-    };
+    if($('cacheCancelMove'))$('cacheCancelMove').onclick=async()=>{try{await api('POST','/im-bridge/storage',{action:'cancel-move'});await load();}catch(e){toast(e.message);}};
     if($('cachePreview'))$('cachePreview').onclick=async()=>{try{var r=await api('POST','/im-bridge/storage',{action:'preview-clean'});$('cacheOut').textContent='可整理 '+Number(r.removed.files)+' 个临时文件，约 '+fmtSize(r.removed.bytes)+'；收藏、作品和记忆保留。';}catch(e){toast(e.message);}};
     if($('mySpaceSave'))$('mySpaceSave').onclick=async()=>{try{await api('POST','/im-bridge/settings',{mySpaceMaxMB:Number($('mySpaceMax').value)||1024});toast('我的文件上限已保存');}catch(e){toast(e.message);}};
     if($('cachePolicy'))$('cachePolicy').onclick=async()=>{try{await api('POST','/im-bridge/settings',{mediaRetention:{enabled:$('cacheAuto').checked,days:Number($('cacheDays').value),maxMB:Number($('cacheMax').value)}});toast('临时媒体整理规则已保存');}catch(e){toast(e.message);}};
@@ -3955,7 +4412,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       api('POST', '/im-bridge/settings', { voice: { enabled: !(data.settings.voice && data.settings.voice.enabled) } })
         .then(function () { toast('已保存'); load(); });
     };
-    
+
     if ((el = $('aiPersonaBtn'))) el.onclick = async function () {
       var el = this; // 捕获当次元素
       var desc = ($('aiPersonaDesc').value || '').trim();
@@ -4068,6 +4525,10 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   var formState = createFormState();
   var formBaselines = formState.baselines;
   var pageDrafts = formState.drafts;
+  function newFormScope(){
+    for(const page of new Set([...Object.keys(pageDrafts),...Object.keys(formBaselines)]))formState.discard(page);
+    renderedTab='';localDraftEditing=false;localConfigDraft=null;localWorkflowDraft=[];editingId='';hubSelection='';hubPreview=null;
+  }
   var renderedEditingId = '';
   var navigationPending = false;
   var mutationEpoch = 0;
@@ -4076,17 +4537,23 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   var personaTool = '';
 
   function formKey(el) {
+    const audioCard=el.closest('[data-rh-kind]');
+    if(audioCard&&['preset','workflowName','mode','id','instanceType','outputIndex','outputNodeId','nodes','referenceAudio','songAudio','songTitle','songArtist','allowLocal'].includes(el.name))return 'audio:'+audioCard.dataset.rhKind+':'+el.name;
+    if(el.matches('[data-wf],[data-map]')){
+      var row=el.closest('[data-local-workflow]');
+      if(row)return 'workflow:'+row.dataset.localWorkflow+':'+(el.dataset.wf||el.dataset.map);
+    }
     if(['ctDate','ctScope','cpGraphSearch','cpGraphEvents','localParameterPicker'].includes(el.id))return '';
     if(el.id==='phPassword')return '';
     if(['piFile','piPersona'].includes(el.id))return '';
-    if(el.id==='rhExample')return '';
+    if(el.id==='rhExample'||el.id==='capExample')return '';
     if(el.id==='rhQueue')return el.id+'@'+renderedRhWorkflow;
     if(el.hasAttribute('data-studio-param'))return 'studio:'+el.getAttribute('data-studio-param')+'@'+renderedRhWorkflow;
     if (el.id === 'rhChoice'||el.id==='rhPromptChoice') return '';
     if(el.id==='rhAuto')return el.id+'@'+renderedRhWorkflow;
     if (/^rh(?:Name|Note|Mode|Id|Node|Field|Instance|Extra|Style|Reference|PromptModel|FixedMode|Triggers)$/.test(el.id)) return el.id+'@'+renderedRhWorkflow;
     var featureKey = featureFieldKey(el); if (featureKey !== null) return featureKey;
-    if (el.id === 'monSearch' || el.id === 'soulChat' || el.id === 'learnSearch') return '';
+    if (el.id === 'monSearch' || el.id === 'monitorChat' || el.id === 'soulChat' || el.id === 'learnSearch') return '';
     if (el.id === 'pName' || el.id === 'pPrompt') return el.id + '@' + (renderedEditingId || 'new');
     return el.id || (el.hasAttribute('data-note') ? 'note:' + el.getAttribute('data-note') : el.hasAttribute('data-pick') ? 'pick:' + el.getAttribute('data-pick') : '');
   }
@@ -4106,7 +4573,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   function rememberDraft(page) {
     if(['overview','daily','diary','star','study'].includes(page))return;
     if (!page || !formBaselines[page] || renderedTab !== page) return;
-    formState.capture(page, readForm());
+    formState.refresh(page, readForm());
   }
   function startFormTracking() {
     featurePrepareFormContext();
@@ -4137,15 +4604,20 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   function floatingSaveTargets() {
     var dirty=pageDrafts[tab]||{},buttons=new Set();
     if(tab==='local'&&localDraftEditing&&$('localSave')&&!$('localSave').disabled)buttons.add('localSave');
-    var allowed=new Set(['agSave','phSave','grSave','shSave','soulSave','vgSave','igSave','mSave','memSave','memDirSave','ownerSave','groupSave','baseSave','autoSave','vSave','vSaveEngine','vsSave','voiceStudioSave','searxSave','pickApply','mfSave','pfSave','dlSave','connectionModeSave','connectionRoutesSave','connectionSave','localSave','localInitiativeSave','cacheSave','pSave','careSave','learnSave','pcSave','wSave','accSave','lifeSave','profileSave','rlSave','rhSave']);
+    var allowed=new Set(['rhAudio-sing-save','rhAudio-speech-save','capApply','capLocalSave','capImportSave','capAssistSave','capVoiceSave','contactScopeSave','agSave','phSave','grSave','shSave','soulSave','vgSave','igSave','mSave','memSave','memDirSave','ownerSave','groupSave','baseSave','autoSave','vSave','vSaveEngine','vsSave','voiceStudioSave','searxSave','pickApply','mfSave','pfSave','dlSave','connectionRoutesSave','connectionSave','localSave','localInitiativeSave','cacheSave','pSave','careSave','learnSave','pcSave','wSave','accSave','lifeSave','profileSave','rlSave','rhSave']);
     var fields=Array.from($('pane')?.querySelectorAll('input,textarea,select')||[]);
     Object.keys(dirty).forEach(function(key){
       var field=fields.find(function(el){return formKey(el)===key;});if(!field)return;
       var id=field.id,target='';
-      if(/^connection(?:WholeMode|Complement|TaskAssist)$/.test(id))target='connectionModeSave';
+      if(/^audio:(?:sing|speech):/.test(key))target='rhAudio-'+key.split(':')[1]+'-save';
+      else if(/^connection(?:WholeMode|Complement|TaskAssist)$/.test(id))target='connectionModeSave';
+      else if(/^capApi/.test(id))target='capAssistSave';
+      else if(/^cap(?:Mode|Source)$/.test(id))target='capApply';
+      else if(/^cap(?:LocalWorkflow|ChatBackend|ModelUrl|ModelId)$/.test(id))target='capLocalSave';
       else if(/^connection(?:Route|RoutingEnabled)/.test(id))target='connectionRoutesSave';
       else if(/^connection/.test(id))target='connectionSave';
       else if(id==='localInitiativeEnabled')target='localInitiativeSave';
+      else if(/^localVoice|^capVoicePreset$/.test(id)&&$('capVoiceSave'))target='capVoiceSave';
       else if(/^local/.test(id))target='localSave';
       else if(/^ag/.test(id))target='agSave';
       else if(/^v(?:Engine|Custom|Mood|Mini|Breeze)/.test(id))target='vSaveEngine';
@@ -4158,7 +4630,6 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       var card=field.closest('.card'),options=card?Array.from(card.querySelectorAll('button[id]')).filter(function(b){return allowed.has(b.id)&&!b.disabled&&typeof b.onclick==='function';}):[];
       if(options.length===1)buttons.add(options[0].id);
     });
-    if(buttons.has('connectionModeSave')&&buttons.has('connectionRoutesSave'))buttons.delete($('connectionRoutingEnabled')?.checked?'connectionModeSave':'connectionRoutesSave');
     return [...buttons];
   }
   function syncFloatingSave(message,state) {
@@ -4199,12 +4670,13 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if (url === '/im-bridge/send') return ['sendText','sendVoice','sendSticker','sendTarget','sendCustom'];
     if (url === '/im-bridge/presets') return ['pName@' + (editId || 'new'), 'pPrompt@' + (editId || 'new')];
     if (url === '/im-bridge/stickers') return ['sName','sFile'];
-    if(url==='/im-bridge/service-connections'&&payload.action==='save')return Object.keys(readForm()).filter(function(key){return /^connection/.test(key)&&!/^connection(?:WholeMode|Complement|TaskAssist|Route|RoutingEnabled)/.test(key);});
-    if(url==='/im-bridge/service-connections'&&payload.action==='mode')return ['connectionWholeMode','connectionComplement','connectionTaskAssist','connectionRoutingEnabled','connectionRouteChat','connectionRouteImage','connectionRouteSpeech','connectionRouteVideo'];
-    if(url==='/im-bridge/service-connections'&&payload.action==='routes')return ['connectionWholeMode','connectionComplement'].concat(Object.keys(readForm()).filter(function(key){return /^connection(?:Route|RoutingEnabled)/.test(key);}));
-    if (url === '/im-bridge/local' && payload.action==='save') return Object.keys(readForm()).filter(function(key){return /^local/.test(key);});
+    if(url==='/im-bridge/service-connections'&&payload.action==='save')return Object.keys(readForm()).filter(function(key){return /^connection/.test(key)&&!/^connectionRoute/.test(key);});
+    if(url==='/im-bridge/service-connections'&&payload.action==='routes')return Object.keys(readForm()).filter(function(key){return /^connectionRoute|^cap(?:Mode|Source)$/.test(key);});
+    if(url==='/im-bridge/local-audio'&&payload.action==='select')return ['capMode','capSource'];
+    if (url === '/im-bridge/local' && payload.action==='save') return Object.keys(readForm()).filter(function(key){return /^local|^cap(?:LocalWorkflow|ChatBackend|ModelUrl|ModelId)$/.test(key);});
     if (url !== '/im-bridge/settings') return keys;
-    if ('localChat' in payload){if('enabled' in payload.localChat)add(['connectionWholeMode']);if('apiComplement' in payload.localChat)add(['connectionComplement']);if('apiTaskAssist' in payload.localChat)add(['connectionTaskAssist']);if('initiativeEnabled' in payload.localChat)add(['localInitiativeEnabled']);}
+    if(payload.voice?.runninghub)for(const kind of Object.keys(payload.voice.runninghub))add(Object.keys(readForm()).filter(key=>key.startsWith('audio:'+kind+':')));
+    if ('localChat' in payload){if('apiComplement' in payload.localChat)add(['capApiComplement']);if('apiTaskAssist' in payload.localChat)add(['capApiTaskAssist']);if('initiativeEnabled' in payload.localChat)add(['localInitiativeEnabled']);}
     if ('companion' in payload) add(['careEnabled','careContinuity','carePauses','careWait','careExpression','careCasual','careBubbles']);
     if ('mood' in payload) add(['moodEnabled','moodEvery','moodConfidence','moodDecay']);
     if ('learning' in payload) add(['learnEnabled','learnPassive','learnActive','learnFocus','learnInterval','learnDaily']);
@@ -4235,6 +4707,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if('personaGrowth' in payload) add(['grEnabled','grDaily','grDailyDays','grDailyMinUser']);
     if ('autonomy' in payload && 'shareMedia' in payload.autonomy) add(['shEnabled','shVoice','shImages','shDuring','shIdle','shSchedule']);
     if ('autonomy' in payload) add(['autoWakeA','autoWakeB','autoIdle','autoExplore','autoQzoneImages','autoQzoneReplies']);
+    if ('contactWhitelistEnabled' in payload) add(['contactWhitelist']);
     if ('userNotes' in payload) add(Object.keys(payload.userNotes).flatMap(function (k) { return ['note:'+k,'ownerAddress_'+k]; }));
     return keys;
   }
@@ -4295,6 +4768,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if(method==='POST'&&deviceUiPreview()&&!window.QQBridgeDeviceUI?.previewWriteAllowed(url,payload))return Promise.reject(Error('当前为另一设备的界面预览，请在实际运行设备打开插件后操作。'));
     var writes = !passiveConsoleRequest(method,url,payload);
     var origin = tab;
+    var requestScope=formScope(data);
     var submitted = writes ? readForm() : {};
     var editId = renderedEditingId;
     if (writes) mutationEpoch += 1;
@@ -4302,7 +4776,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
       if(url==='/im-bridge/local'&&payload?.action==='save'&&value?.verified!==true)throw Error('后台未确认配置回读，请重启 DSH 后检查实际状态');
       if (writes) {
         mutationEpoch += 1;
-        markSaved(origin, submitted, fieldsSaved(url, payload || {}, editId));
+        if(requestScope===formScope(data))markSaved(origin, submitted, fieldsSaved(url, payload || {}, editId));
         if ((url === '/im-bridge/presets' || (url === '/im-bridge/settings' && payload && payload.personae)) && origin === 'persona') personaTool = '';
       }
       if (writes) feed((fieldsSaved(url,payload||{},editId).length?'已保存 · ':'操作完成 · ') + feedName(url), 'good');
@@ -4320,44 +4794,58 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if (!PAGE_HEADS[page]) page = 'overview';
     if (navigationPending || (page === tab && renderedTab === tab)) return;
     var previous = tab;
-    if (updateHash === false) history.replaceState(null, '', '#' + previous);
     rememberDraft(previous);
     if (Object.keys(pageDrafts[previous] || {}).length || previous==='local'&&localDraftEditing) {
       if (!$('modal').hidden) return;
       navigationPending = true;
       var canSave=floatingSaveTargets().length>0;
-      var decision = showModal(canSave?'这页还有未保存的修改。保存成功后再切换；若保存失败，会留在本页供你检查。':'这页有未保存的输入，但没有可自动保存的设置。请先使用本页对应操作，或明确放弃这些输入后切换。', false, '', canSave?'保存并切换':'放弃输入并切换');
+      var hasPrivateInput=Array.from($('pane').querySelectorAll('input[type="password"], input[type="file"], [autocomplete="one-time-code"]')).some(function(el){return !!el.value;});
+      var keepDraft=!hasPrivateInput&&previous!=='local';
+      var decision = showModal(canSave?'这页还有未保存的修改。保存成功后再切换；若保存失败，会留在本页供你检查。':'这页有未保存的输入，但没有可自动保存的设置。请先使用本页对应操作，或明确放弃这些输入后切换。', false, '', canSave?'保存并切换':'放弃输入并切换',keepDraft);
       $('modalCancel').textContent = '继续编辑';
       var leave;
       try {
         leave = await decision;
-        if (leave && canSave) {
+        if (leave === true && canSave) {
           leave = await saveFloatingPage();
           if (!leave) toast('这页还有修改没保存成功，已留在本页，请检查保存提示');
-        } else if (leave) formState.discard(previous);
+        } else if (leave===true) formState.discard(previous);
       } finally { navigationPending = false; }
       if (!leave) return;
     }
-    groupLastPages[groupFor(page).id] = page;
+    if (renderedTab===previous&&data&&routeViewScope===formScope(data)) routeViews.set(previous,capturePanelView($('pane')));
     tab = page;
-    closeSearch();
+    expandedSection=groupFor(page).id;
     if (page === 'overview' && data) {
       /* 切回首页时静默对一次数：只动数字，不重排版面。 */
       setTimeout(function () { if (tab === 'overview') { void refreshCompanionPanel(); void syncLiveSnapshot(); } }, 120);
     }
-    if (updateHash === false) history.replaceState(null, '', '#' + page);
-    else if (location.hash !== '#' + page) history.pushState(null, '', '#' + page);
-    if (data) renderPane();
+    if (updateHash!==false&&location.hash!=='#'+page) {
+      routeIndex++;
+      history.pushState({bridgePage:routeIndex},'','#'+page);
+    }
+    syncNavigation();
+    if (data) {
+      await renderPane();
+      if(tab!==page)return;
+      if(!routeViews.get(page)?.focus){
+        var title=$('pane').querySelector('h1');
+        if(title){title.tabIndex=-1;title.focus({preventScroll:true});}
+      }
+    }
   }
   var overviewRenderSig = '';
   function overviewSignature() {
     try {
       var c = companionPanel.value || {};
       return JSON.stringify([
-        data?.status?.connected, data?.status?.accountPaused, data?.status?.selfId, data?.status?.personaName,
-        c.sleep === true, c.today?.day,
+        data?.status?.connected, data?.status?.accountPaused, data?.status?.accountNeedsAttention, data?.status?.selfId, data?.status?.edition,
+        data?.status?.personaName, data?.status?.persona?.name, data?.status?.preset, data?.status?.chats?.length, data?.status?.allowUsers?.length, data?.status?.allowGroups?.length,
+        data?.stickerFiles?.length, data?.status?.autonomy?.config?.enabled, data?.status?.autonomy?.state?.counts,
+        data?.status?.cost?.today, data?.status?.cost?.last, data?.settings?.memory?.enabled, data?.settings?.voice?.enabled,
+        c.life?.sleeping, c.life?.config?.execute, c.life?.scene?.activity, c.life?.scene?.planned, c.today?.day, c.today?.slots, c.life?.jobs?.map(j=>[j.id,j.status,j.evidence?.length]),
         c.diary?.days?.slice(-1)?.[0]?.day, c.diary?.days?.slice(-1)?.[0]?.text,
-        c.decisions?.pending?.length
+        homePending(c), companionPanel.error
       ]);
     } catch (e) { return 'sig-' + Date.now(); }
   }
@@ -4368,27 +4856,35 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     renderPane();
   }
 
+  function connectionLoginSignature() {
+    return JSON.stringify([login?.selectedAccountId,login?.connected,login?.qqLoggedIn,login?.loginPhase,
+      login?.identity,login?.canScan,login?.qrAvailable,login?.qrUpdatedAt,login?.error,login?.qqInstallation,login?.qqConnectionEvidence]);
+  }
+
   async function syncLiveSnapshot() {
     if (syncPending || !data || document.hidden) return;
     syncPending = true;
     var epoch = mutationEpoch;
-    var wantedMessages = tab === 'overview';
+    var wantedMessages = tab === 'overview' && $('homeRecent')?.closest('details')?.open;
     try {
-      var snapshot = await Promise.all([api('GET', '/im-bridge/settings'), wantedMessages ? api('GET', '/im-bridge/messages') : Promise.resolve(null), api('GET', '/im-bridge/features').catch(function () { return null; }), tab === 'connection' ? api('GET', '/im-bridge/login').catch(function () { return null; }) : Promise.resolve(null)]);
-      if (epoch !== mutationEpoch) return;
+      var revision = loadRevision;
+      var snapshot = await Promise.all([api('GET', '/im-bridge/settings'), wantedMessages ? api('GET', '/im-bridge/messages').catch(function () { return null; }) : Promise.resolve(null), api('GET', '/im-bridge/features').catch(function () { return null; }), tab === 'connection' ? api('GET', '/im-bridge/login').catch(function () { return null; }) : Promise.resolve(null)]);
+      if (epoch !== mutationEpoch || revision !== loadRevision) return;
+      alignHomeQQProfile(snapshot[0]);
+      if (formScope(snapshot[0])!==formScope(data)) { await load(); return; }
       var oldStatus = data.status;
-      var oldQqLoggedIn = login && login.qqLoggedIn;
+      var oldLoginView=connectionLoginSignature();
       if (snapshot[3]) login = snapshot[3];
       data = snapshot[0]; var previousUiDevice=uiDevice; mobileUiPolicy();if(previousUiDevice!==uiDevice){rememberDraft(renderedTab);initNavigation();renderPane();}
       if (snapshot[2]) featureData = snapshot[2];
-      if (snapshot[1]) monitor = snapshot[1];
+      if (Array.isArray(snapshot[1]?.messages)) { monitor = snapshot[1]; void paintHomeRecent(); }
       lastSnapshotAt = Date.now();
       renderPill();
       var modalOpen = !$('modal').hidden;
-      if ($('liveSnapshot')) $('liveSnapshot').textContent = '实时同步状态 · ' + new Date(lastSnapshotAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if ($('liveSnapshot')) $('liveSnapshot').textContent = '同步于 ' + new Date(lastSnapshotAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
       updateHomeNumbers();
-      /* 首页自动同步只更新文字，不整页重画：重画会让整页跳一下。 */
-      if (tab === 'connection' && !modalOpen && !Object.keys(pageDrafts.connection || {}).length && (oldStatus.connected !== data.status.connected || oldStatus.accountPaused !== data.status.accountPaused || oldStatus.manuallyLoggedOut !== data.status.manuallyLoggedOut || oldQqLoggedIn !== (login && login.qqLoggedIn))) {
+      if(tab==='overview'&&!modalOpen)renderOverviewIfChanged();
+      if (tab === 'connection' && !modalOpen && !Object.keys(pageDrafts.connection || {}).length && (oldStatus.connected !== data.status.connected || oldStatus.accountPaused !== data.status.accountPaused || oldStatus.accountNeedsAttention !== data.status.accountNeedsAttention || oldStatus.loginGuard?.userHold !== data.status.loginGuard?.userHold || oldStatus.loginGuard?.holdSavePending !== data.status.loginGuard?.holdSavePending || oldStatus.manuallyLoggedOut !== data.status.manuallyLoggedOut || oldLoginView!==connectionLoginSignature())) {
         renderPane();
       }
     } catch (error) {
@@ -4423,6 +4919,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     if ($('discardDraft')) $('discardDraft').onclick = async function () {
       if (!await askConfirm('放弃本页尚未保存的修改？')) return;
       formState.discard(tab);
+      if(tab==='local'){localConfigDraft=null;localDraftEditing=false;localWorkflowDraft=[];localImportState=null;}
       if (tab === 'imagegen') { imagegenDraft = null; imagegenTypedKeys = {}; }
       if (tab === 'persona') { editingId = ''; personaTool = ''; }
       renderPane();
@@ -4450,7 +4947,15 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     $('modal').setAttribute('aria-modal', 'true');
     $('modal').setAttribute('aria-labelledby', 'modalMsg');
     ['input', 'change'].forEach(function (name) {
-      $('pane').addEventListener(name, function () { rememberDraft(tab); renderDraftNotice(); });
+      $('pane').addEventListener(name, function (event) {
+        var field=event.target;
+        if(renderedTab!==tab||!field.matches?.('input,textarea,select')||field.readOnly)return;
+        var key=formKey(field);
+        if(!key||['overview','daily','diary','star','study'].includes(tab))return;
+        var values=readForm();
+        if(Object.hasOwn(values,key))formState.capture(tab,{[key]:values[key]});
+        renderDraftNotice();
+      },true);
     });
     window.addEventListener('beforeunload', function (event) {
       rememberDraft(renderedTab);
@@ -4474,12 +4979,12 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     var ai = findCard('AI 生成人设');
     var preview = findCard('试聊预览');
     if (!selfCard || !library || !editor || !transfer || !ai || !preview) return html;
-    library.querySelector('h2').textContent = '人设卡（cosplay）';
+
     var cardActive = (data.status && data.status.persona && data.status.persona.id) ? data.status.persona.id !== 'config' : !!(data.settings.activePersonaId && data.settings.activePersonaId !== 'self');
     var name = cardActive ? (data.status.personaName || data.status.preset || '人设卡') : '自我（空卡）';
-    var out = '<div class="persona-toolbar"><span class="persona-current">' + icon('whale') + (cardActive ? '当前穿着 <b>' + esc(name) + '</b>' : '当前 <b>自我（空卡）</b>') + '</span><div class="btnrow">' + (cardActive ? '<button data-self="1">脱下角色卡</button>' : '') + '<button class="primary" data-persona-tool="edit">＋ 新建人设卡</button><button data-persona-tool="ai">' + icon('spark') + 'AI 生成</button><button data-persona-tool="transfer">导入 / 导出</button></div></div>';
+    var out = '<div class="persona-toolbar"><span class="persona-current">' + icon('whale') + (cardActive ? '当前人设 <b>' + esc(name) + '</b>' : '当前 <b>自我（空卡）</b>') + '</span><div class="btnrow">' + (cardActive ? '<button data-self="1">切回自我卡</button>' : '') + '<button class="primary" data-persona-tool="edit">＋ 新建人设卡</button><button data-persona-tool="ai">' + icon('spark') + 'AI 生成</button><button data-persona-tool="transfer">导入 / 导出</button></div></div>';
     out += companionMarkup()+personaImageMarkup()+growthMarkup();
-    out += '<div class="persona-layout"><div class="persona-library">' + selfCard.outerHTML + library.outerHTML + '<div class="effect-note">穿上人设卡后，下一条消息按卡片演；脱下后回到自我。</div></div><aside class="persona-preview">' + preview.outerHTML + '<div class="preview-note">' + icon('shield') + '<span>试聊只在这里预览，不会发送到 QQ，也不改变真实对话。</span></div></aside></div>';
+    out += '<div class="persona-layout"><div class="persona-library">' + selfCard.outerHTML + library.outerHTML + '</div><aside class="persona-preview">' + preview.outerHTML + '<div class="preview-note">' + icon('shield') + '<span>试聊只在这里预览，不会发送到 QQ，也不改变真实对话。</span></div></aside></div>';
     var titles = { edit: editingId ? '编辑人设卡' : '新建人设卡', ai: 'AI 生成人设卡', transfer: '导入与导出' };
     out += '<div class="persona-drawer" id="personaDrawer"' + (personaTool ? '' : ' hidden') + '><div class="drawer-backdrop" data-close-persona="1"></div><section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="personaToolTitle"><header class="drawer-header"><div><span class="page-eyebrow">角色工具</span><h2 id="personaToolTitle">' + esc(titles[personaTool] || '角色工具') + '</h2></div><button class="icon-button" data-close-persona="1" aria-label="关闭角色工具">×</button></header><div class="drawer-content"><section data-tool-panel="edit"' + (personaTool === 'edit' ? '' : ' hidden') + '>' + editor.outerHTML + '</section><section data-tool-panel="ai"' + (personaTool === 'ai' ? '' : ' hidden') + '>' + ai.outerHTML + '</section><section data-tool-panel="transfer"' + (personaTool === 'transfer' ? '' : ' hidden') + '>' + transfer.outerHTML + '</section></div><footer class="drawer-footer">未保存的内容仅暂存在当前窗口。</footer></section></div>';
     return out;
@@ -4541,7 +5046,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   var deliveryPollBusy=false;
   async function refreshDeliveryRows(){if(tab!=='delivery'||!$('deliveryRecords')||deliveryPollBusy)return;deliveryPollBusy=true;try{var v=await requestApi('GET','/im-bridge/deliveries');if(tab!=='delivery'||!$('deliveryRecords'))return;featureData.outbox=v.jobs||[];$('deliveryRecords').innerHTML=deliveryRows(featureData.outbox.slice().reverse());bindDeliveryActions();}catch{}finally{deliveryPollBusy=false;}}
   function viewDelivery() {
-    if(!featureData)return unavailableFeatures();var out='<div class="card"><h2>消息处理规则</h2><p class="muted">按平台消息 ID 去重。同一个人连续发来的消息会合并处理；链接、图片、命令和不同群成员的消息保持边界。手机版的文字分句会先保存整组再发送；确定尚未提交的断线消息会有限续发。已提交但回执不明确的消息不会自动重发。</p><label class="field">回复前停顿（毫秒，0 关闭；有新消息会重新计时）<input id="dlDelay" type="number" min="0" max="15000" step="500" value="'+Number(featureData.reliability.replyDelayMs??3000)+'"></label><p class="muted">默认 3000 毫秒：最后一条消息到达后等 3 秒再提交模型，期间再来消息会重新等 3 秒，给对方留出连续打字的窗口。</p><button class="primary" id="dlSave">保存</button></div><div class="card"><div class="section-heading"><h2>发送队列与回执</h2><span class="muted">每2秒更新发送与核对结果</span></div>';
+    if(!featureData)return unavailableFeatures();var out='<div class="card"><h2>消息可靠性</h2><details><summary>高级：连续消息等待与恢复规则</summary><p class="muted">按平台消息 ID 去重。同一个人连续发来的消息会合并处理；链接、图片、命令和不同群成员的消息保持边界。手机版的文字分句会先保存整组再发送；确定尚未提交的断线消息会有限续发。已提交但回执不明确的消息不会自动重发。</p><label class="field">回复前停顿（毫秒，0 关闭；有新消息会重新计时）<input id="dlDelay" type="number" min="0" max="15000" step="500" value="'+Number(featureData.reliability.replyDelayMs??3000)+'"></label><p class="muted">默认 3000 毫秒：最后一条消息到达后等 3 秒再提交模型，期间再来消息会重新等 3 秒，给对方留出连续打字的窗口。</p><button class="primary" id="dlSave">保存</button></details></div><div class="card"><div class="section-heading"><h2>发送队列与回执</h2><span class="muted">每2秒更新发送与核对结果</span></div>';
     var jobs=(featureData.outbox||[]).slice().reverse();out+='<div id="deliveryRecords">'+deliveryRows(jobs)+'</div>';
     out+='</div>';
     var withheld=(featureData.audits||[]).filter(a=>!a.outboxIds?.length&&a.deliveryReason&&['withheld','failed','generated'].includes(a.deliveryState)).slice(-10).reverse();
@@ -4826,7 +5331,7 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
     Array.prototype.forEach.call(document.querySelectorAll('[data-inbox-retry]'),button=>{button.onclick=async function(){if(!await askConfirm('重新提交这条输入？如果之前已经生成过回复，可能会再次回复。'))return;var result=await featurePost('inbox-retry',{id:button.getAttribute('data-inbox-retry'),confirmUncertain:true},button);if(result)await load();};});
     if((el=$('afAudit')))el.onchange=function(){rememberDraft('activity');auditId=this.value;renderPane();};
     if((el=$('afWithdraw')))el.onclick=async function(){if(!await askConfirm('向 QQ 申请撤回这轮已确认发送的消息？'))return;var result=await featurePost('withdraw',{id:auditId},this);if(result)$('afResult').textContent=result.results.map(r=>r.messageId+'：'+(r.ok?'已撤回':r.error)).join('；');};
-    if((el=$('afRegenerate')))el.onclick=async function(){var id=auditId;var result=await featurePost('regenerate',{id,instruction:$('afInstruction').value},this);if(result){correctionDrafts[id]=result.draft;if(tab==='activity'&&auditId===id){$('afDraft').value=result.draft;rememberDraft('activity');renderDraftNotice();}toast('已生成预览，尚未发送');}};
+    if((el=$('afRegenerate')))el.onclick=async function(){var id=auditId;var result=await featurePost('regenerate',{id,instruction:$('afInstruction').value},this);if(result){correctionDrafts[id]=result.draft;if(tab==='activity'&&auditId===id){$('afDraft').value=result.draft;formState.capture('activity',{[formKey($('afDraft'))]:result.draft});renderDraftNotice();}toast('已生成预览，尚未发送');}};
     if((el=$('afSend')))el.onclick=async function(){if(!$('afDraft').value.trim())return toast('先填写或生成修正版');if(!await askConfirm('把当前修正版发送到这轮回复对应的 QQ 对话？'))return;var result=await featurePost('correction',{id:auditId,text:$('afDraft').value},this);if(result)toast('修正版已加入发送队列');};
     if((el=$('bfExport')))el.onclick=async function(){var result=await featurePost('backup-export',{includeAssets:$('bfAssets').checked,includeMessages:$('bfHistory').checked},this);if(!result)return;var url=URL.createObjectURL(new Blob([JSON.stringify(result.bundle,null,2)],{type:'application/json'}));var anchor=document.createElement('a');anchor.href=url;anchor.download='qq-bridge-backup-'+new Date().toISOString().slice(0,10)+'.json';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('备份已下载');};
     if((el=$('bfFile')))el.onchange=function(){backupBundle=null;backupToken='';$('bfRestore').disabled=true;$('bfPreviewResult').textContent='';};
@@ -4858,10 +5363,23 @@ import {deviceCapabilities, openPermissionControls} from './settings-contract.js
   }
   function viewStudy(){
     var l=companionPanel.value?.learning||{},e=companionPanel.value?.expression||{},effects=l.effects||{},apps=(l.applications||[]),expressionApps=e.applications||[];
-    apps=apps.map(a=>({...a,sources:a.sources||[]}));expressionApps.forEach(a=>{if(!apps.some(b=>b.auditId===a.auditId))apps.push({...a,sources:a.ids||[],reply:'本轮使用了 '+(a.ids||[]).length+' 条表达方法'});});apps.sort((a,b)=>b.at-a.at);
-    return companionPanelToolbar()+learningNotebookMarkup(l)+'<div class="card"><h2>学习有没有用</h2><p>已存 '+(l.items||[]).length+' 条 · 召回 '+Number(effects.retrieved||0)+' 次 · 已评价 '+Number(effects.reviewed||0)+' 轮 · 暂停使用 '+Number(effects.suspended||0)+' 条</p><p class="muted">召回表示交给模型参考；生成、QQ确认送达和你的评价分别记录。纠正会关联到这次实际使用的经验。</p></div><div class="card"><h2>最近应用到的答复</h2>'+apps.slice(0,20).map(a=>'<article class="msg"><p>'+esc(a.reply||'已召回，等待答复结果')+'</p><small>'+esc(a.status)+' · '+a.sources.length+' 条经验'+(a.feedback?' · '+(a.feedback.rating>0?'有帮助':'不合适'):'')+'</small>'+(['generated','delivered'].includes(a.status)?'<div class="btnrow"><button data-cp-feedback="'+esc(a.auditId)+'" data-cp-rating="1">这次有帮助</button><button data-cp-feedback="'+esc(a.auditId)+'" data-cp-rating="-1">这次用得不对</button></div>':'')+'</article>').join('')+(!apps.length?'<p class="muted">新版开始记录具体使用结果，不把旧召回次数冒充已验证效果。</p>':'')+'</div><details class="card"><summary>已提炼的表达方法 '+(e.items||[]).length+' 条</summary>'+(e.items||[]).slice().reverse().map(i=>'<article class="msg"><b>'+esc(i.situation)+'</b><p>'+esc(i.style)+'</p><small>召回 '+Number(i.uses||0)+' 次</small></article>').join('')+'</details><div class="btnrow"><button data-go="thoughts">管理来源与学习设置</button></div>';
+    var refs=e.references||[],byId=new Map(refs.map(i=>[i.id,i])),statuses={retrieved:'已取作参考',generated:'已生成',delivered:'QQ 已确认送达',silent:'没有生成文字',cancelled:'已取消'};
+    apps=apps.map(a=>({...a,sources:a.sources||[]}));
+    expressionApps.forEach(a=>{
+      var row=apps.find(b=>b.auditId===a.auditId);
+      if(!row){row={...a,sources:[]};apps.push(row);}
+      row.sources=row.sources.concat(a.ids||[]);
+      row.expressionNames=(a.ids||[]).map(id=>byId.has(id)?'贴吧样本 · '+byId.get(id).style:'相处中学到的表达');
+      if(!row.reply)row.reply='本轮取到的表达参考';
+    });
+    apps.sort((a,b)=>b.at-a.at);
+    var catalog='<details class="card"><summary>公开贴吧表达参考 '+refs.length+' 条</summary>'+refs.map(i=>'<article class="msg"><b>'+esc(i.situation)+'</b><p>'+esc(i.style)+'</p><p>原帖片段　“'+esc(i.excerpt)+'”<br>另例　“'+esc(i.context)+'” → “'+esc(i.example)+'”</p><small>取作参考 '+Number(i.uses||0)+' 次'+(i.suspended?' · 已暂停':'')+' · '+esc(i.evidence.map(([p,r])=>'第 '+p+' 帖第 '+r+' 条回复').join('、'))+'</small></article>').join('')+(refs.length?'<p><a href="'+esc(e.referenceSource)+'" target="_blank" rel="noreferrer">查看公开样本来源</a></p>':'')+'</details>';
+    return companionPanelToolbar()+learningNotebookMarkup(l)+catalog+'<div class="card"><h2>学习有没有用</h2><p>已存 '+(l.items||[]).length+' 条 · 召回 '+Number(effects.retrieved||0)+' 次 · 已评价 '+Number(effects.reviewed||0)+' 轮 · 暂停使用 '+Number(effects.suspended||0)+' 条</p><p class="muted">召回表示交给模型参考；生成、QQ确认送达和你的评价分别记录。纠正会关联到这次实际使用的经验。</p></div><div class="card"><h2>最近应用到的答复</h2>'+apps.slice(0,20).map(a=>'<article class="msg"><p>'+esc(a.reply||'已召回，等待答复结果')+'</p><small>'+esc(statuses[a.status]||a.status)+' · '+a.sources.length+' 条经验'+(a.expressionNames?.length?' · '+esc(a.expressionNames.join('、')):'')+(a.feedback?' · '+(a.feedback.rating>0?'有帮助':'不合适'):'')+'</small>'+(['generated','delivered'].includes(a.status)?'<div class="btnrow"><button data-cp-feedback="'+esc(a.auditId)+'" data-cp-rating="1">这次有帮助</button><button data-cp-feedback="'+esc(a.auditId)+'" data-cp-rating="-1">这次用得不对</button></div>':'')+'</article>').join('')+(!apps.length?'<p class="muted">新版开始记录具体使用结果，不把旧召回次数冒充已验证效果。</p>':'')+'</div><details class="card"><summary>已提炼的表达方法 '+Number(e.learned||0)+' 条</summary>'+(e.items||[]).slice().reverse().map(i=>'<article class="msg"><b>'+esc(i.situation)+'</b><p>'+esc(i.style)+'</p><small>召回 '+Number(i.uses||0)+' 次</small></article>').join('')+'</details><div class="btnrow"><button data-go="thoughts">管理来源与学习设置</button></div>';
   }
-  function viewSongs(){return '<div data-rh-audio="sing"></div>';}
+  function viewSongs(){return '<div data-rh-audio="sing" data-rh-library-only="true"></div>';}
+  function viewApiSinging(){return '<div class="card"><p>工作流保存在这里；已完成的歌曲统一在作品库管理。</p><button data-go="songs">打开翻唱作品</button></div>';}
+  function viewApiServices(){return '<div class="card"><h2>选择要配置的 API 功能</h2><p class="muted">云端服务与本地运行分开配置。每项实际使用哪个来源，由连接与搭配中的选择决定。</p><div class="form-two">'+[['model','聊天模型'],['imagegen','图片 API'],['voice','语音 API'],['apisong','唱歌 API'],['videogen','视频 API'],['services','连接与搭配']].map(function(item){return '<button data-go="'+item[0]+'">'+item[1]+'</button>';}).join('')+'</div></div>';}
+  function viewMaintenance(){return '<div class="card"><h2>消息排查与手动操作</h2><p class="muted">普通聊天无需操作这些项目。消息去重、连续消息合并与断线恢复仍在后台工作。</p><div class="btnrow"><button data-go="activity">回复依据与纠错</button><button data-go="sessions">会话管理</button><button data-go="send">手动发送消息</button><button data-go="delivery">送达与失败记录</button><button data-go="logs">运行日志</button></div></div>'; }
   async function openCompanionEvidence(id){try{var r=await api('POST','/im-bridge/features/companion',{key:companionPanelKey(),action:'evidence',id});companionPanel.evidence=r.result;renderPane();$('cpEvidence')?.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){toast(e.message);}}
   function bindCompanionPanel(){
     document.querySelectorAll('[data-notebook-subject]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-notebook-row]').forEach(row=>row.hidden=b.dataset.notebookSubject!=='全部'&&row.dataset.notebookRow!==b.dataset.notebookSubject);});
@@ -4935,7 +5453,7 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
 }
 
   function companionWhale(){return '<svg viewBox="0 0 120 105" aria-hidden="true"><path d="M18 58C9 24 69 13 83 47c3 7 4 16 0 24 12 1 20-6 25-18 8 27-12 38-33 34-29 9-54-4-57-29Z" fill="#92b8ee" stroke="#697bb4" stroke-width="2.5"/><path d="M42 30c-5-9-1-17 6-19m3 18c-1-9 4-14 11-15" fill="none" stroke="#8aa7db" stroke-width="3" stroke-linecap="round"/><ellipse cx="36" cy="63" rx="7" ry="4" fill="#eebbd7"/><circle cx="40" cy="54" r="3" fill="#46537b"/><path d="M42 69q11 8 21-2" fill="none" stroke="#56658f" stroke-width="2.5" stroke-linecap="round"/><path d="m83 15 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z" fill="#f0d29b"/></svg>';}
-  function currentCompanion(){var v=companionPanel.value||{},life=v.life||{},online=v.online??(data.status.connected&&!data.status.accountPaused),sleep=!online||life.sleeping;return {v,life,online,sleep,title:!online?'设备未连接':sleep?'正在休息':(life.scene?.planned?'打算：':'')+(life.scene?.activity||'正在安排今天'),name:data.status.personaName||data.status.persona?.name||'小鲸'};}
+  function currentCompanion(){var v=companionPanel.value||{},life=v.life||{},online=typeof data.status.connected==='boolean'?data.status.connected&&!data.status.accountPaused:!!v.online,sleep=!online||life.sleeping;return {v,life,online,sleep,title:!online?'设备未连接':sleep?'正在休息':(life.scene?.planned?'打算：':'')+(life.scene?.activity||'正在安排今天'),name:data.status.personaName||data.status.persona?.name||'小鲸'};}
   function companionHero(){var c=currentCompanion(),clock=c.v.today?.clock||new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());return '<section class="life-hero"><div class="life-avatar">'+companionWhale()+'</div><div class="life-copy"><span class="life-eyebrow">'+esc(c.name)+'的小小世界 · <span id="heroClock">'+esc(clock)+'</span></span><h2>'+esc(c.sleep?c.title:'今天也在这里')+'</h2><p>'+esc(!c.online?'离线的时间就是睡眠，不补编生活。':c.sleep?'正在按自己的作息休息。':c.title)+'</p><div class="life-state"><i class="status-dot '+(c.online?'online':'')+'"></i>'+esc(c.online?'QQ 已连接':'QQ 未连接')+' <span>·</span> '+esc(c.v.today?.day||'上海时间')+'</div>'+(!c.online?'<div class="hero-wake"><button data-go="connection">先连接 QQ</button></div>':c.sleep?'<div class="hero-wake"><button class="primary" data-cp-wake>叫醒她 · 15 分钟</button><small>也可以在号主 QQ 私聊里说“醒醒”，或直接告诉她现在想做什么。</small></div>':'')+'</div><span class="hero-star" aria-hidden="true">✧</span></section>';}
   var LIFE_CAPABILITY_LABELS={group:'群聊参与',draw:'画画',browse:'浏览',listen:'听歌',social:'QQ交流',write:'写作',digital:'数字操作',local:'本机操作',sleep:'睡眠',rest:'休息',unsupported:'跳过实体活动',physical:'跳过实体活动'};
   var LIFE_JOB_LABELS={planned:'计划中',queued:'等待执行',running:'正在执行',participating:'群参与中',waiting_user:'等你决定',completed:'已完成',failed:'未能完成',ended:'已结束',unsupported:'已跳过',sleeping:'睡眠',budget:'今日额度已用完',interrupted:'已中断',incomplete:'未确认结果',cancelled:'已取消',paused:'进度已保存',needs_reconcile:'需要核对',user_request:'按你的请求安排'};
@@ -4981,9 +5499,14 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
   function homeWalletRows(accounts){
     return (accounts||[]).map(function(a){var amount=walletAmountText(a);return '<div class="row"><span><b>'+esc(a.label)+'</b>'+(a.stale?' <span class="tag">旧数据</span>':'')+(a.provider==='runninghub'?'<small class="muted" style="display:block">'+esc(a.reason||'积分与钱包分别展示；数据来自账户接口')+'</small>':'')+'</span><span>'+esc(amount)+' <span class="tag">'+esc(walletStateText(a))+'</span></span></div>';}).join('');
   }
-  function homeWalletCard(c){
-    var rows=homeWalletRows(featureData?.wallet?.accounts||[]);
-    return '<section class="card" id="homeWallet"><div class="section-heading"><h2>口粮与今日花费</h2><div class="btnrow"><button class="small" id="homeWalletSettings">余额设置</button><button class="small" id="homeSpendRefresh">刷新</button></div></div><div id="homeWalletRows">'+(rows||'<p class="muted">余额尚未查询，可在“余额感知”里刷新。</p>')+'</div><div id="homeSpend" data-scope="'+esc(homeSpendScope())+'" class="muted" role="status">正在统计今日花费…</div><label class="check-field"><input type="checkbox" id="homeLifeExecute"'+(c.life.config?.execute!==false?' checked':'')+'>真实执行日程内容</label><p class="muted">关闭后保留日程计划，只暂停日程驱动的工具操作；你在聊天里明确提出的请求仍会执行。</p></section>';
+  function homeWalletCard(){
+    const rows = homeWalletRows(featureData?.wallet?.accounts || []);
+    return '<section class="home-panel home-wallet" id="homeWallet"><div class="home-section-head">'+
+      '<h2>今日花费</h2><button type="button" id="homeSpendRefresh">'+icon('refresh')+'刷新</button></div>'+
+      '<div id="homeSpend" data-scope="'+esc(homeSpendScope())+'" role="status">正在统计今日花费…</div>'+
+      '<details id="homeBalances" class="home-inner-fold"><summary>账户余额</summary><div id="homeWalletRows">'+
+      (rows||'<p class="muted">余额尚未查询，可在余额设置中刷新。</p>')+
+      '</div><button type="button" id="homeWalletSettings">余额设置</button></details></section>';
   }
   function updateHeroClock(){
     var clock=$('heroClock');if(!clock)return;
@@ -4993,8 +5516,9 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
   var lastHomeSpendAt = 0;
   /* 首页只换数字：余额、花费、时间，不重建整页。 */
   function updateHomeNumbers(){
+    if(tab==='overview')void refreshHomeQQProfile();
     var box=$('homeWalletRows');
-    if(box){var html=homeWalletRows(featureData?.wallet?.accounts||[])||'<p class="muted">余额尚未查询，可在“余额感知”里刷新。</p>';if(box.innerHTML!==html)box.innerHTML=html;}
+    if(box){var html=homeWalletRows(featureData?.wallet?.accounts||[])||'<p class="muted">余额尚未查询，可在余额设置中刷新。</p>';if(box.innerHTML!==html)box.innerHTML=html;}
     updateHeroClock();
     if($('homeSpend')&&Date.now()-lastHomeSpendAt>15000){lastHomeSpendAt=Date.now();void loadHomeSpend();}
   }
@@ -5008,16 +5532,207 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
       var spend=value.spend||{};
       if(!spend.day){paint('今日花费统计要等插件重载后生效（重启一次 App 即可）');return;}
       var requestCosts=(spend.requests||[]).filter(function(r){return r.calls>0;}).slice(0,12).map(function(r){return '<p>'+esc((r.purposes||[]).join('、')||'模型调用')+' · '+esc(Number(r.cost||0).toFixed(5))+' 元<br><small>'+esc(r.chat||'后台')+' · '+Number(r.calls||0)+' 次调用 · '+esc(String(r.id||'').slice(-8))+'</small></p>';}).join('');
-      paint('今日模型花费 '+esc(spend.totalText||'0 元')+'<br>聊天与日程执行 '+esc(spend.chatText||'0 元')+' · 辅助分析 '+esc(spend.toolText||'0 元')+'<br><span class="muted">按插件单价估算，图片、语音、视频的服务费及积分另计，以服务商账单为准。历史辅助费用仅能补计仍保留的记录。</span>'+(requestCosts?'<details><summary>按请求查看近期明细</summary>'+requestCosts+'</details>':''));
+      const breakdown = '<dl class="home-cost-breakdown"><div><dt>聊天与日程</dt><dd>'+esc(spend.chatText||'未提供')+'</dd></div>'+
+        '<div><dt>辅助分析</dt><dd>'+esc(spend.toolText||'未提供')+'</dd></div></dl>';
+      paint('<div class="home-amount">'+esc(spend.totalText||'未提供')+'</div>'+breakdown+
+        '<small class="home-cost-note">按插件单价估算，历史辅助费用取自保留的记录。图片、语音、视频与积分另计，实际支出以服务商账单为准。</small>'+
+        (requestCosts?'<details id="homeRequestCosts" class="home-inner-fold"><summary>近期请求明细</summary>'+requestCosts+'</details>':''));
     }catch(error){paint('今日花费暂时读不到：'+esc(error.message));}
   }
   function homeLauncherCard(){
-    return '<section class="card" id="homeLauncher"><div class="section-heading"><h2>QQ 桥接悬浮条</h2></div><p class="muted">网页上那个“QQ 桥接”小条，现在固定在页面上，关不掉。按住可以拖动换位置，位置会自动记住；点下面的按钮回到默认位置。</p><div class="btnrow"><button class="primary" id="homeLauncherRestore">回到默认位置</button></div><p class="muted" id="homeLauncherState" role="status"></p></section>';
+    return '<section class="card" id="homeLauncher"><div class="section-heading"><h2>QQ 桥接悬浮条</h2></div><p class="muted">拖动悬浮条可更改位置，页面会记住你选的位置。</p><div class="btnrow"><button class="primary" id="homeLauncherRestore">恢复默认位置</button></div><p class="muted" id="homeLauncherState" role="status"></p></section>';
   }
-  function companionHome(){var c=currentCompanion(),days=c.v.diary?.days||[],last=days.at(-1),waiting=(c.v.decisions?.pending||[]).length+(c.life.waiting||[]).filter(j=>!j.question?.details?.operationDecisionId).length;companionPanelToolbar();var tiles=[['daily','clock','今天的安排','看看她正在做什么'],['diary','book','翻开小日记','一天，记住一两件事'],['star','spark','关系星图','谁来过，聊过什么'],['study','bulb','她学到了什么','看实际使用与反馈'],['songs','audio','听她唱歌','RunningHub 唱歌与翻唱'],['connection','link','账号与设备','连接、登录、桌面操作']];return '<div class="home-focus">'+companionHero()+homeWalletCard(c)+'</div>'+(waiting?'<button class="waiting-banner" data-go="daily">有 '+waiting+' 件事等你决定 <span>去看看 →</span></button>':'')+'<div class="companion-grid">'+tiles.map(t=>'<button class="quick-tile" data-go="'+t[0]+'"><span class="tile-icon">'+icon(t[1])+'</span><b>'+t[2]+'</b><small>'+t[3]+'</small><span class="tile-arrow">↗</span></button>').join('')+'</div><div class="companion-columns"><section class="card"><div class="section-heading"><h2>接下来的小事</h2><button class="ghost small" data-go="daily">完整日程 →</button></div>'+compactTimeline(3)+'</section><section class="card diary-peek"><span class="life-eyebrow">最近的一页</span><h2>'+esc(last?.day||'还没有日记')+'</h2><p class="diary-preview">'+esc(last?.text||'等生活里有了值得记下的小事，就写在这里。')+'</p><button class="ghost" data-go="diary">翻开日记 →</button></section></div><details class="card advanced-home"><summary>连接状态与高级管理</summary>'+homeLauncherCard()+viewOverview()+'</details>';}
+  function homeConnection(status){
+    if(status.accountNeedsAttention)return {state:'paused',online:false,title:'桥接会话需要恢复',page:'connection',action:'查看连接状态'};
+    var online=status.connected===true&&!status.accountPaused;
+    var state=status.accountPaused?'paused':online?'online':'offline';
+    return {state,online,title:{paused:'QQ 连接已暂停',online:'QQ 已连接',offline:'等待 QQ 连接'}[state],
+      page:online?'monitor':'connection',action:online?'查看对话':'管理连接'};
+  }
+  function homePending(panel){
+    var decisions=panel?.decisions?.pending,jobs=panel?.life?.waiting;
+    var count=(decisions||[]).length+(jobs||[]).filter(job=>!job.question?.details?.operationDecisionId).length;
+    return {count,ready:Array.isArray(decisions)&&Array.isArray(jobs)};
+  }
+  function homeAction(page,label,symbol){
+    return '<button type="button" data-go="'+page+'">'+icon(symbol)+'<span>'+label+'</span>'+icon('arrow')+'</button>';
+  }
+  var homeQQProfile = null;
+  function homeQQIdentityMarkup(){
+    return '<div class="home-qq-person"><span class="home-qq-avatar">'+icon('user')+'<img id="homeQQAvatar" alt="" referrerpolicy="no-referrer" hidden></span>'+
+      '<div class="home-qq-name"><h2 id="homeQQNickname">QQ 资料卡</h2><span class="home-qq-number" id="homeQQNumber"></span></div></div>'+
+      '<p class="home-qq-signature" id="homeQQSignature"></p><div class="home-qq-status">'+
+      '<span id="homeQQBridge"></span><span class="home-qq-fresh" id="homeQQFresh">正在读取资料</span></div>';
+  }
+  function homeQQBackgroundSettings(){
+    return '<div class="home-qq-background-slot"><details id="homeQQBackgroundSettings" class="home-qq-background" hidden><summary>资料卡背景</summary>'+
+      '<p>QQ 接口未提供装扮背景。可选择自己的 QQ 资料卡背景原图，用在当前账号的工作台。支持 JPG、PNG、WebP，最大 8 MiB。</p>'+
+      '<div><button type="button" id="homeQQChooseBackground">选择背景原图</button><button type="button" id="homeQQRemoveBackground" hidden>移除本地背景</button>'+
+      '<input type="file" data-qq-background-file hidden accept="image/jpeg,image/png,image/webp"><span id="homeQQBackgroundResult" role="status"></span></div></details></div>';
+  }
+  function alignHomeQQProfile(snapshot){
+    var status=snapshot?.status||{};
+    var accountId=String(snapshot?.settings?.activeAccountId||''), selfId=String(status.selfId||'');
+    var scope=JSON.stringify([status.edition,accountId,selfId,!!status.connected,!!status.accountPaused,!!status.accountNeedsAttention,!!status.manuallyLoggedOut]);
+    if(homeQQProfile?.scope===scope)return homeQQProfile;
+    var bridge={connected:status.connected===true,accountPaused:!!status.accountPaused,accountNeedsAttention:!!status.accountNeedsAttention,manuallyLoggedOut:!!status.manuallyLoggedOut};
+    homeQQProfile={scope,accountId,selfId,status:bridge,value:null,phase:'loading',nextRead:0,pending:null,changing:false,changeCount:0,mediaVersion:0,notice:''};
+    if($('homeQQBackgroundSettings'))$('homeQQBackgroundSettings').open=false;
+    paintHomeQQProfile(homeQQProfile);
+    return homeQQProfile;
+  }
+  function homeQQMedia(value,online,version){
+    var avatar='',background='',scope=value?.backgroundScope;
+    if(online&&value?.avatarUrl){
+      try{
+        var url=new URL(value.avatarUrl);
+        var receiver=url.searchParams.get('dst_uin')||url.searchParams.get('nk');
+        if(url.protocol==='https:' && !url.username && !url.password && ['q1.qlogo.cn','q.qlogo.cn'].includes(url.host) && receiver===String(value.selfId))avatar=url.href;
+      }catch{}
+    }
+    if(value?.cardBackgroundUrl && /^[a-f0-9]{64}$/.test(scope)){
+      try{
+        var cover=new URL(value.cardBackgroundUrl,location.origin);
+        if(cover.origin===location.origin && cover.pathname==='/im-bridge/self-profile/background' && cover.searchParams.get('scope')===scope){
+          if(version)cover.searchParams.set('v',String(version));
+          background=cover.pathname+cover.search;
+        }
+      }catch{}
+    }
+    return {avatar,background};
+  }
+  function setHomeQQImage(image,src){
+    if(!src){image.hidden=true;image.removeAttribute('src');return;}
+    if(image.getAttribute('src')===src)return;
+    image.hidden=true;
+    image.onload=function(){if(image.getAttribute('src')===src)image.hidden=false;};
+    image.onerror=function(){if(image.getAttribute('src')===src)image.hidden=true;};
+    image.setAttribute('src',src);
+  }
+  function paintHomeQQProfile(record){
+    if(tab!=='overview'||!$('homeQQCard')||record!==homeQQProfile)return;
+    var value=record.value, state=value?.state, status=record.status;
+    var current=status.connected===true&&!status.accountPaused&&!status.accountNeedsAttention&&!status.manuallyLoggedOut&&(state==='ready'||state==='partial');
+    var media=homeQQMedia(value,current,record.mediaVersion);
+    setHomeQQImage($('homeQQAvatar'),media.avatar);
+    setHomeQQImage($('homeQQCover'),media.background);
+    $('homeQQNickname').textContent=value?.nickname||'QQ 资料卡';
+    $('homeQQNumber').textContent=value?.selfId?'QQ '+value.selfId:'';
+    $('homeQQSignature').textContent=value?.signature||(current?(state==='ready'?'未设置个性签名':'个性签名暂未取得'):'');
+    $('homeQQBridge').textContent=status.accountNeedsAttention?'桥接 · 账号待处理':status.accountPaused?'桥接 · 已暂停':status.connected?'桥接 · 已连接':'桥接 · 未连接';
+    var source={ready:'资料已同步',partial:'部分资料可用',offline:'资料未在线同步',paused:'资料同步暂停',unbound:'等待确认 QQ 身份'}[state];
+    if(value?.updatedAt){
+      var date=new Date(value.updatedAt);
+      if(!Number.isNaN(date.getTime())){
+        var stamp=date.toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        source=(current?(state==='partial'?'部分资料 · ':'资料快照 · '):'上次同步 · ')+stamp;
+      }
+    }
+    $('homeQQFresh').textContent=record.phase==='error'?'资料暂时无法读取':source||'正在读取资料';
+    var canEdit=homeQQCanEdit(record);
+    var settings=$('homeQQBackgroundSettings');settings.hidden=!canEdit;
+    if(!canEdit)settings.open=false;
+    $('homeQQChooseBackground').disabled=record.changing;
+    $('homeQQRemoveBackground').hidden=value?.cardBackgroundSource!=='local';
+    $('homeQQRemoveBackground').disabled=record.changing;
+    $('homeQQBackgroundResult').textContent=record.notice;
+  }
+  function refreshHomeQQProfile(){
+    if(tab!=='overview'||document.hidden||!data||!$('homeQQCard'))return;
+    var record=alignHomeQQProfile(data);
+    if(record.pending||record.changing||Date.now()<record.nextRead)return record.pending;
+    var revision=record.changeCount;
+    record.pending=api('GET','/im-bridge/self-profile').then(function(value){
+      if(homeQQProfile!==record||revision!==record.changeCount)return;
+      if(!value||value.accountId!==record.accountId||record.selfId&&value.selfId&&String(value.selfId)!==record.selfId||
+        !['ready','partial','paused','offline','unbound'].includes(value.state))throw Error('资料的账号身份尚未确认');
+      if(['ready','partial'].includes(value.state)&&!value.selfId)throw Error('资料缺少 QQ 身份');
+      record.value=value.selfId&&value.state!=='unbound'?value:{state:value.state,accountId:value.accountId,selfId:''};
+      record.phase='ready';record.nextRead=Date.now()+60000;
+    }).catch(function(){
+      if(homeQQProfile!==record||revision!==record.changeCount)return;
+      record.value=null;record.phase='error';record.nextRead=Date.now()+20000;
+    }).finally(function(){record.pending=null;paintHomeQQProfile(record);});
+    return record.pending;
+  }
+  async function verifyHomeQQBackground(file){
+    var preview=new Image(), url=URL.createObjectURL(file);
+    try{
+      var decoded=typeof preview.decode==='function'?null:new Promise(function(resolve,reject){preview.onload=resolve;preview.onerror=reject;});
+      preview.src=url;
+      await (decoded||preview.decode());
+      if(!preview.naturalWidth||!preview.naturalHeight)throw Error('empty image');
+    }catch{throw Error('图片无法解码，请重新选择完整的 JPG、PNG 或 WebP 原图。');}
+    finally{URL.revokeObjectURL(url);}
+  }
+  function homeQQCanEdit(record){
+    var value=record.value,status=record.status;
+    return status.connected&&!status.accountPaused&&!status.accountNeedsAttention&&!status.manuallyLoggedOut&&
+      ['ready','partial'].includes(value?.state)&&!!value.selfId&&/^[a-f0-9]{64}$/.test(value.backgroundScope);
+  }
+  async function changeHomeQQBackground(record,file){
+    if(record!==homeQQProfile||record.changing||!homeQQCanEdit(record))return;
+    var scope=record.value.backgroundScope;
+    if(file){
+      var issue=!file.size?'所选文件为空，请重新选择背景原图。':file.size>8*1024*1024?'图片超过 8 MiB，请选择较小的原图。':
+        (file.type?['image/jpeg','image/png','image/webp'].includes(file.type):/\.(jpe?g|png|webp)$/i.test(file.name))?'':'请选择 JPG、PNG 或 WebP 图片。';
+      if(issue){record.notice=issue;paintHomeQQProfile(record);return;}
+    }
+    record.changing=true;record.changeCount++;record.notice=file?'正在保存背景…':'正在移除背景…';paintHomeQQProfile(record);
+    try{
+      if(file)await verifyHomeQQBackground(file);
+      if(record!==homeQQProfile)return;
+      var response=await fetch('/im-bridge/self-profile/background?scope='+scope,{method:file?'POST':'DELETE',body:file||undefined,cache:'no-store'});
+      var result=await response.json();
+      if(!response.ok||!result.ok)throw Error(result.error||'背景未能更新');
+      if(record!==homeQQProfile)return;
+      record.value={...record.value,cardBackgroundUrl:result.cardBackgroundUrl||'',cardBackgroundSource:result.cardBackgroundSource||''};
+      record.mediaVersion=Date.now();record.notice=file?'已应用本地背景。':'已移除本地背景。';
+    }catch(error){if(record===homeQQProfile)record.notice=error.message||'背景未能更新';}
+    finally{record.changing=false;paintHomeQQProfile(record);}
+  }
+  function bindHomeQQProfile(){
+    var record=alignHomeQQProfile(data);
+    var input=$('homeQQBackgroundSettings').querySelector('[data-qq-background-file]');
+    $('homeQQChooseBackground').onclick=function(){input._profile=homeQQProfile;input.click();};
+    input.onchange=function(){
+      var file=input.files?.[0], owner=input._profile||record;input.value='';input._profile=null;
+      if(file&&owner)void changeHomeQQBackground(owner,file);
+    };
+    $('homeQQRemoveBackground').onclick=function(){void changeHomeQQBackground(homeQQProfile,null);};
+    paintHomeQQProfile(record);
+    void refreshHomeQQProfile();
+  }
+  function companionHome(){
+    const toolbar = companionPanelToolbar(), c = currentCompanion(), link = homeConnection(data.status);
+    const pending = homePending(c.v);
+    const known = !companionPanel.error && (pending.count > 0 || pending.ready);
+    const waiting = companionPanel.error ? '待办读取失败' : companionPanel.value ? '状态未提供' : '正在读取';
+    const pendingTitle = known ? (pending.ready?'':'<span>至少</span>')+'<strong>'+pending.count+'</strong><span>件待决定</span>' : '<span>'+waiting+'</span>';
+    const scene = link.online && (c.life.sleeping ? '正在休息' : c.life.scene?.activity && (c.life.scene.planned?'计划 · ':'')+c.life.scene.activity);
+    const shortcuts = [['daily','日程','clock'],['study','学习记录','bulb'],['delivery','发送记录','send'],['songs','翻唱作品','audio'],['star','关系星图','spark'],['devices','设备同步','link']];
+    const diary = c.v.diary?.days?.at(-1);
+    const timeline = '<section class="home-panel home-agenda"><div class="home-section-head"><h2>接下来的安排</h2><button type="button" data-go="daily">全部日程 '+icon('arrow')+'</button></div>'+
+      compactTimeline(3)+'<div class="home-execute"><label class="check-field"><input type="checkbox" id="homeLifeExecute"'+(c.life.config?.execute!==false?' checked':'')+'>执行日程任务</label>'+
+      '<small>关闭后仍保留计划，聊天中明确提出的请求仍会执行。</small></div></section>';
+    const journal = '<section class="home-panel home-journal"><div class="home-section-head"><h2>最近的日记</h2><button type="button" data-go="diary">打开日记 '+icon('arrow')+'</button></div>'+
+      (diary?'<time>'+esc(diary.day||'')+'</time><p class="diary-preview">'+esc(diary.text||'')+'</p>':'<p class="muted">暂时没有日记。</p>')+'</section>';
+    return toolbar+'<div class="home-workbench">'+
+      '<div class="home-top-grid"><section class="home-signal" id="homeQQCard" data-state="'+link.state+'" aria-label="当前 QQ 资料卡">'+
+      '<img id="homeQQCover" class="home-qq-cover" alt="" hidden><div class="home-signal-body">'+homeQQIdentityMarkup()+
+      (scene?'<p class="home-qq-scene">'+esc(scene)+'</p>':'')+'<div class="home-signal-actions">'+homeAction(link.page,link.action,link.online?'chat':'link')+
+      (link.online&&c.life.sleeping?'<button type="button" data-cp-wake>叫醒她 · 15 分钟</button>':'')+'</div>'+homeQQBackgroundSettings()+'</div></section>'+
+      '<section class="home-pending"><h2>'+icon('clock')+'日程待办</h2><p class="home-pending-count">'+pendingTitle+'</p>'+
+      '<button type="button" data-go="daily"'+(pending.count?' data-go-target="dailyPending"':'')+'>'+(pending.count?'处理待办':'查看日程')+icon('arrow')+'</button></section></div>'+
+      '<section class="home-quick"><h2>常用入口</h2><div class="home-quick-grid">'+shortcuts.map(([page,label,symbol])=>homeAction(page,label,symbol)).join('')+'</div></section>'+
+      '<div class="home-secondary-grid">'+timeline+homeWalletCard()+'</div>'+
+      '<div class="home-secondary-grid home-history"><details class="home-panel home-disclosure" id="homeConversations"><summary>'+icon('chat')+'最近对话</summary>'+
+      '<div id="homeRecent"></div><button type="button" data-go="monitor">全部对话 '+icon('arrow')+'</button></details>'+journal+'</div>'+
+      '<details class="home-panel home-disclosure advanced-home" id="homeManagement"><summary>'+icon('settings')+'连接与管理工具</summary>'+viewOverview()+'</details></div>';
+  }
   function companionMediaHistory(v){var names={pending:'准备中',waiting_service:'服务忙，稍后再试',generated:'已生成',queued:'等QQ确认',sent:'QQ已接收',failed:'未完成',unknown:'需要核对',confirmed:'已确认'};return '<div class="media-history">'+(v.mediaTasks||[]).slice(-8).reverse().map(t=>'<p>'+esc(t.kind==='image'?'图片':'语音')+' · '+esc(names[t.status]||t.status)+'</p>').join('')+(v.actions||[]).slice(-8).reverse().map(a=>'<p>'+esc(a.action||a.tool||'设备操作')+' · '+esc(names[a.status]||a.status||'待核对')+'</p>').join('')+(!(v.mediaTasks||[]).length&&!(v.actions||[]).length?'<p class="muted">暂无新的操作记录。</p>':'')+'</div>';}
   function scheduleLocator(){var c=currentCompanion(),today=c.v.today||{},slot=(today.slots||[]).find(s=>s.state==='current'),scene=c.life.scene,clock=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()),label=c.sleep?'正在睡眠':scene&&!scene.planned?scene.activity:slot?'原定：'+slot.activity:'正在安排';return '<aside class="schedule-locator" id="scheduleLocator" aria-label="当前日程定位"><span>现在 · '+esc(clock)+'</span><b>'+esc(label||'暂无当前活动')+'</b><button type="button" id="scheduleLocateNow">当前时段 ↑</button></aside>';}
-  function rebuiltDaily(){var c=currentCompanion(),v=c.v,decisions=v.decisions?.pending||[],waiting=c.life.waiting||[],recoverable=c.life.recoverable||[];var out=scheduleLocator()+companionHero()+companionPanelToolbar()+'<section class="card schedule-content"><div class="section-heading"><div><h2>今天的安排</h2><label class="check-field"><input id="cpActualTasks" type="checkbox"'+(c.life.config?.execute!==false?' checked':'')+'>执行实际任务</label><p class="muted">关闭后保留日程计划，暂停日程驱动的工具操作；你在聊天中明确提出的请求仍可执行。只有核对到真实结果才记为完成。</p><p class="muted">这里是她自己写的打算。日常安排留在时间线上，有真实结果的活动可展开看步骤。</p></div><button id="cpSchedule">刷新日程</button></div>'+compactTimeline()+lifeExecutionDetails(c)+'<div class="btnrow"><button id="cpRest">让她休息</button></div></section>';if(decisions.length||waiting.length){out+='<section class="card decision-card"><h2>这笔付款想听你的意见</h2>';decisions.forEach(d=>out+='<article class="decision-item"><p>'+esc(d.question||'这件事需要你确认')+'</p><details><summary>具体操作和内容</summary><pre>'+esc(JSON.stringify(d.operation,null,2))+'</pre></details><div class="btnrow"><button class="primary" data-cp-decision="'+esc(d.id)+'" data-cp-answer="同意">允许这一次</button><button data-cp-decision="'+esc(d.id)+'" data-cp-answer="拒绝">先不要</button></div></article>');waiting.filter(j=>!j.question?.details?.operationDecisionId).forEach(j=>out+='<article class="decision-item"><p>'+esc(j.question?.question||'待决定事项')+'</p><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="同意">同意</button><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="拒绝">暂不</button></article>');out+='</section>';}if(recoverable.length)out+='<section class="card"><h2>还留着的进度</h2>'+recoverable.map(j=>'<article class="decision-item"><b>'+esc(j.activity||'未完的小事')+'</b><p>'+esc(j.checkpoint?.summary||j.reason||'恢复前先核对当前状态')+'</p><button data-cp-resume="'+esc(j.id)+'">继续这件事</button></article>').join('')+'</section>';return out+'<details class="card"><summary>图片、语音与操作记录</summary>'+companionMediaHistory(v)+'</details>';}
+  function rebuiltDaily(){var c=currentCompanion(),v=c.v,decisions=v.decisions?.pending||[],waiting=c.life.waiting||[],recoverable=c.life.recoverable||[];var out=scheduleLocator()+companionHero()+companionPanelToolbar()+'<section class="card schedule-content"><div class="section-heading"><div><h2>今天的安排</h2><label class="check-field"><input id="cpActualTasks" type="checkbox"'+(c.life.config?.execute!==false?' checked':'')+'>执行实际任务</label><p class="muted">关闭后保留日程计划，暂停日程驱动的工具操作；你在聊天中明确提出的请求仍可执行。只有核对到真实结果才记为完成。</p><p class="muted">这里是她自己写的打算。日常安排留在时间线上，有真实结果的活动可展开看步骤。</p></div><button id="cpSchedule">刷新日程</button></div>'+compactTimeline()+lifeExecutionDetails(c)+'<div class="btnrow"><button id="cpRest">让她休息</button></div></section>';if(decisions.length||waiting.length){out+='<section class="card decision-card" id="dailyPending" tabindex="-1"><h2>等你决定的事</h2>';decisions.forEach(d=>out+='<article class="decision-item"><p>'+esc(d.question||'这件事需要你确认')+'</p><details><summary>具体操作和内容</summary><pre>'+esc(JSON.stringify(d.operation,null,2))+'</pre></details><div class="btnrow"><button class="primary" data-cp-decision="'+esc(d.id)+'" data-cp-answer="同意">允许这一次</button><button data-cp-decision="'+esc(d.id)+'" data-cp-answer="拒绝">先不要</button></div></article>');waiting.filter(j=>!j.question?.details?.operationDecisionId).forEach(j=>out+='<article class="decision-item"><p>'+esc(j.question?.question||'待决定事项')+'</p><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="同意">同意</button><button data-cp-life-q="'+esc(j.question.id)+'" data-cp-answer="拒绝">暂不</button></article>');out+='</section>';}if(recoverable.length)out+='<section class="card"><h2>还留着的进度</h2>'+recoverable.map(j=>'<article class="decision-item"><b>'+esc(j.activity||'未完的小事')+'</b><p>'+esc(j.checkpoint?.summary||j.reason||'恢复前先核对当前状态')+'</p><button data-cp-resume="'+esc(j.id)+'">继续这件事</button></article>').join('')+'</section>';return out+'<details class="card"><summary>图片、语音与操作记录</summary>'+companionMediaHistory(v)+'</details>';}
   function diaryDate(day,index){const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(day);if(!match)return '<time class="diary-date">'+esc(day)+'</time>';return '<time class="diary-date" datetime="'+esc(day)+'"><b>'+match[3]+'</b><span>'+match[1]+'.'+match[2]+'</span><small>第 '+String(index+1).padStart(2,'0')+' 页</small></time>';}
   var diaryPage=-1;
   function journalWhale(kind){
@@ -5192,7 +5907,14 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
       bind('onbReadConnection',function(){run(async function(){var result=await load();if(result===false)throw Error('连接状态没读到，请检查页面连接后重试。');if(connected())advance('owner');else message('还没有连接。先点“带我找到登录按钮”，按提示扫码并确认。');});});
       bind('onbShowQr',function(){guide('connection','#qrBox','用给她准备的 QQ 扫码，并在 QQ 中确认。二维码过期就点“换一个二维码”。');});
       bind('onbScanCheck',function(){run(async function(){var result=await load();if(result===false)throw Error('连接状态没读到，请稍后重试。');if(connected())advance('owner');else message('还没连上。请确认已在 QQ 点过“登录/确认”，再稍等几秒重试。');});});
-      bind('onbSaveOwner',function(){run(async function(){var qq=ownerDraft.trim();if(!/^[1-9]\d{4,11}$/.test(qq))throw Error('请填 5～12 位 QQ 数字号码，不是昵称或手机号。');if(String(data?.status?.selfId||login?.qq||'')===qq)throw Error('这是刚才给她登录的 QQ。这里请改填你自己用来发消息的 QQ 号。');var latest=await api('GET','/im-bridge/settings');var previous=latest.settings?.owners?.length?latest.settings.owners:(latest.status?.owners||[]);await api('POST','/im-bridge/settings',{owners:Array.from(new Set(previous.map(String).concat(qq)))});advance('brain');});});
+      bind('onbSaveOwner',function(){run(async function(){
+        var qq=ownerDraft.trim();if(!/^[1-9]\d{4,11}$/.test(qq))throw Error('请填 5～12 位 QQ 数字号码，不是昵称或手机号。');
+        var latest=await api('GET','/im-bridge/settings');
+        var selfId=latest.status?.selfId||(await api('GET','/im-bridge/login')).qq;
+        if(String(selfId||'')===qq)throw Error('这是刚才给她登录的 QQ。这里请改填你自己用来发消息的 QQ 号。');
+        var previous=latest.settings?.owners?.length?latest.settings.owners:(latest.status?.owners||[]);
+        await api('POST','/im-bridge/settings',{owners:Array.from(new Set(previous.map(String).concat(qq)))});advance('brain');
+      });});
       bind('onbTryChat',function(){move('test');});bind('onbCustomApi',function(){move('api-url');});
       bind('onbUrlNext',function(){rememberInput();try{var url=new URL(draft.baseUrl);if(!/^https?:$/.test(url.protocol)||url.username||url.password)throw Error();move('api-key');}catch(e){message('请粘贴以 https:// 或 http:// 开头的完整服务地址。',true);}});
       bind('onbDetectApi',function(){run(async function(){var r=await api('POST','/im-bridge/service-connections',{action:'detect',baseUrl:draft.baseUrl,apiKey:draft.apiKey,type:'auto'});var det=r.detection||{};draft.type=det.type&&det.type!=='unknown'?det.type:'auto';draft.models=Array.isArray(det.models)?det.models.map(String):[];draft.chatModel='';savedProfileId='';advance('api-model');});});
@@ -5212,23 +5934,37 @@ function mountCompanionConstellation(stage,graph,{search='',showEvents=false,onS
     var el=$('replayOnboarding');if(el)el.onclick=function(){$('boxHomeHelp')?.removeAttribute('open');showOnboarding('menu');};
     document.addEventListener('click',function(e){var trigger=e.target.closest?.('[data-onb-track]');if(!trigger)return;var track=trigger.dataset.onbTrack;if(!MEDIA_TUTORIALS[track])return;$('boxHomeHelp')?.removeAttribute('open');showOnboarding(track);});
   }
-  function maybeShowOnboarding(){try{if(localStorage.getItem(ONBOARD_KEY)==='done'||localStorage.getItem(ONBOARD_HIDE)==='1')return;}catch(e){return;}setTimeout(function(){if(!$('onbLayer'))showOnboarding();},600);}
+  var onboardingOffered = false;
+  function maybeShowOnboarding(){
+    if(onboardingOffered)return;
+    try{if(localStorage.getItem(ONBOARD_KEY)==='done'||localStorage.getItem(ONBOARD_HIDE)==='1')return;}catch(e){return;}
+    onboardingOffered = true;
+    setTimeout(function(){if(data && renderedTab && !$('retryLoad') && !$('onbLayer'))showOnboarding();},600);
+  }
 
+  bindAppearance();
   initEnhancements();
   initNavigation();
-  maybeShowOnboarding();
   bindOnboardingReplay();
-  applyTheme();
-  setInterval(applyTheme, 2500);setInterval(function(){if(!document.hidden)void refreshDeliveryRows();},2000);
+  setInterval(function(){if(!document.hidden)void refreshDeliveryRows();},2000);
   load();
   // The panel lives in an iframe; when the plugin is updated this page would
   // otherwise keep running the old code forever. Reload once the server moves on.
   var panelVersion = '';
   setInterval(function () {
+    if(document.hidden)return;
+    var revision=loadRevision,scope=data&&formScope(data),epoch=mutationEpoch;
     api('GET', '/im-bridge/status').then(function (v) {
+      if(!data||revision!==loadRevision||epoch!==mutationEpoch||scope!==formScope(data)||
+        v.activeAccountId!=null&&v.activeAccountId!==(data.settings.activeAccountId||''))return;
+      if(typeof v.connected==='boolean'){
+        data.status=Object.assign({},data.status,v);
+        renderPill();alignHomeQQProfile(data);
+        if(tab==='overview')updateHomeNumbers();
+      }
       if (panelVersion === '') panelVersion = v.version;
-      else if (v.version !== panelVersion) location.reload();
+      else if (v.version !== panelVersion && !Object.keys(pageDrafts).length && !localDraftEditing && $('modal').hidden) location.reload();
     }).catch(function () {});
   }, 7000);
-  setInterval(function () { void syncLiveSnapshot();if((['overview','daily'].includes(tab))&&data&&Date.now()-companionPanel.updatedAt>14000&&!companionPanel.busy&&!document.querySelector('#pane input:focus,#pane textarea:focus,#pane select:focus')&&!Object.keys(pageDrafts[tab]||{}).length)void refreshCompanionPanel(); }, 6000);
+  setInterval(function () { if(document.hidden)return;void syncLiveSnapshot();if((['overview','daily'].includes(tab))&&data&&Date.now()-companionPanel.updatedAt>14000&&!companionPanel.busy&&!document.querySelector('#pane input:focus,#pane textarea:focus,#pane select:focus')&&!Object.keys(pageDrafts[tab]||{}).length)void refreshCompanionPanel(); }, 6000);
 })();

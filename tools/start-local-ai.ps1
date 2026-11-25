@@ -20,7 +20,7 @@ foreach ($serviceProcessId in $listeners) {
     if (@($restartStatus.execution.active).Count -gt 0 -or $restartStatus.comfyQueue.running -gt 0 -or $restartStatus.comfyQueue.pending -gt 0) { throw 'Local tasks are running. Gateway restart deferred; existing tasks were left running.' }
     Stop-Process -Id $serviceProcessId -ErrorAction Stop
 }
-$preferredWorkRoot = if ($env:CODEX_DATA_WORK_DIR) { $env:CODEX_DATA_WORK_DIR } else { 'D:\CodexData\work' }
+$preferredWorkRoot = if ($env:CODEX_DATA_WORK_DIR) { $env:CODEX_DATA_WORK_DIR } else { (Join-Path ([System.IO.Path]::GetTempPath()) 'dsh-local-ai') }
 $serviceWork = if ($env:LOCAL_AI_WORK_DIR) { $env:LOCAL_AI_WORK_DIR } elseif (Test-Path -LiteralPath $preferredWorkRoot) { Join-Path $preferredWorkRoot 'qq-bridge-local-ai' } else { Join-Path $env:LOCALAPPDATA 'DSH\qq-bridge\local-ai' }
 New-Item -ItemType Directory -Force -Path $serviceWork | Out-Null
 $env:LOCAL_AI_WORK_DIR = $serviceWork

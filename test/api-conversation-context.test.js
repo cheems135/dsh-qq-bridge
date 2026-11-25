@@ -2,8 +2,31 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 import {API_CONTEXT_REVISION,summarySourceKey,planConversationSummary,apiContextRotation,conversationHistory,conversationSeed,checkedConversationSummary,qqRecallTarget} from '../api-conversation-context.js';
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
 const ready={turns:new Map(),pendingTurns:[]};
+test('handoff uses QQ event order, distinguishes forwarded material, and leaves transient notices out',()=>{
+ const scope={key:'private:1',accountId:'a',personaId:'p',now:100,excludeIds:['91']};
+ const row=(time,text,extra={})=>({chat:scope.key,accountId:'a',personaId:'p',time,dir:'in',text,...extra});
+ const history=conversationHistory([
+   row(25,'替我看看\n[转发] 我保证周一给你',{userText:'替我看看'}),
+   row(30,'排队中',{dir:'out',delivery:'sent',deliveryRole:'progress'}),
+   row(27,'已撤回的想法',{retracted:true}),row(50,'当前批消息',{messageId:'90',sourceMessageIds:['90','91']}),
+   row(20,'离线时发的第一句'),row(101,'时钟偏到将来'),row(26,'[转发] 朋友自己的话',{userText:''})
+ ],scope);
+ assert.deepEqual(history.recent.map(r=>r.at),[20,25,26]);
+ assert.match(history.recent[1].text,/^替我看看\n【QQ附带资料】\n\[转发\]/);
+ assert.match(history.recent[2].text,/^【QQ附带资料】/);
+});
 test('old oversized history rotates even above the former 100 percent cutoff; an active turn never rotates',()=>{const rec={sessionId:'old',contextTokens:360000};assert.equal(apiContextRotation(rec,ready).rotate,true);assert.equal(apiContextRotation(rec,{...ready,turns:new Map([['task',{}]])},{force:true}).rotate,false);assert.equal(apiContextRotation(rec,{...ready,pendingTurns:[{}]}).rotate,false);});
-test('fixed native tool overhead does not reopen every turn; growth and long conversation do trigger handoff',()=>{const rec={sessionId:'s',contextPolicyVersion:API_CONTEXT_REVISION,contextBaseTokens:20000,contextTokens:21000,contextTurns:1};assert.equal(apiContextRotation(rec,ready).rotate,false);assert.equal(apiContextRotation({...rec,contextTokens:29000,contextTurns:8},ready).rotate,true);assert.equal(apiContextRotation({...rec,contextTurns:40},ready).rotate,true);assert.equal(apiContextRotation({...rec,contextBaseTokens:29493,contextTokens:77425,contextTurns:5},ready).rotate,true);});
+test('warm short chats do not rotate at eight turns or merely reaching forty turns',()=>{
+ const rec={sessionId:'s',contextPolicyVersion:API_CONTEXT_REVISION,contextBaseTokens:35000,contextTokens:45000,contextTurns:8};
+ assert.equal(apiContextRotation(rec,ready).rotate,false);
+ assert.equal(apiContextRotation({...rec,contextTurns:40},ready).rotate,false);
+ assert.equal(apiContextRotation({...rec,contextTokens:65000,contextTurns:24},ready).rotate,true);
+ assert.equal(apiContextRotation({...rec,contextTokens:65000,contextTurns:23},ready).rotate,false);
+ assert.equal(apiContextRotation({...rec,contextTokens:77425,contextTurns:5},ready).rotate,false);
+ assert.equal(apiContextRotation({...rec,contextTokens:110000,contextTurns:5},ready).rotate,true,'large tool output must still respect capacity');
+ assert.equal(apiContextRotation(rec,ready,{force:true}).rotate,true);
+ assert.equal(apiContextRotation({...rec,contextTokens:30000},ready,{windowTokens:32000}).rotate,true,'an explicitly smaller context window remains authoritative');
+});
 test('handoff keeps recent original messages apart from older sources, with account/persona and clear boundaries',()=>{const rows=Array.from({length:80},(_,i)=>({chat:'private:1',accountId:'a',personaId:'p',messageId:String(i),time:i+1,dir:i%2?'out':'in',text:'原话'+i}));rows.push({...rows[0],accountId:'other',text:'SECRET'}, {...rows[0],personaId:'other',text:'FOREIGN'});const h=conversationHistory(rows,{key:'private:1',accountId:'a',personaId:'p',floor:10,excludeIds:['79']});assert.equal(h.recent.length,24);assert.equal(h.recent.at(-1).text,'原话78');assert(h.older.every(r=>r.at>10&&r.at<h.recent[0].at));assert(!JSON.stringify(h).includes('SECRET'));assert(!JSON.stringify(h).includes('FOREIGN'));assert(conversationSeed({items:[{text:'未完成约定'}]},h.recent).includes('未完成约定'));});
 test('invalid summary references fall back to real excerpts, rather than inventing a bridge memory',()=>{const rows=[{id:'s1',speaker:'甲',at:1,text:'还没做完，等你有空继续'}];const summary=checkedConversationSummary('{"items":[{"text":"已经完成付款","sourceIds":["fake"]}]}',rows);assert.equal(summary.method,'local-excerpts');assert(!JSON.stringify(summary).includes('已经完成付款'));assert(JSON.stringify(summary).includes('还没做完'));});
 test('handoff summarizes only appended evidence, and rejects prior summaries after an edit or clear',()=>{
@@ -54,6 +77,7 @@ test('QQ recall routes and ledger updates isolate account and chat, including a 
  for(const change of [{self_id:'88888'},{user_id:selfId},{message_id:0},{post_type:'message'}])assert.equal(qqRecallTarget({...event,...change},selfId),null);
  const original={chat:key,accountId:'a',personaId:'p',dir:'in',messageId:'-71',sourceMessageIds:['-71','-73'],text:'两句合并的原话'};
  const deps={settings:{activeAccountId:'a'},recordsStored:()=>true,recordsAllowed:()=>true,activePersona:()=>({id:'p'}),messages:[original,{...original,accountId:'b'},{...original,chat:'group:12345'}],state:{chats:{[key]:{sessionId:'s',preset:'p'}}},sessionDigests:new Map([['s','旧预载']]),recentWithdrawals:new Set(),withdrawalKey:(a,k,id)=>JSON.stringify([a,k,String(id)]),pruneMonitor:()=>{},recordCalendarRow:()=>{},log:()=>{}};
+ deps.messageHistory={putMany:()=>{},recall:()=>{}};deps.messageKey=r=>JSON.stringify([r.accountId,r.chat,r.messageId]);
  const mark=extract('markQqWithdrawal',deps);mark(key,'b','-73');assert.equal(original.retracted,undefined);
  mark(key,'a','-73');mark(key,'a','-73');
  assert.deepEqual(deps.messages.map(r=>!!r.retracted),[true,false,false]);assert.equal(deps.state.chats[key].recallRevision,1);assert.equal(deps.sessionDigests.has('s'),false);

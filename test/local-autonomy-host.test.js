@@ -1,3 +1,5 @@
+import {createResidenceFeedback} from '../residence-feedback.js';
+const quietResidence=createResidenceFeedback({readJson:()=>null});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -12,7 +14,7 @@ function setup({fail=false}={}){
  const settings={localChat:{enabled:true},life:{execute:true},agency:{enabled:true,autonomous:true},owners:['12345']},localTurns=new Map(),chats=new Map(),socket={ready:true};
  const lifeExecution={asleep:()=>false,ended:(...v)=>ended.push(v)};
  const deps={conversationExecutionHint:()=>'',sleepAwarenessHint:()=> '【实际睡眠与离线】被动离线，已恢复连接',currentPersonaMood:()=>({}),consumeMoodHint:()=>({text:''}),apiAssistTools:()=>({}),settings,localTurns,chats,socket,lifeExecution,stopped:false,accountPaused:false,localForegroundAt:0,featureState:{revisions:{}},autonomyConfig:()=>({enabled:true}),recordsAllowed:()=>true,privateInitiativeAllowed:()=>true,pausedConversation:()=>false,inDnd:()=>false,initiativeWindow:()=>true,calendarMeta:()=>({accountId:'a',personaId:'p'}),activePersona:()=>({id:'p'}),localTurnScope:c=>({accountId:'a',personaId:'p',personaVersion:'v',key:c.key}),localScopeCurrent:()=>true,getLocalCapabilities:async()=>({busy:false,features:{tools:{supported:true}}}),qzoneEnabled:()=>false,randomUUID:()=>String(Math.random()),localTurnSignals:s=>({signal:s,close:()=>{}}),workspaceLeases:{resolve:()=>({})},agencyTools:{localTools:()=>({})},localQqTools:()=>({}),messages:[],operationContext:key=>recentOperationContext(deps.messages,{key,accountId:'a',personaId:'p',floor:Date.now()-20000}),currentLifeChatTurns,recipientIdentity:()=> '当前收件人是测试号主',personaPromptText:()=> '角色',CONTEXT_RULES:'context',CORE_CONTEXT_RULES:'core',LIFE_EXECUTION_RULES:'life',QZONE_DAILY_CUE:'qzone',briefLifeJob:j=>j,withClock:t=>t,currentScheduleScope:()=>({}),promptPreferences:{snapshot:()=>({values:{}})},serviceMediaScope:{run:(_s,fn)=>fn()},recordInvocation:()=>{},reportBridgeIssue:()=>{},executeLocalAutonomy:async args=>{captured=args;await gate;await args.finish(fail?'failed':'completed');if(fail)throw Error('测试工具失败');},runWithHostTools:()=>{throw Error('unexpected live tool call');},runScheduledTool:(_k,_n,_a,execute)=>execute(),prepareLocalReply:t=>t,queueOutgoing:()=> 'outbox',validateLocalAttachment:a=>a,pathToFileURL:f=>({href:f})};
- Object.assign(deps,{initiativeConversation,privateInitiativeUnanswered:()=>false});
+ Object.assign(deps,{residenceParts:(chat,options)=>quietResidence.parts({accountId:"a",personaId:"p",key:chat.key},options),initiativeConversation,privateInitiativeUnanswered:()=>false});
  const start=new Function(...Object.keys(deps),body+';return startLocalAutonomousTurn;')(...Object.values(deps));
  const chat={key:'private:12345',kind:'private',userId:'12345',chatId:'12345',isOwner:true};
  return {messages:deps.messages,start,chat,settings,localTurns,chats,lifeExecution,ended,release,get captured(){return captured;}};

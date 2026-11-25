@@ -2,6 +2,9 @@ import {naturalBubbleParts,normalizeReplyNewlines,stickerMessageGroups,QQ_LINE_B
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {randomUUID} from 'node:crypto';
 import {cleanOutgoingText,qqParagraphGroups,deliveryFingerprint,existingDelivery} from '../qq-reliability.js';
 import {deliveryCommitmentId} from '../commitments.js';
+import {outgoingMediaEvidence} from '../outgoing-media-evidence.js';
+import {reconcileUncertainInbox} from '../inbox-recovery.js';
+import {isProgressDelivery,deliveryMatchesAudit,replyDeliveryState} from '../delivery-outbox.js';
 import {expressionHint} from '../conversation-care.js';
 import {BRIEF_RULES,briefExpression} from '../prompt-budget.js';
 import {mobileRule} from '../mobile-prompt.js';
@@ -11,6 +14,37 @@ function extract(name,deps){const start=source.search(new RegExp('^  function '+
 function fixture({saveOk=true,deny=()=>'',audit=null}={}){const featureState={outbox:[],proactiveContacts:[]};let saves=0,flushes=0;const deps={qqParagraphGroups,cleanOutgoingText,deliveryFingerprint,existingDelivery,deliveryCommitmentId,featureState,settings:{activeAccountId:'a'},stripUnrequestedActions:v=>v,lifeExecution:null,calendarMeta:()=>({}),activePersona:()=>({id:'p'}),deliveryScopeCurrent:()=>true,personaContextIdentity:()=> 'v',calendarSafeText:v=>v,groupStopped:()=>false,auditById:()=>audit,noteDeliveryIssue:()=>{},recipientDenial:deny,recordsAllowed:()=>true,wrongOwnerAddress:()=>false,privateInitiativeAllowed:()=>true,randomUUID,stopped:false,accountPaused:false,proactiveCheck:()=>'',reserveProactive:()=>{},proactiveIncoming:()=>0,log:()=>{},saveFeatures:()=>{saves++;return saveOk;},logDelivery:()=>{},flushOutbox:()=>{flushes++;}};
  const queue=extract('queueOutgoing',deps);return {queue,featureState,deps,get saves(){return saves;},get flushes(){return flushes;}};}
 const chat={key:'private:12345',kind:'private',chatId:'12345',turnKind:'user',deliveryKey:'local:turn-1'};
+test('persisted QQ queue and chat history associate B’s reply and A’s wait notice with their own inputs across restart',()=>{
+ const h=fixture(),messages=[],at=Date.now()-100;
+ const audits=['A','B'].map(id=>({id:'audit-'+id,chat:chat.key,at,accountId:'a',persona:'p',
+   status:'queued',outboxIds:[],inboundIds:[id],submissionStartedAt:0}));
+ const deps={...h.deps,messages,auditById:id=>audits.find(a=>a.id===id),outgoingMediaEvidence,isProgressDelivery,deliveryMatchesAudit,replyDeliveryState,
+   memoryHub:null,websiteReader:null,recordCalendarRow:()=>{},pruneMonitor:()=>{},recentWithdrawals:new Set(),
+   withdrawalKey:(account,key,id)=>JSON.stringify([account,key,id])};
+ deps.messageHistory={putMany:()=>{}};deps.messageKey=r=>JSON.stringify([r.accountId,r.chat,r.localId||r.messageId]);
+ deps.logMessage=extract('logMessage',deps);
+ deps.logDelivery=extract('logDelivery',deps);
+ const queue=extract('queueOutgoing',deps);
+ queue({...chat,auditId:audits[0].id,deliveryRole:'progress',deliveryKey:'local:a:wait'},[{type:'text',data:{text:'我再看看。'}}]);
+ queue({...chat,auditId:audits[1].id,deliveryKey:'local:b:answer'},[{type:'text',data:{text:'回答 B。'}}]);
+ assert.deepEqual(messages.map(m=>m.replyToInboundIds),[['A'],['B']]);
+ assert.ok(messages.every(m=>!m.sourceMessageIds));
+ assert.deepEqual(audits[0].outboxIds,[]);
+ assert.equal(audits[0].deliveryState,undefined);
+ assert.equal(audits[1].outboxIds.length,1);
+ const [wait,reply]=h.featureState.outbox;
+ for(const [i,job] of [wait,reply].entries()){
+   job.status='sent';job.messageId=String(i+100);deps.logDelivery(job);
+ }
+ for(const evidence of [
+   {audits,outbox:h.featureState.outbox,messages}, {audits:[],outbox:[],messages}
+ ]){
+   const inbox=['A','B'].map(id=>({id,key:chat.key,at,status:'uncertain',accountId:'a',payload:{message_id:id}}));
+   const result=reconcileUncertainInbox(inbox,JSON.parse(JSON.stringify(evidence)));
+   assert.deepEqual(inbox.map(j=>j.status),['queued','admitted']);
+   assert.equal(result.blocked,0);
+ }
+});
 test('literal typography survives prepared bubbles and paragraph children without exposing internal markers',()=>{
  for(const preparedReply of [undefined,'bubble']){
    const audit={id:'one',accountId:'a',persona:'p',status:'completed',outboxIds:[],userWords:'请逐字回复，保留标点和空格。'};

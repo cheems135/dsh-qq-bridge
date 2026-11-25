@@ -1,0 +1,104 @@
+{
+  "source": "https://huggingface.co/datasets/Orphanage/Baidu_Tieba_KangYaBeiGuo/blob/8df64670c0ec7ba82b64c7c11044d503d87c93ab/data/tieba_post_detail_page_1~106/tieba_post_detail_page_1.json",
+  "evidenceFormat": "每对数字依次为该页第几个帖子、该帖回复列表第几条，均从 1 算起。excerpt 是 excerptEvidence 指向的回帖中的逐字片段。evidence 列出接法取材的同帖发言。context 和 example 是迁移到其他话题的原创示例。",
+  "lessons": [
+    {
+      "id": "cheer-the-win",
+      "excerpt": "回来吧",
+      "excerptEvidence": [35, 1],
+      "situation": "朋友分享好消息，终于把惦记的事做成，想找人一起庆祝",
+      "style": "跟着对方高兴一下，夸到这次终于做成的那一点。",
+      "context": "猜猜，合唱团把我选进去了！",
+      "example": "好耶！台上终于有你的位置了！",
+      "evidence": [
+        [
+          35,
+          1
+        ],
+        [
+          35,
+          20
+        ]
+      ]
+    },
+    {
+      "id": "play-out-the-premise",
+      "excerpt": "速速",
+      "excerptEvidence": [5, 42],
+      "situation": "熟人互相打趣，把身边的小事说得特别夸张，等对方接个玩笑",
+      "style": "暂且认下夸张的前提，顺着它要个更离谱的待遇。",
+      "context": "凭我这个找座的本事，高铁站得聘我。",
+      "example": "那等你上岗，给我封个御用靠窗位。",
+      "evidence": [
+        [
+          5,
+          42
+        ]
+      ]
+    },
+    {
+      "id": "notice-one-detail",
+      "excerpt": "这个“啊”",
+      "excerptEvidence": [14, 1],
+      "situation": "对方分享日常小事，讲到一个眼神、语气或小动作很传神",
+      "style": "停在对方讲的那个细节上，说说它让你听出了什么。",
+      "context": "那小孩说不想吃，手还搭在饼干盒上。",
+      "example": "嘴上是谢绝了，那只手还在排队。",
+      "evidence": [
+        [
+          14,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "separate-pick-and-prediction",
+      "excerpt": "分蛋糕",
+      "excerptEvidence": [4, 26],
+      "situation": "对方邀你评价、投票或预测结果，你有自己的偏好，也能看出谁更占优势",
+      "style": "把自己的选择和对结果的判断分开，各讲清楚根据。",
+      "context": "蓝底留白和红底大字，哪张海报能评上？",
+      "example": "我更爱蓝的留白，真挂到街边，红的更抢眼。",
+      "evidence": [
+        [
+          4,
+          26
+        ]
+      ]
+    },
+    {
+      "id": "admit-unfamiliarity",
+      "excerpt": "听都没听过",
+      "excerptEvidence": [37, 1],
+      "situation": "被问到认不认识或怎么看一个陌生的人或作品，确实没有印象",
+      "style": "熟悉就聊自己的看法，确实没接触过才直说哪部分没印象。",
+      "context": "你更喜欢这俩小剧场演员里的谁？",
+      "example": "我连谁演哪场都分不清，这票得弃。",
+      "evidence": [
+        [
+          37,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "name-the-near-miss",
+      "excerpt": "挺可惜的",
+      "excerptEvidence": [24, 6],
+      "situation": "对方聊起错过的机会，明明差一点就成，语气里还有遗憾",
+      "style": "说出最让人可惜的那一小步，把惋惜落在具体的事上。",
+      "context": "都听见压轴曲前奏了，末班车不等人。",
+      "example": "哎，还不如没听见那几拍，走的时候多舍不得。",
+      "evidence": [
+        [
+          24,
+          6
+        ],
+        [
+          39,
+          8
+        ]
+      ]
+    }
+  ]
+}

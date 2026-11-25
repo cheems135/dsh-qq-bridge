@@ -21,6 +21,25 @@ function isReported(clauses,i) {
   return reportedSpeech.test(clauses[i]) || reportedSpeech.exec(clauses[i-1]||'')?.[1] === '';
 }
 
+// Keep direct quotations and reported words out of evidence about the sender.
+export function ownClauses(text) {
+  const parts=speakerText(text).split(/[，,。！!；;\n]/u).map(part=>part.trim()).filter(Boolean);
+  return parts.filter((clause,i)=>!isReported(parts,i));
+}
+
+// The same small result can be a breakthrough or a disappointment.
+export function progressReading(clauses) {
+  const own=clauses.filter(clause=>!/[?？]|(?:吗|么|嘛)[呀啊呢]?$/.test(clause));
+  const speech=own.join('，');
+  const reportedWin=own.some(clause=>/^(?:好消息[：:]|(?:我(?:终于|这次|真的|刚刚?)?|终于)?(?:考过了|通过了|被录取了|升职了|中奖了|成功了|太开心|好开心))/.test(clause));
+  const delight=own.some(clause=>/^(?:好消息|好耶+|太好了|太棒了|好开心|真高兴)[呀啊啦哇～~]*$/.test(clause));
+  const breakthrough=own.some(clause=>!/^(?:他|她|对方|别人)/.test(clause)&&/(?:终于|总算|如愿).{1,28}(?:了|啦|成|到手|成功)/.test(clause));
+  const shortfall=own.some(clause=>!/^(?:他|她|你|对方|别人|朋友|同事)/.test(clause)&&/(?:才|只)(?:够|能|有|[^，。！？?!]{0,5}[一二三四五六七八九十两半\d])/.test(clause));
+  const frustration=own.some(clause=>/^(?:(?:可|但是|可是|不过)?我(?:真|真的|都|有点|好|很|挺)?(?:服了|泄气|沮丧|挫败)|白忙(?:了|活了)?|真泄气)[啊呀啦了～~]*$/.test(clause));
+  const happy=(reportedWin||delight&&breakthrough)&&!/才怪|高兴早了|白高兴/.test(speech);
+  return {happy,disappointed:shortfall&&frustration,qualified:/(?:不过|但是|可是|却|但(?!凡))/.test(speech)};
+}
+
 export function supportReading(clauses) {
   let feeling = '';
   let preference = '';

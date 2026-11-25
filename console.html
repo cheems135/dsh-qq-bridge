@@ -1,23 +1,102 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="light" data-layout-revision="20261107-host-visible-v5">
+<html lang="zh-CN" data-theme="light" data-theme-mode="auto" data-accent="violet" data-layout-revision="20261107-host-visible-v5">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>她的小世界 · QQ 桥接</title>
-<link rel="stylesheet" href="/im-bridge/ui/console-base.css?v=1.62.128">
-<link rel="stylesheet" href="/im-bridge/ui/console-shell.css?v=1.62.128"><link rel="stylesheet" id="panelLayoutStyles" href="/im-bridge/ui/console-layout.css?v=1.62.128"><script>
+<script id="appearanceBootstrap">
 (function(){
- document.documentElement.dataset.skin='blue';
+ 'use strict';
+ var root=document.documentElement;
+ var modes=['auto','light','dark'], accents=['violet','blue','teal','rose','amber'];
+ var prefix='qqbridge-appearance-v1:', memory=Object.create(null), pending={};
+ function systemQuery(view){
+   try{var query=view.matchMedia('(prefers-color-scheme: dark)');return typeof query.matches==='boolean'&&query.media!=='not all'?query:null;}catch{return null;}
+ }
+ var outer=window;
+ try{while(outer.parent!==outer&&outer.parent.document)outer=outer.parent;}catch{}
+ var media=systemQuery(outer)||(outer!==window?systemQuery(window):null);
+ function read(key){try{return localStorage.getItem(key);}catch{return null;}}
+ function deviceName(name){return name==='desktop'||name==='phone'?name:'';}
+ var device=deviceName(read('qqbridge-runtime-device-v1'));
+ function restore(){
+   var saved=memory[device];
+   if(!saved&&device){try{saved=JSON.parse(read(prefix+device));}catch{}}
+   var mode=saved?.mode||read('qqb-ui-theme');
+   return {mode:modes.includes(mode)?mode:'auto',accent:accents.includes(saved?.accent)?saved.accent:'violet'};
+ }
+ var prefs=restore();
+ function hostTheme(){
+   try{
+     if(window.parent===window)return '';
+     var doc=window.parent.document, host=doc.documentElement;
+     var markers=[host.getAttribute('data-theme'),host.getAttribute('data-color-mode'),host.className,doc.body?.className].join(' ').toLowerCase();
+     if(/(?:^|[\s_-])dark(?:$|[\s_-])/.test(markers))return 'dark';
+     if(/(?:^|[\s_-])light(?:$|[\s_-])/.test(markers))return 'light';
+     if(!doc.body)return '';
+     var bg=window.parent.getComputedStyle(doc.body).backgroundColor;
+     var rgb=bg.match(/[\d.]+/g)?.map(Number);
+     if(rgb?.length>=3&&(rgb.length===3||rgb[3]>0))
+       return rgb[0]*.299+rgb[1]*.587+rgb[2]*.114<128?'dark':'light';
+   }catch{}
+   return '';
+ }
+ function apply(){
+   var theme=prefs.mode==='auto'?(media?(media.matches?'dark':'light'):(hostTheme()||'light')):prefs.mode;
+   var changed=root.dataset.theme!==theme||root.dataset.themeMode!==prefs.mode||root.dataset.accent!==prefs.accent;
+   root.dataset.theme=theme;root.dataset.themeMode=prefs.mode;root.dataset.accent=prefs.accent;
+   root.style.colorScheme=theme;
+   if(changed)window.dispatchEvent(new Event('qqbridge-appearance-change'));
+ }
+ function persist(){
+   if(!device)return true;
+   memory[device]={...prefs};
+   try{localStorage.setItem(prefix+device,JSON.stringify(prefs));return true;}catch{return false;}
+ }
+ function setDevice(name){
+   name=deviceName(name);
+   if(!name||name===device)return;
+   device=name;prefs=restore();
+   if(Object.keys(pending).length){Object.assign(prefs,pending);pending={};persist();}
+   apply();
+ }
+ function choose(key,value){
+   var allowed=key==='mode'?modes:key==='accent'?accents:[];
+   if(!allowed.includes(value))return false;
+   prefs[key]=value;if(!device)pending[key]=value;
+   var saved=persist();apply();return saved;
+ }
+ window.QQBridgeAppearance={setDevice,choose};
+ apply();
+ if(media?.addEventListener)media.addEventListener('change',apply);
+ else if(media?.addListener)media.addListener(apply);
  try{
-  localStorage.setItem('qqbridge-skin','blue');
-  if(localStorage.getItem('qqbridge-blue-grid-revision')!=='20261107-v3'){
-   localStorage.setItem('qqb-ui-theme','light');
-   localStorage.setItem('qqbridge-blue-grid-revision','20261107-v3');
-  }
- }catch(e){}
+   if(!media&&window.parent!==window){
+     var parentDoc=window.parent.document,observer=new MutationObserver(apply);
+     var options={attributes:true,attributeFilter:['class','style','data-theme','data-color-mode']};
+     observer.observe(parentDoc.documentElement,options);if(parentDoc.body)observer.observe(parentDoc.body,options);
+   }
+ }catch{}
+ window.addEventListener('pagehide',function(event){
+   if(event.persisted)return;
+   if(media?.removeEventListener)media.removeEventListener('change',apply);else media?.removeListener?.(apply);
+   observer?.disconnect();
+ });
+ window.addEventListener('storage',function(event){
+   if(event.key===null)memory=Object.create(null);
+   else if(event.key.startsWith(prefix))delete memory[event.key.slice(prefix.length)];
+   if(event.key===null||event.key===prefix+device||event.key==='qqb-ui-theme'){prefs=restore();apply();}
+ });
 })();
-</script><script src="/im-bridge/ui/device-ui.js?v=1.62.128"></script><link rel="stylesheet" id="blueGridPalette" href="/im-bridge/ui/console-palette.css?v=1.62.128"><link rel="stylesheet" href="/im-bridge/ui/console-prompt-frame.css?v=1.62.128"><link rel="stylesheet" href="/im-bridge/ui/diary.css?v=1.62.128"><link rel="stylesheet" id="helpTopRightStyles" href="/im-bridge/ui/console-help.css?v=1.62.128"><link rel="stylesheet" id="onboardingV3Styles" href="/im-bridge/ui/console-onboarding.css?v=1.62.128"><link rel="stylesheet" href="/im-bridge/ui/execution-overview.css?v=1.62.128">
-<link id="bridgeDesignStyles" rel="stylesheet" href="/im-bridge/ui/console-design.css?v=1.62.128">
+</script>
+<link rel="stylesheet" href="/im-bridge/ui/console-base.css?v=1.63.0-rc.20">
+<link rel="stylesheet" href="/im-bridge/ui/console-shell.css?v=1.63.0-rc.20"><link rel="stylesheet" id="panelLayoutStyles" href="/im-bridge/ui/console-layout.css?v=1.63.0-rc.20">
+<script src="/im-bridge/ui/device-ui.js?v=1.63.0-rc.20"></script><link rel="stylesheet" id="blueGridPalette" href="/im-bridge/ui/console-palette.css?v=1.63.0-rc.20"><link rel="stylesheet" href="/im-bridge/ui/console-prompt-frame.css?v=1.63.0-rc.20"><link rel="stylesheet" href="/im-bridge/ui/diary.css?v=1.63.0-rc.20"><link rel="stylesheet" id="helpTopRightStyles" href="/im-bridge/ui/console-help.css?v=1.63.0-rc.20"><link rel="stylesheet" id="onboardingV3Styles" href="/im-bridge/ui/console-onboarding.css?v=1.63.0-rc.20"><link rel="stylesheet" href="/im-bridge/ui/execution-overview.css?v=1.63.0-rc.20">
+<link id="bridgeDesignStyles" rel="stylesheet" href="/im-bridge/ui/console-design.css?v=1.63.0-rc.20">
+<link rel="stylesheet" href="/im-bridge/ui/workbench-navigation.css?v=1.63.0-rc.20">
+<link rel="stylesheet" href="/im-bridge/ui/home-workbench.css?v=1.63.0-rc.20">
+<link rel="stylesheet" href="/im-bridge/ui/workbench-connection.css?v=1.63.0-rc.20">
 </head>
 <body>
 
@@ -26,41 +105,68 @@
   <a id="returnDsh" href="/" target="_top">返回 DSH</a>
 
 </nav>
-<script defer src="/im-bridge/ui/launcher.js?v=1.62.128"></script>
+<script defer src="/im-bridge/ui/launcher.js?v=1.63.0-rc.20"></script>
 <section class="device-ui-bar" id="deviceUiBar" aria-label="当前设备"><div class="device-ui-title"><b data-device-label>QQ 桥接</b><small data-device-note>正在读取运行设备…</small></div><div class="statusbox"><span class="pill"><span class="dot" id="dot"></span><span id="pillText">正在连接控制台…</span></span><div class="chips"><span class="chip" id="chipIq">档位 —</span><span class="chip" id="chipVoice">语音 —</span></div></div><details id="boxHomeHelp"><summary>帮助教程</summary><div class="help-popover"><button type="button" id="replayOnboarding" style="margin:2px 0 8px;padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:inherit;cursor:pointer;font-size:12px">打开教程目录</button><div class="onb-help-entry"><button type="button" data-onb-track="image">图片教程 · RunningHub</button><button type="button" data-onb-track="voice">语音教程 · BreezeBlue</button></div><p>“返回 DSH”回到网页聊天主界面；DSH Go 的原生界面请用应用自己的返回入口。入口小条可拖动，位置会自动记住；插件首页可以复位入口位置。</p></div></details></section><p class="device-preview" id="devicePreview" role="status" hidden></p>
 <div class="app">
-  <aside class="side" aria-label="主导航">
-    <a class="brand" href="#overview" aria-label="QQ 桥接工作台"><span class="logo"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-3l-5 4v-4H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="1.7"/><path d="M7 10h7M7 13h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="brandText"><b>QQ 桥接</b><span>一点点记录，一直在身边</span></span></a>
-    <div class="nav-label">控制台</div>
-    <nav class="nav" id="tabs"></nav>
-    <div class="side-guide"><span class="guide-line"></span><b>有回应，也有陪伴。</b><p>把角色、记忆和日常，<br>连接在每一次对话里。</p></div>
+  <aside class="side" id="workspaceSidebar" aria-label="工作台侧栏">
+    <a class="brand" href="#overview" data-go="overview" aria-label="打开 QQ 桥接工作台"><span class="logo"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-3l-5 4v-4H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="1.7"/><path d="M7 10h7M7 13h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span class="brandText"><b>QQ 桥接</b><small id="ver"></small></span></a>
+    <nav id="workspaceNav" aria-label="工作台页面"></nav>
     <div class="sidefoot">
       <button class="side-persona" data-go="persona" aria-label="打开当前角色人设" title="打开当前角色人设"><span class="tiny-avatar" id="sideAvatar">Q</span><span><b id="sidePersona">当前角色</b><small id="sideAccount">尚未连接账号</small></span><span class="side-chevron">›</span></button>
 
     </div>
   </aside>
   <main class="main" id="main">
-    <header class="topbar"><div class="breadcrumb"><span>控制台</span><span>/</span><b id="breadcrumb">工作台</b></div><div class="top-actions"><div class="feature-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><input id="navSearch" type="search" placeholder="查找功能…" aria-label="搜索控制台功能" aria-controls="searchResults" aria-expanded="false" autocomplete="off"><kbd>Ctrl K</kbd><div class="search-results" id="searchResults" hidden></div></div><button id="bridgeIssueButton" type="button" title="查看运行提醒和错误详情" aria-controls="bridgeIssuePanel">运行提醒 · 0</button><button class="icon-button" id="themeToggle" title="主题：跟随系统" aria-label="切换界面主题"></button><button class="refresh-button" id="refresh"><span id="refreshIcon"></span><span>刷新</span></button></div></header>
+    <header class="topbar" id="workspaceToolbar">
+      <div class="breadcrumb" aria-label="当前位置"><span id="breadcrumbGroup">工作台</span><span aria-hidden="true">/</span><b id="breadcrumb">桥接工作台</b></div>
+      <div class="top-actions">
+        <button id="openNavigator" type="button" aria-label="查找功能" aria-haspopup="dialog" aria-controls="workspaceNavigator"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>查找功能</span><kbd>Ctrl K</kbd></button>
+        <button id="bridgeIssueButton" type="button" title="查看运行提醒和错误详情" aria-controls="bridgeIssuePanel">运行提醒 · 0</button>
+        <button id="themeToggle" type="button" aria-haspopup="dialog" aria-controls="appearanceDialog" aria-label="界面外观"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.7 12.2A8.7 8.7 0 1 0 12 20.8h1.1a2 2 0 0 0 1.2-3.6 1.3 1.3 0 0 1 .8-2.3h2.8a2.8 2.8 0 0 0 2.8-2.7Z"/><path d="M6.9 11.7h.01m1.5-4h.01m4.4-1.2h.01m3.9 2.5h.01" stroke-width="2.8"/></svg><span>界面外观</span></button><button class="refresh-button" id="refresh"><span id="refreshIcon"></span><span>刷新</span></button>
+      </div>
+    </header>
     <div class="maininner"><div id="pane"><div class="loading-state"><span class="loading-dot"></span><h1>正在打开控制台</h1><p>读取连接状态与角色设置…</p></div></div></div>
     <footer class="app-footer"><span>QQ 桥接 <span class="footer-separator">/</span> DeepSeek Harness</span><span>每一段对话，都值得被记住。</span></footer>
   </main>
 </div>
+<nav id="quickNav" aria-label="常用页面"></nav>
+<dialog id="appearanceDialog" aria-labelledby="appearanceTitle">
+  <header class="appearance-head"><h2 id="appearanceTitle">界面外观</h2><button id="closeAppearance" type="button">关闭</button></header>
+  <fieldset class="appearance-modes"><legend>明暗模式</legend><div class="appearance-options">
+    <label><input type="radio" name="appearance-mode" value="auto"><span>跟随系统</span></label>
+    <label><input type="radio" name="appearance-mode" value="light"><span>浅色</span></label>
+    <label><input type="radio" name="appearance-mode" value="dark"><span>深色</span></label>
+  </div></fieldset>
+  <fieldset class="appearance-accents"><legend>主色</legend><div class="appearance-options">
+    <label><input type="radio" name="appearance-accent" value="violet"><span data-swatch="violet" aria-hidden="true"></span><span>鸢尾紫</span></label>
+    <label><input type="radio" name="appearance-accent" value="blue"><span data-swatch="blue" aria-hidden="true"></span><span>湖蓝</span></label>
+    <label><input type="radio" name="appearance-accent" value="teal"><span data-swatch="teal" aria-hidden="true"></span><span>青竹</span></label>
+    <label><input type="radio" name="appearance-accent" value="rose"><span data-swatch="rose" aria-hidden="true"></span><span>玫瑰</span></label>
+    <label><input type="radio" name="appearance-accent" value="amber"><span data-swatch="amber" aria-hidden="true"></span><span>琥珀</span></label>
+  </div></fieldset>
+  <span id="appearanceStatus" role="status"></span>
+</dialog>
+<dialog id="workspaceNavigator" aria-labelledby="navigatorTitle">
+  <div class="navigator-head"><h2 id="navigatorTitle">全部功能</h2><button id="closeNavigator" type="button" aria-label="关闭全部功能">关闭</button></div>
+  <label class="navigator-input"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><input id="navSearch" type="search" placeholder="搜索页面、设置或关键词" aria-label="查找功能" aria-controls="searchResults" autocomplete="off"></label>
+  <div id="searchResults"></div><span class="nav-sr-only" id="navMatchCount" role="status" aria-live="polite"></span>
+</dialog>
 <footer class="panel-dock" id="panelDock" aria-label="保存修改" hidden><section class="save-dock" id="saveDock" aria-label="保存当前页面设置"><small id="saveDockStatus" role="status" aria-live="polite">保存当前页设置</small><button id="saveCurrentPage" class="primary" type="button" disabled>一键保存</button></section></footer>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<div class="modal" id="modal" hidden>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalMsg" hidden>
   <div class="modalbox">
     <div class="modalmsg" id="modalMsg"></div>
     <input id="modalInput" placeholder="">
-    <div class="btnrow"><button id="modalCancel">取消</button><button class="primary" id="modalOk">确定</button></div>
+    <div class="btnrow"><button id="modalCancel">取消</button><button id="modalKeep" hidden>保留草稿并切换</button><button class="primary" id="modalOk">确定</button></div>
   </div>
 </div>
-<script src="/im-bridge/ui/visual-share.js?v=1.62.128"></script>
-<script src="/im-bridge/ui/companion-float.js?v=1.62.128"></script><script src="/im-bridge/ui/companion-mobile-float.js?v=1.62.128"></script>
-<script type="module" src="/im-bridge/ui/console-controller.js?v=1.62.128" onerror="document.getElementById('pane').innerHTML='&lt;div class=&quot;loading-state&quot;&gt;&lt;h1&gt;界面文件暂未加载&lt;/h1&gt;&lt;p&gt;如果刚安装更新，请完全退出再打开 DSH，使后台加载新版插件&lt;/p&gt;&lt;a href=&quot;&quot;&gt;重新加载页面&lt;/a&gt;&lt;/div&gt;'"></script>
+<script src="/im-bridge/ui/visual-share.js?v=1.63.0-rc.20"></script>
+<script src="/im-bridge/ui/companion-float.js?v=1.63.0-rc.20"></script><script src="/im-bridge/ui/companion-mobile-float.js?v=1.63.0-rc.20"></script>
+<script type="module" src="/im-bridge/ui/console-controller.js?v=1.63.0-rc.20" onerror="document.getElementById('pane').innerHTML='&lt;div class=&quot;loading-state&quot;&gt;&lt;h1&gt;界面文件暂未加载&lt;/h1&gt;&lt;p&gt;如果刚安装更新，请完全退出再打开 DSH，使后台加载新版插件&lt;/p&gt;&lt;a href=&quot;&quot;&gt;重新加载页面&lt;/a&gt;&lt;/div&gt;'"></script>
 
 
-<link rel="stylesheet" href="/im-bridge/ui/console-issues.css?v=1.62.128">
+<link rel="stylesheet" href="/im-bridge/ui/console-issues.css?v=1.63.0-rc.20">
 
 <dialog id="bridgeIssuePanel" aria-label="QQ桥接运行提醒">
  <div class="issue-toolbar"><b>QQ桥接运行提醒</b><button id="bridgeIssueSound" type="button">启用错误提示音</button><button id="bridgeIssueAck" type="button">标记全部已读</button><button id="bridgeIssueClose" type="button">关闭</button></div>
@@ -84,7 +190,8 @@
  state.textContent='已连接 · '+(enabled&&audio&&audio.state==='running'?'提示音已启用':enabled?'提示音待浏览器允许':'提示音未启用');render();if(!changed&&fresh.length){if(!tone()&&enabled)state.textContent='有新报错；浏览器尚未允许声音，请点击启用错误提示音。';}
  }catch(e){state.textContent='提醒记录暂未连接：'+e.message;}finally{polling=false;}}
  document.getElementById('bridgeIssueAck').onclick=async function(){var ids=rows.filter(function(r){return !r.acknowledged;}).map(function(r){return r.id;});try{var response=await fetch('/im-bridge/issues',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'acknowledge',ids:ids})});if(!response.ok)throw Error('HTTP '+response.status);await poll();}catch(e){state.textContent='标记已读失败：'+e.message;}};
- soundLabel();void poll();setInterval(poll,2500);
+ function pollVisible(){if(!document.hidden||enabled)void poll();}
+ soundLabel();pollVisible();setInterval(pollVisible,2500);document.addEventListener('visibilitychange',pollVisible);
 })();
 </script>
 
@@ -93,7 +200,7 @@
 (function(){
  'use strict';
  function boot(){
-  var root=document.documentElement,dock=document.getElementById('panelDock'),nav=document.getElementById('tabs'),pane=document.getElementById('pane');
+  var root=document.documentElement,dock=document.getElementById('panelDock'),nav=document.getElementById('quickNav'),pane=document.getElementById('pane');
   if(!dock)return;
   var pending=false,locator=null;
   function pixels(name,value){var next=Math.ceil(Math.max(0,value))+'px';if(root.style.getPropertyValue(name)!==next)root.style.setProperty(name,next);}
@@ -138,7 +245,7 @@
     pixels('--panel-content-right',Math.max(12,document.documentElement.clientWidth-right));
    }
    pixels('--panel-dock-height',dock.getBoundingClientRect().height);
-   pixels('--panel-nav-height',root.dataset.deviceUi==='phone'&&nav?nav.getBoundingClientRect().height:0);
+   pixels('--panel-nav-height',nav?nav.getBoundingClientRect().height:0);
    var viewport=window.visualViewport;
    pixels('--panel-keyboard-inset',Math.max(hostBottomInset(),viewport?window.innerHeight-viewport.height-viewport.offsetTop:0));
    var next=document.querySelector('.schedule-locator');

@@ -1,6 +1,34 @@
 import {existsSync,lstatSync,readFileSync,writeFileSync,readdirSync,unlinkSync} from 'node:fs';
 import {join} from 'node:path';
 export const LOG_RETENTION_MS=7*24*60*60*1000;
+const ONEBOT_DIAGNOSTIC_TYPES=new Set(['text','at','reply','image','mface','face','record','video','file','json','xml','share','forward','node','music','poke','location','contact','markdown','keyboard']);
+
+export function logOptInRawPayload(log,payload,enabled) {
+  if(enabled!==true || payload?.post_type!=='message')return;
+  try{
+    log('RAW '+JSON.stringify(payload).slice(0,6000));
+  }catch{
+    // Diagnostics must not interfere with message handling.
+  }
+}
+
+export function oneBotMessageShape(payload={}) {
+  const message=payload.message ?? payload.raw_message;
+  if(typeof message==='string')return `string chars=${message.length}`;
+  if(!Array.isArray(message))return message==null?'missing':'unexpected shape';
+  const counts=new Map();
+  for(const segment of message){
+    const type=ONEBOT_DIAGNOSTIC_TYPES.has(segment?.type)?segment.type:'other';
+    counts.set(type,(counts.get(type)||0)+1);
+  }
+  return `segments=${message.length}`+[...counts].map(([type,count])=>' '+type+'='+count).join('');
+}
+
+export function diagnosticFailure(error) {
+  const type=['TypeError','SyntaxError','RangeError','AbortError','TimeoutError'].includes(error?.name)?error.name:'error';
+  const status=Number(error?.status ?? error?.statusCode ?? /\bHTTP\s+(\d{3})\b/i.exec(String(error?.message ?? ''))?.[1]);
+  return Number.isInteger(status)&&status>=100&&status<=599?type+' HTTP '+status:type;
+}
 const ACTIVE=new Set(['started','submitted','queued','processing','sending','running','waiting_user','unknown','pending']);
 export function recordTime(row){for(const key of ['updatedAt','recordedAt','endedAt','at','time','startedAt']){const v=row?.[key],n=typeof v==='number'?v:Date.parse(v);if(Number.isFinite(n)&&n>0)return n;}return 0;}
 export function recentRecords(rows=[],now=Date.now(),{preserveActive=false}={}){return rows.filter(row=>preserveActive&&ACTIVE.has(row.status)||!recordTime(row)||recordTime(row)>=now-LOG_RETENTION_MS);}

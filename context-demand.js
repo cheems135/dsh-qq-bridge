@@ -12,7 +12,7 @@ export function contextTopicsFor(text='',{history=[],mediaKinds=[]}={}){
  if(/在(?:干嘛|干什么|做什么|哪儿|哪里)|忙什么|当前位置|什么地方|什么场景|现在的背景|where are you|what are you doing/i.test(s))add('scene');
  if(/日程|安排|计划|今天要做|接下来做|什么时候(?:睡|起)|schedule|your plans/i.test(s))add('schedule');
  if(/还记得|记不记得|你记得|上次|那次|以前.{0,8}(?:说|聊)|之前.{0,8}(?:说|聊)|回忆|记忆|remember|last time/i.test(s))add('memory');
- if(/学过|学会|学到了|你的理解|你的看法|之前看过/.test(s))add('learning');
+ if(/学过|学会|学到了|你的理解|你的看法|之前看过|(?:今天|昨天|最近|刚才).{0,6}(?:学(?:了|过|到)|学习)|学了(?:什么|啥)/.test(s))add('learning');
  if(/这个梗|什么梗|梗.{0,6}(?:意思|用法)|玩梗|meme/i.test(s))add('memes');
  if(/说话方式|怎么表达|表达方式|语气模仿/.test(s))add('expression');
  if(/语音|听听.{0,3}(?:你|声音)|唱歌|清唱|晚安故事|voice|speech/i.test(s)||mediaKinds.includes('voice'))add('voice');

@@ -1,13 +1,19 @@
 import {randomUUID} from 'node:crypto';
 import {redactInvocation} from './invocation-journal.js';
+import {isProgressDelivery, deliveryMatchesAudit, replyDeliveryState} from './delivery-outbox.js';
 export function recoverInterruptedChatAudits(audits=[],outbox=[],{accountId,keys=[],before=Date.now(),now=Date.now()}={}){
  const allowed=new Set(keys);let count=0;
  for(const audit of audits){
   if(audit.accountId!==accountId||!allowed.has(audit.chat)||!['queued','running'].includes(audit.status)||audit.at>=before)continue;
-  const rows=outbox.filter(o=>o.auditId===audit.id);
+  const rows=outbox.filter(row=>deliveryMatchesAudit(row,audit));
+  const formal=rows.filter(row=>!isProgressDelivery(row));
   audit.status='cancelled';audit.recoveredAt=now;audit.durationUnknown=true;
   audit.error='插件重新加载，上一轮未取得结束回执；已保留生成与发送记录，不自动重发';
-  if(rows.length)audit.deliveryState=rows.every(o=>o.status==='sent')?'sent':rows.some(o=>['unknown','sending'].includes(o.status))?'unknown':rows.some(o=>o.status==='queued')?'queued':'failed';
+  if(formal.length)audit.deliveryState=replyDeliveryState(formal,true);
+  else if(rows.length){
+    audit.deliveryState='unknown';
+    audit.deliveryReason='仅找到等待提示的记录，尚无正式答复的 QQ 回执';
+  }
   count++;
  }
  return count;

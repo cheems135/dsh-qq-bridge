@@ -1,4 +1,7 @@
 // Form values only: no DOM, HTTP, account settings or storage side effects.
+export function formScope(snapshot){
+  return JSON.stringify([snapshot?.status?.edition==='mobile'?'phone':'desktop',snapshot?.settings?.activeAccountId||'',snapshot?.settings?.activePersonaId||'']);
+}
 export function sameFormValue(a, b) {
   return a && a.type === 'file' ? !!b && b.type === 'file' && a.signature === b.signature : a === b;
 }
@@ -12,8 +15,15 @@ export function createFormState() {
   return {
     baselines, drafts,
     begin(page, values) {
+      const previous = baselines[page] || {};
       baselines[page] = { ...values };
+      for (const key of Object.keys(drafts[page] || {})) if (owns(previous,key)) baselines[page][key] = previous[key];
       return drafts[page] || {};
+    },
+    // Refresh from the server without turning its defaults into user edits.
+    refresh(page, values) {
+      if (!baselines[page]) return;
+      for (const [key,value] of Object.entries(values)) if (!owns(drafts[page],key)) baselines[page][key]=value;
     },
     capture(page, current) {
       const base = baselines[page];
@@ -42,7 +52,7 @@ export function createFormState() {
         }
       }
       prune(page);
-      if (current) this.capture(page, current);
+      if (current) this.refresh(page, current);
     },
     discard(page) {
       delete baselines[page];

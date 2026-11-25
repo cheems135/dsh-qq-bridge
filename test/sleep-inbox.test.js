@@ -31,6 +31,30 @@ test('group wake review includes at most 20 newest unread messages and retires o
  assert.equal(box.batches(()=>true)[0].messageId,batch.messageId);
  assert.equal(saves,26);
 });
+
+test('a receipt settles an unread message even when admission was recorded later or by the live inbox', () => {
+  for (const reviewMessageId of ['', 'sleep-review-test']) {
+    let rows = [];
+    let clock = 100;
+    const options = {getRows: () => rows, setRows: value => { rows = value; }, save() {}, now: () => clock};
+    const box = createSleepInbox(options);
+    box.capture(payload('7'), scope);
+    clock = 110;
+    box.acknowledge([rows[0].id], reviewMessageId);
+    const receipt = {accountId: 'a', persona: 'p', chat: scope.key, at: 105, inboundIds: [7], deliveryState: 'sent'};
+    const restored = createSleepInbox(options);
+    assert.equal(restored.reconcile([], [
+      {...receipt, accountId: 'other'}, {...receipt, persona: 'other'}, {...receipt, chat: 'private:99999'},
+      {...receipt, inboundIds: ['8']}, {...receipt, at: 99}, {...receipt, deliveryState: 'queued'},
+    ]), false);
+    assert.equal(rows[0].status, 'queued');
+    assert.equal(restored.reconcile([], [receipt]), true);
+    assert.equal(rows[0].status, 'reviewed');
+    assert.equal(rows[0].recoveryPayload, undefined);
+    assert.equal(restored.reconcile([], [receipt]), false);
+    assert.deepEqual(restored.batches(() => true), []);
+  }
+});
 test('unconfirmed admission is quarantined after one attempt and later sent audit settles it',()=>{
  let rows=[];const box=createSleepInbox({getRows:()=>rows,setRows:v=>rows=v,save:()=>{},now:()=>1794060000000});
  box.capture(payload('1'),scope);const [batch]=box.batches(()=>true);

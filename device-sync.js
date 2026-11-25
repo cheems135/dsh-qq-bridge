@@ -1,3 +1,4 @@
+import {verifySyncCheckpoint,rotateSyncCheckpoints} from './backup-retention.js';
 import {apiOnlySettings,apiOnlyConnections} from './mobile-api-policy.js';
 import {buildUnionPlan} from './sync-union.js';
 import {requestLocalJson} from './local-transport.js';
@@ -47,6 +48,7 @@ export function createDeviceSync(options){
  function resolveKey(key){
   if(!validKey(key))throw Error('同步路径无效');const [kind,...parts]=key.split('/');
   if(kind==='secrets')throw Error('凭据必须通过凭据服务读写');
+  if(options.shareEntry&&!options.shareEntry(kind,parts.join('/')))throw Error('目录不在桥接可同步资料范围内');
   if(kind==='data'&&(!DATA.has(parts.join('/'))||parts.length!==1))throw Error('不允许访问该插件运行文件');
   if(kind==='source'&&(parts.includes('node_modules')||parts.includes('.git')||parts.at(-1)==='cordis.patch.yml'||/^media-runtime(?:-mobile|-desktop)?\.json$/.test(parts.at(-1))))throw Error('设备配置不参与版本同步');
   const root=rootMap()[kind];if(!root)throw Error('同步目录不存在');const target=path.resolve(root,...parts),relative=path.relative(path.resolve(root),target);
@@ -62,7 +64,7 @@ export function createDeviceSync(options){
  function canonical(key,bytes,toPortable=true){
   if(!key.endsWith('.json')){if(key==='source/client.js'){let s=bytes.toString();s=toPortable?s.replace(/dsh-im-bridge(?:-mobile)?(?![\w-])/g,'dsh-im-bridge-unified'):s.replaceAll('dsh-im-bridge-unified',own==='phone'?'dsh-im-bridge-mobile':'dsh-im-bridge');return Buffer.from(s);}return bytes;}
   let value;try{value=JSON.parse(bytes);}catch{return bytes;}
-  value=replacePaths(value,toPortable);
+  if(!key.startsWith('cache/chat-history/')&&key!=='cache/messages.json')value=replacePaths(value,toPortable);
   if(key==='source/package.json')value.name=toPortable?'dsh-im-bridge-unified':own==='phone'?'dsh-im-bridge-mobile':'dsh-im-bridge';
   if(key==='data/settings.json'){
    const local=localSettings();
@@ -80,7 +82,16 @@ export function createDeviceSync(options){
    if(toPortable&&runtimeIsolation){value.routes='@device/service/routes';value.legacyLocalEnabled='@device/service/local';value.legacyApiComplement='@device/service/complement';}
    else if(!toPortable){if(value.routes==='@device/service/routes')value.routes=local.routes||{enabled:false,chat:'host',image:'legacy',speech:'legacy'};if(value.legacyLocalEnabled==='@device/service/local')value.legacyLocalEnabled=local.legacyLocalEnabled===true;if(value.legacyApiComplement==='@device/service/complement')value.legacyApiComplement=local.legacyApiComplement===true;if(own==='phone')value=apiOnlyConnections(value);}
   }
-  if(key==='data/state.json'){value.chats={};value.accountPaused=true;value.manuallyLoggedOut=false;}
+  if(key==='data/state.json'){
+   value.chats={};value.accountPaused=true;value.manuallyLoggedOut=false;
+   // A login notice applies to the QQ session bound on this device. Importing
+   // chat state must neither clear its hold nor assign it to a peer session.
+   delete value.qqLoginHolds;
+   if(!toPortable){
+    const localHolds=readJSON(path.join(options.dataDir,'state.json')).qqLoginHolds;
+    if(Array.isArray(localHolds)&&localHolds.length)value.qqLoginHolds=localHolds;
+   }
+  }
   if(key==='data/features.json')value.generation=0;
   return jsonBytes(value);
  }
@@ -92,7 +103,7 @@ export function createDeviceSync(options){
   try{
   const add=(key,file)=>{if(!validKey(key))return;const stat=fs.lstatSync(file);if(stat.isSymbolicLink()||!stat.isFile())return;const bytes=canonical(key,fs.readFileSync(file));manifest[key]={hash:digest(bytes),size:bytes.length,modifiedAt:stat.mtimeMs};if(snapshotRoot)fs.writeFileSync(path.join(snapshotRoot,digest(key)),bytes,{mode:0o600});};
   for(const name of DATA){const f=path.join(options.dataDir,name);if(fs.existsSync(f))add('data/'+name,f);}
-  const walk=(kind,root,relative='')=>{if(!fs.existsSync(root))return;for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){if(entry.isSymbolicLink()||['node_modules','.git','.runtime','__pycache__'].includes(entry.name))continue;const rel=(relative?relative+'/':'')+entry.name,key=kind+'/'+rel;if(kind==='cache'&&/^(?:device-sync|backups|maintenance-backups)(?:\/|$)/.test(rel))continue;if(kind==='source'&&((entry.isDirectory()&&(entry.name.startsWith('.')||/^(?:inquiry-regression|phone-cancel|sync-progress)-/.test(entry.name)))||/\.bak(?:[-.]|$)|\.tmp$/.test(entry.name)))continue;if(kind==='source'&&(entry.name==='cordis.patch.yml'||/^media-runtime(?:-mobile|-desktop)?\.json$/.test(entry.name)||/\.(?:tgz|png\.bak|pyc)$/.test(entry.name)))continue;if(entry.isDirectory())walk(kind,root,rel);else add(key,path.join(root,rel));}};
+  const walk=(kind,root,relative='')=>{if(!fs.existsSync(root))return;for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})){if(entry.isSymbolicLink()||['node_modules','.git','.runtime','__pycache__'].includes(entry.name))continue;const rel=(relative?relative+'/':'')+entry.name,key=kind+'/'+rel;if(options.shareEntry&&!options.shareEntry(kind,rel))continue;if(kind==='cache'&&/^(?:device-sync|backups|maintenance-backups)(?:\/|$)/.test(rel))continue;if(kind==='source'&&((entry.isDirectory()&&(entry.name.startsWith('.')||/^(?:inquiry-regression|phone-cancel|sync-progress)-/.test(entry.name)))||/\.bak(?:[-.]|$)|\.tmp$/.test(entry.name)))continue;if(kind==='source'&&(entry.name==='cordis.patch.yml'||/^media-runtime(?:-mobile|-desktop)?\.json$/.test(entry.name)||/\.(?:tgz|png\.bak|pyc)$/.test(entry.name)))continue;if(entry.isDirectory())walk(kind,root,rel);else add(key,path.join(root,rel));}};
   for(const [kind,root]of Object.entries(rootMap()))if(kind!=='data')walk(kind,root);
   const credential=await options.credential();if(credential){const b=jsonBytes({deepseekKey:credential});manifest['secrets/deepseek.json']={hash:digest(b),size:b.length};if(snapshotRoot)fs.writeFileSync(path.join(snapshotRoot,digest('secrets/deepseek.json')),b,{mode:0o600});}
   return{device:own,protocolVersion:2,snapshotId,version:readJSON(path.join(options.sourceDir,'package.json')).version||options.status().version,files:manifest};
@@ -133,9 +144,11 @@ export function createDeviceSync(options){
    const backup=path.join(dir,'backups',body.id),prepared=[];fs.mkdirSync(backup,{recursive:true});
    for(const item of body.items){if(!validKey(item.key))throw Error('同步路径无效');const target=item.key==='secrets/deepseek.json'?null:resolveKey(item.key);let bytes=null;if(!item.remove){const stage=path.join(dir,'stage',body.id,digest(item.key));bytes=fs.readFileSync(stage);if(digest(bytes)!==item.hash||bytes.length!==item.size)throw Error('同步校验失败，未覆盖本地数据');bytes=canonical(item.key,bytes,false);}const old=target?(fs.existsSync(target)?fs.readFileSync(target):null):jsonBytes({deepseekKey:await options.credential()||''});if(old)atomic(path.join(backup,digest(item.key)),old);prepared.push({item,target,bytes,old});}
    atomic(path.join(backup,'manifest.json'),jsonBytes(prepared.map(x=>({key:x.item.key,existed:!!x.old,remove:x.item.remove}))));
+   verifySyncCheckpoint(backup,prepared);
    try{for(const p of prepared){if(p.target){if(p.item.remove){if(fs.existsSync(p.target))fs.unlinkSync(p.target);}else atomic(p.target,p.bytes);if(p.item.key.startsWith('source/'))codeChanged=true;}else await options.credential(p.bytes?JSON.parse(p.bytes).deepseekKey:'');}if(!body.deferReload)await options.reload();}
    catch{for(const p of prepared){if(p.target){if(p.old)atomic(p.target,p.old);else if(fs.existsSync(p.target))fs.unlinkSync(p.target);}else await options.credential(JSON.parse(p.old).deepseekKey);}try{await options.reload();}catch{}throw Error('同步应用失败，已回退本次本地写入，请保持两端暂停后重试');}
    for(const p of prepared)if(!p.item.remove){try{fs.unlinkSync(path.join(dir,'stage',body.id,digest(p.item.key)));}catch{}}
+   try{rotateSyncCheckpoints(backup);}catch{lastError='同步完成，旧备份轮换等待重试';}
    return{committed:prepared.length,backup:true,codeReloadRequired:codeChanged};
   },
  };
@@ -153,6 +166,12 @@ export function createDeviceSync(options){
    const isolated=before.desktop.runtimeIsolationVersion===1&&before.phone.runtimeIsolationVersion===1;
    const a=await local.manifest({runtimeIsolation:isolated,snapshot:true});if(a.snapshotId)snapshotRefs.push(['desktop',a.snapshotId]);
    const b=await peerCall('/manifest',{runtimeIsolation:isolated,snapshot:true});if(b.snapshotId)snapshotRefs.push(['phone',b.snapshotId]);
+   // Older peers may advertise other folders from a shared cache. Apply the
+   // local storage policy before reading any peer content for a union plan.
+   if(options.shareEntry)for(const key of Object.keys(b.files)){
+    const [kind,...parts]=key.split('/');
+    if(!options.shareEntry(kind,parts.join('/')))delete b.files[key];
+   }
    const snapshotIds={desktop:a.snapshotId,phone:b.snapshotId};
    const readFrom=async(side,key,meta)=>{const chunks=[];for(let offset=0;offset<meta.size||offset===0;offset+=CHUNK){const part=await invoke(side,'chunk',{key,hash:meta.hash,offset,snapshotId:snapshotIds[side]});chunks.push(Buffer.from(part.data,'base64'));}const bytes=Buffer.concat(chunks);if(bytes.length!==meta.size||digest(bytes)!==meta.hash)throw Error('同步读取校验失败');return bytes;};
    updateProgress({phase:'planning'},true);

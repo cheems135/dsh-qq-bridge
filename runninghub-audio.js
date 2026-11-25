@@ -1,14 +1,22 @@
 import {setTimeout as wait} from 'node:timers/promises';
 import {spawn} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {existsSync,renameSync,unlinkSync} from 'node:fs';
 import {runningHubSubmission,runningHubTaskId} from './image-api-contract.js';
+import {publicGet} from './bridge-features.js';
 
 const maxAudioBytes=32*1024*1024;
-const inputToken=/^\{\{(text|instructions|song_audio|reference_audio)\}\}$/;
+const inputToken=/^\{\{(text|instructions|song_audio|reference_audio|song_start|song_end)\}\}$/;
 const audioName=/^(?:api\/)?[\w./-]{1,500}$/;
 const field=value=>String(value??'').trim();
 
-export function normalizeRunningHubAudio(input={}){
+export function singingWorkflowKey(config={}){
+ return createHash('sha256').update(JSON.stringify({id:config.id||'',mode:config.mode||'app',instanceType:config.instanceType||'default',outputIndex:config.outputIndex||0,outputNodeId:config.outputNodeId||'',referenceAudio:config.referenceAudio||'',nodes:[...(config.nodeInfoList||[])].sort((a,b)=>(a.nodeId+':'+a.fieldName).localeCompare(b.nodeId+':'+b.fieldName))})).digest('hex');
+}
+export function songTime(seconds=0){const value=Math.max(0,Math.floor(Number(seconds)||0));return Math.floor(value/60)+':'+String(value%60).padStart(2,'0');}
+export function singingAudioTiming(source){return Number(source?.duration)>0?{song_start:'0:00',song_end:songTime(source.duration)}:{};}
+
+export function normalizeRunningHubAudio(input={},includePresets=true){
   return Object.fromEntries(['speech','sing'].map(kind=>{
     const raw=input?.[kind]||{};
     return [kind,{
@@ -20,8 +28,11 @@ export function normalizeRunningHubAudio(input={}){
       })):[],
       referenceAudio:field(raw.referenceAudio).slice(0,500),
       songAudio:kind==='sing'?field(raw.songAudio).slice(0,500):'',
+      ...(kind==='sing'?{songTitle:field(raw.songTitle).slice(0,80),songArtist:field(raw.songArtist).slice(0,80),songIdentityAudio:field(raw.songIdentityAudio).slice(0,500)}:{}),
       outputIndex:Number.isInteger(raw.outputIndex)&&raw.outputIndex>=0&&raw.outputIndex<32?raw.outputIndex:0,
+      outputNodeId:field(raw.outputNodeId).slice(0,80),
       allowLocal:raw.allowLocal===true,
+      ...(includePresets?{presets:(Array.isArray(raw.presets)?raw.presets:[]).slice(-20).map(p=>({name:field(p.name||p.id).slice(0,80),...normalizeRunningHubAudio({[kind]:p},false)[kind]}))}:{}),
     }];
   }));
 }
@@ -48,7 +59,7 @@ export function runningHubAudioNodes(config,kind,inputs={}, {requireValues=true}
       return {nodeId,fieldName,fieldValue};
     }
     used.add(token);
-    const value=inputs[token]||(token==='reference_audio'?config.referenceAudio:token==='song_audio'?config.songAudio:'');
+    const value=inputs[token]||(token==='reference_audio'?config.referenceAudio:token==='song_audio'?config.songAudio:token==='song_start'?'0:00':token==='song_end'?'1:00':'');
     if(requireValues&&((token==='song_audio'||token==='reference_audio')?!audioName.test(value)||value.split('/').some(part=>part==='..'):token==='text'&&!String(value).trim())){
       throw Error(token==='text'?'请填写要说的正文或要唱的歌词':token==='song_audio'?'请先上传歌曲片段，或配置默认歌曲素材':'请先上传参考音色');
     }
@@ -67,19 +78,27 @@ export function validateRunningHubAudio(input){
   return config;
 }
 
-const outputType=/^(?:audio\/)?(?:mp3|mpeg|wav|wave|x-wav|flac|x-flac)$/i;
+const outputType=/^(?:audio(?:\/[^;]+)?|mp3|mpeg|wav|wave|x-wav|flac|x-flac|ogg|opus|m4a|aac|webm)$/i;
 function audioOutputs(value){
   const rows=value?.results??value?.data?.results??value?.data??[];
   return Array.isArray(rows)?rows.filter(row=>{
     const url=row?.url||row?.fileUrl;
-    return typeof url==='string'&&(outputType.test(row.fileType||row.outputType||row.type||'')||/\.(?:wav|mp3|flac)(?:[?#]|$)/i.test(url));
-  }).map(row=>row.url||row.fileUrl):[];
+    return typeof url==='string'&&(outputType.test(row.fileType||row.outputType||row.type||'')||/\.(?:wav|mp3|flac|ogg|opus|m4a|aac|webm)(?:[?#]|$)/i.test(url));
+  }).map(row=>({url:row.url||row.fileUrl,nodeId:field(row.nodeId??row.node_id)})):[];
 }
 
 async function download(url,signal,fetchImpl){
-  const target=new URL(url);
-  if(target.protocol!=='https:'||target.port||target.username||target.password)throw Error('音频下载地址无效');
-  const response=await fetchImpl(target,{signal,redirect:'error'});
+  let target=new URL(url),response;
+  for(let redirects=0;redirects<=6;redirects++){
+    if(!['http:','https:'].includes(target.protocol)||target.username||target.password)throw Error('音频下载地址无效');
+    // Public downloads use DNS-pinned validation on every hop; no API key or
+    // browser credentials are forwarded to a CDN or redirect destination.
+    if(fetchImpl===fetch){const data=await publicGet(target.href,{signal,binary:true,maxBytes:maxAudioBytes,timeoutMs:60000});response=new Response(data.bytes||null,{status:data.status,headers:{...data.headers,...(data.location?{location:data.location}:{})}});}
+    else response=await fetchImpl(target,{signal,redirect:'manual'});
+    if(![301,302,303,307,308].includes(response.status))break;
+    const location=response.headers.get('location');await response.body?.cancel();
+    if(!location||redirects===6)throw Error('音频下载跳转无效或次数过多');target=new URL(location,target);
+  }
   if(!response.ok||!response.body||Number(response.headers.get('content-length'))>maxAudioBytes)throw Error('音频下载失败或超过 32MB');
   const reader=response.body.getReader(),chunks=[];
   let length=0;
@@ -96,8 +115,10 @@ async function download(url,signal,fetchImpl){
   const wav=bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WAVE';
   const mp3=bytes.toString('ascii',0,3)==='ID3'||bytes.length>2&&bytes[0]===0xff&&(bytes[1]&0xe0)===0xe0;
   const flac=bytes.toString('ascii',0,4)==='fLaC'&&length>=42&&(bytes[4]&127)===0&&bytes.readUIntBE(5,3)===34;
-  if(length<256||!wav&&!mp3&&!flac)throw Error('产物不是可识别的 WAV、MP3 或 FLAC');
-  return {bytes,extension:wav?'wav':mp3?'mp3':'flac'};
+  const ogg=bytes.toString('ascii',0,4)==='OggS',m4a=bytes.toString('ascii',4,8)==='ftyp',webm=bytes.subarray(0,4).toString('hex')==='1a45dfa3';
+  const aac=length>2&&bytes[0]===255&&(bytes[1]&246)===240;
+  if(length<256||!wav&&!mp3&&!flac&&!ogg&&!m4a&&!webm&&!aac)throw Error('产物不是可识别的音频文件');
+  return {bytes,extension:wav?'wav':flac?'flac':ogg?'ogg':m4a?'m4a':webm?'webm':aac?'aac':'mp3'};
 }
 
 export async function renderRunningHubAudio({config,kind,inputs,apiConfig,request,signal,assertCurrent=()=>{},onTask=()=>{},fetchImpl=fetch,poll=wait}){
@@ -132,11 +153,13 @@ export async function renderRunningHubAudio({config,kind,inputs,apiConfig,reques
       check();
       const urls=audioOutputs(state);
       const outputs=urls.length?urls:audioOutputs(await request(workflow,'/task/openapi/outputs',{apiKey:apiConfig.apiKey,taskId},'POST',{signal:deadline}));
-      if(!outputs[config.outputIndex])throw Error('所选 WAV、MP3 或 FLAC 音频结果不存在，请核对工作流输出与序号');
+      const selected=config.outputNodeId&&outputs.some(row=>row.nodeId)
+        ?outputs.find(row=>row.nodeId===config.outputNodeId):outputs[config.outputIndex];
+      if(!selected)throw Error('所选音频输出不存在，请核对输出节点 '+(config.outputNodeId||'未指定')+' 与序号');
       check();
-      const result=await download(outputs[config.outputIndex],deadline,fetchImpl);
+      const result=await download(selected.url,deadline,fetchImpl);
       check();
-      return {...result,taskId};
+      return {...result,taskId,outputNodeId:selected.nodeId||config.outputNodeId||'',outputSelection:selected.nodeId?'node':'index'};
     }
   }catch(error){
     if(taskId)throw Object.assign(Error('RunningHub 任务 '+taskId+'：'+String(error.message).slice(0,170)),{taskId,deliveryUnknown:!error.taskFailed,nonRetryable:true});

@@ -1,8 +1,9 @@
 import {existsSync,lstatSync,readdirSync,unlinkSync,statSync,mkdirSync,copyFileSync,readFileSync,writeFileSync,openSync,readSync,closeSync,rmdirSync,symlinkSync} from 'node:fs';
 import {join,resolve,relative,dirname,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
-export const MANAGED_MEDIA_DIRS=['voice','stickers','messages','photos','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','life-artifacts','drawings','social-assets','singing-renders','singing-samples','saved-covers'];
-const temporary=['voice','messages','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','singing-renders','photos/requests','photos/gen'];
+export const MANAGED_MEDIA_DIRS=['voice','stickers','messages','photos','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','life-artifacts','drawings','social-assets','singing-renders','singing-samples','saved-covers','qq-profile-backgrounds','companion-audio','companion-microphone','companion-desktop','hearing-models','chat-history'];
+export const TEMPORARY_MEDIA_DIRS=['voice','messages','videos','audio-input','audio-analysis','music-input','browser','desktop','phone','reference-padded','singing-renders','photos/requests','photos/gen','companion-audio','companion-microphone','companion-desktop'];
+const temporary=TEMPORARY_MEDIA_DIRS;
 const within=(root,p)=>{const r=relative(resolve(root),resolve(p));return r!==''&&!r.startsWith('..')&&!isAbsolute(r);};
 export function mediaRetention(v={}){const n=(x,d,min,max)=>Number.isFinite(Number(x))?Math.max(min,Math.min(max,Number(x))):d;return {enabled:v.enabled!==false,days:n(v.days,7,1,365),maxMB:n(v.maxMB,4096,256,1048576)};}
 function files(root){if(!existsSync(root)||lstatSync(root).isSymbolicLink())return [];return readdirSync(root).flatMap(name=>{const p=join(root,name),s=lstatSync(p);return s.isSymbolicLink()?[]:s.isDirectory()?files(p):[{file:p,bytes:s.size,mtime:s.mtimeMs}];});}

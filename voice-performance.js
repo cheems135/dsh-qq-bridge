@@ -16,14 +16,14 @@
 //  3. Ordinary speech uses directions; event tags require an explicit selection.
 //  4. Respect the saved speech guidance and speed rather than scaling by emotion.
 
-export const VOICE_PERFORMANCE_REVISION = '20261116-contextual-voice-v12';
+export const VOICE_PERFORMANCE_REVISION = '20261124-contextual-affect-v14';
 
 // 情绪方向描述表演，音色身份仍由所选声音决定；不能把音色漂移视为已验收。
 // arousal describes a profile; it does not override saved synthesis parameters.
 // Each profile keeps two short cue phrases: the least ambiguous ones for that state.
 const PROFILES = {
-  angry: {arousal: .95, mood:'生气', cues:['音量提一档、字咬实','语速略快、停顿短而硬'], scene:'真的被惹到了，但还留着一分克制', note:''},
-  crying: {arousal: .95, mood:'哭腔', cues:['说话断断续续、吸气很浅','句尾抖着散掉'], scene:'被人弄哭、还在硬撑着说话，想让他心软', note:''},
+  angry: {arousal: .95, mood:'生气', cues:['怒气落实在重音和咬字上','短促换气、句尾带着火气落下'], note:''},
+  crying: {arousal: .95, mood:'哭泣', cues:['带着清晰抽噎说话，换气断续','哭腔持续到句尾、尾音发颤'], note:''},
   afraid: {arousal: .9, mood:'害怕', scene:'被吓到，缩在那儿想让人来又怕他靠近', cues:['忍不住漏出来的哭，不是撒娇','话断断续续、吸气很浅'], note:''},
   excited: {arousal: .9, mood:'兴奋', cues:['语速快、音高跳得开','带笑的气声'], scene:'憋不住的好消息，抢着说', note:''},
   surprised: {arousal: .8, mood:'惊讶', scene:'被打了个措手不及', cues:['开口先高一下再回落','语气急'], note:''},
@@ -57,7 +57,7 @@ const PROFILES = {
   lonely: {arousal: .25, mood:'孤单', scene:'很久没人理，想被听见', cues:['声音空、尾音飘着','句子之间空很久'], note:''},
   tired: {arousal: .2, mood:'疲惫', cues:['音量低、句尾往下垂','越说越慢'], note:''},
   boredom: {arousal: .15, mood:'无聊', cues:['拖长音、起伏敷衍','句间空白久'], note:''},
-  pained: {arousal: .85, mood:'吃痛', cues:['字尾咬紧、气从牙缝出来','到用力处咬字变形'], scene:'正在忍着痛说完整句话，不想显得太狼狈', note:''},
+  pained: {arousal: .85, mood:'痛苦', cues:['疼痛使发声发紧，字间出现短促停顿','呼吸不稳，句尾难以平稳落下'], note:''},
   breathless: {arousal: .85, mood:'急促', cues:['句子切得很短、字间都是喘气的缝','句首抢气'], scene:'刚被折腾得喘不上气，急着把话说完', note:''},
   moan: {arousal: .8, mood:'气息断续', cues:['气声压住嗓音、句子断成几截','尾音含在喉咙里'], scene:'被撩到说不出整句，还想让他继续', note:''},
   laugh: {arousal: .8, mood:'带笑', cues:['笑声混在字里','字被笑意带散'], note:''},

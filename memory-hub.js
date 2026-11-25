@@ -26,6 +26,7 @@ export function createMemoryHub({storage,allowed,signature=()=>'',identity=()=>[
  function write(f,value){storage.write(f,value);names().add(f);}
  function save(d){write(hubScope(d.meta)+'.json',d.state);}
  function load(meta){
+  storage.prepare?.(meta);
   const id=hubScope(meta);if(cache.has(id))return cache.get(id);
   let state;try{state=storage.read(id+'.json');}catch(e){if(e.code!=='ENOENT')throw e;}
   if(state&&(state.meta?.accountId!==(meta.accountId||'')||state.meta?.key!==meta.key))throw Error('共享记忆范围不匹配');
@@ -326,5 +327,5 @@ export function createMemoryHub({storage,allowed,signature=()=>'',identity=()=>[
   }
   return true;
  }
- return {recent,continuity,preserve,record,recordActivity,recall,desktop,maintain,tick,snapshot,forget,clear,journals,compactJournal,writeDailyJournal,graph,evidence,redactPortable,reload(){reloadRevision++;cache.clear();catalog=null},close(){closed=true;reloadRevision++;cache.clear();catalog=null}};
+ return {recent,continuity,preserve,record,recordActivity,recall,desktop,maintain,tick,snapshot,forget,clear,journals,compactJournal,writeDailyJournal,graph,evidence,redactPortable,reload(){reloadRevision++;cache.clear();catalog=null;storage.reload?.();},close(){closed=true;reloadRevision++;cache.clear();catalog=null}};
 }

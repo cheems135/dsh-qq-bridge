@@ -5,6 +5,24 @@ import {createDesktopCompanion} from '../desktop-companion.js';
 import {installVisualCompanion,parseVisualReaction} from '../companion-plugin.js';
 import {transcribeCompanionAudio} from '../companion-input-audio.js';
 import {recoverInterruptedChatAudits,chatAuditInvocations} from '../model-invocation-audit.js';
+
+test('restart never upgrades a wait notice, foreign scope, or missing QQ receipt to a sent answer',()=>{
+ const scope={accountId:'a',personaId:'p',chat:'private:12345'},options={accountId:'a',keys:[scope.chat],before:10,now:11};
+ const wait={...scope,id:'wait',auditId:'turn',status:'sent',messageId:'10',deliveryKey:'local:a:wait'};
+ const final={...wait,id:'answer',deliveryKey:'local:a:answer',messageId:'11'};
+ const run=jobs=>{
+   const audit={...scope,id:'turn',status:'running',at:1};
+   assert.equal(recoverInterruptedChatAudits([audit],jobs,options),1);
+   return audit;
+ };
+ for(const patch of [{accountId:'b'},{personaId:'q'},{chat:'group:77777'},{messageId:''}]){
+   assert.equal(run([wait,{...final,...patch}]).deliveryState,'unknown');
+ }
+ assert.match(run([wait]).deliveryReason,/等待提示/);
+ assert.equal(run([wait,final]).deliveryState,'sent');
+ assert.equal(run([wait,{...final,status:'sending'}]).deliveryState,'unknown');
+ assert.equal(run([wait,{...final,status:'cancelled'}]).deliveryState,'cancelled');
+});
 import {createVisualSessions} from '../visual-session.js';
 
 test('real vision prose remains a reaction without a paid repair call or executable action; malformed JSON is rejected',()=>{

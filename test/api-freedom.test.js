@@ -14,13 +14,13 @@ test('switching a single API source preserves the other API or local sources',()
   c.use(a.id,'image');assert.equal(c.route('chat'),local?'local':'host');assert.equal(c.route('speech'),local?'local':'legacy');
   c.use(b.id,'speech');assert.equal(c.route('image'),'profile:'+a.id);assert.equal(c.route('speech'),'profile:'+b.id);
   c.use(a.id,'chat');assert.equal(c.route('speech'),'profile:'+b.id);assert.equal(c.route('chat'),'profile:'+a.id);
-  c.saveRoutes({...c.raw().routes,enabled:false});assert.equal(c.raw().legacyLocalEnabled,local);
+  c.saveRoutes({...c.raw().routes,enabled:false});assert.equal(c.raw().legacyLocalEnabled,undefined);assert.equal(c.route('image'),'profile:'+a.id);assert.equal(c.route('speech'),'profile:'+b.id);
  }
 });
 
 test('connections without a required voice or protocol cannot be activated for speech',()=>{
- const c=setup(),p=c.save(input({voice:''}));assert.throws(()=>c.use(p.id,'speech'),/音色/);assert.equal(c.raw().routes.enabled,false);
- const claude=c.save(input({type:'anthropic'}));assert.throws(()=>c.use(claude.id,'image'),/类型/);assert.equal(c.raw().routes.enabled,false);
+ const c=setup(),p=c.save(input({voice:''}));assert.throws(()=>c.use(p.id,'speech'),/音色/);assert.equal(c.route('speech'),'legacy');assert.equal(c.route('image'),'legacy');
+ const claude=c.save(input({type:'anthropic'}));assert.throws(()=>c.use(claude.id,'image'),/类型/);assert.equal(c.route('speech'),'legacy');assert.equal(c.route('image'),'legacy');
 });
 
 test('model-page selection changes the active chat model and restoring default preserves media routes',()=>{

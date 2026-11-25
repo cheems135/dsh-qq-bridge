@@ -12,9 +12,11 @@ export function compareVersions(left,right){
 }
 function identity(v){
  if(!object(v))return 'value:'+stable(v);
+ if(v.localId&&v.chat&&v.dir)return 'local-message:'+JSON.stringify([v.accountId||'',v.chat,v.dir,v.localId]);
  if(v.messageId&&v.chat)return 'message:'+JSON.stringify([v.accountId||'',v.chat,String(v.messageId),v.dir||'']);
  if(v.id!==undefined)return 'id:'+JSON.stringify([v.accountId||'',v.chat||v.key||'',String(v.id)]);
  if(v.localId)return 'local:'+v.localId;
+ if(v.historyEventId&&v.chat)return 'history:'+JSON.stringify([v.accountId||'',v.chat,v.historyEventId]);
  if(v.qq)return 'qq:'+String(v.qq);
  return 'value:'+stable(v);
 }
@@ -31,7 +33,7 @@ export function mergeSyncJson(left,right,{prefer='desktop',key=''}={}){
   }
   if(object(a)&&object(b)){const out=Object.create(null);for(const name of new Set([...Object.keys(a),...Object.keys(b)]))out[name]=merge(a[name],b[name],field?field+'.'+name:name,depth+1,preferred);return out;}
   if(typeof a==='number'&&typeof b==='number'&&/(?:^|\.)(?:floors|revisions|contextAfter|lastRead|lastSeen|seenAt|lastPoll)(?:\.|$)/.test(field))return Math.max(a,b);
-  if(typeof a==='boolean'&&typeof b==='boolean'&&/(?:^|\.)(?:deleted|reverted|removed|disabled)$/.test(field))return a||b;
+  if(typeof a==='boolean'&&typeof b==='boolean'&&/(?:^|\.)(?:deleted|reverted|removed|disabled|retracted)$/.test(field))return a||b;
   return preferred==='desktop'?a:b;
  }
  const out=JSON.parse(JSON.stringify(merge(left,right)));
@@ -92,10 +94,11 @@ export async function buildUnionPlan(left,right,{read}={}){
  const alternateFor=(key,digest)=>{const dot=key.lastIndexOf('.'),slash=key.lastIndexOf('/');return (dot>slash?key.slice(0,dot):key)+'.sync-'+digest.slice(0,16)+(dot>slash?key.slice(dot):'');};
  const mediaMaps={desktop:[],phone:[]};
  for(const key of Object.keys(left.files)){const a=left.files[key],b=right.files[key];if(!b||a.hash===b.hash||key.endsWith('.json')||!/^(cache|persona|workspace)\//.test(key))continue;const losing=(a.modifiedAt||0)>=(b.modifiedAt||0)?'phone':'desktop';mediaMaps[losing].push([key,alternateFor(key,files[losing][key].hash)]);}
- const remap=(value,side,jsonKey)=>{
+ const remap=(value,side,jsonKey,field='')=>{
+  if((jsonKey==='cache/messages.json'||jsonKey.startsWith('cache/chat-history/'))&&['text','userText','quote','content'].includes(field))return value;
   if(typeof value==='string'){let text=value;for(const [old,replacement]of mediaMaps[side]){text=text.split('@bridge/'+old).join('@bridge/'+replacement);const prefix=old.split('/')[0]+'/';if(jsonKey.startsWith(prefix)&&text===old.slice(prefix.length))text=replacement.slice(prefix.length);}return text;}
-  if(Array.isArray(value))return value.map(v=>remap(v,side,jsonKey));
-  if(object(value)){const out=Object.create(null);for(const [k,v]of Object.entries(value))out[k]=remap(v,side,jsonKey);return out;}return value;
+  if(Array.isArray(value))return value.map(v=>remap(v,side,jsonKey,field));
+  if(object(value)){const out=Object.create(null);for(const [k,v]of Object.entries(value))out[k]=remap(v,side,jsonKey,k);return out;}return value;
  };
  let vaultSide=null;const vault='data/phone-mobile-secrets.json',vaultKey='data/phone-mobile-secrets.key';
  if((left.files[vault]||right.files[vault])&&(left.files[vault]?.hash!==right.files[vault]?.hash||left.files[vaultKey]?.hash!==right.files[vaultKey]?.hash)){

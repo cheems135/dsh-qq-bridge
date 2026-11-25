@@ -1,6 +1,10 @@
 // Exact allowlist: no request path is ever resolved against the filesystem.
 export const CONSOLE_ASSETS = Object.freeze([
+  { name: 'memory-library.js', source: './ui/memory-library.js' },
   { name: 'console-design.css', source: './ui/console-design.css' },
+  { name: 'workbench-navigation.css', source: './ui/workbench-navigation.css' },
+  { name: 'home-workbench.css', source: './ui/home-workbench.css' },
+  { name: 'workbench-connection.css', source: './ui/workbench-connection.css' },
   { name: 'console-interaction.js', source: './ui/console-interaction.js' },
   { name: 'device-ui.js', source: './ui/device-ui.js' },
   { name: 'mobile.css', source: './ui/mobile.css' },
@@ -13,6 +17,7 @@ export const CONSOLE_ASSETS = Object.freeze([
   { name: 'companion-mobile-float.js', source: './ui/companion-mobile-float.js' },
   { name: 'console-controller.js', source: './ui/console-controller.js' },
   { name: 'runninghub-audio-ui.js', source: './ui/runninghub-audio-ui.js' },
+  { name: 'guild.js', source: './ui/guild.js' },
   { name: 'form-state.js', source: './ui/form-state.js' },
   { name: 'execution-overview.js', source: './ui/execution-overview.js' },
   { name: 'execution-overview.css', source: './ui/execution-overview.css' },

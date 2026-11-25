@@ -80,7 +80,7 @@ export function requestsSinging(value=''){
 // A cover workflow uses the stored song, so a specific new title needs different audio.
 export function requestsDifferentCover(value=''){
  const text=String(value||'');
- return /《[^》\n]{1,100}》|(?:换|另|再选)(?:一|个|首|段){1,3}(?:歌|曲)?|(?:用|拿)(?:我|这次|刚才|刚刚).{0,8}(?:发|传|这份|这个).{0,8}(?:音频|原曲|歌|片段)/.test(text);
+ return /《[^》\n]{1,100}》|新(?:歌|曲)|新的(?:歌|曲)|另一首|别的(?:歌|曲)|(?:换|另|再选)(?:一|个|首|段){1,3}(?:歌|曲)?|(?:不要|别|不用).{0,12}(?:之前|上次|旧|存|保存|缓存).{0,8}(?:歌|曲|版|录音|音乐)|(?:用|拿)(?:我|这次|刚才|刚刚).{0,8}(?:发|传|这份|这个).{0,8}(?:音频|原曲|歌|片段)/.test(text);
 }
 export function requestsVoice(value=''){
   if(requestsSinging(value))return true;
@@ -129,10 +129,12 @@ export function selectMediaIntent(value='',decision={},available={image:true,voi
 export function mediaIntentHint(intent){
   if(intent?.draw)return '【本轮画画请求】对方要的是你亲手画的，不是 AI 生图：用 bridge_drawing 亲手画（create 建画布 → path/line/ellipse 起稿、分层上色 → render 看效果再改），画完用 bridge_life_share 把导出的 PNG 发到当前对话。不要用 [图:…] 走生图，也不要说这是 AI 画的；画不好就直说哪里不行。';
   const singing=requestsSinging(intent?.request);
-  if(singing&&intent.coverNeedsAudio)return '【本轮翻唱】对方要的是另一首歌。这套翻唱工作流使用保存的原曲片段，请自然说明需要在唱歌页换成那首歌的片段。这一轮不生成或发送旧歌曲。';
+  if(singing&&intent.coverNeedsAudio)return '【本轮翻唱核对未通过】'+(intent.songReason||'请先换成那首歌的原曲片段并绑定歌名')+'。只说明当前缺少的那一项，不假装已有对应原曲，不生成或发送默认旧歌曲。可用bridge_song查看库存与版本反馈；歌名相同不代表音频内容已核实。';
+  if(singing&&intent.stockOnly)return '【本轮只从库存选歌】没有本人提供的相关音乐参考，不搜索新歌、不调用生成。程序只会发送这段对话尚未发过的可用库存；库存用完则自然说明，等待音乐参考，不许重复。'+(intent.songReason||'');
+  if(singing&&intent.coverNeedsSource)return '【本轮翻唱先识别本人提供的音乐参考】用bridge_song sing完成识别、查档和执行。有同曲同片段存档直接发送，没有才从这份参考取得原曲并生成；不替换成工作流默认原曲，不自行另找一首。只有识别或获取这份参考实际失败才说明缺失，不把已经完成的下载和填写交回本人。';
   if(!intent?.kinds?.length)return '';
   const songHint=!singing?'':intent.cover
-    ? '【本轮翻唱】程序会用保存的原曲片段和参考音色提交翻唱。不需要写歌词、语音标签或复制指令，自然接话即可；按真实回执确认发送。'
+    ? '【本轮翻唱】先识别本人提供的音乐参考并查存档，有同曲同片段存档直接发送，没有才生成；没有参考只发未重复的库存。生成后保存歌名、歌手、原曲来源和版本。音准仍需实际试听，不宣称已经唱准。不需要写歌词、语音标签或复制指令，自然接话即可；按真实回执确认发送。对方说跑调或错歌时用bridge_song反馈停用该版本，不能替旧音频改歌名。'
     : '【本轮唱歌】用 [语音:唱歌] 另起一段，后面写实际要唱的歌词。是否生成以 RunningHub 的实际回执为准。';
   return (songHint?songHint+'\n':'')+'【本轮媒体表达参考】'+JSON.stringify(intent)+(intent.source==='direct'?'\n对方本轮明确邀请发送媒体。':'\n这是表达形式判断的建议，不是对方明确要求；request仅保留对方原话。先直接回答原问题，自主选择媒体时不改变意思，不把理由或计划当已发生的事实。')+(intent.kinds.includes('image')?'请实际输出单独一行 [图:具体画面]；“看看你在干嘛”应结合当前模拟日程，拍角色前置自拍或眼前后置视角，别只描述自己在做什么。':'')+(!singing&&intent.kinds.includes('voice')?'请把实际要说的话写为 [语音:合适语气]台词；“想听你说晚安”要用声音说晚安，不只回复文字或介绍语音功能。':'')+'不重复发送，不假装媒体已经成功送达；成功与否由程序回执确认。';
 }
@@ -193,9 +195,8 @@ export function completeMediaReply(value,intent,currentRequest=''){
   if(intent?.kinds?.includes('voice')&&!voice.test(body)&&intent.direct===true&&!requestsSinging(intent.request)&&shortLine){
     let spoken=spokenCandidate.replace(/\r\n?|\n/g,' ');
     if(/(?:不能|无法|没法|不支持|没有).{0,16}(?:语音|声音|发送|能力|功能)/.test(spoken))spoken='';
-    if(!spoken)spoken=/晚安/.test(intent.request||'')?'晚安，好好休息。':/早安/.test(intent.request||'')?'早安。':'嗯，我在听。';
     const pictures=[...body.matchAll(new RegExp(image.source,'g'))].map(m=>m[0]);
-    body=['[语音]'+spoken,...pictures].join('\n');
+    if(spoken)body=['[语音]'+spoken,...pictures].join('\n');
   }
   // 标签可能被写在引子后面：语音必须独占一段开头，否则会把
   // [语音:温柔] 原样当文字发出去；图和语音也拆成各自的消息，保住先后顺序。

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {understandingCandidate,understandLocalTurn} from '../local-understanding.js';
+import {understandingCandidate,understandLocalTurn,withLocalReading} from '../local-understanding.js';
 import {defaultLocalConfig} from '../local-config.js';
 test('quality default adds local semantic context without changing the original message or executing a tool',async()=>{
  assert.equal(defaultLocalConfig({}).dialoguePriority,'quality');
@@ -11,4 +11,15 @@ test('quality default adds local semantic context without changing the original 
 test('uncertain, invented actions, tool calls and identifiers never become a normalized instruction',()=>{
  for(const result of ['{"meaning":"不确定是哪一个","uncertain":true}','{"meaning":"删除所有文件","uncertain":false}','{"meaning":"发到12345678","uncertain":false}',{tool_calls:[{function:{name:'anything'}}]},'prose'])assert.equal(understandingCandidate(result,'那就第二个','两个地方'),'');
  assert.equal(understandingCandidate('{"meaning":"我担心之后下雨","uncertain":false}','担心虾雨'),'我担心之后下雨');
+});
+
+test('a tentative reading preserves the original attachment and never changes a tool receipt',()=>{
+ const content=[{type:'text',text:'这句该怎么说？'},{type:'image_url',image_url:{url:'fixture'}}];
+ const rows=[{role:'user',content},{role:'user',_localReceipt:true,content:'执行结果'}];
+ const prepared=withLocalReading(rows,'先向她说清楚情况');
+ assert.equal(prepared[1],rows[1]);
+ assert.deepEqual(prepared[0].content.slice(1),content);
+ assert.equal(rows[0].content,content);
+ assert.match(prepared[0].content[0].text,/本机.*推测/);
+ assert.equal(withLocalReading(rows,''),rows);
 });

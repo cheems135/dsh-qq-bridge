@@ -48,6 +48,7 @@ export function createPersonaGrowth({storage,now=()=>Date.now(),config,allowed,s
   const cache=new Map();let busy=false,closed=false;
   const name=meta=>'growth-'+hash([meta.accountId||'',meta.key||'',meta.personaId])+'.json';
   function get(meta){
+    storage.prepare?.(meta);
     const file=name(meta);if(cache.has(file))return cache.get(file);
     let d;try{d=storage.read(file);}catch{}
     if(!d||d.version!==1)d={version:1,meta:clone(meta),queue:[],history:[],status:null};
@@ -147,7 +148,7 @@ export function createPersonaGrowth({storage,now=()=>Date.now(),config,allowed,s
     next.status={state:'reverted',level,...(level==='day'?{day:item.start}:{month:item.start.slice(0,7)}),at:now()};
     save(next);Object.assign(d,next);return snapshot(meta);
   }
-  function reload(){cache.clear();}
+  function reload(){cache.clear();storage.reload?.();}
   function clear(meta){if(!allowed(meta))throw Error('该人设成长范围不可用');const d=get(meta),next=clone(d);next.queue=[];next.history=[];next.status=null;next.revision=(d.revision||0)+1;save(next);Object.assign(d,next);}
   function exportArchive(){return storage.list().filter(f=>/^growth-[a-f0-9]{64}\.json$/.test(f)).map(f=>{try{return storage.read(f);}catch{return null;}}).filter(d=>d&&allowed(d.meta)).map(d=>({meta:{key:d.meta.key||'',personaId:d.meta.personaId},history:clone(d.history)}));}
   function restoreArchive(value,accountId){

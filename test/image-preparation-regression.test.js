@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {photoComposition} from '../image-persona.js';
+import {photoComposition,selfieDeviceConflict} from '../image-persona.js';
 import {requestedImageText} from '../image-prompt-language.js';
 import {modelImagePrompt,createImageStudio} from '../image-studio.js';
 import {prepareLocalImagePrompt,explicitlyRequiresReference} from '../local-image-prompt.js';
@@ -15,6 +15,12 @@ import {listenLocalServer} from './local-server-listen.js';
 
 const request='画一张生日贺卡，上面写“生日快乐”';
 const prose='A birthday card rests beside a wrapped present on a wooden table. The card displays the lettering "生日快乐" in blue ink, surrounded by small painted flowers.';
+test('the reported off-screen phone wording is an exclusion and does not trigger a device-visible failure',()=>{
+ const prompt='One arm extends past the frame toward the camera while her other index finger taps toward the off-screen phone screen, its glow faintly catching her fingertip.';
+ assert.equal(selfieDeviceConflict(prompt,'front'),false);
+ assert.equal(selfieDeviceConflict('The phone is visible in the foreground.','front'),true);
+ assert.equal(selfieDeviceConflict('她的手机在画面内，屏幕清晰可见。','front'),true);
+});
 test('English scene validation preserves requested Chinese lettering, but rejects untranslated narration',()=>{
  const literalText=requestedImageText(request);
  assert.deepEqual(literalText,['生日快乐']);

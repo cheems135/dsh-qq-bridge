@@ -1,3 +1,4 @@
+import {AUDIO_DELIVERY_GUIDANCE} from './audio-delivery.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
@@ -6,8 +7,8 @@ import {pipeline} from 'node:stream/promises';
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const scope=c=>JSON.stringify([c.accountId||'',c.personaId||'',c.key||'']);
 const safeName=v=>String(v||'attachment').replaceAll('\\','/').split('/').at(-1).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/,'').slice(0,160)||'attachment';
-export const QQ_FILE_DESCRIPTION='QQ文件收发。list列出当前会话收到的真实文件；download传返回的id下载到当前角色作品目录，文本可返回预览，其他格式交给宿主文件工具读取；收到不等于已解析。send传本角色作品file，或本会话已下载的id，target省略为当前会话，也可选已允许目标；文件通过可靠发送队列上传。status传deliveryId查询平台回执，不把排队说成对方收到。不接受模型猜测的下载网址、文件编号或任意本机路径。';
-export const QQ_FILE_PARAMETERS={type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['list','download','send','status']},id:{type:'string'},file:{type:'string'},target:{type:'string'},deliveryId:{type:'string'}},required:['action']};
+export const QQ_FILE_DESCRIPTION='QQ文件收发。list列出当前会话收到的真实文件；download传返回的id下载，文本可返回预览，其他格式交给宿主文件工具读取；收到不等于已解析。send可传浏览器、平台、MCP、原生工具实际取得或生成的file，不要求存放在指定下载目录；工具成功返回的文件会按来源记录核对并自动复制归档，保留原件。也可传当前任务文件、角色作品file或本会话已下载的id。先用真实可用的获取工具取得文件，不能猜路径；登录凭据不分享。target省略为当前会话，也可选已允许目标；文件通过可靠发送队列上传。status传deliveryId查询平台回执，不把排队说成对方收到。'+AUDIO_DELIVERY_GUIDANCE;
+export const QQ_FILE_PARAMETERS={type:'object',additionalProperties:false,properties:{action:{type:'string',enum:['list','download','send','status']},id:{type:'string'},file:{type:'string'},target:{type:'string'},deliveryId:{type:'string'},delivery:{type:'string',enum:['voice','file']}},required:['action']};
 
 export function normalizeQqFileNotice(p){
  if(p?.post_type!=='notice'||!['offline_file','group_upload'].includes(p.notice_type))return p;

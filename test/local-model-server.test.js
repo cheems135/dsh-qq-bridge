@@ -222,7 +222,7 @@ test('small Comfy VL chat receives the actual image once with the latest questio
   try{
     const response=await fetch(base+'/v1/local/turn',{method:'POST',body:JSON.stringify({messages:imageMessages()})});const body=await response.json();
     assert.equal(response.status,200,JSON.stringify(body));assert.equal(body.text,'蓝色。😊\n你喜欢吗？');
-    assert.equal(received.text,'图里是什么颜色？');assert.equal(received.imageFiles.length,1);assert.match(received.system,/只输出你直接对对方说的话/);
+    assert.equal(received.text,'图里是什么颜色？');assert.equal(received.imageFiles.length,1);assert.match(received.system,/闲聊时直接跟对方说/);
     assert.deepEqual(calls,['release','chat']);assert.equal(existsSync(received.imageFiles[0]),false,'temporary input removed after the turn');
   }finally{await service.close();rmSync(directory,{recursive:true,force:true});}
 });

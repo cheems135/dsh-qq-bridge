@@ -8,8 +8,9 @@ export function claimSignature(rows,accountId,now=Date.now()){
  if(!signatureAvailable(rows,accountId,now))throw Error('今天已尝试自动修改签名，明天再考虑；本人明确要求修改不受此限制');
  const row={accountId,day:qzoneDay(now),at:now};rows.push(row);return row;
 }
-export function claimSpaceComment(offers,c,row,now=Date.now()){
+export function claimSpaceComment(offers,c,row,now=Date.now(),{unrestricted=false}={}){
  if(c.meta?.kind!=='proactive'||!['comment','reply'].includes(row.kind))return false;
+ if(unrestricted)return false;
  const offer=dailySpaceOffer(offers,c.accountId||'',now);
  if(!offer||offer.token!==c.meta.qzoneVisitToken||offer.personaId!==c.personaId)throw Error('这轮不是今天的空间访问');
  if(offer.commentAttempt)throw Error('这次空间访问已尝试一条评论或回复，继续浏览即可，不再连续评论');

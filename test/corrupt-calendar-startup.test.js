@@ -24,7 +24,7 @@ test('a zero-filled execution file preserves the original, skips the uncertain s
 test('restoring an earlier valid execution record retains history and holds unverified actions',t=>{
  const dir=mkdtempSync(join(tmpdir(),'bridge-life-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const file=join(dir,'life-execution.json'),store=lifeExecutionStorage(file);
- const jobs=[{id:'done',status:'completed'},{id:'pending',status:'paused',resume:true}];
+ const jobs=[{id:'done',status:'completed'},{id:'pending',status:'paused',resume:true,steps:[{id:'send',idempotent:false,status:'unknown'}]}];
  store.write({version:2,jobs});writeFileSync(file,'{}');
  const restored=store.read();assert.deepEqual(restored.jobs[0],jobs[0]);assert.equal(restored.jobs[1].status,'needs_reconcile');assert.equal(restored.jobs[1].resume,false);
 });

@@ -13,7 +13,7 @@ import * as imagePersona from '../image-persona.js';
 import {normalizePromptLanguage} from '../image-studio.js';
 
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
-function extract(name,deps){const start=source.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0,name);for(let end=source.indexOf('}',start);end>=0;end=source.indexOf('}',end+1)){let create;try{create=Function(...Object.keys(deps),'return ('+source.slice(start,end+1)+');');}catch(error){if(error instanceof SyntaxError)continue;throw error;}return create(...Object.values(deps));}throw Error(name);}
+function extract(name,deps){deps={learningMemory:null,...deps};const start=source.search(new RegExp('^  (?:async )?function '+name+'\\(','m'));assert(start>=0,name);for(let end=source.indexOf('}',start);end>=0;end=source.indexOf('}',end+1)){let create;try{create=Function(...Object.keys(deps),'return ('+source.slice(start,end+1)+');');}catch(error){if(error instanceof SyntaxError)continue;throw error;}return create(...Object.values(deps));}throw Error(name);}
 function fixture(kind='private'){
  const chat={key:kind+':11111111',kind,isOwner:kind==='private',userId:'11111111',sessionId:'session',inboundVersion:1,turns:new Map([['turn',{meta:{kind:'user',inboundVersion:1,auditId:'audit',speakerId:'speaker'}}]])};
  const calls=[],journal=[];

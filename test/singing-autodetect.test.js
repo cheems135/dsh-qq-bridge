@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {requestsSinging,requestsDifferentCover,selectMediaIntent,mediaIntentHint,completeMediaReply,directMediaIntent,imageFirstReply,independentRequestedVoice} from '../media-intent.js';
 import {isRunningHubCover,runningHubAudioNodes} from '../runninghub-audio.js';
+import {selectSingingPlan} from '../singing-plan.js';
 import {naturalBubbleParts,stickerMessageGroups} from '../chat-bubbles.js';
 import {stripUnrequestedActions} from '../dialogue-only.js';
 
 const source=readFileSync(new URL('../index.js',import.meta.url),'utf8');
-const workflow={id:'2058763737900867585',allowLocal:true,songAudio:'api/song.wav',referenceAudio:'api/sample.wav',nodeInfoList:[
+const workflow={id:'2058763737900867585',allowLocal:true,songAudio:'api/song.wav',songTitle:'已确认素材',songIdentityAudio:'api/song.wav',referenceAudio:'api/sample.wav',nodeInfoList:[
   {nodeId:'5',fieldName:'audio',fieldValue:'{{song_audio}}'},{nodeId:'4',fieldName:'audio',fieldValue:'{{reference_audio}}'},
 ]};
 const request='用 RunningHub API 帮我翻唱一下这段';
@@ -20,8 +21,9 @@ function scopedSource(start,end,deps,expression){
   return Function(...Object.keys(deps),source.slice(a,b)+'\nreturn '+expression)(...Object.values(deps));
 }
 function intentFor(settings){
-  return scopedSource('  function singingWorkflowFor(','  function voiceRuntimeReadiness(',{
+  return scopedSource('  function singingWorkflowFor(','  function voiceRuntimeReadiness(',{localAudioWorkflows:null,
     settings,requestsSinging,requestsDifferentCover,selectMediaIntent,isRunningHubCover,featureProfile:()=>({}),
+    singingPlanFor:words=>selectSingingPlan({request:words,context:[{role:'user',text:'本次素材是《已确认素材》'}],config:settings.voice.runninghub.sing}),
     askModel:()=>{throw Error('an explicit song should not require a classifier');},
   },'previewMediaForm');
 }
@@ -35,14 +37,17 @@ test('the API preflight uses preset cover assets, keeps lyric workflows distinct
   const intent=await intentFor(settings)(request,key);
   assert.deepEqual(intent.kinds,['voice']);
   assert.equal(intent.cover,true);
-  assert.match(mediaIntentHint(intent),/保存的原曲片段和参考音色/);
+  assert.match(mediaIntentHint(intent),/有同曲同片段存档直接发送/);
   assert.deepEqual(runningHubAudioNodes(workflow,'sing'),[
     {nodeId:'5',fieldName:'audio',fieldValue:'api/song.wav'},{nodeId:'4',fieldName:'audio',fieldValue:'api/sample.wav'},
   ]);
   const named=await intentFor(settings)('唱一首《另一首歌》给我听',key);
-  assert.deepEqual(named.kinds,[]);
-  assert.equal(named.coverNeedsAudio,true);
-  assert.match(mediaIntentHint(named),/换成那首歌的片段/);
+  assert.deepEqual(named.kinds,['voice']);
+  assert.equal(named.coverNeedsSource,true);
+  const fresh=await intentFor(settings)('给我唱首新歌',key);
+  assert.equal(fresh.coverNeedsSource,true);
+  assert.deepEqual(fresh.kinds,['voice']);
+  assert.match(mediaIntentHint(named),/识别本人提供的音乐参考/);
   settings.voice.runninghub.sing={...workflow,nodeInfoList:[{nodeId:'5',fieldName:'lyrics',fieldValue:'{{text}}'}]};
   const lyrics=await intentFor(settings)(request,key);
   assert.equal(lyrics.cover,undefined);
@@ -53,8 +58,9 @@ test('the API preflight uses preset cover assets, keeps lyric workflows distinct
   assert.deepEqual((await intentFor(settings)(request,key)).kinds,[]);
 });
 
-test('the real QQ reply dispatcher starts one configured cover on plain text and another chat reply does not wait',async()=>{
-  const audit={id:'cover',status:'completed',userWords:request,mediaUserWords:request,mediaIntent:{request,kinds:['voice'],cover:true}};
+test('the real QQ reply dispatcher keeps the selected song and clip, starts it once on plain text, and another chat reply does not wait',async()=>{
+  const selectedSong={title:'稻香',artist:'原唱',sourceSong:{title:'稻香',audio:'api/correct.mp3',verified:true,duration:30},segment:{start:30,end:60}};
+  const audit={id:'cover',status:'completed',userWords:request,mediaUserWords:request,mediaIntent:{request,kinds:['voice'],cover:true},singingSelection:selectedSong};
   const live={key,kind:'private',sendChain:Promise.resolve()};
   const actor={key,kind:'private',chatId:'12345',auditId:audit.id,turnKind:'user'};
   const sent=[],errors=[],jobs=[];
@@ -68,7 +74,7 @@ test('the real QQ reply dispatcher starts one configured cover on plain text and
     stopped:false,accountPaused:false,lifeExecution:null,isDesktop:true,activePersona:()=>({id:'p'}),calendarMeta:()=>({}),setTimeout:fn=>queueMicrotask(fn),
     beginMediaTask:()=>({task:{id:'task',status:'pending',auditId:audit.id}}),recordMediaTask:()=>{},finishMediaTask:(task,status,extra)=>Object.assign(task,extra,{status}),
     completeMediaShare:()=>{},saveSettings:()=>{},saveFeatures:()=>{},generationBlocked:()=>false,beginGeneration:()=>{},endGeneration:()=>{},featureProfile:()=>({}),conversationScope:()=>key,
-    synthesizeVoice:async(text,_chat,options)=>{jobs.push({text,performance:options.performance,request:options.songRequest});started();return pending;},
+    synthesizeVoice:async(text,_chat,options)=>{jobs.push({text,performance:options.performance,request:options.songRequest,title:options.songTitle,artist:options.songArtist,source:options.sourceSong,start:options.start,end:options.end});started();return pending;},
     burstSegments:text=>[{type:'text',data:{text}}],stickerMessageGroups,sendSegments:(_actor,segments)=>{sent.push(segments[0]);return 'delivery';},
     replyDeliveryFailure:(_chat,error)=>errors.push(error),log:()=>{},
   };
@@ -81,6 +87,6 @@ test('the real QQ reply dispatcher starts one configured cover on plain text and
   release('cover.wav');
   await first;
   assert.deepEqual(errors,[]);
-  assert.deepEqual(jobs,[{text:'',performance:'sing',request}]);
+  assert.deepEqual(jobs,[{text:'',performance:'sing',request,title:selectedSong.title,artist:selectedSong.artist,source:selectedSong.sourceSong,start:30,end:60}]);
   assert.deepEqual(sent.at(-1),{type:'record',data:{file:'cover.wav'}});
 });

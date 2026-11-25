@@ -3,7 +3,20 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {createComfyRuntime} from '../comfyui-runtime.js';
+import {createComfyRuntime,rebindMovedModelFiles,comfyRequestError} from '../comfyui-runtime.js';
+
+test('moved model files are rebound by their unique exact filename, while ambiguous matches remain untouched',()=>{
+ const graph={'77':{class_type:'LoraLoader',inputs:{lora_name:'c站\\deepseek\\角色.safetensors'}}};
+ const info={LoraLoader:{input:{required:{lora_name:[['anima\\角色.safetensors']]}}}};
+ assert.deepEqual(rebindMovedModelFiles(graph,info),[{node:'77',field:'lora_name',previous:'c站\\deepseek\\角色.safetensors',value:'anima\\角色.safetensors'}]);
+ assert.equal(graph['77'].inputs.lora_name,'anima\\角色.safetensors');
+ graph['77'].inputs.lora_name='c站\\deepseek\\角色.safetensors';
+ info.LoraLoader.input.required.lora_name[0].push('other\\角色.safetensors');
+ assert.deepEqual(rebindMovedModelFiles(graph,info),[]);
+ const error=comfyRequestError('/prompt',400,JSON.stringify({node_errors:{77:{errors:[{details:'LoRA 角色.safetensors missing',extra_info:{input_name:'lora_name'}}]}}}));
+ assert.match(error.message,/节点 77.*lora_name.*角色/);
+ assert.equal(error.code,'COMFY_VALIDATION_FAILED');
+});
 
 test('Comfy output is downloaded and written only after MIME verification', async () => {
   const mediaDir = mkdtempSync(join(tmpdir(), 'local-agent-comfy-'));

@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
+import {get} from 'node:http';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
 import {openBilibiliRange} from '../bilibili-range.js';
 import {createVideoReader} from '../video-reader.js';
+
+// FFmpeg connects directly over HTTP, including to OS-assigned ports blocked by Fetch.
+function readRelay(url, range) {
+  return new Promise((resolve,reject)=>{
+    const req=get(url,{headers:range?{range}:{}},async res=>{
+      try {
+        const chunks=[];
+        for await (const bytes of res) chunks.push(bytes);
+        resolve({status:res.statusCode,headers:res.headers,bytes:Buffer.concat(chunks)});
+      } catch (error) {reject(error);}
+    });
+    req.on('error',reject);
+  });
+}
 
 test('Bilibili playback reads byte ranges on demand, including media indexes near the end',async t=>{
   const blockSize=256*1024;
@@ -20,20 +35,20 @@ test('Bilibili playback reads byte ranges on demand, including media indexes nea
   t.after(()=>relay.close());
   const origin=new URL(relay.url).origin;
   assert.deepEqual(requests,[[0,blockSize-1]]);
-  assert.equal((await fetch(origin+'/different')).status,404);
-  assert.equal((await fetch(relay.url,{headers:{range:'bytes='+size+'-'}})).status,416);
+  assert.equal((await readRelay(origin+'/different')).status,404);
+  assert.equal((await readRelay(relay.url,'bytes='+size+'-')).status,416);
 
-  const tail=await fetch(relay.url,{headers:{range:'bytes='+(size-8)+'-'}});
+  const tail=await readRelay(relay.url,'bytes='+(size-8)+'-');
   assert.equal(tail.status,206);
-  assert.equal(tail.headers.get('content-range'),'bytes '+(size-8)+'-'+(size-1)+'/'+size);
-  assert.deepEqual(Buffer.from(await tail.arrayBuffer()),Buffer.alloc(8,16));
+  assert.equal(tail.headers['content-range'],'bytes '+(size-8)+'-'+(size-1)+'/'+size);
+  assert.deepEqual(tail.bytes,Buffer.alloc(8,16));
 
-  const next=await fetch(relay.url,{headers:{range:'bytes='+(blockSize-2)+'-'+(blockSize+1)}});
-  assert.deepEqual(Buffer.from(await next.arrayBuffer()),Buffer.from([0,0,1,1]));
+  const next=await readRelay(relay.url,'bytes='+(blockSize-2)+'-'+(blockSize+1));
+  assert.deepEqual(next.bytes,Buffer.from([0,0,1,1]));
   assert.deepEqual(requests,[[0,blockSize-1],[16*blockSize,size-1],[blockSize,2*blockSize-1]]);
 });
 
-test('closing Bilibili playback cancels an outstanding download',async t=>{
+test('closing Bilibili playback cancels an outstanding download',{timeout:5000},async t=>{
   const blockSize=256*1024;
   let began,aborted;
   const started=new Promise(resolve=>{began=resolve;});
@@ -49,11 +64,10 @@ test('closing Bilibili playback cancels an outstanding download',async t=>{
     formatOf:()=> 'mov',
   });
   t.after(()=>relay.close());
-  const response=fetch(relay.url,{headers:{range:'bytes='+blockSize+'-'}}).catch(()=>null);
-  await started;
+  const response=readRelay(relay.url,'bytes='+blockSize+'-');
+  await Promise.race([started,response.then(()=>assert.fail('Response ended before the requested chunk started'))]);
   relay.close();
-  await stopped;
-  assert.equal(await response,null);
+  await Promise.all([stopped,assert.rejects(response,{code:'ECONNRESET'})]);
 });
 
 test('Bilibili video reader rejects a CDN response with a mismatched byte range',async t=>{

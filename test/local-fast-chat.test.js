@@ -53,6 +53,6 @@ test('slow-media notice is delayed, uses model persona wording once and is cance
 });
 
 test('friendly error copy retains the cause category without exposing raw stack, paths or retry promises',()=>{
- for(const [error,pattern]of [[Object.assign(Error('connect'),{code:'ECONNREFUSED'}),/启动/],[Error('ComfyUI out of memory'),/显存/],[Error('context length exceeded'),/分几条/],[Error('503 busy queue'),/任务/],[Error('LOCAL_DEADLINE 超时'),/等得有点久/]])assert.match(localIssueReply(error),pattern);
+ for(const [error,pattern]of [[Object.assign(Error('connect'),{code:'ECONNREFUSED'}),/启动/],[Error('ComfyUI out of memory'),/显存/],[Error('context length exceeded'),/没装下.*不让你重发/],[Error('503 busy queue'),/任务/],[Error('LOCAL_DEADLINE 超时'),/等得有点久/]])assert.match(localIssueReply(error),pattern);
  assert.doesNotMatch(localIssueReply(Error('TypeError C:/private/settings.json sk-secret')),/TypeError|private|sk-secret/);
 });

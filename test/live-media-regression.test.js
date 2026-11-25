@@ -39,7 +39,7 @@ for(const isDesktop of [true,false])for(const kind of ['private','group'])for(co
 
 test('a locked workflow conflict is explained after one review, without paid futile redrafting',async()=>{
  let calls=0;
- const studio=createImageStudio({getConfig:()=>({promptLanguage:'en'}),visualPlan:()=>({humanRequest:'静物照片，无人物',prompt:'blue cup on a table',lifeContext:{location:'room'}}),ask:async(system,input)=>{
+ const studio=createImageStudio({getConfig:()=>({promptLanguage:'en'}),visualPlan:()=>({humanRequest:'静物照片，无人物',prompt:'blue cup on a table',ownPortrait:false}),ask:async(system,input)=>{
   calls++;const data=JSON.parse(input);
   if(system.startsWith('【图像细节核对】')){assert.deepEqual(data.requirements.lockedWorkflowPrompts,['1girl, character_token']);assert.match(data.finalPrompt,/character_token/);return JSON.stringify({ok:false,missing:['固定人物词与无人要求冲突'],fixedPromptConflicts:['1girl']});}
   assert.deepEqual(data.lockedWorkflowPrompts,['1girl, character_token']);return JSON.stringify({prompt:'A blue cup rests on a wooden table beside a lemon. Soft window light falls across the ceramic surface and the grain of the wood.'});

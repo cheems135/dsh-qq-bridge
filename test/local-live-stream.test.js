@@ -49,6 +49,24 @@ test('actual gateway streams a completed line as soon as its newline arrives',{t
  });
 });
 
+test('the local quality gateway keeps actual speaker words when its reading invents a commitment',async()=>{
+ const request='我还在想怎么跟她说，给我一句就好。';
+ const inference='我答应她明天补齐。';
+ const history=[{role:'user',content:'我把她的书单写错了。'},{role:'assistant',content:'是人名还是书名？'},{role:'user',content:request}];
+ let interpretations=0,answers=0;
+ await fixture({config:{dialoguePriority:'quality'},model:async options=>{
+  if(options.purpose==='understanding'){interpretations++;return JSON.stringify({uncertain:false,meaning:inference});}
+  answers++;
+  const actual=options.messages.findLast(row=>row.role==='user').content;
+  assert.ok(actual.includes(JSON.stringify(inference))&&actual.endsWith(request));
+  assert.ok(options.messages.filter(row=>row.role==='system').every(row=>!row.content.includes(inference)));
+  return '我把你的书单写错了。';
+ }},async base=>{
+   const response=await requestLocalJson(base+'/v1/local/turn',{method:'POST',body:{messages:history}});
+   assert.equal(response.ok,true);assert.equal(interpretations,1);assert.equal(answers,1);
+ });
+});
+
 test('fast dialogue explicitly escalates to real tools without executing a guessed action first',async()=>{
  let calls=0,executed=0;
  await fixture({tools:{bridge_probe:{kind:'data',description:'读实际资料',parameters:{type:'object',properties:{},additionalProperties:false},execute:async()=>{executed++;return {ok:true,text:'实际资料'};}}},model:async options=>{

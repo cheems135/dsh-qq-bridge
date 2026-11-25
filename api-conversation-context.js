@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {choiceMode,personalChoiceHint} from './personal-choice.js';
+import {dialogueHistoryRows,dialogueHistoryText} from './qq-history-context.js';
 // Only an idle API conversation may move to a new host session. Originals and
 // long-term memory stay in their existing stores; tool execution is never cut.
 export const API_CONTEXT_REVISION='20261114-memory-handoff-v1';
@@ -96,28 +97,34 @@ export function apiContextRotation(record,live,{windowTokens=128000,force=false}
  if(live?.turns?.size||live?.pendingTurns?.length||live?.proactivePending)return {rotate:false,reason:'busy'};
  const window=Math.max(2048,Number(windowTokens)||128000),known=record.contextPolicyVersion===API_CONTEXT_REVISION;
  const base=known?Math.max(0,Number(record.contextBaseTokens)||0):0;
- const limit=Math.min(Math.floor(window*.65),Math.max(12000,base+8000));
+ const limit=Math.min(Math.floor(window*.65),Math.max(24000,base+24000));
  const used=Math.max(Number(record.contextTokens)||0,Number(live?.contextTokens)||0),turns=Number(record.contextTurns)||0;
- const hardLimit=Math.min(Math.floor(window*.85),Math.max(32000,base+24000));
- // A new session's fixed tool schema alone cannot trigger another handoff.
- const rotate=force||turns>=40||used>=limit&&(!known||used>=hardLimit||turns>=8&&used>=base+8000);
- return {rotate,used,limit,turns,reason:force?'manual':turns>=40?'turns':rotate?'context-size':'within-budget'};
+ const hardLimit=Math.floor(window*.85);
+ // Replaying a compact seed loses warm history and may add a summary call.
+ // Amortize that work instead of reopening after just eight small exchanges.
+ // Capacity pressure still takes priority, including a large tool response.
+ const rotate=force||used>=hardLimit||used>=limit&&(!known||turns>=24);
+ return {rotate,used,limit,hardLimit,turns,reason:force?'manual':rotate?'context-size':'within-budget'};
 }
-export function conversationHistory(rows,{key,accountId='',personaId,floor=0,excludeIds=[]}={}){
- const excluded=new Set(excludeIds.map(String));
- const selected=rows.filter(r=>!r.retracted&&r.chat===key&&(r.accountId||'')===accountId&&r.personaId===personaId&&r.time>floor&&(r.dir==='in'||!r.delivery||r.delivery==='sent')&&typeof r.text==='string'&&r.text.trim()&&r.text!=='[skip]'&&!excluded.has(String(r.messageId||''))&&!r.sourceMessageIds?.some(id=>excluded.has(String(id))));
- let remaining=6000;const recent=[];
- for(const r of selected.slice(-24).reverse()){
-  const value=cut(r.text,Math.min(1400,remaining));if(!value)break;remaining-=value.length;
-  recent.unshift({id:String(r.messageId||r.localId||r.time),at:r.time,role:r.dir==='in'?'user':'assistant',speaker:r.dir==='in'?String(r.speakerName||r.speakerId||'对方'):'你',text:value});
+export function conversationHistory(rows,scope={}){
+ const selected=dialogueHistoryRows(rows,scope),recent=[],older=[];
+ let recentRoom=6000,olderRoom=14000;
+ for(let i=selected.length-1;i>=0;i--){
+  if(older.length===80||!olderRoom)break;
+  const row=selected[i],value=dialogueHistoryText(row);
+  if(!value||value==='[skip]')continue;
+  const isRecent=recent.length<24&&recentRoom>0;
+  const text=value.slice(0,isRecent?Math.min(1400,recentRoom):Math.min(500,olderRoom));
+  const item={at:row.time,role:row.dir==='in'?'user':'assistant',speaker:row.dir==='in'?String(row.speakerName||row.speakerId||'对方'):'你',text};
+  if(isRecent){
+   recent.push({id:String(row.messageId||row.localId||row.time),...item});
+   recentRoom-=text.length;
+  }else{
+   older.push(item);
+   olderRoom-=text.length;
+  }
  }
- const recentIds=new Set(selected.slice(-recent.length));
- let budget=14000;const older=[];
- for(const r of selected.filter(r=>!recentIds.has(r)).slice(-80).reverse()){
-  const text=cut(r.text,Math.min(500,budget));if(!text)break;budget-=text.length;
-  older.unshift({at:r.time,role:r.dir==='in'?'user':'assistant',speaker:r.dir==='in'?String(r.speakerName||r.speakerId||'对方'):'你',text});
- }
- return {recent,older:older.map((r,i)=>({...r,id:'s'+(i+1)}))};
+ return {recent:recent.reverse(),older:older.reverse().map((r,i)=>({...r,id:'s'+(i+1)}))};
 }
 export function fallbackConversationSummary(sources,previous){
  const rows=sources.slice(-8).map(r=>({text:cut(r.speaker,24)+'：'+cut(r.text,120),sourceIds:[r.id],at:r.at}));

@@ -13,6 +13,49 @@ const job=(patch={})=>({...scope,id:'reply',auditId:'turn',at:3,status:'sent',me
 const record=(patch={})=>({...scope,id:'chat:turn',auditId:'turn',at:1,tool:'chat.reply',kind:'chat',backend:'api',status:'returned',...patch});
 const view=options=>executionOverview({accountId:'a',...options});
 
+test('a wait notice stays with its incoming QQ IDs and cannot turn a cancellation into delivery',()=>{
+  const a=audit({status:'cancelled',inboundIds:['5','6']});
+  const wait=job({auditId:'',deliveryRole:'progress',replyToInboundIds:['5','6']});
+  const [request]=view({audits:[a],outbox:[wait]});
+  assert.equal(request.state,'cancelled');
+  assert.equal(request.steps.filter(s=>s.type==='delivery').length,1);
+  assert.equal(view({audits:[{...a,status:'running'}],outbox:[wait]})[0].state,'running');
+  assert.equal(view({outbox:[wait]})[0].state,'progress');
+});
+
+test('reused audit and invocation IDs in two QQ chats remain separate in the panel',()=>{
+  const other='group:55555';
+  const calls=[record({input:'甲'}),record({chat:other,input:'乙'})];
+  const requests=view({audits:[audit(),audit({chat:other})],records:calls});
+  assert.equal(requests.length,2);
+  for(const request of requests){
+    const pane={innerHTML:'',querySelectorAll:()=>[]};
+    paintExecutionRequests(pane,[request],calls,row=>'详情'+row.input);
+    const right=request.chat===other?'乙':'甲';
+    assert.ok(pane.innerHTML.includes('详情'+right));
+    assert.ok(!pane.innerHTML.includes('详情'+(right==='乙'?'甲':'乙')));
+  }
+});
+
+test('private and group requests distinguish a legacy wait from a final, withheld, or intentionally silent answer',()=>{
+  for(const chat of [scope.chat,'group:55555']){
+    const wait=job({chat,deliveryKey:'local:turn:wait:line:0'});
+    const display=(patch,jobs=[wait])=>view({audits:[audit({chat,...patch})],outbox:jobs})[0];
+    assert.equal(display({}).state,'progress');
+    assert.match(display({}).steps.at(-1).label,/等待提示/);
+    assert.equal(display({deliveryState:'silent'}).state,'silent');
+    assert.equal(display({deliveryState:'failed'}).state,'failed');
+    const withheld=display({deliveryState:'withheld',deliveryReason:'已暂停 <test>'});
+    assert.equal(withheld.state,'withheld');
+    const pane={innerHTML:'',querySelectorAll:()=>[]};
+    paintExecutionRequests(pane,[withheld],[],()=> '');
+    assert.match(pane.innerHTML,/已暂停 &lt;test&gt;/);
+    assert.equal(display({},[wait,job({chat,id:'final'})]).state,'accepted');
+    const file=job({chat,messageId:'',uploadReceipt:{action:'upload_group_file',transport:'accepted',fileId:'f1'}});
+    assert.equal(display({},[file]).state,'accepted');
+  }
+});
+
 test('successful text delivery never hides failed image generation',()=>{
   const [r]=view({audits:[audit()],records:[record()],mediaTasks:[media()],outbox:[job()]});
   assert.equal(r.state,'partial');assert.equal(r.steps.length,4);assert.equal(r.output,'画好了');
@@ -91,7 +134,7 @@ test('phone has API sources and does not advertise local fallback',()=>{
   assert.equal(r.device,'phone');assert.equal(r.apiComplement,false);assert(r.items.every(i=>i.backend==='api'));
 });
 test('a host with no selected chat model can still display its other configured sources',()=>{
-  const r=serviceSourceOverview({model:null});assert.equal(r.items[0].state,'incomplete');assert.equal(r.items.length,4);
+  const r=serviceSourceOverview({model:null});assert.equal(r.items[0].state,'incomplete');assert.equal(r.items.length,5);
 });
 test('legacy voice selection can still execute locally while chat uses API',()=>{
   const r=serviceSourceOverview({settings:{voice:{enabled:true,localai:{preset:'own-voice',baseUrl:'http://localhost:9000'}}},voiceEngine:'localai',model:{provider:'api',model:'chat'}});

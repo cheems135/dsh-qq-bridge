@@ -23,3 +23,6 @@ __pycache__/
 /test-temp/
 /.prompt-preferences-tests/
 /.voice-preference-tests/
+
+# Default local media output, including verification images
+/local-media/

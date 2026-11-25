@@ -1,13 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createServiceConnections} from '../service-connections.js';
 import {auditModelCompletion,invocationViewRows} from '../model-invocation-audit.js';import {localIssueReply} from '../local-issue-reply.js';
 import {readFileSync} from 'node:fs';
-test('explicit local activation disables mixed cloud routes and complement, and disabling a local mixed chat never restores API',()=>{
+test('choosing local chat preserves independent API media choices and never restores the removed global mode',()=>{
  let state=null,local=false,complement=false;
  const c=createServiceConnections({storage:{read:()=>structuredClone(state),write:v=>state=structuredClone(v)},getLegacyMode:()=>local,getLegacyComplement:()=>complement,onChange:s=>{local=s.routes.enabled?s.routes.chat==='local':s.legacyLocalEnabled;complement=s.routes.enabled?false:s.legacyApiComplement;}});
  c.saveRoutes({enabled:true,chat:'local',image:'legacy',speech:'legacy'});assert.equal(local,true);
  c.saveRoutes({enabled:false,chat:'local'});assert.equal(local,true);
- c.setMode('local');assert.equal(local,true);assert.equal(complement,false);assert.deepEqual(c.raw().routes,{enabled:false,chat:'local',image:'local',speech:'local'});
- c.setMode('api');assert.equal(local,false);
+ c.saveRoutes({chat:'local'});assert.equal(local,true);assert.equal(complement,false);assert.deepEqual(c.raw().routes,{enabled:true,chat:'local',image:'legacy',speech:'legacy',video:'legacy'});assert.equal(c.setMode,undefined);
+ c.saveRoutes({chat:'host'});assert.equal(local,false);assert.equal(c.route('image'),'legacy');
 });
 test('model records show purpose, input, output and real returned usage; failure stays a failure',async()=>{
  const rows=[];const result=await auditModelCompletion({record:r=>rows.push(r),backend:'api',system:'You are an image art director',input:'画窗边书桌',run:async usage=>{usage({inputTokens:20,outputTokens:10});return '窗边书桌的描述';}});
@@ -19,7 +19,7 @@ test('existing chat audits join the records with account and source filtering an
  const rows=invocationViewRows([],audits,{accountId:'a',backend:'local',kind:'chat'});assert.equal(rows.length,1);assert.equal(rows[0].output,'晚上好');assert.equal(rows[0].modelExplanation,'');assert.equal(rows[0].elapsedMs,10);
 });
 test('human-readable failure explains a real cause without a model call or claiming success',()=>{
- const text=localIssueReply(Error('ECONNREFUSED'),{style:'gentle'});assert.match(text,/等我一下|跟你说一下/);assert.match(text,/连不上/);assert.doesNotMatch(text,/已完成|生成好了/);
+ const text=localIssueReply(Error('ECONNREFUSED'),{style:'gentle'});assert.doesNotMatch(text,/等我一下|跟你说一下|这次未能完成/);assert.match(text,/连不上/);assert.doesNotMatch(text,/已完成|生成好了/);
  assert.match(localIssueReply(Error('HTTP 401'),{backend:'api'}),/账号或密钥验证/);
 });
 test('pure local API entry is blocked before touching any model transport',async()=>{

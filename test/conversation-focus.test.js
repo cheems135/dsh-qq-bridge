@@ -4,6 +4,26 @@ import {conversationStep, conversationHint} from '../conversation-care.js';
 
 const turn = (words, previous = {}) => conversationStep(previous, words, {personaId:'p', now:5000});
 
+test('the speaker’s own appraisal distinguishes a small win, a shortfall and an open reading',()=>{
+  for(const words of ['好耶，四个音终于弹顺了','太好了，那叠照片总算理完了']){
+    const state=turn(words);
+    assert.deepEqual([state.intent,state.userAffect],['celebrate','happy'],words);
+    assert.match(conversationHint(state),/成果大小由他自己衡量/);
+  }
+  for(const words of ['练一晚上才四个音，我服了','忙了半天才拍好两张，我真泄气']){
+    const state=turn(words);
+    assert.deepEqual([state.intent,state.userAffect],['support','low'],words);
+    assert.match(conversationHint(state),/投入和结果有落差/);
+  }
+  const mixed=turn('我升职了，可是我也很紧张。');
+  assert.deepEqual([mixed.intent,mixed.userAffect],['mixed','mixed']);
+  for(const words of ['我拍了两张','我服了','他才十岁，我服了','她说“好耶，终于拍好了”','室友说，我升职了']){
+    assert.equal(turn(words).userAffect,'unknown',words);
+  }
+  assert.equal(turn('我升职了，你能帮我看看合同吗？').intent,'answer');
+  assert.equal(turn('你说错了，我升职了').intent,'repair');
+});
+
 test('a question returning to a past subject keeps its answer path and leaves work pending', () => {
   const old = turn('换个话题，明早我去看牙。');
   const next = turn('回到电影，小池指什么？', old);
@@ -51,4 +71,14 @@ test('a vent about an experience gets a reaction while a request for space leave
   assert.match(conversationHint(vent),/上文有具体经历.*感受或看法/);
   assert.doesNotMatch(conversationHint(turn('你先听我说完')), /感受或看法/);
   assert.equal(turn('我就想吐槽两句，不过你能给我点建议吗？').support.mode,'advice');
+});
+
+test('a practical question retains a stated feeling without inventing emotions from quotations or carrying a stale mood',()=>{
+  const state=turn('我有点难过，能帮我看看这封信怎么回吗？');
+  assert.equal(state.intent,'answer');assert.equal(state.support.emotion,'sad');
+  assert.match(conversationHint(state),/把事情答清，也回应/);
+  for(const words of ['朋友说“我有点难过”，这句话怎么翻译？','我不难过，能帮我看看怎么回吗？','现在好多了，能帮我看看怎么回吗？']){
+    const next=turn(words,state);assert.equal(next.support,undefined,words);
+    assert.doesNotMatch(conversationHint(next),/那份有原话依据的感受/);
+  }
 });
