@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "release": "1.63.0-rc.21",
+  "automaticApply": false,
+  "presets": [
+    {
+      "id": "rh-image-qwen-edit",
+      "kind": "image",
+      "name": "Qwen2.1 双图编辑",
+      "appId": "2102644452430008321",
+      "note": "两张图片都是任务输入，不随包提供私人头像；图片页导入后确认489(value)为提示词节点，并配置参考图。",
+      "requestFile": "rh-image-qwen-edit.curl",
+      "jsonFile": "rh-image-qwen-edit.json"
+    },
+    {
+      "id": "rh-video-minimax",
+      "kind": "video",
+      "name": "RunningHub 动态视频",
+      "appId": "2085597941657587714",
+      "note": "这是插件已接入的视频应用。界面导入读取时长和画幅，分辨率及放大参数由现有视频适配器处理；不是任意视频工作流通用执行器。",
+      "requestFile": "rh-video-minimax.curl",
+      "jsonFile": "rh-video-minimax.json"
+    },
+    {
+      "id": "rh-sing-current",
+      "kind": "sing",
+      "name": "当前翻唱：音乐＋音色",
+      "appId": "2102953894560231426",
+      "note": "优先使用此版；参考音色先用自己的RunningHub Key上传，再把返回素材名填入默认参考音色。不要填写固定原曲或默认歌名。",
+      "requestFile": "rh-sing-current.curl",
+      "jsonFile": "rh-sing-current.json"
+    },
+    {
+      "id": "rh-sing-alternative",
+      "kind": "sing",
+      "name": "备用翻唱：双音频裁剪与混音",
+      "appId": "2055815336380911617",
+      "note": "插件导入器会将23绑定音色、45绑定原曲，并选择46混音输出及第2个音频产物。不要交换两个音频。",
+      "requestFile": "rh-sing-alternative.curl",
+      "jsonFile": "rh-sing-alternative.json"
+    }
+  ],
+  "speech": {
+    "id": "breeze-speech",
+    "configFile": "breeze-speech.json",
+    "referenceFile": "../voice-presets/breeze-speaking-reference.wav"
+  },
+  "historical": [
+    {
+      "appId": "2058763737900867585",
+      "status": "not-preconfigured",
+      "reason": "历史应用仅保留ID，没有足以核对的完整节点示例，不伪造即用映射。"
+    }
+  ],
+  "requiredUserInputs": [
+    "自己的API Key",
+    "自己的音色访问权限或新建音色ID",
+    "本次任务真实图片或原曲音频"
+  ],
+  "noBundledAccountUploads": true
+}

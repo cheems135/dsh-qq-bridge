@@ -1,0 +1,45 @@
+curl --request POST 'https://www.runninghub.cn/openapi/v2/run/ai-app/2102644452430008321' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer ${RUNNINGHUB_API_KEY}' \
+  --data-raw '{
+  "nodeInfoList": [
+    {
+      "nodeId": "470",
+      "fieldName": "image",
+      "fieldValue": "{{image_1}}",
+      "description": "待编辑图片：实际上传后替换"
+    },
+    {
+      "nodeId": "475",
+      "fieldName": "image",
+      "fieldValue": "{{image_2}}",
+      "description": "第二张参考图：实际上传后替换"
+    },
+    {
+      "nodeId": "489",
+      "fieldName": "value",
+      "fieldValue": "{{prompt}}",
+      "description": "编辑提示词"
+    },
+    {
+      "nodeId": "13",
+      "fieldName": "megapixels",
+      "fieldValue": "2",
+      "description": "分辨率档位"
+    },
+    {
+      "nodeId": "480",
+      "fieldName": "batch_size",
+      "fieldValue": "1",
+      "description": "图片数量"
+    },
+    {
+      "nodeId": "13",
+      "fieldName": "aspect_ratio",
+      "fieldValue": "9:16 (Portrait Widescreen)",
+      "description": "画幅"
+    }
+  ],
+  "instanceType": "default",
+  "usePersonalQueue": "false"
+}'

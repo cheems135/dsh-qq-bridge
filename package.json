@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-bridge",
-  "version": "1.63.0-rc.20",
+  "version": "1.63.0-rc.21",
   "private": true,
   "type": "module",
   "description": "QQ 桥接：手机与电脑共用 API 核心，电脑版另支持本地",
@@ -315,7 +315,11 @@
     "voice-scenes.json",
     "sleep-awareness.js",
     "voice-output-check.js",
-    "initiative-grounding.js"
+    "initiative-grounding.js",
+    "docs/quickstart.md",
+    "docs/api-workflows.md",
+    "docs/feature-guide.md",
+    "test/fixtures/runninghub-sing-2102953894560231426.txt"
   ],
   "dsh": {
     "bundle": {

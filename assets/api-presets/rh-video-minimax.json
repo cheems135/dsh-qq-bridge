@@ -1,0 +1,121 @@
+{
+  "webappId": "2085597941657587714",
+  "nodeInfoList": [
+    {
+      "nodeId": "181",
+      "fieldName": "image",
+      "fieldValue": "{{image_1}}",
+      "description": "主人物参考图"
+    },
+    {
+      "nodeId": "191",
+      "fieldName": "index",
+      "fieldValue": "1",
+      "description": "参考模式"
+    },
+    {
+      "nodeId": "172",
+      "fieldName": "aspect_ratio",
+      "fieldValue": "9:16",
+      "description": "画幅"
+    },
+    {
+      "nodeId": "219",
+      "fieldName": "index",
+      "fieldValue": "4",
+      "description": "分辨率编码"
+    },
+    {
+      "nodeId": "218",
+      "fieldName": "value",
+      "fieldValue": "10",
+      "description": "秒数"
+    },
+    {
+      "nodeId": "169",
+      "fieldName": "index",
+      "fieldValue": "1",
+      "description": "放大编码"
+    },
+    {
+      "nodeId": "217",
+      "fieldName": "index",
+      "fieldValue": "0",
+      "description": "文戏提示词模式"
+    },
+    {
+      "nodeId": "216",
+      "fieldName": "text",
+      "fieldValue": "{{prompt}}",
+      "description": "按当前任务生成的动态脚本"
+    },
+    {
+      "nodeId": "140",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "129",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "130",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "133",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "178",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "198",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "342",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "343",
+      "fieldName": "image",
+      "fieldValue": "{{neutral_image}}",
+      "description": "插件运行时准备的占位图"
+    },
+    {
+      "nodeId": "193",
+      "fieldName": "audio",
+      "fieldValue": "None",
+      "description": "无额外音轨"
+    },
+    {
+      "nodeId": "194",
+      "fieldName": "audio",
+      "fieldValue": "None",
+      "description": "无额外音轨"
+    },
+    {
+      "nodeId": "195",
+      "fieldName": "audio",
+      "fieldValue": "None",
+      "description": "无额外音轨"
+    }
+  ],
+  "instanceType": "default",
+  "usePersonalQueue": "false"
+}

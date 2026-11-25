@@ -1,0 +1,9 @@
+{
+  "name": "Breeze说话音色参考",
+  "file": "breeze-speaking-reference.wav",
+  "durationSeconds": 11.568,
+  "bytes": 555342,
+  "sha256": "bc46a488ca4c51b9b7f0286ef1ae2f55786a7bc8f8d0c1c62bfbbb5e21db1215",
+  "source": "仓库维护者提供的普通说话参考；按请求与API预设一起分发",
+  "purpose": "用于音色参考上传；不包含歌曲库存、私人演出配方或账号凭据"
+}

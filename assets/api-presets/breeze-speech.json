@@ -1,0 +1,18 @@
+{
+  "engine": "breeze",
+  "emotion": "auto",
+  "breeze": {
+    "mode": "official",
+    "baseUrl": "https://api.breeze.blue",
+    "apiKey": "",
+    "voiceId": "voc_4c6tnexm328j",
+    "model": "breeze-tts-2",
+    "language": "zh",
+    "instructions": "",
+    "guidance": 2,
+    "speed": 1
+  },
+  "referenceFile": "assets/voice-presets/breeze-speaking-reference.wav",
+  "voiceAccess": "这是作者当前音色ID，跨账号可调用性未经验证；若无权限，使用参考文件在自己的服务账号创建音色并替换ID。",
+  "note": "仅语音配置示例，不是完整settings.json，不要覆盖已有连接和人设。"
+}

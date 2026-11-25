@@ -1,0 +1,43 @@
+{
+  "webappId": "2102953894560231426",
+  "nodeInfoList": [
+    {
+      "nodeId": "1",
+      "fieldName": "audio",
+      "fieldValue": "{{song_audio}}",
+      "description": "上传音乐／原曲"
+    },
+    {
+      "nodeId": "2",
+      "fieldName": "audio",
+      "fieldValue": "{{reference_audio}}",
+      "description": "上传音色参考"
+    },
+    {
+      "nodeId": "5",
+      "fieldName": "value",
+      "fieldValue": "0",
+      "description": "音色参考开始时间（秒）"
+    },
+    {
+      "nodeId": "6",
+      "fieldName": "value",
+      "fieldValue": "11",
+      "description": "音色参考结束时间（秒，随包音色长度）"
+    },
+    {
+      "nodeId": "10",
+      "fieldName": "value",
+      "fieldValue": "true",
+      "description": "音色人声分离"
+    },
+    {
+      "nodeId": "37",
+      "fieldName": "value",
+      "fieldValue": "false",
+      "description": "关闭波形动画"
+    }
+  ],
+  "instanceType": "default",
+  "usePersonalQueue": "false"
+}

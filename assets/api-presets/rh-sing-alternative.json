@@ -1,0 +1,61 @@
+{
+  "webappId": "2055815336380911617",
+  "nodeInfoList": [
+    {
+      "nodeId": "23",
+      "fieldName": "audio",
+      "fieldValue": "{{reference_audio}}",
+      "description": "音色参考"
+    },
+    {
+      "nodeId": "45",
+      "fieldName": "audio",
+      "fieldValue": "{{song_audio}}",
+      "description": "原曲音频"
+    },
+    {
+      "nodeId": "57",
+      "fieldName": "end_time",
+      "fieldValue": "{{song_end}}",
+      "description": "原曲片段终点，由实际音频长度更新"
+    },
+    {
+      "nodeId": "57",
+      "fieldName": "start_time",
+      "fieldValue": "{{song_start}}",
+      "description": "原曲片段起点"
+    },
+    {
+      "nodeId": "36",
+      "fieldName": "language",
+      "fieldValue": "Mandarin",
+      "description": "参考语言"
+    },
+    {
+      "nodeId": "58",
+      "fieldName": "end_time",
+      "fieldValue": "0:05",
+      "description": "音色参考片段终点"
+    },
+    {
+      "nodeId": "58",
+      "fieldName": "start_time",
+      "fieldValue": "0:00",
+      "description": "音色参考片段起点"
+    },
+    {
+      "nodeId": "38",
+      "fieldName": "language",
+      "fieldValue": "Mandarin",
+      "description": "歌曲语言"
+    },
+    {
+      "nodeId": "40",
+      "fieldName": "control",
+      "fieldValue": "score",
+      "description": "工作流控制方式"
+    }
+  ],
+  "instanceType": "default",
+  "usePersonalQueue": "false"
+}
